@@ -1,0 +1,10 @@
+# Streamlit Community Cloud용 의존성(진입 파일 streamlit_app.py와 같은 폴더).
+# 냉장고 재료 추천 GraphRAG 화면 실행에 필요한 패키지만 둔다(PostgreSQL·ETL 의존성은 제외).
+# 버전 하한은 2026-10-23 로컬 검증 버전(Python 3.12)이다.
+streamlit>=1.66.1,<2
+neo4j>=6.4.0,<7
+certifi>=2026.7.22
+python-dotenv>=1.2.4
+pydantic>=2.13,<3
+langgraph>=1.2.14,<2
+langchain-openai>=1.6.7,<2

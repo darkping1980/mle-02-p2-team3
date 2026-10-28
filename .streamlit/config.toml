@@ -1,0 +1,13 @@
+[theme]
+base = "light"
+primaryColor = "#5b43e8"
+
+[browser]
+gatherUsageStats = false
+
+[client]
+showErrorDetails = false
+
+[server]
+# 배포에서는 Transformers의 지연 로딩 모듈을 파일 감시 대상으로 탐색하지 않습니다.
+fileWatcherType = "none"

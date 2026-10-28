@@ -1,0 +1,76 @@
+%% Recipe target model (11 tables, docs/db/recipe_target_schema.sql). Logical relationships only; DDL contains no PostgreSQL FOREIGN KEY constraints.
+erDiagram
+    RCP_RAW {
+        varchar(20) rcp_raw_id PK "원본 수집 회차 ID"
+        varchar(6) rcp_raw_seq PK "회차 내 행 순번 000001~"
+        text rcp_seq UK "식약처 원본 레시피 번호 (rcp_raw_id, rcp_seq)"
+        text rcp_nm
+        text rcp_pat2
+        text rcp_way2
+        text rcp_parts_dtls
+    }
+    RCP_CAT {
+        varchar(20) rcp_cat_id PK "요리 분류 ID"
+        text rcp_cat_nm UK
+    }
+    RCP_CAT_REL {
+        varchar(20) rcp_id PK "레시피 ID"
+        varchar(20) rcp_cat_id PK "요리 분류 ID"
+    }
+    COMMON_CODE_GRP {
+        varchar(20) common_code_grp_id PK
+        text common_code_grp_nm
+    }
+    COMMON_CD {
+        varchar(20) common_code_grp_id PK
+        varchar(20) common_cd PK
+        text common_cd_nm
+    }
+    RCP {
+        varchar(20) rcp_id PK "내부 레시피 ID"
+        text rcp_seq UK "식약처 원본 레시피 번호"
+        varchar(20) rcp_raw_id "최종 반영 원본 회차"
+        text rcp_nm
+        varchar(20) cook_mthd_cd "COOK_MTHD 코드"
+        varchar(20) rcp_nutrition_status
+    }
+    RCP_STEP {
+        varchar(20) rcp_id PK
+        smallint step_no PK
+        text rcp_step_instruction_txt
+        text rcp_step_image_url
+    }
+    INGR {
+        varchar(20) ingr_id PK "표준 식재료 ID"
+        text ingr_nm UK
+    }
+    INGR_ALS {
+        varchar(20) ingr_id PK
+        varchar(20) ingr_als_id PK "기존 별칭 ID 유지"
+        text ingr_als_nm "UK (ingr_id, ingr_als_nm)"
+    }
+    RCP_INGR_STG {
+        varchar(20) rcp_raw_id PK
+        varchar(6) rcp_raw_seq PK
+        varchar(20) rcp_ingr_stg_id PK
+        smallint rcp_ingr_line_no "UK (rcp_raw_id, rcp_raw_seq, rcp_ingr_line_no)"
+        varchar(20) ingr_id "승인 시 매핑"
+        varchar(20) rcp_ingr_status
+    }
+    RCP_INGR {
+        varchar(20) rcp_id PK
+        varchar(20) ingr_id PK
+        varchar(20) rcp_raw_id "관계 생성 근거 회차"
+    }
+
+    RCP ||--|{ RCP_CAT_REL : "rcp_id (1..N)"
+    RCP_CAT ||--o{ RCP_CAT_REL : "rcp_cat_id"
+    COMMON_CODE_GRP ||--o{ COMMON_CD : "common_code_grp_id"
+    COMMON_CD ||--o{ RCP : "COOK_MTHD + cook_mthd_cd (non-identifying)"
+    RCP ||--o{ RCP_STEP : "rcp_id"
+    RCP ||--o{ RCP_INGR : "rcp_id"
+    INGR ||--o{ RCP_INGR : "ingr_id"
+    INGR ||--o{ INGR_ALS : "ingr_id"
+    RCP_RAW ||--o{ RCP_INGR_STG : "(rcp_raw_id, rcp_raw_seq)"
+    RCP_RAW ||--o| RCP : "rcp_raw_id + rcp_seq (non-identifying)"
+    INGR ||--o{ RCP_INGR_STG : "approved mapping (optional)"

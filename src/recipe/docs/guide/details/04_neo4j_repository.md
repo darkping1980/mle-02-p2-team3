@@ -1,0 +1,24 @@
+# Neo4j Repository와 Cypher 상세
+
+[메인](../README.md) · [추천 Service](03_recommend_service.md) · [데이터 파이프라인](05_data_pipeline.md)
+
+원본: [RecipeGraphRepository](../../../recipe_recommender/recipe_graph_repository.py), [연결 도우미](../../../recipe_recommender/neo4j_connection.py), [공통 Neo4j 세션](../../../common/neo4j_db_session.py). Cypher 파일명 stem이 namespace이고 `// name: statement`가 쿼리 ID다. 예: `recipe_graph_queries.graphrag_context`.
+
+| 메서드·함수 | 인자 → 반환 | 호출·처리·오류/부작용 |
+| --- | --- | --- |
+| [`RecipeGraphRepository.__init__(driver=None,database=None)`](../../../recipe_recommender/recipe_graph_repository.py) | 선택적 드라이버·DB명 → 객체 | 웹 팩토리·적재 CLI. 환경 로드/import 준비 → 드라이버 미주입 시 `create_neo4j_driver` → `configure_query_logging()` → `Neo4jDbSession(mapper_root=패키지 폴더, cypher_log_mode='combined' if RECIPE_QUERY_LOG else 'none')`. 드라이버 소유 여부 저장. |
+| [`query_example(name,parameters) -> list[dict]`](../../../recipe_recommender/recipe_graph_repository.py) | 쿼리명·dict → 행 목록 | 추천 Service의 `recipe_graph_queries.*`, 적재 검증 Service. `mapper.select_list('recipe_graph_queries.'+name,parameters)` 위임. 메서드 docstring의 호출자 설명보다 실제 추천 Service 호출도 고려. |
+| [`inspect/project_rows/project_counts/...`](../../../recipe_recommender/recipe_graph_repository.py) | 각 검증 입력 → dict/목록/건수 | 적재 Service. `recipe_graph_validation.*`와 연결 확인으로 스키마·키·건수 조회. |
+| [`create_schema()`](../../../recipe_recommender/recipe_graph_repository.py) | 없음 → `None` | `apply`에서만. [제약 Cypher](../../../recipe_recommender/recipe_graph_constraints.cypher)의 `SCHEMA_NAMES`를 순회해 `execute`. 쓰기. |
+| [`explain_load_statements() -> int`](../../../recipe_recommender/recipe_graph_repository.py) | 없음 → 계획한 쿼리 수 | `apply`에서 이름 9개(조리 단계 2개 포함)의 원문에 `EXPLAIN`을 붙여 read access 세션에서 계획 확인. 실제 적재는 이 함수에서 하지 않는다. |
+| [`write_batch(statement,rows,check_statement=None)`](../../../recipe_recommender/recipe_graph_repository.py) | 이름·행 목록 → `None` | `apply`가 호출. `mapper.transaction()`에서 관계 부모 매칭 수 검사 후 `recipe_graph_load.<statement>` 실행. 불일치면 `ValueError`·배치 rollback. 성공 시 해당 배치 commit. |
+| [`statement_text(statement) -> str`](../../../recipe_recommender/recipe_graph_repository.py) | 전체 식별자 → Cypher 원문 | 제출용 노트북(화면에서는 사용하지 않음). `mapper._query` 위임, 실행하지 않음. |
+| [`close()`](../../../recipe_recommender/recipe_graph_repository.py) | 없음 → `None` | 적재 CLI `finally`. Repository가 만든 드라이버일 때만 닫음. |
+| [`create_neo4j_driver()`](../../../recipe_recommender/neo4j_connection.py) | 환경변수 → Driver | URI/사용자/비밀번호 누락이면 `ValueError`. `driver_arguments`가 검증 TLS 스킴의 CA를 설정하고 `+ssc`는 거부. 실제 접속 검증은 웹의 `verify_connectivity` 또는 적재의 `inspect`에서 수행. |
+| [`Neo4jDbSession.select_list(id,params)`](../../../common/neo4j_db_session.py) | 명명 쿼리·매개변수 → `list[dict]` | mapper 등록 텍스트 실행, Neo4j Record를 dict로 바꿈. `select_one`은 첫 행 또는 `None`; 자동 LIMIT 추가 없음. |
+
+추천 경로에서 읽는 명명 Cypher는 [ingredient_name_candidates](../../../recipe_recommender/recipe_graph_queries.cypher), [pantry_recommendations](../../../recipe_recommender/recipe_graph_queries.cypher), [graphrag_context](../../../recipe_recommender/recipe_graph_queries.cypher), [ingredient_vocabulary](../../../recipe_recommender/pantry_graphrag.cypher), [pantry_recommendations_by_coverage](../../../recipe_recommender/pantry_graphrag.cypher), [recipe_steps](../../../recipe_recommender/recipe_graph_queries.cypher)다. Service의 `ALLOWED_STATEMENTS`는 이 여섯 개만 허용한다(모두 MATCH/RETURN, `ReadOnlyQueryTests`가 쓰기 절을 검사). 추천 화면에서 `create_schema`/`write_batch`를 호출하는 경로는 없다. 모드 B는 `GraphQuestionService.ALLOWED_STATEMENTS` 8개(기존 `ingredient_name_candidates`·`recipes_by_ingredient_term`·`similar_recipes`·`recipe_steps` + 신규 [graph_questions.cypher](../../../recipe_recommender/graph_questions.cypher)의 `recipe_options`·`category_options`·`similar_recipe_categories`·`category_ingredients`)만 실행한다.
+
+적재 Cypher는 [recipe_graph_load.cypher](../../../recipe_recommender/recipe_graph_load.cypher)의 노드 `MERGE` 3개, 관계 `MERGE` 2개, 조리 단계 `load_recipe_steps`(노드+관계 `MERGE`) 1개와 부모 검사 3개다. [validation Cypher](../../../recipe_recommender/recipe_graph_validation.cypher)는 스키마·키·건수 확인에 쓴다. `Neo4jDbSession`은 `mapper_root` 아래 `*.cypher`를 재귀 탐색한다. 오타난 namespace/statement는 `_query`가 `ValueError`/`LookupError`로 알린다. PostgreSQL SQL mapper의 `-- name:`과 구분한다.
+
+현재 목표 그래프 라벨은 소문자 `rcp`, `ingr`, `rcp_cat`, `rcp_step`; 관계는 `RCP_USES`, `RCP_IN_RECIPE_CATEGORY`, `RCP_HAS_STEP`이다. `rcp_step`은 PostgreSQL `recipe.rcp_step` 한 행이며 키는 PK와 같은 `(rcp_id, step_no)` 복합 유일 제약 `rcp_step_key`다. 속성은 `rcp_id`, `step_no`(원본 MANUAL 번호), `rcp_step_instruction_txt`, `rcp_step_image_url`(없으면 속성 없음). 대표 이미지는 기존 `rcp.rcp_image_url` 속성을 그대로 쓴다. **2026-10-24 기준 AuraDB에는 `rcp_step`·`RCP_HAS_STEP`·`rcp_step_key`가 아직 없다**(코드만 반영, 실제 적재는 별도 승인 후 `load_recipe_graph --apply`). 적재 전에도 `recipe_steps`는 빈 결과를 돌려주므로 화면은 대표 이미지만 보이고 조리 과정 칸에 "데이터가 없습니다"를 표시한다. 과거 라벨·식재료 분류 노드가 남은 그래프는 적재 사전 점검에서 거부될 수 있다. [설계/이력 문서](../../neo4j/neo4j_label_rename_20261023.md)보다 이 파일의 `NODE_LABELS`와 적재 쿼리를 실행 기준으로 삼는다.

@@ -1,0 +1,463 @@
+{
+  "title_ko": "레시피 GraphRAG Neo4j 실제 그래프 구조",
+  "generated_at": "2026-10-23T06:56:38+00:00",
+  "source": "실제 Neo4j 읽기 전용 조회(READ 세션: db.schema.nodeTypeProperties, db.schema.relTypeProperties, SHOW CONSTRAINTS/INDEXES, MATCH 집계). 설계 문서를 복사하지 않음",
+  "database": {
+    "name": "6ac1f0f8",
+    "neo4j_version": "5.27-aura",
+    "edition": "enterprise",
+    "total_nodes_all_projects": 1437,
+    "total_relationships_all_projects": 11584
+  },
+  "status_note_ko": "2026-10-23 노드 라벨을 PostgreSQL recipe 스키마 테이블명과 통일했다(RcpRecipe→rcp, RcpIngredient→ingr, RcpRecipeCategory→rcp_cat). 새 라벨을 부여하고 기존 라벨을 제거하는 방식이라 노드·속성·관계·elementId는 그대로다. 관계 타입 RCP_USES·RCP_IN_RECIPE_CATEGORY는 변경하지 않았다. 업무 ID·관계 집합은 PostgreSQL과 일치한다(누락·초과·중복 0). 식재료 분류 노드·관계는 목표 모델에서 제거되어 존재하지 않는다.",
+  "label_naming_ko": "노드 라벨 = PostgreSQL recipe 스키마 테이블명. rcp_ingr·rcp_cat_rel 테이블은 각각 RCP_USES·RCP_IN_RECIPE_CATEGORY 관계로 표현",
+  "status_values": {
+    "current": "목표 모델 구성요소(현재 존재)",
+    "legacy_pending_removal": "이전 모델 잔존(삭제 승인 대기)"
+  },
+  "summary": {
+    "project_nodes": 1437,
+    "project_relationships": 11584,
+    "target_model_nodes": 1437,
+    "target_model_relationships": 11584
+  },
+  "nodes": [
+    {
+      "label": "ingr",
+      "postgres_table": "recipe.ingr",
+      "name_ko": "표준 식재료",
+      "description_ko": "검토된 표준 식재료와 별칭 목록(recipe.ingr + recipe.ingr_als)",
+      "identity_key": [
+        "ingr_id"
+      ],
+      "count": 275,
+      "status": "current",
+      "properties": [
+        {
+          "name": "ingr_id",
+          "name_ko": "표준 식재료 ID",
+          "types": [
+            "STRING NOT NULL"
+          ],
+          "mandatory": true,
+          "is_key": true,
+          "status": "current"
+        },
+        {
+          "name": "alias_names",
+          "name_ko": "별칭 목록",
+          "types": [
+            "LIST<NOTHING> NOT NULL",
+            "LIST<STRING NOT NULL> NOT NULL"
+          ],
+          "mandatory": true,
+          "is_key": false,
+          "status": "current"
+        },
+        {
+          "name": "alias_names_norm",
+          "name_ko": "검색용 정규화 별칭 목록",
+          "types": [
+            "LIST<NOTHING> NOT NULL",
+            "LIST<STRING NOT NULL> NOT NULL"
+          ],
+          "mandatory": true,
+          "is_key": false,
+          "status": "current"
+        },
+        {
+          "name": "ingr_nm",
+          "name_ko": "표준 식재료명",
+          "types": [
+            "STRING NOT NULL"
+          ],
+          "mandatory": true,
+          "is_key": false,
+          "status": "current"
+        },
+        {
+          "name": "ingr_nm_norm",
+          "name_ko": "검색용 정규화 식재료명",
+          "types": [
+            "STRING NOT NULL"
+          ],
+          "mandatory": true,
+          "is_key": false,
+          "status": "current"
+        }
+      ]
+    },
+    {
+      "label": "rcp",
+      "postgres_table": "recipe.rcp",
+      "name_ko": "레시피",
+      "description_ko": "식약처 레시피 1건(PostgreSQL recipe.rcp)",
+      "identity_key": [
+        "rcp_id"
+      ],
+      "count": 1156,
+      "status": "current",
+      "properties": [
+        {
+          "name": "rcp_id",
+          "name_ko": "레시피 ID",
+          "types": [
+            "STRING NOT NULL"
+          ],
+          "mandatory": true,
+          "is_key": true,
+          "status": "current"
+        },
+        {
+          "name": "cook_mthd_cd",
+          "name_ko": "조리 방법 코드",
+          "types": [
+            "STRING NOT NULL"
+          ],
+          "mandatory": true,
+          "is_key": false,
+          "status": "current"
+        },
+        {
+          "name": "cook_mthd_nm",
+          "name_ko": "조리 방법명",
+          "types": [
+            "STRING NOT NULL"
+          ],
+          "mandatory": true,
+          "is_key": false,
+          "status": "current"
+        },
+        {
+          "name": "rcp_energy_kcal",
+          "name_ko": "열량(kcal)",
+          "types": [
+            "FLOAT NOT NULL"
+          ],
+          "mandatory": true,
+          "is_key": false,
+          "status": "current"
+        },
+        {
+          "name": "rcp_image_url",
+          "name_ko": "대표 이미지 URL",
+          "types": [
+            "STRING NOT NULL"
+          ],
+          "mandatory": false,
+          "is_key": false,
+          "status": "current"
+        },
+        {
+          "name": "rcp_nm",
+          "name_ko": "레시피명",
+          "types": [
+            "STRING NOT NULL"
+          ],
+          "mandatory": true,
+          "is_key": false,
+          "status": "current"
+        },
+        {
+          "name": "rcp_nutrition_status",
+          "name_ko": "영양정보 검증 상태",
+          "types": [
+            "STRING NOT NULL"
+          ],
+          "mandatory": true,
+          "is_key": false,
+          "status": "current"
+        },
+        {
+          "name": "rcp_seq",
+          "name_ko": "식약처 원본 레시피 번호",
+          "types": [
+            "STRING NOT NULL"
+          ],
+          "mandatory": true,
+          "is_key": false,
+          "status": "current"
+        }
+      ]
+    },
+    {
+      "label": "rcp_cat",
+      "postgres_table": "recipe.rcp_cat",
+      "name_ko": "요리 분류",
+      "description_ko": "요리 분류 마스터(recipe.rcp_cat, 원본 RCP_PAT2)",
+      "identity_key": [
+        "rcp_cat_id"
+      ],
+      "count": 6,
+      "status": "current",
+      "properties": [
+        {
+          "name": "rcp_cat_id",
+          "name_ko": "요리 분류 ID",
+          "types": [
+            "STRING NOT NULL"
+          ],
+          "mandatory": true,
+          "is_key": true,
+          "status": "current"
+        },
+        {
+          "name": "rcp_cat_nm",
+          "name_ko": "요리 분류명",
+          "types": [
+            "STRING NOT NULL"
+          ],
+          "mandatory": true,
+          "is_key": false,
+          "status": "current"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "type": "RCP_IN_RECIPE_CATEGORY",
+      "postgres_table": "recipe.rcp_cat_rel",
+      "name_ko": "요리 분류 소속",
+      "description_ko": "레시피가 요리 분류에 속한다(recipe.rcp_cat_rel 1행 = 관계 1개, 다중 분류 가능)",
+      "from_label": "rcp",
+      "to_label": "rcp_cat",
+      "direction": "from_label -> to_label",
+      "count": 1156,
+      "properties": [],
+      "status": "current"
+    },
+    {
+      "type": "RCP_USES",
+      "postgres_table": "recipe.rcp_ingr",
+      "name_ko": "사용 식재료",
+      "description_ko": "레시피가 표준 식재료를 사용한다(recipe.rcp_ingr 1행 = 관계 1개)",
+      "from_label": "rcp",
+      "to_label": "ingr",
+      "direction": "from_label -> to_label",
+      "count": 10428,
+      "properties": [],
+      "status": "current"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "ingr_key",
+      "type": "NODE_PROPERTY_UNIQUENESS",
+      "labelsOrTypes": [
+        "ingr"
+      ],
+      "properties": [
+        "ingr_id"
+      ],
+      "ownedIndex": "ingr_key",
+      "name_ko": "",
+      "status": "current"
+    },
+    {
+      "name": "rcp_cat_key",
+      "type": "NODE_PROPERTY_UNIQUENESS",
+      "labelsOrTypes": [
+        "rcp_cat"
+      ],
+      "properties": [
+        "rcp_cat_id"
+      ],
+      "ownedIndex": "rcp_cat_key",
+      "name_ko": "요리 분류 ID 유일",
+      "status": "current"
+    },
+    {
+      "name": "rcp_key",
+      "type": "NODE_PROPERTY_UNIQUENESS",
+      "labelsOrTypes": [
+        "rcp"
+      ],
+      "properties": [
+        "rcp_id"
+      ],
+      "ownedIndex": "rcp_key",
+      "name_ko": "",
+      "status": "current"
+    },
+    {
+      "name": "rcp_seq_key",
+      "type": "NODE_PROPERTY_UNIQUENESS",
+      "labelsOrTypes": [
+        "rcp"
+      ],
+      "properties": [
+        "rcp_seq"
+      ],
+      "ownedIndex": "rcp_seq_key",
+      "name_ko": "식약처 원본 레시피 번호 유일",
+      "status": "current"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "ingr_key",
+      "type": "RANGE",
+      "labelsOrTypes": [
+        "ingr"
+      ],
+      "properties": [
+        "ingr_id"
+      ],
+      "owningConstraint": "ingr_key",
+      "state": "ONLINE",
+      "name_ko": "",
+      "status": "current"
+    },
+    {
+      "name": "ingr_nm_norm_idx",
+      "type": "RANGE",
+      "labelsOrTypes": [
+        "ingr"
+      ],
+      "properties": [
+        "ingr_nm_norm"
+      ],
+      "owningConstraint": null,
+      "state": "ONLINE",
+      "name_ko": "정규화 식재료명 검색 인덱스",
+      "status": "current"
+    },
+    {
+      "name": "rcp_cat_key",
+      "type": "RANGE",
+      "labelsOrTypes": [
+        "rcp_cat"
+      ],
+      "properties": [
+        "rcp_cat_id"
+      ],
+      "owningConstraint": "rcp_cat_key",
+      "state": "ONLINE",
+      "name_ko": "요리 분류 ID 유일",
+      "status": "current"
+    },
+    {
+      "name": "rcp_key",
+      "type": "RANGE",
+      "labelsOrTypes": [
+        "rcp"
+      ],
+      "properties": [
+        "rcp_id"
+      ],
+      "owningConstraint": "rcp_key",
+      "state": "ONLINE",
+      "name_ko": "",
+      "status": "current"
+    },
+    {
+      "name": "rcp_nm_idx",
+      "type": "RANGE",
+      "labelsOrTypes": [
+        "rcp"
+      ],
+      "properties": [
+        "rcp_nm"
+      ],
+      "owningConstraint": null,
+      "state": "ONLINE",
+      "name_ko": "레시피명 검색 인덱스",
+      "status": "current"
+    },
+    {
+      "name": "rcp_seq_key",
+      "type": "RANGE",
+      "labelsOrTypes": [
+        "rcp"
+      ],
+      "properties": [
+        "rcp_seq"
+      ],
+      "owningConstraint": "rcp_seq_key",
+      "state": "ONLINE",
+      "name_ko": "식약처 원본 레시피 번호 유일",
+      "status": "current"
+    }
+  ],
+  "statistics": {
+    "recipes_per_category": [
+      {
+        "rcp_cat_id": "20261022_000001",
+        "rcp_cat_nm": "국&찌개",
+        "recipes": 103
+      },
+      {
+        "rcp_cat_id": "20261022_000002",
+        "rcp_cat_nm": "기타",
+        "recipes": 37
+      },
+      {
+        "rcp_cat_id": "20261022_000003",
+        "rcp_cat_nm": "반찬",
+        "recipes": 574
+      },
+      {
+        "rcp_cat_id": "20261022_000004",
+        "rcp_cat_nm": "밥",
+        "recipes": 119
+      },
+      {
+        "rcp_cat_id": "20261022_000005",
+        "rcp_cat_nm": "일품",
+        "recipes": 181
+      },
+      {
+        "rcp_cat_id": "20261022_000006",
+        "rcp_cat_nm": "후식",
+        "recipes": 142
+      }
+    ],
+    "categories_per_recipe": [
+      {
+        "categories": 1,
+        "recipes": 1156
+      }
+    ],
+    "recipes_without_ingredient": 8,
+    "ingredients_per_recipe": {
+      "min": 1,
+      "max": 22,
+      "avg": 9.08
+    },
+    "recipes_per_ingredient": {
+      "min": 6,
+      "max": 443,
+      "avg": 37.92
+    },
+    "alias_total": 71,
+    "ingredients_with_alias": 55,
+    "alias_example": {
+      "ingr_id": "20261022_000175",
+      "ingr_nm": "달걀",
+      "alias_names": [
+        "계란"
+      ]
+    }
+  },
+  "search_conventions_ko": {
+    "ingredient_input": "입력어를 양끝 공백 제거·소문자화한 뒤 ingr_nm_norm 또는 alias_names_norm과 정확히 비교",
+    "alias_example": "별칭 '계란' → 표준 식재료 '달걀'",
+    "no_fuzzy_merge": "유사 이름(두부/연두부)은 서로 다른 표준 식재료로 유지"
+  },
+  "other_database_objects": {
+    "note_ko": "레시피 프로젝트(rcp·ingr·rcp_cat 라벨) 외 객체. LOOKUP 인덱스는 Neo4j가 기본 제공하는 라벨·관계 유형 조회용이며 구조도에서 제외",
+    "constraints": [],
+    "indexes": [
+      {
+        "name": "index_1b9dcc97",
+        "type": "LOOKUP"
+      },
+      {
+        "name": "index_460996c0",
+        "type": "LOOKUP"
+      }
+    ],
+    "labels_with_nodes": []
+  }
+}

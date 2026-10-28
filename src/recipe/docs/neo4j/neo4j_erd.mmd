@@ -1,0 +1,7 @@
+flowchart LR
+    RC["rcp_cat<br/>key: rcp_cat_id<br/>rcp_cat_nm"]
+    R["rcp<br/>key: rcp_id<br/>rcp_seq, rcp_nm, cook_mthd_cd"]
+    I["ingr<br/>key: ingr_id<br/>ingr_nm, alias_names"]
+
+    R -- "RCP_IN_RECIPE_CATEGORY<br/>(rcp_cat_rel, 1..N)" --> RC
+    R -- "RCP_USES<br/>(rcp_ingr)" --> I
