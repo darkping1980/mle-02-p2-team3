@@ -6,7 +6,7 @@ import os
 import logging
 from pathlib import Path
 
-from .config import configure_query_logging, load_project_environment, prepare_common_imports
+from .config import configure_query_logging, load_project_environment
 from .neo4j_connection import create_neo4j_driver
 
 # region 1. 그래프 모델 및 Mapper 경로
@@ -37,7 +37,6 @@ class RecipeGraphRepository:
         # 빈 그래프 점검은 아직 생성되지 않은 레이블을 조회하므로 알림을 줄인다.
         logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
         load_project_environment()
-        prepare_common_imports()
         from common.neo4j_db_session import Neo4jDbSession
 
         # 기본은 none: 적재 CLI의 $rows(배치당 최대 1,000행)까지 :param 줄로 찍히지 않게 꺼 둔다.

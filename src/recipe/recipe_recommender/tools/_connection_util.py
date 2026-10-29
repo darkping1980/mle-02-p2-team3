@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import re
 
-from recipe_recommender.config import load_project_environment, prepare_imports
+from recipe_recommender.config import load_project_environment, prepare_common_imports
 
 
 def initialize() -> None:
     """단독 실행 도구가 패키지 경로와 환경변수를 읽도록 준비한다."""
-    prepare_imports()
+    prepare_common_imports()
     load_project_environment()
 
 

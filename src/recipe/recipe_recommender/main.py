@@ -11,7 +11,7 @@ TASK_DIR = Path(__file__).resolve().parents[1]
 if str(TASK_DIR) not in sys.path:
     sys.path.insert(0, str(TASK_DIR))
 
-from recipe_recommender.config import prepare_imports
+from recipe_recommender.config import prepare_common_imports
 
 
 # region 1. CLI 준비 상태 출력
@@ -21,7 +21,7 @@ from recipe_recommender.config import prepare_imports
 
 def main() -> int:
     """import 경로를 준비하고 골격 안내문을 출력한 뒤 0을 반환한다."""
-    prepare_imports()
+    prepare_common_imports()
     print("Recipe recommender scaffold is ready. Recipe behavior is not implemented.")
     return 0
 

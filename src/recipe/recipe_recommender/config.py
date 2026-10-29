@@ -36,34 +36,14 @@ def project_root() -> Path:
     return TASK_DIR
 
 
-def prepare_imports() -> None:
-    """과제 폴더를 import 경로에 넣어 같은 수준의 ``common``을 찾게 한다."""
+def prepare_common_imports() -> None:
+    """과제 폴더를 import 경로에 넣어 같은 수준의 ``common``을 찾게 한다.
+
+    pgvector 버전별 ``Vector`` 위치 차이는 ``common.postgres_db_session`` 이 직접 처리한다.
+    """
     task_path = str(TASK_DIR)
     if task_path not in sys.path:
         sys.path.insert(0, task_path)
-
-
-def prepare_common_imports() -> None:
-    """``common`` import를 준비하고 pgvector의 이전 import 경로를 보완한다.
-
-    공통 세션이 참조하는 ``pgvector.utils.Vector``가 없는 설치 버전에서는
-    패키지 루트의 ``Vector``를 같은 모듈 이름에 등록한다. Python의
-    ``sys.modules`` 별칭이므로 해당 프로세스의 import에만 적용된다.
-    """
-    prepare_imports()
-    try:
-        import pgvector.utils  # noqa: F401
-    except ModuleNotFoundError:
-        import types
-
-        try:
-            import pgvector
-        except ModuleNotFoundError:
-            return                      # pgvector 자체가 없으면 common import 시점에 원래 오류가 난다.
-
-        alias = types.ModuleType("pgvector.utils")
-        alias.Vector = pgvector.Vector
-        sys.modules["pgvector.utils"] = alias
 
 
 def load_project_environment() -> None:

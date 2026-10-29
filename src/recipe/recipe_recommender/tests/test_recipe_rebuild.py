@@ -6,6 +6,7 @@ import csv
 import hashlib
 import json
 import re
+import shutil
 import sys
 import tempfile
 import unittest
@@ -248,7 +249,9 @@ class SchemaSelectionTests(unittest.TestCase):
         from recipe_recommender.config import PACKAGE_DIR
 
         self.assertEqual(_mapper_root_for("recipe"), PACKAGE_DIR)
-        rendered = (_mapper_root_for("recipe_v2") / "recipe.sql").read_text(encoding="utf-8")
+        folder = _mapper_root_for("recipe_v2")
+        self.addCleanup(shutil.rmtree, folder, True)
+        rendered = (folder / "recipe.sql").read_text(encoding="utf-8")
         self.assertNotRegex(statements(rendered), r"(?<![\w.])recipe\.")
         self.assertIn("INSERT INTO recipe_v2.rcp_cat_rel", rendered)
         self.assertIn("to_regclass('recipe_v2.rcp_cat_rel')", rendered)

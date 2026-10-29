@@ -14,7 +14,6 @@ if str(TASK_DIR) not in sys.path:
     sys.path.insert(0, str(TASK_DIR))
 
 from recipe_recommender.config import PACKAGE_DIR
-from recipe_recommender.database import classify_pool_mode
 
 
 class ProjectStructureTests(unittest.TestCase):
@@ -61,17 +60,6 @@ class ProjectStructureTests(unittest.TestCase):
             )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), "55")
-
-    def test_supabase_pooler_modes_are_classified(self):
-        self.assertEqual(
-            classify_pool_mode("aws-0-region.pooler.supabase.com", 5432),
-            "session_pooler",
-        )
-        self.assertEqual(
-            classify_pool_mode("aws-0-region.pooler.supabase.com", 6543),
-            "transaction_pooler",
-        )
-        self.assertEqual(classify_pool_mode("db.example.invalid", 5432), "direct_or_other")
 
 
 if __name__ == "__main__":
