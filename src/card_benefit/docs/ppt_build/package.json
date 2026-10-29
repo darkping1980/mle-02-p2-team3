@@ -1,0 +1,10 @@
+{
+  "name": "card-benefit-ppt-build",
+  "version": "1.0.0",
+  "private": true,
+  "description": "카드 혜택 GraphRAG 발표 PPT 생성 스크립트 (pptxgenjs)",
+  "type": "commonjs",
+  "dependencies": {
+    "pptxgenjs": "^3.12.0"
+  }
+}
