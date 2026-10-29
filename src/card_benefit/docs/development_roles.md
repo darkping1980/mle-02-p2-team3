@@ -15,9 +15,9 @@
 
 | 담당자 | 방식 | 현재 폴더 | 처리 범위 |
 |---|---|---|---|
-| **이현근** | 파일 기반 Python 파싱 + LLM 추출 | `payment_card/extraction/` | 문서 읽기 → 전처리 → 정규식 → LLM 추출 → Python 검증 → 추출 결과 A |
-| **김병주** | PostgreSQL 기반 저장·처리 + AI 추출 | `payment_card/ingestion/` | 원본 DB 저장 → SQL 전처리 → DB 데이터 기반 AI 추출 → SQL 정제·검증 → 추출 결과 B |
-| **공동** | 공통 데이터 계약, 비교·검증 | (폴더 미정) | 평가 기준, 결과 A·B 비교, 최종 데이터 확정, 향후 Neo4j·GraphRAG |
+| **이현근** | 파일 기반 Python 파싱 + LLM 추출 | `payment_card/file_pipeline/` | 문서 읽기 → 전처리 → 정규식 → LLM 추출 → Python 검증 → 추출 결과 A |
+| **김병주** | PostgreSQL 기반 저장·처리 + AI 추출 | `payment_card/db_pipeline/` | 원본 DB 저장 → SQL 전처리 → DB 데이터 기반 AI 추출 → SQL 정제·검증 → 추출 결과 B |
+| **공동** | 공통 데이터 계약, 비교·검증 | `payment_card/` 최상위 | 평가 기준, 결과 A·B 비교, 최종 데이터 확정, 향후 Neo4j·GraphRAG |
 
 두 사람 모두 현재 담당 폴더에 Python 코드가 없습니다(폴더 README만 있음). 아래 담당 범위는 모두 ⏳ 개발 예정입니다.
 
@@ -78,16 +78,19 @@ PDF·원천 문서 파일을 Python으로 직접 읽어 처리하는 방식을 �
 
 | 경로 | 소유 | 변경 규칙 |
 |---|---|---|
-| `payment_card/extraction/` | 이현근 | 파일 기반 방식 코드. 자유롭게 변경 |
-| `payment_card/ingestion/` | 김병주 | PostgreSQL 기반 방식 코드(전용 `.sql` 포함). 자유롭게 변경 |
+| `payment_card/file_pipeline/` | 이현근 | 파일 기반 방식 전용 처리 로직. 자유롭게 변경 |
+| `payment_card/db_pipeline/` | 김병주 | PostgreSQL 기반 방식 전용 처리 로직과 전용 SQL(`db_pipeline.sql`). 자유롭게 변경 |
 | `sql/` (신규 DDL) | 김병주 (테이블 설계) | 운영 DB 적용 전 공동 확인 |
 | `sql/schema.sql` (기존) | 공동 | 현재 CLI가 쓰는 `card_product` 테이블. 변경 시 합의 |
-| `payment_card/models.py`, `repository.py`, `payment_card.sql`, `main.py`, `__init__.py` | 공동 | 현재 카드 등록·조회 CLI 코드. 어느 쪽 방식에도 아직 속하지 않음. 기존 동작을 깨지 않게 변경 |
+| `payment_card/models.py` | 공동 | 공통 카드 데이터 모델 ✅ + 추출 결과 계약(⏳ 예정, 아직 없음). 양쪽 합의 후 변경 |
+| `payment_card/repository.py`, `payment_card.sql` | 공동 | 두 방식이 공통으로 쓸 카드 등록·조회. 현재 호출자는 CLI뿐. 기존 동작을 깨지 않게 변경 |
+| `payment_card/main.py`, `__init__.py` | 공동 | 현재 실행 진입점(카드 등록·조회 CLI) |
 | `payment_card/tests/test_payment_card.py` | 공동 | 각자 테스트는 새 `test_*.py` 파일로 추가 |
 | `data/` | 공동 | 두 방식이 같은 원천 문서를 쓰도록 함께 관리 |
 | `docs/`, `README.md` | 공동 | 자기 방식 문서는 각자 추가 |
 
-공통 JSON 형식 정의와 결과 A·B 비교 코드를 둘 위치는 아직 정하지 않았습니다 ❓.
+공통 로직·SQL은 각 파이프라인에 복사하지 않고 최상위 것을 사용합니다. 반대로 한 방식에서만 쓰는 로직·SQL은 그 파이프라인 폴더에 둡니다.
+추출 결과 계약은 `models.py` 에 둘 예정입니다(⏳). 결과 A·B 비교 코드의 위치는 아직 정하지 않았습니다 ❓.
 
 ## 6. 담당자별 입력·출력
 
@@ -100,15 +103,16 @@ PDF·원천 문서 파일을 Python으로 직접 읽어 처리하는 방식을 �
 ## 7. 의존성과 통합 방식
 
 ```text
-원천 문서 (data/) ──┬──▶ extraction/ (이현근) ──▶ 결과 A (JSON) ──┐
-                    │                                              ├──▶ 공통 형식 비교 · 근거 검증 (공동)
-                    └──▶ ingestion/ (김병주) ──▶ PostgreSQL ──▶ 결과 B (JSON) ──┘
+원천 문서 (data/) ──┬──▶ file_pipeline/ (이현근) ──▶ 결과 A ─────────────────┐
+                    │                                                         ├──▶ 공통 형식 비교 · 근거 검증 (공동)
+                    └──▶ db_pipeline/ (김병주) ──▶ PostgreSQL ──▶ 결과 B ─────┘
+              공통: models.py(계약) · repository.py · payment_card.sql · src/common
 ```
 
-- `extraction/` 과 `ingestion/` 은 서로 import하지 않고, 서로의 출력을 입력으로 쓰지 않습니다.
-- 두 방식이 공유하는 것은 원천 문서, 공통 데이터 계약, `src/common` 뿐입니다. 따라서 각자 독립적으로 개발·테스트할 수 있습니다.
-- `ingestion/` 은 `src/common` 의 `PostgresDbSession` 을 사용합니다. 기존 `CardRepository` 를 재사용할지는 테이블 설계 때 결정합니다 ❓.
-- `extraction/` 이 결과 A를 PostgreSQL에 저장할지(비교를 DB에서 할지)는 미정입니다 ❓.
+- `file_pipeline/` 과 `db_pipeline/` 은 서로 import하지 않고, 서로의 출력을 입력으로 쓰지 않습니다.
+- 두 방식이 공유하는 것은 원천 문서, `payment_card/` 최상위 공통 코드(모델·계약·등록·조회), `src/common` 뿐입니다. 따라서 각자 독립적으로 개발·테스트할 수 있습니다.
+- `db_pipeline/` 은 `src/common` 의 `PostgresDbSession` 과 공통 `CardRepository` 를 사용합니다. 전용 SQL은 `db_pipeline/db_pipeline.sql` 에 둡니다.
+- `file_pipeline/` 이 결과 A를 PostgreSQL에 저장할지(비교를 DB에서 할지)는 미정입니다 ❓.
 
 ## 8. 향후 확정이 필요한 사항
 
@@ -117,8 +121,8 @@ PDF·원천 문서 파일을 Python으로 직접 읽어 처리하는 방식을 �
 | 공통 데이터 계약 (4절 전체) | ❓ 공동 합의 필요 — 가장 먼저 결정 |
 | 김병주 방식의 원천 텍스트 확보 방법 (이현근 파싱 결과 공유 / 별도 파싱) | ❓ 비교 범위가 달라짐 ([architecture.md](architecture.md) 4절) |
 | DB에서 AI를 호출하는 방식과 Supabase 지원 여부 | ❓ 기술 검증 필요 |
+| 추출 결과 계약의 구체 내용 (`models.py` 에 추가 예정) | ❓ 4절 합의 후 구현 |
 | 결과 A·B 비교 코드·정답셋 위치, 비교를 파일에서 할지 DB에서 할지 | ❓ 미정 |
 | 최종 데이터 확정 방식 (한 방식 채택 / 결과 병합 / 사람 승인) | ❓ 미정 |
-| `ingestion/` 폴더 이름 | ❓ 검토 의견만 있음 ([directory_structure.md](directory_structure.md) 9절) |
 | `run_offline_tests.py` 에 card_benefit 테스트 포함 여부 | ❓ 미정 (루트 스크립트 변경 필요) |
 | Neo4j 적재·GraphRAG 검색 | ⏳ 향후 공동 |

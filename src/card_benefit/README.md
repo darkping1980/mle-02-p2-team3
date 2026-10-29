@@ -2,7 +2,8 @@
 
 신용카드·체크카드의 혜택·이용 조건을 관리하는 2인 팀 프로젝트입니다.
 카드 상품설명서에서 혜택 정보를 AI로 추출·검증하고, 이후 Neo4j GraphRAG와 연동하는 것이 목표입니다.
-두 팀원이 같은 원천 문서를 **서로 다른 방식(파일 기반 / PostgreSQL 기반)으로 각자 추출·검증**한 뒤 결과를 비교합니다.
+두 팀원이 같은 원천 문서를 **서로 다른 방식(파일 기반 / PostgreSQL 기반)으로 각자 파싱·추출·검증**한 뒤 결과를 비교합니다.
+두 파이프라인은 독립적인 실험·구현이며, 한쪽 결과가 다른 쪽 입력이 되지 않습니다.
 
 ## 현재 구현된 기능
 
@@ -16,9 +17,9 @@ PDF 파싱, 정규식·LLM 추출, 정제·검증, Neo4j·GraphRAG는 **아직 �
 ```text
 card_benefit/                     프로젝트 루트 (실행 위치)
 ├── payment_card/                 Python 패키지
-│   ├── main.py · models.py · repository.py · payment_card.sql   등록·조회 (공동)
-│   ├── extraction/               파일 기반 파싱·LLM 추출·검증 (이현근, 미구현)
-│   ├── ingestion/                PostgreSQL 기반 저장·AI 추출·검증 (김병주, 미구현)
+│   ├── main.py · models.py · repository.py · payment_card.sql   공통 모델·등록·조회·SQL (공동)
+│   ├── file_pipeline/            파일 기반 파싱·LLM 추출·검증 (이현근, 미구현)
+│   ├── db_pipeline/              PostgreSQL 기반 저장·AI 추출·검증 (김병주, 미구현)
 │   └── tests/
 ├── sql/schema.sql                DDL (수동 실행 전용)
 ├── data/                         샘플 데이터
@@ -29,8 +30,8 @@ card_benefit/                     프로젝트 루트 (실행 위치)
 
 | 담당자 | 방식 | 영역 |
 |---|---|---|
-| 이현근 | 파일 기반 | `extraction/` — Python 파싱·전처리, 정규식, Python LLM 호출, Python 검증 → 추출 결과 A |
-| 김병주 | PostgreSQL 기반 | `ingestion/` — 테이블 설계, 원본 DB 저장, SQL 전처리, DB 데이터 기반 AI 추출(호출 방식 미확정), SQL 검증 → 추출 결과 B |
+| 이현근 | 파일 기반 | `file_pipeline/` — Python 파싱·전처리, 정규식, Python LLM 호출, Python 검증 → 추출 결과 A |
+| 김병주 | PostgreSQL 기반 | `db_pipeline/` — 테이블 설계, 원본 DB 저장, SQL 전처리, DB 데이터 기반 AI 추출(호출 방식 미확정), SQL 검증 → 추출 결과 B |
 | 공동 | — | 공통 데이터 계약, 결과 A·B 비교·근거 검증, 통합 테스트, 향후 Neo4j·GraphRAG |
 
 ## 준비
@@ -80,5 +81,5 @@ uv run python -m unittest discover -s payment_card/tests -v
 ## 문서
 
 - [docs/architecture.md](docs/architecture.md) — 현재 호출 흐름, 병렬 추출·비교 구조, 기술 검토 사항, 세 가지 검증의 차이
-- [docs/directory_structure.md](docs/directory_structure.md) — 폴더·파일 역할, common/recipe와의 관계, 배치 원칙, 폴더 이름 검토 의견
+- [docs/directory_structure.md](docs/directory_structure.md) — 폴더·파일 역할, common/recipe와의 관계, 배치 원칙, 폴더 이름 변경 이력
 - [docs/development_roles.md](docs/development_roles.md) — 담당자별 방식·범위, 공통 데이터 계약, 소유·변경 규칙, 미확정 사항
