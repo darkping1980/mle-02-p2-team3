@@ -32,7 +32,7 @@ class NewCard:
 
 @dataclass
 class Card:
-    """DB에 등록된 카드 상품. ``payment_card.card_product`` 한 행에 해당한다."""
+    """DB에 등록된 카드 상품. ``card_benefit.card_product`` 한 행에 해당한다."""
 
     card_id: int
     issuer: str

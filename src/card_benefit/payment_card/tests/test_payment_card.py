@@ -58,6 +58,8 @@ class MapperCompatibilityTests(unittest.TestCase):
         insert_sql = session._query("payment_card.insert_card").sql
         for name in ("issuer", "card_name", "card_type"):
             self.assertIn(f"%({name})s", insert_sql)                           # 값은 바인딩 파라미터로 전달된다
+        for statement in ("insert_card", "list_cards", "find_card"):
+            self.assertIn("card_benefit.card_product", session._query(f"payment_card.{statement}").sql)  # DB 스키마는 card_benefit (namespace는 파일명)
 
 
 class CardRepositoryTests(unittest.TestCase):

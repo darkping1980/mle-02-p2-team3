@@ -5,16 +5,16 @@
 --=========================================================
 
 -- name: insert_card
-INSERT INTO payment_card.card_product (issuer, card_name, card_type)
+INSERT INTO card_benefit.card_product (issuer, card_name, card_type)
 VALUES (:issuer, :card_name, :card_type)
 RETURNING card_id, issuer, card_name, card_type, created_at;
 
 -- name: list_cards
 SELECT card_id, issuer, card_name, card_type, created_at
-FROM payment_card.card_product
+FROM card_benefit.card_product
 ORDER BY card_id;
 
 -- name: find_card
 SELECT card_id, issuer, card_name, card_type, created_at
-FROM payment_card.card_product
+FROM card_benefit.card_product
 WHERE card_id = :card_id;

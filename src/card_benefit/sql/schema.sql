@@ -1,13 +1,13 @@
 --=========================================================
 -- payment_card 카드 상품 테이블 DDL (수동 실행 전용)
 --   애플리케이션과 테스트는 이 파일을 자동 실행하지 않는다.
---   기존 테이블과 겹치지 않도록 별도 스키마 payment_card를 사용한다.
+--   기존 테이블과 겹치지 않도록 별도 스키마 card_benefit을 사용한다(수집·정제·검증 테이블과 같은 스키마: hana_card_schema_draft.sql).
 --   IF NOT EXISTS만 사용하므로 다시 실행해도 기존 데이터를 지우지 않는다.
 --=========================================================
 
-CREATE SCHEMA IF NOT EXISTS payment_card;
+CREATE SCHEMA IF NOT EXISTS card_benefit;
 
-CREATE TABLE IF NOT EXISTS payment_card.card_product (
+CREATE TABLE IF NOT EXISTS card_benefit.card_product (
     card_id    BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     issuer     TEXT        NOT NULL,                      -- 카드사
     card_name  TEXT        NOT NULL,                      -- 카드 상품명

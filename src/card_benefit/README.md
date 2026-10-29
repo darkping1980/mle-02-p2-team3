@@ -7,7 +7,7 @@
 
 ## 현재 구현된 기능
 
-- PostgreSQL 카드 상품 등록·목록 조회·단건 조회 CLI (`payment_card.card_product`)
+- PostgreSQL 카드 상품 등록·목록 조회·단건 조회 CLI (`card_benefit.card_product`)
 - DB 연결·SQL 실행은 `src/common` 의 `PostgresDbSession` 을 그대로 사용
 
 PDF 파싱, 정규식·LLM 추출, 정제·검증, Neo4j·GraphRAG는 **아직 구현되지 않았습니다.**

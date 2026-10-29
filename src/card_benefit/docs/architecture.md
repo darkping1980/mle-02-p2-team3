@@ -13,12 +13,12 @@ PostgreSQL 카드 상품 등록·조회 CLI뿐입니다. PDF 파싱, 추출, 정
 | `payment_card/models.py` | `NewCard`(입력 검증), `Card`(조회 결과) |
 | `payment_card/repository.py` | `CardRepository`: `payment_card.*` statement 실행 |
 | `payment_card/payment_card.sql` | Named SQL Mapper |
-| `sql/schema.sql` | `payment_card.card_product` DDL (수동 실행) |
+| `sql/schema.sql` | `card_benefit.card_product` DDL (수동 실행) |
 | `src/common` | `PostgresDbSession`(SQL 실행·트랜잭션), `DatabaseManager`(Connection Pool) — 그대로 재사용 |
 
 ## 2. 테이블
 
-`payment_card.card_product`
+`card_benefit.card_product`
 
 | 컬럼 | 타입 | 의미 |
 |---|---|---|
@@ -81,7 +81,7 @@ main.main(argv)
 - 두 방식을 반드시 하나의 구현으로 합치지 않습니다. 같은 원문과 평가 기준으로 비교할 수 있는 구조를 지향합니다.
 - 비교가 가능하려면 공통 데이터 계약(문서 ID·원문 위치, 공통 JSON, 판정 기준 등)이 먼저 필요합니다([development_roles.md](development_roles.md) 4절).
 - 단계별 모듈, 테이블, JSON 필드, 비교 코드 위치, 실행 진입점은 아직 정해지지 않았습니다.
-  공통 `CardRepository`·`payment_card.card_product` 를 각 방식이 어떻게 쓸지도 테이블 설계 때 구체화합니다.
+  공통 `CardRepository`·`card_benefit.card_product` 를 각 방식이 어떻게 쓸지도 테이블 설계 때 구체화합니다.
 
 ### 기술 검토 사항 ❓ (구현 전 확인)
 

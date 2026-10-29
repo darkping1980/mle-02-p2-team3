@@ -84,7 +84,7 @@ src/card_benefit/                     프로젝트 루트 = 실행 위치, impor
 ## 4. SQL Mapper — `payment_card/payment_card.sql`
 
 - 위치: `repository.py` 와 같은 폴더. 파일명 stem `payment_card` 가 namespace 다.
-- statement: `insert_card`(INSERT … RETURNING, 접미사 없음), `list_cards`, `find_card`. 모두 `payment_card.card_product` 대상.
+- statement: `insert_card`(INSERT … RETURNING, 접미사 없음), `list_cards`, `find_card`. 모두 `card_benefit.card_product` 대상.
 - `PostgresDbSession` 은 `MAPPER_ROOT`(= `payment_card/`) **하위 폴더까지** `-- name:` 이 있는 `*.sql` 을 모두 등록한다.
   따라서 파이프라인 폴더에 `.sql` 을 두면 별도 설정 없이 자동 등록되며, 파일명이 다른 `.sql` 과 같으면 중복 오류가 난다.
 - 이 파일은 두 방식이 공통으로 쓰는 카드 등록·조회 SQL이다. 한 방식에서만 쓰는 SQL은 그 파이프라인 폴더에 둔다.
@@ -93,7 +93,7 @@ src/card_benefit/                     프로젝트 루트 = 실행 위치, impor
 
 ## 5. PostgreSQL DDL — `sql/schema.sql`
 
-- `CREATE SCHEMA IF NOT EXISTS payment_card` + `CREATE TABLE IF NOT EXISTS payment_card.card_product`.
+- `CREATE SCHEMA IF NOT EXISTS card_benefit` + `CREATE TABLE IF NOT EXISTS card_benefit.card_product`. 하나카드 수집·정제·검증 테이블(`hana_card_schema_draft.sql`)도 같은 `card_benefit` 스키마를 쓴다.
 - 컬럼: `card_id`(BIGINT IDENTITY PK), `issuer`, `card_name`, `card_type`(CHECK CREDIT/DEBIT), `created_at`(TIMESTAMPTZ 기본 `now()`).
 - 애플리케이션·테스트가 자동 실행하지 않는다. `-- name:` 이 없고 `MAPPER_ROOT` 밖에 있어 mapper로 등록되지도 않는다.
 
