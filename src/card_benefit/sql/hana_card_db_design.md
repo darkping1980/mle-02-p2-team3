@@ -1,8 +1,8 @@
 # 하나카드 상품설명서 PDF 정제·검증 DB 설계서 (db_pipeline, 초안)
 
 - 작성일: 2026-10-29
-- 상태: **설계 검토 초안. DB에 적용하지 않음.** 적용 전 공동 확인 필요([development_roles.md](../docs/development_roles.md) 5절)
-- DDL 초안: [hana_card_schema_draft.sql](hana_card_schema_draft.sql)
+- 상태: **설계 검토 초안. `db_pipeline` 스키마는 DB에 적용하지 않음.** 공유 Supabase에는 같은 10개 테이블이 이전 스키마 `card_benefit`에 있다(2026-10-30 백업 `src/data/backup/card_benefit-postgres-202610301243.sql`). 적용 전 공동 확인 필요([development_roles.md](../docs/development_roles.md) 5절)
+- 관리용 DDL 기준본: [db_pipeline_schema.sql](db_pipeline_schema.sql) (2026-10-30). 이전 초안 [hana_card_schema_draft.sql](hana_card_schema_draft.sql)은 비교용으로 보존
 - 표기: **[기존]** 현재 소스·문서에 근거한 사실 · **[제안]** 이 문서에서 새로 제안하는 설계 · **❓** 미확정
 - 스키마: **`db_pipeline`** (2026-10-30 변경). 이 문서의 신규 테이블·시퀀스·함수·인덱스는 DB 기반 전용 스키마 `db_pipeline`에 두고, 카드 마스터 `card_product`(`schema.sql`)는 공통 스키마 `card_benefit`에 그대로 둔다. 이전 `payment_card` 스키마는 사용하지 않는다(DB에서 삭제됨, 다시 만들지 않음). Python 패키지 `payment_card/`와 mapper namespace `payment_card.*`는 DB 스키마가 아니라 파일·폴더 이름이므로 그대로다.
 
@@ -24,11 +24,11 @@
 | 테이블명 | 소문자 snake_case 약어: `rcp`, `ingr`, `ingr_als`, `rcp_raw`, `rcp_ingr_stg`, `rcp_cat_rel` | `card_doc`, `card_doc_chunk`, `card_extr_stg`, `card_excl_item_als`, `card_bnft`, `card_cond` |
 | 컬럼명 | 테이블 약어 접두어 + 의미 접미어: `_id`, `_nm`, `_txt`, `_cd`, `_no`, `_seq`, `_status`, `_date`, `_note` | `doc_*`, `page_*`, `chunk_*`, `run_*`, `call_*`, `stg_*`, `bnft_*`, `cond_*` |
 | 업무 ID | `VARCHAR(20) DEFAULT recipe.fn_get_biz_id('<테이블>')` → `YYYYMMDD_000001`, 테이블별 `seq_<테이블>` (MAXVALUE 999999, CYCLE) | `db_pipeline.fn_get_biz_id` + `db_pipeline.seq_<테이블>` 동일 구조 |
-| PK | 단일 업무 ID 또는 부모 키를 포함한 복합 PK (`pk_rcp_raw (rcp_raw_id, rcp_raw_seq)`, `pk_ingr_als (ingr_id, ingr_als_id)`) | 같은 방식 (`pk_card_doc_page (doc_id, page_no)` 등) |
+| PK | 단일 업무 ID 또는 부모 키를 포함한 복합 PK (`pk_rcp_raw (rcp_raw_id, rcp_raw_seq)`, `pk_ingr_als (ingr_id, ingr_als_id)`) | **부모 PK 승계 복합 PK** (`card_doc_page (doc_id, page_no)`, `card_doc_chunk (doc_id, page_no, chunk_id)` 등). 단독 ID로 참조되는 컬럼은 단독 UNIQUE 유지. 3-1절 |
 | FK | **물리 FK 없음**. 부모 존재·중복은 적재기와 검증 SQL에서 확인 (`recipe_design_review.md` 등에 명시) | 동일하게 물리 FK 없음 + 8절 검증 SQL |
-| 제약·인덱스 이름 | `pk_`, `uq_<테이블>_<컬럼>`, `ck_<테이블>_<컬럼>`, `ix_<테이블>_<키>_key` | 동일 |
+| 제약·인덱스 이름 | `pk_`, `uq_<테이블>_<컬럼>`, `ck_<테이블>_<컬럼>`, `ix_<테이블>_<키>_key` | **제약조건 이름을 쓰지 않음**(2026-10-30). PostgreSQL 자동 이름 `<테이블>_pkey`, `<테이블>_<컬럼>_key`, `<테이블>_<컬럼>_check`(여러 컬럼이면 `<테이블>_check`, `_check1`…). 인덱스 이름 `ix_<테이블>_<키>_key`·`uq_card_doc_active`는 유지 |
 | 상태값 | `VARCHAR(20)` + 영문 대문자 코드 CHECK (`UNCHECKED`/`VALID`/…, `PENDING_REVIEW`/`AUTO_APPROVED`/`MANUAL_APPROVED`/`REJECTED`) | 동일. staging 상태값은 그대로 차용 |
-| 승인 조건 CHECK | `ck_rcp_ingr_stg_approval`: 승인 상태면 매핑 ID 필수 | `ck_card_extr_stg_approval`: 승인 상태면 SQL 검증 OK·근거 위치·제외 항목 매핑 필수 |
+| 승인 조건 CHECK | `ck_rcp_ingr_stg_approval`: 승인 상태면 매핑 ID 필수 | 승인 조건 CHECK(이름 없음, 이전 `ck_card_extr_stg_approval`): 승인 상태면 SQL 검증 OK·근거 위치·제외 항목 매핑 필수 |
 | 원본·staging·정제 분리 | `rcp_raw`(원본) → `rcp_ingr_stg`(파싱·검토, `*_raw_txt`·`*_parsed_nm`·`*_parser_version`·`*_review_note`·`*_approved_*`) → `rcp`·`rcp_ingr`(정제) | `card_doc_page`·`card_doc_chunk`(원문) → `card_ai_call`·`card_extr_stg`(AI 원 출력·검토) → `card_bnft`·`card_cond`(확정) |
 | 별칭 사전 | `ingr` + `ingr_als` (`uq (ingr_id, ingr_als_nm)`) | `card_excl_item` + `card_excl_item_als` |
 | 공통 컬럼 | `create_date`·`update_date` `timestamptz DEFAULT now() NOT NULL`, `create_user_id`·`update_user_id` `VARCHAR(50) NOT NULL`(기본값 없음) | 모든 신규 테이블에 동일 |
@@ -82,6 +82,40 @@
 - 모든 신규 테이블은 **db_pipeline 소유**. `file_pipeline`은 이 테이블을 읽거나 쓰지 않는다. 두 방식이 공유할 것은 `card_doc.doc_cd`(문서 코드)·페이지 번호·근거 원문 같은 **계약 값**뿐이다(9절).
 - `card_bnft`·`card_cond`의 "확정"은 **db_pipeline 내부 검증 완료(결과 B)** 를 뜻한다. 결과 A·B를 비교한 공동 최종 확정은 별개이며 미정 ❓.
 
+### 3-1. PK 승계 구조 (2026-10-30 확정)
+
+원칙: 부모 테이블의 PK를 자식 PK 앞에 승계하고 자기 식별자를 붙인다. 물리 FK는 만들지 않는다. 다른 테이블이 단독 ID 하나로 참조하는 컬럼은 **단독 UNIQUE**로 남겨 그 참조를 유지한다. PK 구성 컬럼은 모두 NOT NULL이다(임시 로컬 DB 카탈로그로 확인).
+
+| 테이블 | 부모 | PK | 단독 UNIQUE(참조용) | 변경 |
+|---|---|---|---|---|
+| `card_doc` | (최상위, `card_product`는 다른 스키마 논리 참조) | `(doc_id)` | — | 없음 |
+| `card_doc_page` | `card_doc` | `(doc_id, page_no)` | — | 없음 |
+| `card_doc_chunk` | `card_doc_page` | `(doc_id, page_no, chunk_id)` | `(chunk_id)` | **변경**(이전 `(chunk_id)`) |
+| `card_ai_run` | (최상위. `run_target_doc_id`는 여러 문서 실행 시 NULL) | `(run_id)` | — | 없음 |
+| `card_ai_call` | `card_ai_run` + `card_doc_chunk` | `(run_id, chunk_id, call_seq)` | — | 없음(**예외**, 아래) |
+| `card_excl_item` | (최상위, 카드사별 사전) | `(excl_item_id)` | — | 없음 |
+| `card_excl_item_als` | `card_excl_item` | `(excl_item_id, excl_item_als_id)` | — | 없음 |
+| `card_extr_stg` | `card_ai_call` | `(run_id, chunk_id, call_seq, stg_id)` | `(stg_id)` | **변경**(이전 `(stg_id)`) |
+| `card_bnft` | `card_doc` | `(doc_id, bnft_id)` | `(bnft_id)` | **변경**(이전 `(bnft_id)`) |
+| `card_cond` | `card_doc` | `(doc_id, cond_id)` | `(cond_id)` | **변경**(이전 `(cond_id)`) |
+
+- 단독 UNIQUE를 참조하는 곳: `chunk_id` ← `card_ai_call`·`card_extr_stg`·`card_bnft`·`card_cond` / `stg_id` ← `card_extr_stg.stg_parent_stg_id`·`card_bnft.stg_id`·`card_cond.stg_id` / `bnft_id` ← `card_cond.bnft_id`·`card_extr_stg.bnft_id`·Neo4j Benefit / `cond_id` ← `card_extr_stg.cond_id`·Neo4j Condition.
+- `card_cond`의 부모 혜택(`bnft_id`)은 카드 전체 조건이면 NULL이라 PK에 넣지 않았다. `card_bnft`·`card_cond`의 `card_id`는 문서(`card_doc.card_id`)에서 정해지는 값이라 PK에 넣지 않았다.
+
+**설계 예외 — `card_ai_call`은 청크의 상위 키를 승계하지 않는다.**
+청크 PK가 `(doc_id, page_no, chunk_id)`가 되었지만 `card_ai_call`은 `chunk_id`만 가진다. 이유: 승계하려면 컬럼을 추가해야 하는데 기존 컬럼 구조를 바꾸지 않기로 했고, `chunk_id`가 단독 UNIQUE라 청크를 하나로 특정할 수 있다. 같은 이유로 자식인 `card_extr_stg`도 `doc_id`, `page_no`를 갖지 않는다. 근거 청크를 `chunk_id`로만 가리키는 `card_bnft`·`card_cond`의 `chunk_id`도 같은 방식이다.
+
+**완전 승계 구조로 바꿀 경우(미승인, 참고용)** — 컬럼 추가가 필요하므로 별도 승인 대상이다.
+
+| 테이블 | 추가할 컬럼 | 바뀌는 PK / UNIQUE | 관계 |
+|---|---|---|---|
+| `card_ai_call` | `doc_id varchar(20) NOT NULL`, `page_no smallint NOT NULL` | PK `(run_id, doc_id, page_no, chunk_id, call_seq)` | `card_doc_chunk (doc_id, page_no, chunk_id)` 복합 참조 + `card_ai_run (run_id)` |
+| `card_extr_stg` | `doc_id`, `page_no` (같은 자료형, NOT NULL) | PK `(run_id, doc_id, page_no, chunk_id, call_seq, stg_id)`, UNIQUE `(run_id, doc_id, page_no, chunk_id, call_seq, stg_item_seq)` | `card_ai_call` 복합 참조 |
+| `card_bnft`, `card_cond` | `page_no smallint NOT NULL`(근거 청크 위치) | PK는 그대로 `(doc_id, …)` | 근거 `card_doc_chunk (doc_id, page_no, chunk_id)` 복합 참조 |
+
+- 추가 컬럼은 `chunk_id`로 결정되는 중복 값이므로 적재 시 청크 값과 일치하는지 8절 같은 검증 SQL이 필요하다. 인덱스(`ix_card_ai_call_chunk_key`, `ix_card_extr_stg_chunk_key`)와 8절 SQL·COMMENT도 함께 고쳐야 한다.
+- 장점은 모든 하위 행에서 문서·페이지를 조인 없이 바로 알 수 있다는 것이고, 단점은 컬럼 중복과 값 불일치 위험이다.
+
 ---
 
 ## 4. 테이블별 설계 [제안]
@@ -127,8 +161,8 @@ PDF 바이너리는 저장하지 않는다(재배포 조건 미확인, 과제 �
 
 | 컬럼 | 타입 | NULL | 설명 / 제약 |
 |---|---|---|---|
-| `chunk_id` | varchar(20) | N | **PK**, 업무 ID |
-| `doc_id`, `page_no` | | N | 논리 참조 → `card_doc_page`. **ix (doc_id, page_no)** |
+| `chunk_id` | varchar(20) | N | 업무 ID. **UQ (chunk_id)** — 다른 테이블의 `chunk_id` 참조용 |
+| `doc_id`, `page_no` | | N | 논리 참조 → `card_doc_page`. **PK (doc_id, page_no, chunk_id)** — (doc_id, page_no) 조회도 PK 인덱스가 맡음 |
 | `chunk_seq` | integer | N | **UQ (doc_id, chunk_seq)**, 문서 내 순번 |
 | `chunk_section_nm` | text | Y | 원문 절 제목(`[실적 산정 기준]`, `서비스 제외 대상`) |
 | `chunk_type_cd` | varchar(20) | N | `BODY`/`TABLE`/`NOTICE`/`HEADER_FOOTER`/`ETC` |
@@ -169,7 +203,7 @@ recipe `rcp_ingr_stg`와 같은 구조: 원본 항목 + 파싱 값 + 검토 상�
 
 | 컬럼 그룹 | 컬럼 | 설명 |
 |---|---|---|
-| 키 | `stg_id` **PK**; **UQ (run_id, chunk_id, call_seq, stg_item_seq)** | 응답의 몇 번째 항목인지 |
+| 키 | **PK (run_id, chunk_id, call_seq, stg_id)**; **UQ (stg_id)**; **UQ (run_id, chunk_id, call_seq, stg_item_seq)** | 부모 `card_ai_call` PK 승계. 응답의 몇 번째 항목인지 |
 | 출처 | `run_id`, `chunk_id`, `call_seq`, `card_id` | 논리 참조. **ix chunk_id** |
 | 종류 | `stg_kind_cd` (`BENEFIT`/`CONDITION`), `stg_parent_stg_id` | 조건이 걸린 혜택(staging 내 자기 참조), NULL = 카드 전체 |
 | 정제 전 | `stg_raw_item jsonb NOT NULL` | AI 항목 원본 |
@@ -178,7 +212,7 @@ recipe `rcp_ingr_stg`와 같은 구조: 원본 항목 + 파싱 값 + 검토 상�
 | 원문 표기 | `stg_value_txt`, `stg_target_txt` | 금액·비율·가맹점 원문 표기 보존(M3: 원문 표기 유지) |
 | 근거 | `stg_evidence_txt NOT NULL`, `stg_evidence_start_pos`, `stg_evidence_end_pos` | 위치는 SQL이 `chunk_raw_txt`에서 찾았을 때만 채움 |
 | 검증 | `stg_sql_check_cd` (NULL/`OK`/`EVIDENCE_NOT_FOUND`/`SCHEMA_VIOLATION`/`DUPLICATE`/`ORPHAN_REF`/`UNMAPPED_ITEM`/`VALUE_PARSE_ERROR`), `stg_ai_vrfy_cd` (`MATCH`/`MISMATCH`/`UNCERTAIN`), `stg_ai_vrfy_run_id` | SQL 정합성 검증과 AI 의미 검증을 **분리 기록**(architecture.md 5절) |
-| 승인 | `stg_status` (`PENDING_REVIEW`/`AUTO_APPROVED`/`MANUAL_APPROVED`/`REJECTED`), `stg_review_note`, `stg_approved_date`, `stg_approved_user_id` | **`ck_card_extr_stg_approval`**: 승인 상태면 SQL 검증 OK + 근거 위치 존재 + 제외 조건은 `excl_item_id` 필수 |
+| 승인 | `stg_status` (`PENDING_REVIEW`/`AUTO_APPROVED`/`MANUAL_APPROVED`/`REJECTED`), `stg_review_note`, `stg_approved_date`, `stg_approved_user_id` | **승인 조건 CHECK**: 승인 상태면 SQL 검증 OK + 근거 위치 존재 + 제외 조건은 `excl_item_id` 필수 |
 | 반영 | `bnft_id`, `cond_id` | 확정 테이블에 반영된 ID |
 
 **ix (stg_status, stg_kind_cd)**, **ix excl_item_id**.
@@ -196,8 +230,8 @@ recipe `rcp_ingr_stg`와 같은 구조: 원본 항목 + 파싱 값 + 검토 상�
 
 | 컬럼 | 타입 | NULL | 설명 / 제약 |
 |---|---|---|---|
-| `bnft_id` | varchar(20) | N | **PK** = Neo4j Benefit 키 |
-| `card_id`, `doc_id` | | N | 논리 참조. `card_id`는 `card_doc.card_id`와 같아야 함(8절). **ix (card_id, doc_id)** |
+| `bnft_id` | varchar(20) | N | **UQ (bnft_id)** = Neo4j Benefit 키 |
+| `card_id`, `doc_id` | | N | **PK (doc_id, bnft_id)**. 논리 참조. `card_id`는 `card_doc.card_id`와 같아야 함(8절). **ix (card_id, doc_id)** |
 | `bnft_nm` | text | N | **UQ (doc_id, bnft_nm)** |
 | `bnft_grp_nm`, `bnft_type_cd` | | Y/N | 서비스 영역(ONE PICK), 유형 CHECK |
 | `bnft_target_txt`, `bnft_rate numeric(6,3)`, `bnft_amt numeric(12,0)`, `bnft_value_txt` | | Y | 대표값. 구간값은 `card_cond` TIER |
@@ -209,8 +243,8 @@ recipe `rcp_ingr_stg`와 같은 구조: 원본 항목 + 파싱 값 + 검토 상�
 
 | 컬럼 | 타입 | NULL | 설명 / 제약 |
 |---|---|---|---|
-| `cond_id` | varchar(20) | N | **PK** = Neo4j Condition 노드 / EXCLUDES 관계 키 |
-| `card_id`, `doc_id`, `bnft_id` | | N/N/Y | `bnft_id` NULL = 카드 전체 |
+| `cond_id` | varchar(20) | N | **UQ (cond_id)** = Neo4j Condition 노드 / EXCLUDES 관계 키 |
+| `card_id`, `doc_id`, `bnft_id` | | N/N/Y | **PK (doc_id, cond_id)**. `bnft_id` NULL = 카드 전체 |
 | `cond_apply_lvl_cd` | varchar(20) | N | `CARD`/`BENEFIT`. **CHECK: CARD ⇔ bnft_id IS NULL** |
 | `cond_type_cd` | varchar(20) | N | `SPEND_REQ` 전월실적 요건 · `SPEND_EXCL` 실적 산정 제외 · `BNFT_EXCL` 혜택 적용 제외 · `LIMIT` 한도 · `TIER` 구간별 률·금액 · `USAGE_REQ` 건당 이용 요건 · `GRACE` 유예 · `MERCHANT_RULE` 가맹점 분류 규칙 · `ETC` |
 | `excl_item_id`, `cond_excl_raw_txt` | | Y | **CHECK: SPEND_EXCL·BNFT_EXCL이면 둘 다 필수** |
@@ -334,9 +368,9 @@ erDiagram
         varchar page_layer_cd
     }
     card_doc_chunk {
-        varchar chunk_id PK
-        varchar doc_id
-        smallint page_no
+        varchar doc_id PK
+        smallint page_no PK
+        varchar chunk_id PK,UK
         int chunk_seq
         int chunk_start_pos
         text chunk_raw_txt
@@ -355,7 +389,10 @@ erDiagram
         jsonb call_resp_json
     }
     card_extr_stg {
-        varchar stg_id PK
+        varchar run_id PK
+        varchar chunk_id PK
+        smallint call_seq PK
+        varchar stg_id PK,UK
         varchar stg_kind_cd
         jsonb stg_raw_item
         varchar stg_cond_type_cd
@@ -375,14 +412,15 @@ erDiagram
         text excl_item_als_nm
     }
     card_bnft {
-        varchar bnft_id PK
+        varchar doc_id PK
+        varchar bnft_id PK,UK
         bigint card_id
-        varchar doc_id
         text bnft_nm
         varchar stg_id UK
     }
     card_cond {
-        varchar cond_id PK
+        varchar doc_id PK
+        varchar cond_id PK,UK
         varchar bnft_id
         varchar cond_apply_lvl_cd
         varchar cond_type_cd
@@ -394,14 +432,34 @@ erDiagram
 
 ---
 
-## 7. DDL 초안
+## 7. DDL
 
-전체 DDL: [hana_card_schema_draft.sql](hana_card_schema_draft.sql) (시퀀스 8개, 함수 1개, 테이블 10개, 인덱스, 전체 COMMENT).
+| 파일 | 용도 | 비고 |
+|---|---|---|
+| [db_pipeline_schema.sql](db_pipeline_schema.sql) | **관리용 DDL 기준본.** 사람이 읽고 직접 수정한다 | recipe `rcp_cat` 형식: PK·UNIQUE·CHECK를 `CREATE TABLE` 안에 이름 없이 두고, 코드값 CHECK는 `IN (...)`, 자료형은 `varchar`·`timestamptz`. PK는 3-1절 승계 구조 |
+| [hana_card_schema_draft.sql](hana_card_schema_draft.sql) | 이전 초안(pg_dump 표기). 비교용 보존 | 컬럼·CHECK·COMMENT는 기준본과 같고, PK 4개·단독 UNIQUE 4개·인덱스 1개·제약조건 이름이 다르다(아래). 앞으로 수정하지 않는다 |
+| `src/data/backup/card_benefit-postgres-202610301243.sql` | 공유 DB pg_dump 백업 원본(`card_benefit` 스키마) | 수정 금지 |
+| `src/data/backup/card_benefit-postgres-202610301243_db_pipeline.sql` | 위 백업의 스키마명만 `db_pipeline`으로 바꾼 사본 | `COPY`·`setval` 포함. 관리용 DDL과 섞지 않는다 |
 
-- `CREATE ... IF NOT EXISTS`만 사용(함수만 `CREATE OR REPLACE`). DROP·ALTER·데이터 변경 없음.
-- 이 파일은 `card_product`를 만들거나 바꾸지 않는다. 적용 순서: `schema.sql` → `hana_card_schema_draft.sql` (`schema.sql`은 `CREATE SCHEMA IF NOT EXISTS card_benefit`, 이 파일은 `CREATE SCHEMA IF NOT EXISTS db_pipeline`).
-- 재실행: 스키마·시퀀스·테이블·인덱스는 `IF NOT EXISTS`, 함수는 `CREATE OR REPLACE`, `COMMENT ON`은 덮어쓰기라 두 번 실행해도 오류·데이터 손실이 없다. 단 `IF NOT EXISTS`는 이미 있는 테이블의 컬럼·제약 차이를 고치지 않는다.
-- 오프라인 구문 검사만 수행했다(pglast, PostgreSQL 파서 기준 245개 문장 파싱 성공). **DB 적용·실행 검증은 하지 않았다.**
+- 구성: 스키마 1, 시퀀스 8, 함수 1(`fn_get_biz_id`), 테이블 10(PK 10·UNIQUE 15·CHECK 46), 일반 인덱스 11 + 조건부 UNIQUE 인덱스 1(`uq_card_doc_active`), 전체 COMMENT.
+- 제약조건은 `CONSTRAINT 이름` 없이 선언한다. CHECK는 테이블마다 `-- CHECK: 업무 규칙·확정 코드값`과 `-- CHECK [검토 대상]: 미확정 코드값` 두 묶음으로 나눠 적는다. 검토 대상 10개(삭제하지 않음): `page_layer_cd`, `chunk_type_cd`, `run_stage_cd`, `run_call_mthd_cd`, `call_status`, `stg_bnft_type_cd`, `stg_cond_type_cd`, `stg_ai_vrfy_cd`, `bnft_type_cd`, `cond_type_cd`.
+
+  2026-10-30 변경 내역(이전 기준본·초안 대비):
+
+  | 항목 | 이전 | 현재 |
+  |---|---|---|
+  | `card_doc_chunk` PK | `pk_card_doc_chunk (chunk_id)` | `(doc_id, page_no, chunk_id)` + UNIQUE `(chunk_id)` |
+  | `card_extr_stg` PK | `pk_card_extr_stg (stg_id)` | `(run_id, chunk_id, call_seq, stg_id)` + UNIQUE `(stg_id)` |
+  | `card_bnft` PK | `pk_card_bnft (bnft_id)` | `(doc_id, bnft_id)` + UNIQUE `(bnft_id)` |
+  | `card_cond` PK | `pk_card_cond (cond_id)` | `(doc_id, cond_id)` + UNIQUE `(cond_id)` |
+  | `ix_card_doc_chunk_page_key (doc_id, page_no)` | 있음 | 삭제(PK 인덱스 앞부분과 중복) |
+  | 제약조건 이름 | `pk_`·`uq_`·`ck_` 명시 | 없음(자동 이름) |
+
+- 실행 순서: 스키마 → 시퀀스 → 업무 ID 함수 → 테이블 → 인덱스 → COMMENT. 컬럼 순서는 현재 DB와 같다.
+- `CREATE ... IF NOT EXISTS`만 사용(함수만 `CREATE OR REPLACE`). DROP·ALTER·데이터 변경 없음. 두 번 실행해도 오류·데이터 손실이 없지만, 이미 있는 테이블의 컬럼·제약 차이는 고치지 않는다.
+- `card_product`는 만들거나 바꾸지 않는다. 적용 순서: `schema.sql`(`card_benefit`) → `db_pipeline_schema.sql`(`db_pipeline`).
+- 물리 FK는 없다. 6절 ERD의 관계선은 논리 참조이며 PostgreSQL FK 제약조건이 아니다.
+- 검증(2026-10-30, 임시 로컬 PostgreSQL 16.2 — 공유 Supabase 아님): 기준본을 두 번 실행해 오류 없음. 백업 변환본과 카탈로그를 정의 기준으로 비교한 결과 테이블·컬럼(순서·자료형·기본값·NOT NULL)·시퀀스·함수·COMMENT·CHECK 46개·기존 UNIQUE 11개·나머지 인덱스가 같고, 차이는 위 변경 내역(PK 4개, UNIQUE 4개 추가, 인덱스 1개 삭제)뿐이다. 코드값 CHECK는 PostgreSQL 내부 배열 표기만 다르고 의미가 같다. 업무 ID 함수의 `Asia/Seoul` 변환은 임시 환경에 시간대 데이터가 없어 실행 확인하지 못했다(함수 본문은 백업과 동일).
 
 ---
 

@@ -17,7 +17,7 @@
 - `file_pipeline/` 을 import하지 않습니다. DB 연결·트랜잭션은 `src/common` 의 `PostgresDbSession` 을 사용합니다.
 - 공통 등록·조회 SQL은 `../payment_card.sql`, 이 방식 전용 SQL은 이 폴더의 `db_pipeline.sql` 에 둡니다(`mappers/` 폴더 없음).
   파일명이 namespace가 되므로(`db_pipeline.*`) 추가 시 다른 `.sql` 과 이름이 겹치지 않는지 확인합니다.
-- DB 스키마: 이 방식 전용 테이블·시퀀스·함수는 `db_pipeline` 스키마에 둡니다(DDL: `src/card_benefit/sql/hana_card_schema_draft.sql`).
+- DB 스키마: 이 방식 전용 테이블·시퀀스·함수는 `db_pipeline` 스키마에 둡니다(관리용 DDL 기준본: `src/card_benefit/sql/db_pipeline_schema.sql`).
   `db_pipeline.sql` 의 SQL은 `db_pipeline.card_doc` 처럼 스키마를 명시하고 `search_path` 에 기대지 않습니다.
   카드 마스터는 공통 스키마의 `card_benefit.card_product` 를 그대로 참조하고, 파일 기반 전용 `file_pipeline` 스키마는 사용하지 않습니다.
 - 테이블 DDL은 `src/card_benefit/sql/` 에 둡니다. 첫 Python 모듈을 추가할 때 `__init__.py` 도 함께 만듭니다.
