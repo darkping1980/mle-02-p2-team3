@@ -4,7 +4,13 @@
 - 상태: **설계 검토 초안. DB에 적용하지 않음.** 적용 전 공동 확인 필요([development_roles.md](../docs/development_roles.md) 5절)
 - DDL 초안: [hana_card_schema_draft.sql](hana_card_schema_draft.sql)
 - 표기: **[기존]** 현재 소스·문서에 근거한 사실 · **[제안]** 이 문서에서 새로 제안하는 설계 · **❓** 미확정
-- 스키마: **`card_benefit`** (2026-10-29 변경). 카드 마스터 `card_product`(`schema.sql`)와 신규 테이블 모두 이 스키마를 쓴다. 이전 `payment_card` 스키마는 사용하지 않는다(DB에서 삭제됨, 다시 만들지 않음). Python 패키지 `payment_card/`와 mapper namespace `payment_card.*`는 DB 스키마가 아니라 파일·폴더 이름이므로 그대로다.
+- 스키마: **`db_pipeline`** (2026-10-30 변경). 이 문서의 신규 테이블·시퀀스·함수·인덱스는 DB 기반 전용 스키마 `db_pipeline`에 두고, 카드 마스터 `card_product`(`schema.sql`)는 공통 스키마 `card_benefit`에 그대로 둔다. 이전 `payment_card` 스키마는 사용하지 않는다(DB에서 삭제됨, 다시 만들지 않음). Python 패키지 `payment_card/`와 mapper namespace `payment_card.*`는 DB 스키마가 아니라 파일·폴더 이름이므로 그대로다.
+
+| 스키마 | 역할 |
+|---|---|
+| `card_benefit` | 기존 공통 카드 마스터(`card_product`) 및 등록·조회 CLI |
+| `file_pipeline` | 파일 기반 파이프라인 전용 영역(담당 별도, 이 문서 범위 밖) |
+| `db_pipeline` | DB 기반 PDF 추출·정제·검증 전용 영역(이 문서의 테이블 10개, 시퀀스 8개, `fn_get_biz_id`) |
 
 ---
 
@@ -14,10 +20,10 @@
 
 | 항목 | recipe 덤프의 패턴 | 이번 설계 적용 |
 |---|---|---|
-| 스키마 | 프로젝트 단일 스키마(`recipe`) + 스키마 COMMENT | 프로젝트 단일 스키마 `card_benefit` + 스키마 COMMENT (`card_product`와 같은 스키마) |
+| 스키마 | 프로젝트 단일 스키마(`recipe`) + 스키마 COMMENT | DB 기반 전용 스키마 `db_pipeline` + 스키마 COMMENT (`card_product`는 공통 스키마 `card_benefit`) |
 | 테이블명 | 소문자 snake_case 약어: `rcp`, `ingr`, `ingr_als`, `rcp_raw`, `rcp_ingr_stg`, `rcp_cat_rel` | `card_doc`, `card_doc_chunk`, `card_extr_stg`, `card_excl_item_als`, `card_bnft`, `card_cond` |
 | 컬럼명 | 테이블 약어 접두어 + 의미 접미어: `_id`, `_nm`, `_txt`, `_cd`, `_no`, `_seq`, `_status`, `_date`, `_note` | `doc_*`, `page_*`, `chunk_*`, `run_*`, `call_*`, `stg_*`, `bnft_*`, `cond_*` |
-| 업무 ID | `VARCHAR(20) DEFAULT recipe.fn_get_biz_id('<테이블>')` → `YYYYMMDD_000001`, 테이블별 `seq_<테이블>` (MAXVALUE 999999, CYCLE) | `card_benefit.fn_get_biz_id` + `card_benefit.seq_<테이블>` 동일 구조 |
+| 업무 ID | `VARCHAR(20) DEFAULT recipe.fn_get_biz_id('<테이블>')` → `YYYYMMDD_000001`, 테이블별 `seq_<테이블>` (MAXVALUE 999999, CYCLE) | `db_pipeline.fn_get_biz_id` + `db_pipeline.seq_<테이블>` 동일 구조 |
 | PK | 단일 업무 ID 또는 부모 키를 포함한 복합 PK (`pk_rcp_raw (rcp_raw_id, rcp_raw_seq)`, `pk_ingr_als (ingr_id, ingr_als_id)`) | 같은 방식 (`pk_card_doc_page (doc_id, page_no)` 등) |
 | FK | **물리 FK 없음**. 부모 존재·중복은 적재기와 검증 SQL에서 확인 (`recipe_design_review.md` 등에 명시) | 동일하게 물리 FK 없음 + 8절 검증 SQL |
 | 제약·인덱스 이름 | `pk_`, `uq_<테이블>_<컬럼>`, `ck_<테이블>_<컬럼>`, `ix_<테이블>_<키>_key` | 동일 |
@@ -393,7 +399,7 @@ erDiagram
 전체 DDL: [hana_card_schema_draft.sql](hana_card_schema_draft.sql) (시퀀스 8개, 함수 1개, 테이블 10개, 인덱스, 전체 COMMENT).
 
 - `CREATE ... IF NOT EXISTS`만 사용(함수만 `CREATE OR REPLACE`). DROP·ALTER·데이터 변경 없음.
-- 이 파일은 `card_product`를 만들거나 바꾸지 않는다. 적용 순서: `schema.sql` → `hana_card_schema_draft.sql` (둘 다 `CREATE SCHEMA IF NOT EXISTS card_benefit`).
+- 이 파일은 `card_product`를 만들거나 바꾸지 않는다. 적용 순서: `schema.sql` → `hana_card_schema_draft.sql` (`schema.sql`은 `CREATE SCHEMA IF NOT EXISTS card_benefit`, 이 파일은 `CREATE SCHEMA IF NOT EXISTS db_pipeline`).
 - 재실행: 스키마·시퀀스·테이블·인덱스는 `IF NOT EXISTS`, 함수는 `CREATE OR REPLACE`, `COMMENT ON`은 덮어쓰기라 두 번 실행해도 오류·데이터 손실이 없다. 단 `IF NOT EXISTS`는 이미 있는 테이블의 컬럼·제약 차이를 고치지 않는다.
 - 오프라인 구문 검사만 수행했다(pglast, PostgreSQL 파서 기준 245개 문장 파싱 성공). **DB 적용·실행 검증은 하지 않았다.**
 
@@ -405,47 +411,47 @@ erDiagram
 
 ```sql
 -- 고아 참조: 문서의 카드가 card_product에 없음
-SELECT d.doc_id FROM card_benefit.card_doc d
+SELECT d.doc_id FROM db_pipeline.card_doc d
 LEFT JOIN card_benefit.card_product p ON p.card_id = d.card_id
 WHERE p.card_id IS NULL;
 
 -- 고아 참조: 청크의 페이지가 없음
-SELECT c.chunk_id FROM card_benefit.card_doc_chunk c
-LEFT JOIN card_benefit.card_doc_page g ON g.doc_id = c.doc_id AND g.page_no = c.page_no
+SELECT c.chunk_id FROM db_pipeline.card_doc_chunk c
+LEFT JOIN db_pipeline.card_doc_page g ON g.doc_id = c.doc_id AND g.page_no = c.page_no
 WHERE g.doc_id IS NULL;
 
 -- 원문 위치 정합성: 청크 원문이 페이지 원문의 해당 위치와 다름
-SELECT c.chunk_id FROM card_benefit.card_doc_chunk c
-JOIN card_benefit.card_doc_page g ON g.doc_id = c.doc_id AND g.page_no = c.page_no
+SELECT c.chunk_id FROM db_pipeline.card_doc_chunk c
+JOIN db_pipeline.card_doc_page g ON g.doc_id = c.doc_id AND g.page_no = c.page_no
 WHERE substr(g.page_raw_txt, c.chunk_start_pos, c.chunk_end_pos - c.chunk_start_pos + 1) <> c.chunk_raw_txt;
 
 -- 근거 대조: AI 근거가 청크 원문에 없음 → EVIDENCE_NOT_FOUND (공백 정규화 후 비교)
-SELECT s.stg_id FROM card_benefit.card_extr_stg s
-JOIN card_benefit.card_doc_chunk c ON c.chunk_id = s.chunk_id
+SELECT s.stg_id FROM db_pipeline.card_extr_stg s
+JOIN db_pipeline.card_doc_chunk c ON c.chunk_id = s.chunk_id
 WHERE strpos(regexp_replace(c.chunk_raw_txt, '\s+', '', 'g'),
              regexp_replace(s.stg_evidence_txt, '\s+', '', 'g')) = 0;
 
 -- 카드 일치: 확정 조건의 card_id가 문서의 card_id와 다름
-SELECT k.cond_id FROM card_benefit.card_cond k
-JOIN card_benefit.card_doc d ON d.doc_id = k.doc_id
+SELECT k.cond_id FROM db_pipeline.card_cond k
+JOIN db_pipeline.card_doc d ON d.doc_id = k.doc_id
 WHERE d.card_id <> k.card_id;
 
 -- 혜택 귀속: BENEFIT 조건의 혜택이 다른 문서 소속
-SELECT k.cond_id FROM card_benefit.card_cond k
-JOIN card_benefit.card_bnft b ON b.bnft_id = k.bnft_id
+SELECT k.cond_id FROM db_pipeline.card_cond k
+JOIN db_pipeline.card_bnft b ON b.bnft_id = k.bnft_id
 WHERE b.doc_id <> k.doc_id;
 
 -- 중복 후보: 같은 run에서 같은 조건이 두 번 추출됨
 SELECT run_id, card_id, stg_cond_type_cd, excl_item_id, stg_min_amt, stg_max_amt, count(*)
-FROM card_benefit.card_extr_stg
+FROM db_pipeline.card_extr_stg
 WHERE stg_kind_cd = 'CONDITION'
 GROUP BY run_id, card_id, stg_cond_type_cd, excl_item_id, stg_min_amt, stg_max_amt
 HAVING count(*) > 1;
 
 -- 별칭 모호성: 같은 카드사에서 한 별칭이 여러 표준 항목에 매핑됨
 SELECT i.issuer, a.excl_item_als_nm, count(DISTINCT a.excl_item_id)
-FROM card_benefit.card_excl_item_als a
-JOIN card_benefit.card_excl_item i ON i.excl_item_id = a.excl_item_id
+FROM db_pipeline.card_excl_item_als a
+JOIN db_pipeline.card_excl_item i ON i.excl_item_id = a.excl_item_id
 GROUP BY i.issuer, a.excl_item_als_nm
 HAVING count(DISTINCT a.excl_item_id) > 1;
 
