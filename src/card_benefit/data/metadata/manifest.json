@@ -1,0 +1,482 @@
+{
+  "created": "2026-10-30",
+  "scope": "공식 상품설명서 10종 재다운로드 및 기존 사본 비교",
+  "notes": [
+    "공식 페이지 링크 확인은 해당 시점에 제공된 링크의 확인이며 모든 후속 문서 및 효력 최신성의 보증이 아님",
+    "PDF 텍스트 추출 성공은 표 구조 및 조건의 정확한 추출을 보장하지 않음",
+    "BT 제휴 상품 페이지는 동일한 원본 BT 상품으로 확정하지 않음"
+  ],
+  "cards": [
+    {
+      "no": 1,
+      "card_name": "ONE PICK STYLE 하나 체크카드",
+      "card_type": "체크",
+      "document_type": "하나카드 공식 서버 PDF 원본",
+      "product_page_url": "https://m.hanacard.co.kr/MKCDCM1000M.web?CD_PD_SEQ=18899",
+      "page_http_status": 200,
+      "page_current_pdf_links": [],
+      "page_links_this_pdf": false,
+      "official_pdf_url": "https://m.hanacard.co.kr/leaflet/15/15650_20260429.pdf",
+      "download_final_url": "https://m.hanacard.co.kr/leaflet/15/15650_20260429.pdf",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "filename": "15650_20260429.pdf",
+      "filename_date": "20260429",
+      "pdf_creation_date_raw": "D:20260429174456+09'00'",
+      "pdf_metadata_title": "260429 하나 원픽 체크_STYLE 상품약관",
+      "compliance_review_ids": [
+        "준법심의 L-26-0542(2026.04.29)"
+      ],
+      "local_path": "src/card_benefit/data/raw/hanacard/debit/15650_20260429.pdf",
+      "bytes": 360659,
+      "pages": 2,
+      "sha256": "6ec9641c2e318ce9429a916f5d01c0468ccc3cffb238eb1162a43b280e25c6d2",
+      "opens_ok": true,
+      "text_chars_per_page": [
+        2482,
+        3181
+      ],
+      "text_extractable": true,
+      "card_name_search_key": "ONE PICK STYLE",
+      "card_name_found": true,
+      "existing_path": "tmp/card_pdf_collection/debit/15650_20260429.pdf",
+      "existing_sha256": "6ec9641c2e318ce9429a916f5d01c0468ccc3cffb238eb1162a43b280e25c6d2",
+      "existing_manifest_sha256": "6ec9641c2e318ce9429a916f5d01c0468ccc3cffb238eb1162a43b280e25c6d2",
+      "same_sha256": true,
+      "existing_manifest_hash_matches": true,
+      "existing_opens_ok": true,
+      "existing_pages": 2,
+      "existing_text_chars_per_page": [
+        2482,
+        3181
+      ],
+      "latest_verification": "상품 페이지 PDF 링크 미확인; 최신판 미확인",
+      "download_method": "공식 URL 직접 다운로드",
+      "download_date": "2026-10-30"
+    },
+    {
+      "no": 2,
+      "card_name": "ONE PICK PLAY 하나 체크카드",
+      "card_type": "체크",
+      "document_type": "하나카드 공식 서버 PDF 원본",
+      "product_page_url": "https://m.hanacard.co.kr/MKCDCM1000M.web?CD_PD_SEQ=18901",
+      "page_http_status": 200,
+      "page_current_pdf_links": [],
+      "page_links_this_pdf": false,
+      "official_pdf_url": "https://m.hanacard.co.kr/leaflet/15/15651_20260429.pdf",
+      "download_final_url": "https://m.hanacard.co.kr/leaflet/15/15651_20260429.pdf",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "filename": "15651_20260429.pdf",
+      "filename_date": "20260429",
+      "pdf_creation_date_raw": "D:20260429174442+09'00'",
+      "pdf_metadata_title": "260429 하나 원픽 체크_PLAY 상품약관",
+      "compliance_review_ids": [
+        "준법심의 L-26-0543(2026.04.29)"
+      ],
+      "local_path": "src/card_benefit/data/raw/hanacard/debit/15651_20260429.pdf",
+      "bytes": 327746,
+      "pages": 2,
+      "sha256": "228260b213e52c65fdf1e0123482c6c35bfa844cf673969db14129721ec320ee",
+      "opens_ok": true,
+      "text_chars_per_page": [
+        2486,
+        3181
+      ],
+      "text_extractable": true,
+      "card_name_search_key": "ONE PICK PLAY",
+      "card_name_found": true,
+      "existing_path": "tmp/card_pdf_collection/debit/15651_20260429.pdf",
+      "existing_sha256": "228260b213e52c65fdf1e0123482c6c35bfa844cf673969db14129721ec320ee",
+      "existing_manifest_sha256": "228260b213e52c65fdf1e0123482c6c35bfa844cf673969db14129721ec320ee",
+      "same_sha256": true,
+      "existing_manifest_hash_matches": true,
+      "existing_opens_ok": true,
+      "existing_pages": 2,
+      "existing_text_chars_per_page": [
+        2486,
+        3181
+      ],
+      "latest_verification": "상품 페이지 PDF 링크 미확인; 최신판 미확인",
+      "download_method": "공식 URL 직접 다운로드",
+      "download_date": "2026-10-30"
+    },
+    {
+      "no": 3,
+      "card_name": "K-패스 하나 체크카드",
+      "card_type": "체크",
+      "document_type": "하나카드 공식 서버 PDF 원본",
+      "product_page_url": "https://www.hanacard.co.kr/OPI41000000D.web?schID=pcd&mID=PI41017033P&CD_PD_SEQ=17033",
+      "page_http_status": 200,
+      "page_current_pdf_links": [
+        "https://m.hanacard.co.kr/leaflet/14/14474_20251224.pdf"
+      ],
+      "page_links_this_pdf": true,
+      "official_pdf_url": "https://m.hanacard.co.kr/leaflet/14/14474_20251224.pdf",
+      "download_final_url": "https://m.hanacard.co.kr/leaflet/14/14474_20251224.pdf",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "filename": "14474_20251224.pdf",
+      "filename_date": "20251224",
+      "pdf_creation_date_raw": "D:20260129131808+09'00'",
+      "pdf_metadata_title": "2601 K패스 하나 체크카드",
+      "compliance_review_ids": [
+        "준법심의 L-25-0390(2025.12.24)"
+      ],
+      "local_path": "src/card_benefit/data/raw/hanacard/debit/14474_20251224.pdf",
+      "bytes": 266251,
+      "pages": 1,
+      "sha256": "819395701e3d49075b5a3d653cbce44d460e6a84d6a35cd522a6c3217d6b2eec",
+      "opens_ok": true,
+      "text_chars_per_page": [
+        4958
+      ],
+      "text_extractable": true,
+      "card_name_search_key": "K패스 하나 체크카드",
+      "card_name_found": true,
+      "existing_path": "tmp/card_pdf_collection/debit/14474_20251224.pdf",
+      "existing_sha256": "819395701e3d49075b5a3d653cbce44d460e6a84d6a35cd522a6c3217d6b2eec",
+      "existing_manifest_sha256": "819395701e3d49075b5a3d653cbce44d460e6a84d6a35cd522a6c3217d6b2eec",
+      "same_sha256": true,
+      "existing_manifest_hash_matches": true,
+      "existing_opens_ok": true,
+      "existing_pages": 1,
+      "existing_text_chars_per_page": [
+        4958
+      ],
+      "latest_verification": "공식 상품 페이지 연결 파일 확인; 전체 최신 유효판 여부 미확정",
+      "download_method": "공식 URL 직접 다운로드",
+      "download_date": "2026-10-30"
+    },
+    {
+      "no": 4,
+      "card_name": "더 심플 체크카드",
+      "card_type": "체크",
+      "document_type": "하나카드 공식 서버 PDF 원본",
+      "product_page_url": "https://www.hanacard.co.kr/OPI41000000D.web?schID=pcd&mID=PI41018271P&CD_PD_SEQ=18271",
+      "page_http_status": 200,
+      "page_current_pdf_links": [
+        "https://m.hanacard.co.kr/leaflet/15/15245_20250703.pdf"
+      ],
+      "page_links_this_pdf": true,
+      "official_pdf_url": "https://m.hanacard.co.kr/leaflet/15/15245_20250703.pdf",
+      "download_final_url": "https://m.hanacard.co.kr/leaflet/15/15245_20250703.pdf",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "filename": "15245_20250703.pdf",
+      "filename_date": "20250703",
+      "pdf_creation_date_raw": "D:20250718141706+09'00'",
+      "pdf_metadata_title": "더심플 체크카드 출력용 2507",
+      "compliance_review_ids": [
+        "준법심의 L-25-0253(2025.07.03)"
+      ],
+      "local_path": "src/card_benefit/data/raw/hanacard/debit/15245_20250703.pdf",
+      "bytes": 197362,
+      "pages": 1,
+      "sha256": "f63efee1e0250cfcc6d7a2219004262d8d2f81688b5d73c61ecdac98a20505c0",
+      "opens_ok": true,
+      "text_chars_per_page": [
+        5229
+      ],
+      "text_extractable": true,
+      "card_name_search_key": "더 심플 체크카드",
+      "card_name_found": true,
+      "existing_path": "tmp/card_pdf_collection/debit/15245_20250703.pdf",
+      "existing_sha256": "f63efee1e0250cfcc6d7a2219004262d8d2f81688b5d73c61ecdac98a20505c0",
+      "existing_manifest_sha256": "f63efee1e0250cfcc6d7a2219004262d8d2f81688b5d73c61ecdac98a20505c0",
+      "same_sha256": true,
+      "existing_manifest_hash_matches": true,
+      "existing_opens_ok": true,
+      "existing_pages": 1,
+      "existing_text_chars_per_page": [
+        5229
+      ],
+      "latest_verification": "공식 상품 페이지 연결 파일 확인; 전체 최신 유효판 여부 미확정",
+      "download_method": "공식 URL 직접 다운로드",
+      "download_date": "2026-10-30"
+    },
+    {
+      "no": 5,
+      "card_name": "MULTI Any 체크카드",
+      "card_type": "체크",
+      "document_type": "하나카드 공식 서버 PDF 원본",
+      "product_page_url": "https://www.hanacard.co.kr/OPI41000000D.web?schID=pcd&mID=PI41013823P&CD_PD_SEQ=13823",
+      "page_http_status": 200,
+      "page_current_pdf_links": [
+        "https://m.hanacard.co.kr/leaflet/13/13278_20260306.pdf"
+      ],
+      "page_links_this_pdf": true,
+      "official_pdf_url": "https://m.hanacard.co.kr/leaflet/13/13278_20260306.pdf",
+      "download_final_url": "https://m.hanacard.co.kr/leaflet/13/13278_20260306.pdf",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "filename": "13278_20260306.pdf",
+      "filename_date": "20260306",
+      "pdf_creation_date_raw": "D:20260309141423+09'00'",
+      "pdf_metadata_title": "260309_Multi Any 체크 인쇄형 트래블로그스위치 추가",
+      "compliance_review_ids": [
+        "준법심의 L-26-0187(2026.01.28)",
+        "준법심의 L-26-0410(2026.03.06)"
+      ],
+      "local_path": "src/card_benefit/data/raw/hanacard/debit/13278_20260306.pdf",
+      "bytes": 1906890,
+      "pages": 2,
+      "sha256": "72177812c926a711bb30c275afb2baaf65fdf115e28758c3316b8df281eb9ee3",
+      "opens_ok": true,
+      "text_chars_per_page": [
+        4853,
+        5120
+      ],
+      "text_extractable": true,
+      "card_name_search_key": "Any",
+      "card_name_found": true,
+      "existing_path": "tmp/card_pdf_collection/debit/13278_20260306.pdf",
+      "existing_sha256": "72177812c926a711bb30c275afb2baaf65fdf115e28758c3316b8df281eb9ee3",
+      "existing_manifest_sha256": "72177812c926a711bb30c275afb2baaf65fdf115e28758c3316b8df281eb9ee3",
+      "same_sha256": true,
+      "existing_manifest_hash_matches": true,
+      "existing_opens_ok": true,
+      "existing_pages": 2,
+      "existing_text_chars_per_page": [
+        4853,
+        5120
+      ],
+      "latest_verification": "공식 상품 페이지 연결 파일 확인; 전체 최신 유효판 여부 미확정",
+      "download_method": "공식 URL 직접 다운로드",
+      "download_date": "2026-10-30"
+    },
+    {
+      "no": 6,
+      "card_name": "BT 카드",
+      "card_type": "신용",
+      "document_type": "하나카드 공식 서버 PDF 원본",
+      "product_page_url": null,
+      "page_http_status": null,
+      "page_current_pdf_links": [],
+      "page_links_this_pdf": false,
+      "official_pdf_url": "https://m.hanacard.co.kr/leaflet/14/14324_20260310.pdf",
+      "download_final_url": "https://m.hanacard.co.kr/leaflet/14/14324_20260310.pdf",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "filename": "14324_20260310.pdf",
+      "filename_date": "20260310",
+      "pdf_creation_date_raw": "D:20260310165546+09'00'",
+      "pdf_metadata_title": "260310_BT카드_리플렛(발급실 출력)",
+      "compliance_review_ids": [
+        "준법심의 L-26-0339(2026.02.03)"
+      ],
+      "local_path": "src/card_benefit/data/raw/hanacard/credit/14324_20260310.pdf",
+      "bytes": 543780,
+      "pages": 1,
+      "sha256": "520d635dd26e1d370e4d1ca85105ddfa140023098fcd36e914b13ea2df70577e",
+      "opens_ok": true,
+      "text_chars_per_page": [
+        4659
+      ],
+      "text_extractable": true,
+      "card_name_search_key": "BIG TICKET",
+      "card_name_found": true,
+      "existing_path": "tmp/card_pdf_collection/credit/14324_20260310.pdf",
+      "existing_sha256": "520d635dd26e1d370e4d1ca85105ddfa140023098fcd36e914b13ea2df70577e",
+      "existing_manifest_sha256": "520d635dd26e1d370e4d1ca85105ddfa140023098fcd36e914b13ea2df70577e",
+      "same_sha256": true,
+      "existing_manifest_hash_matches": true,
+      "existing_opens_ok": true,
+      "existing_pages": 1,
+      "existing_text_chars_per_page": [
+        4659
+      ],
+      "latest_verification": "상품 페이지 PDF 링크 미확인; 최신판 미확인",
+      "download_method": "공식 URL 직접 다운로드",
+      "download_date": "2026-10-30"
+    },
+    {
+      "no": 7,
+      "card_name": "에너지 더블 카드",
+      "card_type": "신용",
+      "document_type": "하나카드 공식 서버 PDF 원본",
+      "product_page_url": "https://www.hanacard.co.kr/OPI41000000D.web?schID=pcd&mID=PI41016772P&CD_PD_SEQ=16772",
+      "page_http_status": 200,
+      "page_current_pdf_links": [
+        "https://m.hanacard.co.kr/leaflet/14/14422_20251224.pdf"
+      ],
+      "page_links_this_pdf": true,
+      "official_pdf_url": "https://m.hanacard.co.kr/leaflet/14/14422_20251224.pdf",
+      "download_final_url": "https://m.hanacard.co.kr/leaflet/14/14422_20251224.pdf",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "filename": "14422_20251224.pdf",
+      "filename_date": "20251224",
+      "pdf_creation_date_raw": "D:20260122133034+09'00'",
+      "pdf_metadata_title": "2601_에너지더블 리플렛",
+      "compliance_review_ids": [
+        "준법심의 L-25-0524(2025.12.24)"
+      ],
+      "local_path": "src/card_benefit/data/raw/hanacard/credit/14422_20251224.pdf",
+      "bytes": 1398539,
+      "pages": 1,
+      "sha256": "1b938dd04b54116a9c56b715f291e345c529b56a3505603baf16f2d0b55a0198",
+      "opens_ok": true,
+      "text_chars_per_page": [
+        4894
+      ],
+      "text_extractable": true,
+      "card_name_search_key": "에너지",
+      "card_name_found": true,
+      "existing_path": "tmp/card_pdf_collection/credit/14422_20251224.pdf",
+      "existing_sha256": "1b938dd04b54116a9c56b715f291e345c529b56a3505603baf16f2d0b55a0198",
+      "existing_manifest_sha256": "1b938dd04b54116a9c56b715f291e345c529b56a3505603baf16f2d0b55a0198",
+      "same_sha256": true,
+      "existing_manifest_hash_matches": true,
+      "existing_opens_ok": true,
+      "existing_pages": 1,
+      "existing_text_chars_per_page": [
+        4894
+      ],
+      "latest_verification": "공식 상품 페이지 연결 파일 확인; 전체 최신 유효판 여부 미확정",
+      "download_method": "공식 URL 직접 다운로드",
+      "download_date": "2026-10-30"
+    },
+    {
+      "no": 8,
+      "card_name": "K-패스 하나 신용카드",
+      "card_type": "신용",
+      "document_type": "하나카드 공식 서버 PDF 원본",
+      "product_page_url": "https://www.hanacard.co.kr/OPI41000000D.web?schID=pcd&mID=PI41017016P&CD_PD_SEQ=17016",
+      "page_http_status": 200,
+      "page_current_pdf_links": [
+        "https://m.hanacard.co.kr/leaflet/14/14472_20251224.pdf"
+      ],
+      "page_links_this_pdf": true,
+      "official_pdf_url": "https://m.hanacard.co.kr/leaflet/14/14472_20251224.pdf",
+      "download_final_url": "https://m.hanacard.co.kr/leaflet/14/14472_20251224.pdf",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "filename": "14472_20251224.pdf",
+      "filename_date": "20251224",
+      "pdf_creation_date_raw": "D:20260130141522+09'00'",
+      "pdf_metadata_title": "2601_K패스 하나 신용카드",
+      "compliance_review_ids": [
+        "준법심의 L-25-0389(2025.12.24)"
+      ],
+      "local_path": "src/card_benefit/data/raw/hanacard/credit/14472_20251224.pdf",
+      "bytes": 216784,
+      "pages": 1,
+      "sha256": "d461b07b93f01b0009075be904b22d89eda9bdfbcad1379c6fbc31e5e61d4da4",
+      "opens_ok": true,
+      "text_chars_per_page": [
+        4316
+      ],
+      "text_extractable": true,
+      "card_name_search_key": "K패스 하나 신용카드",
+      "card_name_found": true,
+      "existing_path": "tmp/card_pdf_collection/credit/14472_20251224.pdf",
+      "existing_sha256": "d461b07b93f01b0009075be904b22d89eda9bdfbcad1379c6fbc31e5e61d4da4",
+      "existing_manifest_sha256": "d461b07b93f01b0009075be904b22d89eda9bdfbcad1379c6fbc31e5e61d4da4",
+      "same_sha256": true,
+      "existing_manifest_hash_matches": true,
+      "existing_opens_ok": true,
+      "existing_pages": 1,
+      "existing_text_chars_per_page": [
+        4316
+      ],
+      "latest_verification": "공식 상품 페이지 연결 파일 확인; 전체 최신 유효판 여부 미확정",
+      "download_method": "공식 URL 직접 다운로드",
+      "download_date": "2026-10-30"
+    },
+    {
+      "no": 9,
+      "card_name": "더 심플 하나카드",
+      "card_type": "신용",
+      "document_type": "하나카드 공식 서버 PDF 원본",
+      "product_page_url": "https://www.hanacard.co.kr/OPI41000000D.web?schID=pcd&mID=PI41016952P&CD_PD_SEQ=16952",
+      "page_http_status": 200,
+      "page_current_pdf_links": [
+        "https://m.hanacard.co.kr/leaflet/14/14527_20260929.pdf"
+      ],
+      "page_links_this_pdf": true,
+      "official_pdf_url": "https://m.hanacard.co.kr/leaflet/14/14527_20260929.pdf",
+      "download_final_url": "https://m.hanacard.co.kr/leaflet/14/14527_20260929.pdf",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "filename": "14527_20260929.pdf",
+      "filename_date": "20260929",
+      "pdf_creation_date_raw": "D:20261029151053+09'00'",
+      "pdf_metadata_title": "261029 더심플 약관 출력용",
+      "compliance_review_ids": [
+        "준법심의 L-26-2189(2026.09.29)"
+      ],
+      "local_path": "src/card_benefit/data/raw/hanacard/credit/14527_20260929.pdf",
+      "bytes": 206617,
+      "pages": 1,
+      "sha256": "5e6417c7f693ff44e90c7c570e081618d8dfd189d7e9ba9e014d74716723520a",
+      "opens_ok": true,
+      "text_chars_per_page": [
+        4615
+      ],
+      "text_extractable": true,
+      "card_name_search_key": "더 심플 하나카드",
+      "card_name_found": true,
+      "existing_path": "tmp/card_pdf_collection/credit/14527_20260929.pdf",
+      "existing_sha256": "5e6417c7f693ff44e90c7c570e081618d8dfd189d7e9ba9e014d74716723520a",
+      "existing_manifest_sha256": "5e6417c7f693ff44e90c7c570e081618d8dfd189d7e9ba9e014d74716723520a",
+      "same_sha256": true,
+      "existing_manifest_hash_matches": true,
+      "existing_opens_ok": true,
+      "existing_pages": 1,
+      "existing_text_chars_per_page": [
+        4615
+      ],
+      "latest_verification": "공식 상품 페이지 연결 파일 확인; 전체 최신 유효판 여부 미확정",
+      "download_method": "공식 URL 직접 다운로드",
+      "download_date": "2026-10-30"
+    },
+    {
+      "no": 10,
+      "card_name": "하나 원큐 카드",
+      "card_type": "신용",
+      "document_type": "하나카드 공식 서버 PDF 원본",
+      "product_page_url": "https://www.hanacard.co.kr/OPI41000000D.web?schID=pcd&mID=PI41012942P&CD_PD_SEQ=12942",
+      "page_http_status": 200,
+      "page_current_pdf_links": [
+        "https://m.hanacard.co.kr/leaflet/13/13066_20251224.pdf"
+      ],
+      "page_links_this_pdf": true,
+      "official_pdf_url": "https://m.hanacard.co.kr/leaflet/13/13066_20251224.pdf",
+      "download_final_url": "https://m.hanacard.co.kr/leaflet/13/13066_20251224.pdf",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "filename": "13066_20251224.pdf",
+      "filename_date": "20251224",
+      "pdf_creation_date_raw": "D:20260213100134+09'00'",
+      "pdf_metadata_title": "2601_하나원큐카드",
+      "compliance_review_ids": [
+        "준법심의 L-25-0454(2025.12.24)"
+      ],
+      "local_path": "src/card_benefit/data/raw/hanacard/credit/13066_20251224.pdf",
+      "bytes": 320949,
+      "pages": 1,
+      "sha256": "f6dbd8445a219a00bfbda5d32f0e36ef9961df25c44bcecf062cfd9397de4d89",
+      "opens_ok": true,
+      "text_chars_per_page": [
+        4238
+      ],
+      "text_extractable": true,
+      "card_name_search_key": "하나원큐 카드",
+      "card_name_found": true,
+      "existing_path": "tmp/card_pdf_collection/credit/13066_20251224.pdf",
+      "existing_sha256": "f6dbd8445a219a00bfbda5d32f0e36ef9961df25c44bcecf062cfd9397de4d89",
+      "existing_manifest_sha256": "f6dbd8445a219a00bfbda5d32f0e36ef9961df25c44bcecf062cfd9397de4d89",
+      "same_sha256": true,
+      "existing_manifest_hash_matches": true,
+      "existing_opens_ok": true,
+      "existing_pages": 1,
+      "existing_text_chars_per_page": [
+        4238
+      ],
+      "latest_verification": "공식 상품 페이지 연결 파일 확인; 전체 최신 유효판 여부 미확정",
+      "download_method": "공식 URL 직접 다운로드",
+      "download_date": "2026-10-30"
+    }
+  ]
+}
