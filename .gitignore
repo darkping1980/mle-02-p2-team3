@@ -33,3 +33,6 @@ Thumbs.db
 /tmp/
 /.chart-data-*/
 /data/*.pdf
+
+# Windows alternate data stream metadata
+*:[Zz]one.[Ii]dentifier
