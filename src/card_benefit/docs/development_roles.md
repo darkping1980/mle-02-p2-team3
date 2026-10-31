@@ -79,7 +79,7 @@ PDF·원천 문서 파일을 Python으로 직접 읽어 처리하는 방식을 �
 | 경로 | 소유 | 변경 규칙 |
 |---|---|---|
 | `payment_card/file_pipeline/` | 이현근 | 파일 기반 방식 전용 처리 로직. 자유롭게 변경 |
-| `payment_card/db_pipeline/` | 김병주 | PostgreSQL 기반 방식 전용 처리 로직과 전용 SQL(`db_pipeline.sql`). 자유롭게 변경 |
+| `payment_card/db_pipeline/` | 김병주 | PostgreSQL 기반 방식 전용 처리 로직과 전용 SQL(`document_repository.sql`). 자유롭게 변경 |
 | `sql/` (신규 DDL) | 김병주 (테이블 설계) | 운영 DB 적용 전 공동 확인 |
 | `sql/schema.sql` (기존) | 공동 | 현재 CLI가 쓰는 `card_product` 테이블. 변경 시 합의 |
 | `payment_card/models.py` | 공동 | 공통 카드 데이터 모델 ✅ + 추출 결과 계약(⏳ 예정, 아직 없음). 양쪽 합의 후 변경 |
@@ -111,7 +111,7 @@ PDF·원천 문서 파일을 Python으로 직접 읽어 처리하는 방식을 �
 
 - `file_pipeline/` 과 `db_pipeline/` 은 서로 import하지 않고, 서로의 출력을 입력으로 쓰지 않습니다.
 - 두 방식이 공유하는 것은 원천 문서, `payment_card/` 최상위 공통 코드(모델·계약·등록·조회), `src/common` 뿐입니다. 따라서 각자 독립적으로 개발·테스트할 수 있습니다.
-- `db_pipeline/` 은 `src/common` 의 `PostgresDbSession` 과 공통 `CardRepository` 를 사용합니다. 전용 SQL은 `db_pipeline/db_pipeline.sql` 에 둡니다.
+- `db_pipeline/` 은 `src/common` 의 `PostgresDbSession` 과 공통 `CardRepository` 를 사용합니다. 전용 SQL은 `db_pipeline/document_repository.sql` 에 둡니다.
 - `file_pipeline/` 이 결과 A를 PostgreSQL에 저장할지(비교를 DB에서 할지)는 미정입니다 ❓.
 
 ## 8. 향후 확정이 필요한 사항

@@ -88,7 +88,7 @@ src/card_benefit/                     프로젝트 루트 = 실행 위치, impor
 - `PostgresDbSession` 은 `MAPPER_ROOT`(= `payment_card/`) **하위 폴더까지** `-- name:` 이 있는 `*.sql` 을 모두 등록한다.
   따라서 파이프라인 폴더에 `.sql` 을 두면 별도 설정 없이 자동 등록되며, 파일명이 다른 `.sql` 과 같으면 중복 오류가 난다.
 - 이 파일은 두 방식이 공통으로 쓰는 카드 등록·조회 SQL이다. 한 방식에서만 쓰는 SQL은 그 파이프라인 폴더에 둔다.
-  예: DB 방식 전용 SQL → `payment_card/db_pipeline/db_pipeline.sql` (namespace `db_pipeline`). 별도 `mappers/` 폴더는 만들지 않는다.
+  예: DB 방식 전용 SQL → `payment_card/db_pipeline/document_repository.sql` (namespace `document_repository`). 별도 `mappers/` 폴더는 만들지 않는다.
 - 전용 SQL 파일을 추가하는 시점에 파일명(namespace)과 statement 이름이 기존 것과 겹치지 않는지 확인한다(아직 추가된 전용 SQL 없음).
 
 ## 5. PostgreSQL DDL — `sql/schema.sql`
