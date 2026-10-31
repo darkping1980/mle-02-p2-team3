@@ -530,13 +530,13 @@ CREATE TABLE db_pipeline.common_code_grp (
         PRIMARY KEY (common_code_grp_id)
 );
 
-COMMENT ON TABLE db_pipeline.common_code_grp IS '공통코드 그룹. 업무 컬럼이 어느 코드 집합을 쓰는지 정의';
-COMMENT ON COLUMN db_pipeline.common_code_grp.common_code_grp_id IS '공통코드 그룹 ID(예: BNFT_TYPE)';
+COMMENT ON TABLE db_pipeline.common_code_grp IS '공통코드 그룹';
+COMMENT ON COLUMN db_pipeline.common_code_grp.common_code_grp_id IS '공통코드 그룹 아이디';
 COMMENT ON COLUMN db_pipeline.common_code_grp.common_code_grp_nm IS '공통코드 그룹명';
 COMMENT ON COLUMN db_pipeline.common_code_grp.create_date IS '생성 일시';
-COMMENT ON COLUMN db_pipeline.common_code_grp.create_user_id IS '생성 사용자 ID';
+COMMENT ON COLUMN db_pipeline.common_code_grp.create_user_id IS '생성 사용자 아이디';
 COMMENT ON COLUMN db_pipeline.common_code_grp.update_date IS '수정 일시';
-COMMENT ON COLUMN db_pipeline.common_code_grp.update_user_id IS '수정 사용자 ID';
+COMMENT ON COLUMN db_pipeline.common_code_grp.update_user_id IS '수정 사용자 아이디';
 
 CREATE TABLE db_pipeline.common_cd (
     common_code_grp_id varchar(20) NOT NULL,
@@ -550,14 +550,14 @@ CREATE TABLE db_pipeline.common_cd (
         PRIMARY KEY (common_code_grp_id, common_cd)
 );
 
-COMMENT ON TABLE db_pipeline.common_cd IS '공통코드. PK는 그룹 PK를 상속. 수치·식별자는 저장하지 않음';
-COMMENT ON COLUMN db_pipeline.common_cd.common_code_grp_id IS '부모 공통코드 그룹 ID 상속';
-COMMENT ON COLUMN db_pipeline.common_cd.common_cd IS '코드값. 기존 코드값을 그대로 보존하기 위해 40자 허용(최장 24자)';
-COMMENT ON COLUMN db_pipeline.common_cd.common_cd_nm IS '코드명';
+COMMENT ON TABLE db_pipeline.common_cd IS '공통코드';
+COMMENT ON COLUMN db_pipeline.common_cd.common_code_grp_id IS '공통코드 그룹 아이디';
+COMMENT ON COLUMN db_pipeline.common_cd.common_cd IS '공통코드';
+COMMENT ON COLUMN db_pipeline.common_cd.common_cd_nm IS '공통코드명';
 COMMENT ON COLUMN db_pipeline.common_cd.create_date IS '생성 일시';
-COMMENT ON COLUMN db_pipeline.common_cd.create_user_id IS '생성 사용자 ID';
+COMMENT ON COLUMN db_pipeline.common_cd.create_user_id IS '생성 사용자 아이디';
 COMMENT ON COLUMN db_pipeline.common_cd.update_date IS '수정 일시';
-COMMENT ON COLUMN db_pipeline.common_cd.update_user_id IS '수정 사용자 ID';
+COMMENT ON COLUMN db_pipeline.common_cd.update_user_id IS '수정 사용자 아이디';
 
 -- ---------------------------------------------------------------------------
 -- 상품·정책 영역
@@ -583,20 +583,20 @@ CREATE TABLE db_pipeline.card_product (
     CONSTRAINT card_product_brand_opt_list_check CHECK (db_pipeline.fn_valid_brand_opt_list(brand_opt_list))
 );
 
-COMMENT ON TABLE db_pipeline.card_product IS '카드 상품 마스터. 상품 PK는 정책판·문서 관계의 부모. 브랜드 선택지는 brand_opt_list에 통합';
-COMMENT ON COLUMN db_pipeline.card_product.card_id IS 'bigint 상품 ID. 기존 card_id 타입과 일치; seq_card_product.nextval 발급';
-COMMENT ON COLUMN db_pipeline.card_product.product_cd IS '문서 파일명과 독립된 상품 업무 코드';
-COMMENT ON COLUMN db_pipeline.card_product.product_nm IS '카드 상품명';
-COMMENT ON COLUMN db_pipeline.card_product.issuer IS '발급 카드사; 제외 항목 issuer와 논리적 범위 일치';
-COMMENT ON COLUMN db_pipeline.card_product.card_kind_cd IS '[공통코드:CARD_KIND] 카드 구분';
-COMMENT ON COLUMN db_pipeline.card_product.product_status_cd IS '[공통코드:PRODUCT_STATUS] 상품 출시/중단 상태';
-COMMENT ON COLUMN db_pipeline.card_product.launched_on IS '상품 출시일(확인된 경우)';
-COMMENT ON COLUMN db_pipeline.card_product.discontinued_on IS '상품 중단일(확인된 경우)';
-COMMENT ON COLUMN db_pipeline.card_product.brand_opt_list IS '브랜드 선택지 JSONB 배열. [{brand_opt_cd,brand_opt_nm,brand_cd,service_grade_cd,service_type_cd,brand_opt_status_cd}]';
+COMMENT ON TABLE db_pipeline.card_product IS '카드 상품';
+COMMENT ON COLUMN db_pipeline.card_product.card_id IS '카드 아이디';
+COMMENT ON COLUMN db_pipeline.card_product.product_cd IS '상품 코드';
+COMMENT ON COLUMN db_pipeline.card_product.product_nm IS '상품명';
+COMMENT ON COLUMN db_pipeline.card_product.issuer IS '카드사';
+COMMENT ON COLUMN db_pipeline.card_product.card_kind_cd IS '카드 구분';
+COMMENT ON COLUMN db_pipeline.card_product.product_status_cd IS '상품 상태';
+COMMENT ON COLUMN db_pipeline.card_product.launched_on IS '출시일';
+COMMENT ON COLUMN db_pipeline.card_product.discontinued_on IS '판매 중단일';
+COMMENT ON COLUMN db_pipeline.card_product.brand_opt_list IS '브랜드 선택지 목록';
 COMMENT ON COLUMN db_pipeline.card_product.create_date IS '생성 일시';
-COMMENT ON COLUMN db_pipeline.card_product.create_user_id IS '생성 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_product.create_user_id IS '생성 사용자 아이디';
 COMMENT ON COLUMN db_pipeline.card_product.update_date IS '수정 일시';
-COMMENT ON COLUMN db_pipeline.card_product.update_user_id IS '수정 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_product.update_user_id IS '수정 사용자 아이디';
 
 CREATE TABLE db_pipeline.card_policy_version (
     card_id bigint NOT NULL,
@@ -616,16 +616,16 @@ CREATE TABLE db_pipeline.card_policy_version (
     CONSTRAINT card_policy_version_ck_4 CHECK (db_pipeline.fn_valid_doc_ref_list(source_doc_list))
 );
 
-COMMENT ON TABLE db_pipeline.card_policy_version IS '상품 정책 개정판. 상품당 같은 시점의 승인 정책은 1개. 승인일/적용일/문서일 분리';
-COMMENT ON COLUMN db_pipeline.card_policy_version.card_id IS '부모 상품 ID 상속';
-COMMENT ON COLUMN db_pipeline.card_policy_version.policy_ver_id IS '정책판 로컬 업무 ID';
-COMMENT ON COLUMN db_pipeline.card_policy_version.policy_ver_no IS '상품 안의 정책판 번호(1부터)';
-COMMENT ON COLUMN db_pipeline.card_policy_version.policy_cond_expr IS '카드 전체 조건식. 실적 산정 기준, 실적 제외, 유예 조건처럼 특정 혜택에 속하지 않는 조건';
-COMMENT ON COLUMN db_pipeline.card_policy_version.source_doc_list IS '정책판의 원천 문서 JSONB 배열. [{card_doc_id,source_role_cd}]. V5 card_policy_doc 대체. 문서 개정판과 정책 개정판은 별개';
-COMMENT ON COLUMN db_pipeline.card_policy_version.valid_from IS '정책 적용 시작일(포함)';
-COMMENT ON COLUMN db_pipeline.card_policy_version.valid_to_excl IS '정책 적용 종료일(미포함)';
-COMMENT ON COLUMN db_pipeline.card_policy_version.approved_at IS '정책 승인 일시';
-COMMENT ON COLUMN db_pipeline.card_policy_version.policy_status_cd IS '[공통코드:POLICY_STATUS] 정책 상태';
+COMMENT ON TABLE db_pipeline.card_policy_version IS '카드 정책 버전';
+COMMENT ON COLUMN db_pipeline.card_policy_version.card_id IS '카드 아이디';
+COMMENT ON COLUMN db_pipeline.card_policy_version.policy_ver_id IS '정책 버전 아이디';
+COMMENT ON COLUMN db_pipeline.card_policy_version.policy_ver_no IS '정책 버전 번호';
+COMMENT ON COLUMN db_pipeline.card_policy_version.policy_cond_expr IS '카드 공통 조건';
+COMMENT ON COLUMN db_pipeline.card_policy_version.source_doc_list IS '근거 문서 목록';
+COMMENT ON COLUMN db_pipeline.card_policy_version.valid_from IS '적용 시작일';
+COMMENT ON COLUMN db_pipeline.card_policy_version.valid_to_excl IS '적용 종료일';
+COMMENT ON COLUMN db_pipeline.card_policy_version.approved_at IS '승인 일시';
+COMMENT ON COLUMN db_pipeline.card_policy_version.policy_status_cd IS '정책 상태';
 
 CREATE TABLE db_pipeline.card_product_doc (
     card_id bigint NOT NULL,
@@ -652,20 +652,20 @@ CREATE TABLE db_pipeline.card_product_doc (
          (effective_from IS NOT NULL AND length(trim(applicability_basis_txt)) > 0))
 );
 
-COMMENT ON TABLE db_pipeline.card_product_doc IS '상품↔문서판 N:M. PK는 상품/문서 양 부모 키. 적용 기간과 승인 이력을 가지므로 독립 유지';
-COMMENT ON COLUMN db_pipeline.card_product_doc.card_id IS '부모 상품 ID';
-COMMENT ON COLUMN db_pipeline.card_product_doc.card_doc_id IS '부모 원천 문서판 ID';
-COMMENT ON COLUMN db_pipeline.card_product_doc.doc_role_cd IS '[공통코드:DOC_ROLE] 상품에 적용되는 문서 역할';
-COMMENT ON COLUMN db_pipeline.card_product_doc.brand_opt_cds IS '문서가 적용되는 brand_opt_cd 목록. BRAND_SERVICE 문서는 필수, NULL이면 상품 전체';
-COMMENT ON COLUMN db_pipeline.card_product_doc.effective_from IS '상품에 문서판 적용 시작일(포함)';
-COMMENT ON COLUMN db_pipeline.card_product_doc.effective_to_excl IS '상품에 문서판 적용 종료일(미포함)';
-COMMENT ON COLUMN db_pipeline.card_product_doc.approval_status_cd IS '[공통코드:APPROVAL_STATUS] 관계 검증/승인 상태';
-COMMENT ON COLUMN db_pipeline.card_product_doc.applicability_basis_txt IS '상품에 이 문서가 적용된다는 원문/출처 근거';
-COMMENT ON COLUMN db_pipeline.card_product_doc.approval_note IS '승인·검토 메모';
+COMMENT ON TABLE db_pipeline.card_product_doc IS '상품별 문서 관계';
+COMMENT ON COLUMN db_pipeline.card_product_doc.card_id IS '카드 아이디';
+COMMENT ON COLUMN db_pipeline.card_product_doc.card_doc_id IS '문서 아이디';
+COMMENT ON COLUMN db_pipeline.card_product_doc.doc_role_cd IS '문서 역할';
+COMMENT ON COLUMN db_pipeline.card_product_doc.brand_opt_cds IS '적용 브랜드 선택지';
+COMMENT ON COLUMN db_pipeline.card_product_doc.effective_from IS '문서 적용 시작일';
+COMMENT ON COLUMN db_pipeline.card_product_doc.effective_to_excl IS '문서 적용 종료일';
+COMMENT ON COLUMN db_pipeline.card_product_doc.approval_status_cd IS '승인 상태';
+COMMENT ON COLUMN db_pipeline.card_product_doc.applicability_basis_txt IS '적용 근거';
+COMMENT ON COLUMN db_pipeline.card_product_doc.approval_note IS '승인 메모';
 COMMENT ON COLUMN db_pipeline.card_product_doc.create_date IS '생성 일시';
-COMMENT ON COLUMN db_pipeline.card_product_doc.create_user_id IS '생성 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_product_doc.create_user_id IS '생성 사용자 아이디';
 COMMENT ON COLUMN db_pipeline.card_product_doc.update_date IS '수정 일시';
-COMMENT ON COLUMN db_pipeline.card_product_doc.update_user_id IS '수정 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_product_doc.update_user_id IS '수정 사용자 아이디';
 
 -- ---------------------------------------------------------------------------
 -- 상품 혜택 영역. 규칙·규칙↔한도·혜택 관계는 card_bnft JSONB로 통합
@@ -696,21 +696,21 @@ CREATE TABLE db_pipeline.card_bnft (
     CONSTRAINT card_bnft_ck_5 CHECK (bnft_origin_cd <> 'COMMON_LINK' OR jsonb_array_length(rule_list) = 0)
 );
 
-COMMENT ON TABLE db_pipeline.card_bnft IS '상품 정책의 혜택 인스턴스. LOCAL 혜택의 계산 규칙과 혜택 간 관계를 JSONB로 포함. COMMON_LINK는 로컬 규칙 없음';
-COMMENT ON COLUMN db_pipeline.card_bnft.card_id IS '부모 정책판 키 상속';
-COMMENT ON COLUMN db_pipeline.card_bnft.policy_ver_id IS '부모 정책판 키 상속';
-COMMENT ON COLUMN db_pipeline.card_bnft.card_bnft_id IS '혜택 로컬 업무 ID';
-COMMENT ON COLUMN db_pipeline.card_bnft.bnft_cd IS '정책판 안의 혜택 업무 코드';
+COMMENT ON TABLE db_pipeline.card_bnft IS '카드 혜택';
+COMMENT ON COLUMN db_pipeline.card_bnft.card_id IS '카드 아이디';
+COMMENT ON COLUMN db_pipeline.card_bnft.policy_ver_id IS '정책 버전 아이디';
+COMMENT ON COLUMN db_pipeline.card_bnft.card_bnft_id IS '혜택 아이디';
+COMMENT ON COLUMN db_pipeline.card_bnft.bnft_cd IS '혜택 코드';
 COMMENT ON COLUMN db_pipeline.card_bnft.bnft_nm IS '혜택명';
-COMMENT ON COLUMN db_pipeline.card_bnft.bnft_type_cd IS '[공통코드:BNFT_TYPE] 혜택 유형';
-COMMENT ON COLUMN db_pipeline.card_bnft.bnft_origin_cd IS '[공통코드:BNFT_ORIGIN] 혜택 출처. LOCAL은 rule_list 사용, COMMON_LINK는 card_bnft_common으로 공통 규칙 사용';
-COMMENT ON COLUMN db_pipeline.card_bnft.bnft_scope_cd IS '[공통코드:BNFT_SCOPE] 적용 범위. PRODUCT는 상품 전체, BRAND는 bnft_brand_opt_cds의 선택지만 적용';
-COMMENT ON COLUMN db_pipeline.card_bnft.bnft_brand_opt_cds IS '적용 brand_opt_cd 목록';
-COMMENT ON COLUMN db_pipeline.card_bnft.bnft_cond_expr IS '혜택 전체 조건식. 규칙 조건 및 공통 규칙 조건과 AND로 결합';
-COMMENT ON COLUMN db_pipeline.card_bnft.rule_select_cd IS '[공통코드:RULE_SELECT] 한 혜택 안에서 규칙이 겹칠 때 선택 방식';
-COMMENT ON COLUMN db_pipeline.card_bnft.rule_list IS '계산 규칙 JSONB 배열. [{rule_key,cond_expr,predicate_state_cd,target_list,calc_method_cd,method_ver,value_num,value_unit_cd,payout_unit_cd,basis_amt,calc_params,rule_priority,rule_status_cd,pool_refs:[{pool_id,pool_role_cd}]}]. V5 card_bnft_rule, card_bnft_rule_pool 대체. 행 복원은 v_card_rule, v_card_rule_pool';
-COMMENT ON COLUMN db_pipeline.card_bnft.relation_list IS '이 혜택에서 시작하는 혜택 관계 JSONB 배열. [{relation_key,to_bnft_id,rel_type_cd,trigger_pool_id,rel_priority}]. V5 card_bnft_rel 대체. MUTUALLY_EXCLUSIVE는 한쪽에만 저장하고 v_card_bnft_rel이 양방향으로 복원';
-COMMENT ON COLUMN db_pipeline.card_bnft.verification_status_cd IS '[공통코드:VERIFY_STATUS] 혜택 검증 상태';
+COMMENT ON COLUMN db_pipeline.card_bnft.bnft_type_cd IS '혜택 유형';
+COMMENT ON COLUMN db_pipeline.card_bnft.bnft_origin_cd IS '혜택 출처';
+COMMENT ON COLUMN db_pipeline.card_bnft.bnft_scope_cd IS '혜택 적용 범위';
+COMMENT ON COLUMN db_pipeline.card_bnft.bnft_brand_opt_cds IS '적용 브랜드 선택지';
+COMMENT ON COLUMN db_pipeline.card_bnft.bnft_cond_expr IS '혜택 적용 조건';
+COMMENT ON COLUMN db_pipeline.card_bnft.rule_select_cd IS '규칙 선택 방식';
+COMMENT ON COLUMN db_pipeline.card_bnft.rule_list IS '계산 규칙 목록';
+COMMENT ON COLUMN db_pipeline.card_bnft.relation_list IS '혜택 관계 목록';
+COMMENT ON COLUMN db_pipeline.card_bnft.verification_status_cd IS '혜택 검증 상태';
 
 CREATE TABLE db_pipeline.card_limit_pool (
     card_id bigint NOT NULL,
@@ -725,15 +725,15 @@ CREATE TABLE db_pipeline.card_limit_pool (
     CONSTRAINT card_limit_pool_ck_1 CHECK (db_pipeline.fn_valid_tier_list(tier_list))
 );
 
-COMMENT ON TABLE db_pipeline.card_limit_pool IS '상품 정책판의 독립 한도. 여러 규칙이 공유하고 한 규칙이 여러 풀을 소비하므로 독립 유지';
-COMMENT ON COLUMN db_pipeline.card_limit_pool.card_id IS '부모 정책판 키 상속';
-COMMENT ON COLUMN db_pipeline.card_limit_pool.policy_ver_id IS '부모 정책판 키 상속';
-COMMENT ON COLUMN db_pipeline.card_limit_pool.pool_id IS '한도 풀 로컬 업무 ID';
-COMMENT ON COLUMN db_pipeline.card_limit_pool.pool_scope_cd IS '[공통코드:LIMIT_SCOPE] 한도 범위';
-COMMENT ON COLUMN db_pipeline.card_limit_pool.period_cd IS '[공통코드:LIMIT_PERIOD] 한도 기간';
-COMMENT ON COLUMN db_pipeline.card_limit_pool.cap_unit_cd IS '[공통코드:LIMIT_UNIT] 한도 단위';
-COMMENT ON COLUMN db_pipeline.card_limit_pool.aggregation_key_cd IS '[공통코드:LIMIT_AGG] 누적 집계 기준';
-COMMENT ON COLUMN db_pipeline.card_limit_pool.tier_list IS '한도 구간 JSONB 배열. [{tier_key,tier_priority,predicate_state_cd,limit_num,cond_expr}]. 행 복원은 v_card_limit_tier';
+COMMENT ON TABLE db_pipeline.card_limit_pool IS '혜택 공유 한도';
+COMMENT ON COLUMN db_pipeline.card_limit_pool.card_id IS '카드 아이디';
+COMMENT ON COLUMN db_pipeline.card_limit_pool.policy_ver_id IS '정책 버전 아이디';
+COMMENT ON COLUMN db_pipeline.card_limit_pool.pool_id IS '한도 풀 아이디';
+COMMENT ON COLUMN db_pipeline.card_limit_pool.pool_scope_cd IS '한도 적용 범위';
+COMMENT ON COLUMN db_pipeline.card_limit_pool.period_cd IS '한도 기간';
+COMMENT ON COLUMN db_pipeline.card_limit_pool.cap_unit_cd IS '한도 단위';
+COMMENT ON COLUMN db_pipeline.card_limit_pool.aggregation_key_cd IS '한도 집계 기준';
+COMMENT ON COLUMN db_pipeline.card_limit_pool.tier_list IS '한도 구간 목록';
 
 -- ---------------------------------------------------------------------------
 -- 공통 혜택 영역. 규칙은 공통 정책판의 JSONB로 통합
@@ -749,12 +749,12 @@ CREATE TABLE db_pipeline.card_common_bnft (
     UNIQUE (common_bnft_cd)
 );
 
-COMMENT ON TABLE db_pipeline.card_common_bnft IS '특정 카드에 종속되지 않는 공통 서비스 정체성. 동일 이름이나 같은 PDF만으로 병합 금지';
-COMMENT ON COLUMN db_pipeline.card_common_bnft.common_bnft_id IS '공통 혜택 업무 ID';
-COMMENT ON COLUMN db_pipeline.card_common_bnft.provider_cd IS '[공통코드:BRAND] 제공 주체인 국제 브랜드';
-COMMENT ON COLUMN db_pipeline.card_common_bnft.service_grade_cd IS '[공통코드:SERVICE_GRADE] 브랜드 서비스 등급';
-COMMENT ON COLUMN db_pipeline.card_common_bnft.service_type_cd IS '[공통코드:SERVICE_TYPE] 서비스 유형(COMMON: 등급 공통, 01~04: 선택서비스)';
-COMMENT ON COLUMN db_pipeline.card_common_bnft.common_bnft_cd IS '공통 혜택 업무 코드';
+COMMENT ON TABLE db_pipeline.card_common_bnft IS '공통 혜택';
+COMMENT ON COLUMN db_pipeline.card_common_bnft.common_bnft_id IS '공통 혜택 아이디';
+COMMENT ON COLUMN db_pipeline.card_common_bnft.provider_cd IS '제공 브랜드';
+COMMENT ON COLUMN db_pipeline.card_common_bnft.service_grade_cd IS '서비스 등급';
+COMMENT ON COLUMN db_pipeline.card_common_bnft.service_type_cd IS '서비스 유형';
+COMMENT ON COLUMN db_pipeline.card_common_bnft.common_bnft_cd IS '공통 혜택 코드';
 COMMENT ON COLUMN db_pipeline.card_common_bnft.common_bnft_nm IS '공통 혜택명';
 
 CREATE TABLE db_pipeline.card_common_policy_version (
@@ -773,15 +773,15 @@ CREATE TABLE db_pipeline.card_common_policy_version (
     CONSTRAINT card_common_policy_version_ck_3 CHECK (db_pipeline.fn_valid_rule_list(rule_list, 'COMMON'))
 );
 
-COMMENT ON TABLE db_pipeline.card_common_policy_version IS '공통 서비스 정책 개정판. 규칙값의 단일 기준이며 상품에 복제하지 않음; 카드 상품/문서 버전과 별개';
-COMMENT ON COLUMN db_pipeline.card_common_policy_version.common_bnft_id IS '부모 공통 혜택 키 상속';
-COMMENT ON COLUMN db_pipeline.card_common_policy_version.common_ver_id IS '공통 정책판 로컬 업무 ID';
-COMMENT ON COLUMN db_pipeline.card_common_policy_version.common_ver_no IS '공통 혜택 안의 정책판 번호(1부터)';
-COMMENT ON COLUMN db_pipeline.card_common_policy_version.rule_list IS '공통 규칙 JSONB 배열. card_bnft.rule_list와 같은 계약이되 pool_refs 대신 limit_list 사용. V5 card_common_bnft_rule 대체. 행 복원은 v_card_common_rule';
-COMMENT ON COLUMN db_pipeline.card_common_policy_version.valid_from IS '공통 정책 적용 시작일(포함)';
-COMMENT ON COLUMN db_pipeline.card_common_policy_version.valid_to_excl IS '공통 정책 적용 종료일(미포함)';
-COMMENT ON COLUMN db_pipeline.card_common_policy_version.approved_at IS '공통 정책 승인 일시';
-COMMENT ON COLUMN db_pipeline.card_common_policy_version.policy_status_cd IS '[공통코드:POLICY_STATUS] 정책 상태';
+COMMENT ON TABLE db_pipeline.card_common_policy_version IS '공통 혜택 정책 버전';
+COMMENT ON COLUMN db_pipeline.card_common_policy_version.common_bnft_id IS '공통 혜택 아이디';
+COMMENT ON COLUMN db_pipeline.card_common_policy_version.common_ver_id IS '공통 정책 버전 아이디';
+COMMENT ON COLUMN db_pipeline.card_common_policy_version.common_ver_no IS '공통 정책 버전 번호';
+COMMENT ON COLUMN db_pipeline.card_common_policy_version.rule_list IS '계산 규칙 목록';
+COMMENT ON COLUMN db_pipeline.card_common_policy_version.valid_from IS '적용 시작일';
+COMMENT ON COLUMN db_pipeline.card_common_policy_version.valid_to_excl IS '적용 종료일';
+COMMENT ON COLUMN db_pipeline.card_common_policy_version.approved_at IS '승인 일시';
+COMMENT ON COLUMN db_pipeline.card_common_policy_version.policy_status_cd IS '정책 상태';
 
 CREATE TABLE db_pipeline.card_bnft_common (
     card_id bigint NOT NULL,
@@ -793,13 +793,13 @@ CREATE TABLE db_pipeline.card_bnft_common (
     PRIMARY KEY (card_id, policy_ver_id, card_bnft_id, common_bnft_id, common_ver_id)
 );
 
-COMMENT ON TABLE db_pipeline.card_bnft_common IS '상품 혜택 인스턴스↔공통 정책판 N:M. 여러 상품의 공통 정책 공유와 승인을 표현하므로 독립 유지';
-COMMENT ON COLUMN db_pipeline.card_bnft_common.card_id IS '부모 혜택 키 상속';
-COMMENT ON COLUMN db_pipeline.card_bnft_common.policy_ver_id IS '부모 혜택 키 상속';
-COMMENT ON COLUMN db_pipeline.card_bnft_common.card_bnft_id IS '부모 혜택 키 상속';
-COMMENT ON COLUMN db_pipeline.card_bnft_common.common_bnft_id IS '부모 공통 정책판 키 상속';
-COMMENT ON COLUMN db_pipeline.card_bnft_common.common_ver_id IS '부모 공통 정책판 키 상속';
-COMMENT ON COLUMN db_pipeline.card_bnft_common.apply_status_cd IS '[공통코드:APPROVAL_STATUS] 적용 승인 상태';
+COMMENT ON TABLE db_pipeline.card_bnft_common IS '상품별 공통 혜택 관계';
+COMMENT ON COLUMN db_pipeline.card_bnft_common.card_id IS '카드 아이디';
+COMMENT ON COLUMN db_pipeline.card_bnft_common.policy_ver_id IS '정책 버전 아이디';
+COMMENT ON COLUMN db_pipeline.card_bnft_common.card_bnft_id IS '혜택 아이디';
+COMMENT ON COLUMN db_pipeline.card_bnft_common.common_bnft_id IS '공통 혜택 아이디';
+COMMENT ON COLUMN db_pipeline.card_bnft_common.common_ver_id IS '공통 정책 버전 아이디';
+COMMENT ON COLUMN db_pipeline.card_bnft_common.apply_status_cd IS '적용 승인 상태';
 
 -- ---------------------------------------------------------------------------
 -- 근거 연결 영역
@@ -834,18 +834,18 @@ CREATE TABLE db_pipeline.card_policy_evidence (
         END)
 );
 
-COMMENT ON TABLE db_pipeline.card_policy_evidence IS '상품 정책 대상↔원문 근거 연결. 규칙·관계는 안정 키(rule_key, relation_key)로 참조하고 대상 유형별 컬럼 조합을 CHECK로 고정';
-COMMENT ON COLUMN db_pipeline.card_policy_evidence.card_id IS '부모 정책판 키 상속';
-COMMENT ON COLUMN db_pipeline.card_policy_evidence.policy_ver_id IS '부모 정책판 키 상속';
-COMMENT ON COLUMN db_pipeline.card_policy_evidence.ev_link_id IS '근거 연결 로컬 업무 ID';
-COMMENT ON COLUMN db_pipeline.card_policy_evidence.ev_subject_cd IS '[공통코드:EV_SUBJECT] 근거 대상 유형';
-COMMENT ON COLUMN db_pipeline.card_policy_evidence.card_bnft_id IS 'BNFT, RULE, REL 대상의 소속 혜택 ID';
-COMMENT ON COLUMN db_pipeline.card_policy_evidence.rule_key IS 'RULE 대상의 card_bnft.rule_list[].rule_key';
-COMMENT ON COLUMN db_pipeline.card_policy_evidence.relation_key IS 'REL 대상의 card_bnft.relation_list[].relation_key';
-COMMENT ON COLUMN db_pipeline.card_policy_evidence.pool_id IS 'POOL 대상의 한도 풀 ID';
-COMMENT ON COLUMN db_pipeline.card_policy_evidence.ev_item_cd IS '[공통코드:EV_ITEM] 대상 안의 JSONB 항목 유형';
-COMMENT ON COLUMN db_pipeline.card_policy_evidence.ev_item_key IS 'JSONB 항목 키(atom_key, target_key, tier_key). SELF는 -';
-COMMENT ON COLUMN db_pipeline.card_policy_evidence.evidence_id IS '부모 원문 근거 ID';
+COMMENT ON TABLE db_pipeline.card_policy_evidence IS '정책 근거 관계';
+COMMENT ON COLUMN db_pipeline.card_policy_evidence.card_id IS '카드 아이디';
+COMMENT ON COLUMN db_pipeline.card_policy_evidence.policy_ver_id IS '정책 버전 아이디';
+COMMENT ON COLUMN db_pipeline.card_policy_evidence.ev_link_id IS '근거 연결 아이디';
+COMMENT ON COLUMN db_pipeline.card_policy_evidence.ev_subject_cd IS '근거 대상 유형';
+COMMENT ON COLUMN db_pipeline.card_policy_evidence.card_bnft_id IS '혜택 아이디';
+COMMENT ON COLUMN db_pipeline.card_policy_evidence.rule_key IS '규칙 키';
+COMMENT ON COLUMN db_pipeline.card_policy_evidence.relation_key IS '혜택 관계 키';
+COMMENT ON COLUMN db_pipeline.card_policy_evidence.pool_id IS '한도 풀 아이디';
+COMMENT ON COLUMN db_pipeline.card_policy_evidence.ev_item_cd IS '근거 항목 유형';
+COMMENT ON COLUMN db_pipeline.card_policy_evidence.ev_item_key IS '근거 항목 키';
+COMMENT ON COLUMN db_pipeline.card_policy_evidence.evidence_id IS '원문 근거 아이디';
 
 CREATE TABLE db_pipeline.card_common_rule_evidence (
     common_bnft_id varchar(20) NOT NULL,
@@ -858,13 +858,13 @@ CREATE TABLE db_pipeline.card_common_rule_evidence (
     CONSTRAINT card_common_rule_evidence_ck_1 CHECK ((ev_item_cd = 'SELF') = (ev_item_key = '-'))
 );
 
-COMMENT ON TABLE db_pipeline.card_common_rule_evidence IS '공통 규칙↔원문 근거 N:M. 공통 정책판 rule_list의 rule_key를 참조';
-COMMENT ON COLUMN db_pipeline.card_common_rule_evidence.common_bnft_id IS '부모 공통 정책판 키 상속';
-COMMENT ON COLUMN db_pipeline.card_common_rule_evidence.common_ver_id IS '부모 공통 정책판 키 상속';
-COMMENT ON COLUMN db_pipeline.card_common_rule_evidence.rule_key IS '공통 정책판 rule_list[].rule_key';
-COMMENT ON COLUMN db_pipeline.card_common_rule_evidence.evidence_id IS '부모 원문 근거 ID';
-COMMENT ON COLUMN db_pipeline.card_common_rule_evidence.ev_item_cd IS '[공통코드:EV_ITEM] 규칙 안의 항목 유형';
-COMMENT ON COLUMN db_pipeline.card_common_rule_evidence.ev_item_key IS 'JSONB 항목 키(atom_key, target_key, limit_key). SELF는 -';
+COMMENT ON TABLE db_pipeline.card_common_rule_evidence IS '공통 규칙 근거 관계';
+COMMENT ON COLUMN db_pipeline.card_common_rule_evidence.common_bnft_id IS '공통 혜택 아이디';
+COMMENT ON COLUMN db_pipeline.card_common_rule_evidence.common_ver_id IS '공통 정책 버전 아이디';
+COMMENT ON COLUMN db_pipeline.card_common_rule_evidence.rule_key IS '규칙 키';
+COMMENT ON COLUMN db_pipeline.card_common_rule_evidence.evidence_id IS '원문 근거 아이디';
+COMMENT ON COLUMN db_pipeline.card_common_rule_evidence.ev_item_cd IS '근거 항목 유형';
+COMMENT ON COLUMN db_pipeline.card_common_rule_evidence.ev_item_key IS '근거 항목 키';
 
 -- ---------------------------------------------------------------------------
 -- 계산 방법·원천 문서·AI 파싱·근거 영역. 코드 열거 CHECK만 공통코드로 이관
@@ -881,13 +881,13 @@ CREATE TABLE db_pipeline.card_method_catalog (
     CONSTRAINT card_method_catalog_ck_2 CHECK (jsonb_typeof(param_schema) = 'object')
 );
 
-COMMENT ON TABLE db_pipeline.card_method_catalog IS '계산·술어 방법의 버전별 실행 계약. 코드와 이름은 공통코드, 파라미터 스키마와 핸들러는 이 테이블에서 관리';
-COMMENT ON COLUMN db_pipeline.card_method_catalog.method_kind_cd IS '[공통코드:METHOD_KIND] 방법 종류';
-COMMENT ON COLUMN db_pipeline.card_method_catalog.method_cd IS '방법 코드. CALC는 CALC_METHOD, PREDICATE는 PREDICATE_METHOD 그룹 소속';
-COMMENT ON COLUMN db_pipeline.card_method_catalog.method_ver IS '방법 실행 버전';
-COMMENT ON COLUMN db_pipeline.card_method_catalog.param_schema IS '이 버전의 calc_params 또는 cond_params JSON 스키마';
-COMMENT ON COLUMN db_pipeline.card_method_catalog.handler_key IS '애플리케이션 허용 목록의 계산 함수 키. 문자열을 코드로 실행하지 않음';
-COMMENT ON COLUMN db_pipeline.card_method_catalog.method_status_cd IS '[공통코드:METHOD_STATUS] 방법 실행 상태';
+COMMENT ON TABLE db_pipeline.card_method_catalog IS '계산 방법 관리';
+COMMENT ON COLUMN db_pipeline.card_method_catalog.method_kind_cd IS '계산 방식 종류';
+COMMENT ON COLUMN db_pipeline.card_method_catalog.method_cd IS '계산 방식 코드';
+COMMENT ON COLUMN db_pipeline.card_method_catalog.method_ver IS '계산 방식 버전';
+COMMENT ON COLUMN db_pipeline.card_method_catalog.param_schema IS '파라미터 스키마';
+COMMENT ON COLUMN db_pipeline.card_method_catalog.handler_key IS '실행 핸들러';
+COMMENT ON COLUMN db_pipeline.card_method_catalog.method_status_cd IS '계산 방식 상태';
 
 CREATE TABLE db_pipeline.card_doc (
     card_doc_id character varying(20) DEFAULT db_pipeline.fn_get_biz_id('card_doc'::text) NOT NULL,
@@ -921,29 +921,29 @@ CREATE TABLE db_pipeline.card_doc (
     CONSTRAINT card_doc_doc_sha256_key UNIQUE (doc_sha256)
 );
 
-COMMENT ON TABLE db_pipeline.card_doc IS '원천 PDF 파일/문서판. 상품 적용은 card_product_doc에서 관리';
-COMMENT ON COLUMN db_pipeline.card_doc.card_doc_id IS '원본 문서 ID';
-COMMENT ON COLUMN db_pipeline.card_doc.card_id IS '기존 파이프라인의 단일 상품 힌트. 신규 문서에서는 NULL; 적용 기준은 상품-문서 관계 테이블';
-COMMENT ON COLUMN db_pipeline.card_doc.doc_cd IS '파이프라인 공통 문서 코드(예: HANA_15650_20260429). 결과 A·B 비교 키 후보';
-COMMENT ON COLUMN db_pipeline.card_doc.doc_type_cd IS '[공통코드:DOC_TYPE] 문서 유형(PRODUCT_GUIDE, TERMS, BRAND_SERVICE, ETC)';
-COMMENT ON COLUMN db_pipeline.card_doc.doc_family_cd IS '개정판을 묶는 문서 계열 코드. 동일 계열의 각 판은 별도 card_doc_id';
+COMMENT ON TABLE db_pipeline.card_doc IS '원천 문서';
+COMMENT ON COLUMN db_pipeline.card_doc.card_doc_id IS '문서 아이디';
+COMMENT ON COLUMN db_pipeline.card_doc.card_id IS '카드 아이디';
+COMMENT ON COLUMN db_pipeline.card_doc.doc_cd IS '문서 코드';
+COMMENT ON COLUMN db_pipeline.card_doc.doc_type_cd IS '문서 유형';
+COMMENT ON COLUMN db_pipeline.card_doc.doc_family_cd IS '문서 계열 코드';
 COMMENT ON COLUMN db_pipeline.card_doc.doc_title IS '문서 제목';
-COMMENT ON COLUMN db_pipeline.card_doc.doc_source_url IS '공식 출처 URL';
-COMMENT ON COLUMN db_pipeline.card_doc.doc_file_nm IS '수집 파일명';
-COMMENT ON COLUMN db_pipeline.card_doc.doc_file_size IS '수집 파일 크기(바이트)';
-COMMENT ON COLUMN db_pipeline.card_doc.doc_sha256 IS '수집 파일 SHA-256(소문자 16진수 64자)';
-COMMENT ON COLUMN db_pipeline.card_doc.doc_page_cnt IS 'PDF 페이지 수';
-COMMENT ON COLUMN db_pipeline.card_doc.doc_review_no IS '준법심의·여신협회 심의필 번호 원문';
+COMMENT ON COLUMN db_pipeline.card_doc.doc_source_url IS '문서 출처 URL';
+COMMENT ON COLUMN db_pipeline.card_doc.doc_file_nm IS '파일명';
+COMMENT ON COLUMN db_pipeline.card_doc.doc_file_size IS '파일 크기';
+COMMENT ON COLUMN db_pipeline.card_doc.doc_sha256 IS '파일 해시';
+COMMENT ON COLUMN db_pipeline.card_doc.doc_page_cnt IS '페이지 수';
+COMMENT ON COLUMN db_pipeline.card_doc.doc_review_no IS '심의 번호';
 COMMENT ON COLUMN db_pipeline.card_doc.doc_review_date IS '심의일';
-COMMENT ON COLUMN db_pipeline.card_doc.doc_release_date IS '기존 상품 출시일 기록; 공통 문서는 확인된 문서 발행일만 기재. 관계 적용 시작일과 구별';
-COMMENT ON COLUMN db_pipeline.card_doc.doc_collect_date IS '파일 수집(다운로드) 일시';
-COMMENT ON COLUMN db_pipeline.card_doc.doc_version_no IS '문서판 번호(1부터). 상품별 적용 기간은 관계 테이블에서 관리';
-COMMENT ON COLUMN db_pipeline.card_doc.doc_status IS '[공통코드:DOC_STATUS] 원천 문서 상태(ACTIVE, SUPERSEDED, EXCLUDED). 상품별 현재 적용 여부는 승인된 문서 관계의 기간으로 판정';
-COMMENT ON COLUMN db_pipeline.card_doc.doc_note IS '문서 범위·확인 사항 메모';
+COMMENT ON COLUMN db_pipeline.card_doc.doc_release_date IS '문서 발행일';
+COMMENT ON COLUMN db_pipeline.card_doc.doc_collect_date IS '수집 일시';
+COMMENT ON COLUMN db_pipeline.card_doc.doc_version_no IS '문서 버전 번호';
+COMMENT ON COLUMN db_pipeline.card_doc.doc_status IS '문서 상태';
+COMMENT ON COLUMN db_pipeline.card_doc.doc_note IS '문서 메모';
 COMMENT ON COLUMN db_pipeline.card_doc.create_date IS '생성 일시';
-COMMENT ON COLUMN db_pipeline.card_doc.create_user_id IS '생성 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_doc.create_user_id IS '생성 사용자 아이디';
 COMMENT ON COLUMN db_pipeline.card_doc.update_date IS '수정 일시';
-COMMENT ON COLUMN db_pipeline.card_doc.update_user_id IS '수정 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_doc.update_user_id IS '수정 사용자 아이디';
 
 CREATE TABLE db_pipeline.card_doc_page (
     card_doc_id character varying(20) NOT NULL,
@@ -963,20 +963,20 @@ CREATE TABLE db_pipeline.card_doc_page (
     CONSTRAINT card_doc_page_page_no_check CHECK ((page_no > 0))
 );
 
-COMMENT ON TABLE db_pipeline.card_doc_page IS '문서 페이지별 추출 원문(정제 전, 적재 후 변경 금지)';
-COMMENT ON COLUMN db_pipeline.card_doc_page.card_doc_id IS '원본 문서 ID';
-COMMENT ON COLUMN db_pipeline.card_doc_page.page_no IS 'PDF 페이지 번호(1부터)';
-COMMENT ON COLUMN db_pipeline.card_doc_page.page_raw_txt IS '추출기가 반환한 페이지 텍스트 원문(가공 없음)';
-COMMENT ON COLUMN db_pipeline.card_doc_page.page_char_cnt IS '페이지 원문 문자 수';
-COMMENT ON COLUMN db_pipeline.card_doc_page.page_txt_sha256 IS '페이지 원문 SHA-256(재추출 시 변경 감지)';
-COMMENT ON COLUMN db_pipeline.card_doc_page.page_layer_cd IS '[공통코드:PAGE_LAYER] 텍스트 레이어 유형(TEXT, IMAGE, MIXED: 일부 표가 이미지, UNKNOWN)';
-COMMENT ON COLUMN db_pipeline.card_doc_page.page_extractor_nm IS '텍스트 추출기명(예: PyMuPDF)';
-COMMENT ON COLUMN db_pipeline.card_doc_page.page_extractor_ver IS '텍스트 추출기 버전';
-COMMENT ON COLUMN db_pipeline.card_doc_page.page_note IS '추출 한계·확인 메모(표 미탐지 등)';
+COMMENT ON TABLE db_pipeline.card_doc_page IS '문서 페이지';
+COMMENT ON COLUMN db_pipeline.card_doc_page.card_doc_id IS '문서 아이디';
+COMMENT ON COLUMN db_pipeline.card_doc_page.page_no IS '페이지 번호';
+COMMENT ON COLUMN db_pipeline.card_doc_page.page_raw_txt IS '페이지 원문';
+COMMENT ON COLUMN db_pipeline.card_doc_page.page_char_cnt IS '페이지 문자 수';
+COMMENT ON COLUMN db_pipeline.card_doc_page.page_txt_sha256 IS '페이지 원문 해시';
+COMMENT ON COLUMN db_pipeline.card_doc_page.page_layer_cd IS '텍스트 레이어 유형';
+COMMENT ON COLUMN db_pipeline.card_doc_page.page_extractor_nm IS '추출기명';
+COMMENT ON COLUMN db_pipeline.card_doc_page.page_extractor_ver IS '추출기 버전';
+COMMENT ON COLUMN db_pipeline.card_doc_page.page_note IS '페이지 메모';
 COMMENT ON COLUMN db_pipeline.card_doc_page.create_date IS '생성 일시';
-COMMENT ON COLUMN db_pipeline.card_doc_page.create_user_id IS '생성 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_doc_page.create_user_id IS '생성 사용자 아이디';
 COMMENT ON COLUMN db_pipeline.card_doc_page.update_date IS '수정 일시';
-COMMENT ON COLUMN db_pipeline.card_doc_page.update_user_id IS '수정 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_doc_page.update_user_id IS '수정 사용자 아이디';
 
 CREATE TABLE db_pipeline.card_doc_chunk (
     card_doc_id character varying(20) NOT NULL,
@@ -1001,24 +1001,24 @@ CREATE TABLE db_pipeline.card_doc_chunk (
     CONSTRAINT card_doc_chunk_chunk_seq_check CHECK ((chunk_seq > 0))
 );
 
-COMMENT ON TABLE db_pipeline.card_doc_chunk IS '문서 청크(조항·표·안내 단위) 원문과 SQL 정제 결과';
-COMMENT ON COLUMN db_pipeline.card_doc_chunk.card_doc_id IS '원본 문서 ID';
-COMMENT ON COLUMN db_pipeline.card_doc_chunk.page_no IS '청크가 속한 페이지 번호(청크는 페이지를 넘지 않음)';
-COMMENT ON COLUMN db_pipeline.card_doc_chunk.card_doc_chunk_id IS '청크 ID';
-COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_seq IS '문서 내 청크 순번(1부터)';
-COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_section_nm IS '원문 절 제목(예: [실적 산정 기준], 서비스 제외 대상)';
-COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_type_cd IS '[공통코드:CHUNK_TYPE] 청크 유형(BODY, TABLE, NOTICE: 유의사항, HEADER_FOOTER: 머리말·꼬리말, ETC)';
-COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_start_pos IS 'page_raw_txt 내 시작 문자 위치(1부터, PostgreSQL substr 기준)';
-COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_end_pos IS 'page_raw_txt 내 끝 문자 위치(포함)';
-COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_raw_txt IS '청크 원문(정제 전, page_raw_txt의 부분 문자열)';
-COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_clean_txt IS 'SQL 정제 후 텍스트(AI 입력)';
-COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_status IS '[공통코드:CHUNK_STATUS] 청크 상태(RAW: 분리만 됨, CLEANED: 정제 완료, EXCLUDED: 추출 대상 제외)';
+COMMENT ON TABLE db_pipeline.card_doc_chunk IS '문서 청크';
+COMMENT ON COLUMN db_pipeline.card_doc_chunk.card_doc_id IS '문서 아이디';
+COMMENT ON COLUMN db_pipeline.card_doc_chunk.page_no IS '페이지 번호';
+COMMENT ON COLUMN db_pipeline.card_doc_chunk.card_doc_chunk_id IS '청크 아이디';
+COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_seq IS '청크 순번';
+COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_section_nm IS '절 제목';
+COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_type_cd IS '청크 유형';
+COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_start_pos IS '청크 시작 위치';
+COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_end_pos IS '청크 종료 위치';
+COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_raw_txt IS '청크 원문';
+COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_clean_txt IS '청크 정제문';
+COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_status IS '청크 상태';
 COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_split_rule_ver IS '청크 분리 규칙 버전';
-COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_clean_rule_ver IS 'SQL 정제 규칙 버전';
+COMMENT ON COLUMN db_pipeline.card_doc_chunk.chunk_clean_rule_ver IS '청크 정제 규칙 버전';
 COMMENT ON COLUMN db_pipeline.card_doc_chunk.create_date IS '생성 일시';
-COMMENT ON COLUMN db_pipeline.card_doc_chunk.create_user_id IS '생성 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_doc_chunk.create_user_id IS '생성 사용자 아이디';
 COMMENT ON COLUMN db_pipeline.card_doc_chunk.update_date IS '수정 일시';
-COMMENT ON COLUMN db_pipeline.card_doc_chunk.update_user_id IS '수정 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_doc_chunk.update_user_id IS '수정 사용자 아이디';
 
 CREATE TABLE db_pipeline.card_ai_run (
     card_ai_run_id character varying(20) DEFAULT db_pipeline.fn_get_biz_id('card_ai_run'::text) NOT NULL,
@@ -1040,23 +1040,23 @@ CREATE TABLE db_pipeline.card_ai_run (
     CONSTRAINT card_ai_run_check CHECK (((run_end_date IS NULL) OR (run_end_date >= run_start_date)))
 );
 
-COMMENT ON TABLE db_pipeline.card_ai_run IS 'AI 추출·검증 실행 이력(실행 회차 단위)';
-COMMENT ON COLUMN db_pipeline.card_ai_run.card_ai_run_id IS 'AI 실행 ID';
-COMMENT ON COLUMN db_pipeline.card_ai_run.run_stage_cd IS '[공통코드:RUN_STAGE] 실행 단계(EXTRACT: 혜택·조건 추출, VERIFY: 추출 결과 의미 검증)';
-COMMENT ON COLUMN db_pipeline.card_ai_run.run_call_mthd_cd IS '[공통코드:RUN_CALL_METHOD] AI 호출 방식(PYTHON_RELAY, PGAI, EDGE_FUNCTION, ETC). 기술 검증 후 확정';
-COMMENT ON COLUMN db_pipeline.card_ai_run.run_model_nm IS '사용 모델명';
+COMMENT ON TABLE db_pipeline.card_ai_run IS 'AI 실행 이력';
+COMMENT ON COLUMN db_pipeline.card_ai_run.card_ai_run_id IS 'AI 실행 아이디';
+COMMENT ON COLUMN db_pipeline.card_ai_run.run_stage_cd IS '실행 단계';
+COMMENT ON COLUMN db_pipeline.card_ai_run.run_call_mthd_cd IS 'AI 호출 방식';
+COMMENT ON COLUMN db_pipeline.card_ai_run.run_model_nm IS '모델명';
 COMMENT ON COLUMN db_pipeline.card_ai_run.run_prompt_ver IS '프롬프트 버전';
-COMMENT ON COLUMN db_pipeline.card_ai_run.run_prompt_txt IS '실행에 사용한 프롬프트 템플릿 원문';
-COMMENT ON COLUMN db_pipeline.card_ai_run.run_param IS '모델 호출 파라미터(temperature, 출력 스키마 등)';
-COMMENT ON COLUMN db_pipeline.card_ai_run.run_target_card_doc_id IS '대상 원본 문서 ID(여러 문서 실행이면 NULL)';
-COMMENT ON COLUMN db_pipeline.card_ai_run.run_status IS '[공통코드:RUN_STATUS] 실행 상태(RUNNING, SUCCEEDED, PARTIAL: 일부 호출 실패, FAILED)';
+COMMENT ON COLUMN db_pipeline.card_ai_run.run_prompt_txt IS '프롬프트 원문';
+COMMENT ON COLUMN db_pipeline.card_ai_run.run_param IS '모델 파라미터';
+COMMENT ON COLUMN db_pipeline.card_ai_run.run_target_card_doc_id IS '대상 문서 아이디';
+COMMENT ON COLUMN db_pipeline.card_ai_run.run_status IS '실행 상태';
 COMMENT ON COLUMN db_pipeline.card_ai_run.run_start_date IS '실행 시작 일시';
 COMMENT ON COLUMN db_pipeline.card_ai_run.run_end_date IS '실행 종료 일시';
 COMMENT ON COLUMN db_pipeline.card_ai_run.run_note IS '실행 메모';
 COMMENT ON COLUMN db_pipeline.card_ai_run.create_date IS '생성 일시';
-COMMENT ON COLUMN db_pipeline.card_ai_run.create_user_id IS '생성 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_ai_run.create_user_id IS '생성 사용자 아이디';
 COMMENT ON COLUMN db_pipeline.card_ai_run.update_date IS '수정 일시';
-COMMENT ON COLUMN db_pipeline.card_ai_run.update_user_id IS '수정 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_ai_run.update_user_id IS '수정 사용자 아이디';
 
 CREATE TABLE db_pipeline.card_ai_call (
     card_ai_run_id character varying(20) NOT NULL,
@@ -1081,25 +1081,25 @@ CREATE TABLE db_pipeline.card_ai_call (
     CONSTRAINT card_ai_call_check CHECK ((((call_status)::text <> 'SUCCEEDED'::text) OR (call_resp_json IS NOT NULL)))
 );
 
-COMMENT ON TABLE db_pipeline.card_ai_call IS 'AI 실행 내 청크별 호출 원 응답(정제 전 AI 출력)';
-COMMENT ON COLUMN db_pipeline.card_ai_call.card_ai_run_id IS 'AI 실행 ID';
-COMMENT ON COLUMN db_pipeline.card_ai_call.card_doc_id IS '원본 문서 ID(card_doc_chunk 부모 PK 승계)';
-COMMENT ON COLUMN db_pipeline.card_ai_call.page_no IS '청크가 속한 PDF 페이지 번호(card_doc_chunk 부모 PK 승계)';
-COMMENT ON COLUMN db_pipeline.card_ai_call.card_doc_chunk_id IS '입력 청크 ID';
-COMMENT ON COLUMN db_pipeline.card_ai_call.call_seq IS '같은 실행·청크 내 호출 순번(재시도 시 증가)';
-COMMENT ON COLUMN db_pipeline.card_ai_call.call_input_sha256 IS '실제 입력(프롬프트+청크) SHA-256';
-COMMENT ON COLUMN db_pipeline.card_ai_call.call_status IS '[공통코드:CALL_STATUS] 호출 상태(SUCCEEDED, FAILED: 호출 실패, PARSE_ERROR: JSON 파싱 실패)';
-COMMENT ON COLUMN db_pipeline.card_ai_call.call_resp_raw IS '모델 응답 원문';
-COMMENT ON COLUMN db_pipeline.card_ai_call.call_resp_json IS '파싱한 응답 JSON';
+COMMENT ON TABLE db_pipeline.card_ai_call IS 'AI 호출 이력';
+COMMENT ON COLUMN db_pipeline.card_ai_call.card_ai_run_id IS 'AI 실행 아이디';
+COMMENT ON COLUMN db_pipeline.card_ai_call.card_doc_id IS '문서 아이디';
+COMMENT ON COLUMN db_pipeline.card_ai_call.page_no IS '페이지 번호';
+COMMENT ON COLUMN db_pipeline.card_ai_call.card_doc_chunk_id IS '청크 아이디';
+COMMENT ON COLUMN db_pipeline.card_ai_call.call_seq IS '호출 순번';
+COMMENT ON COLUMN db_pipeline.card_ai_call.call_input_sha256 IS '호출 입력 해시';
+COMMENT ON COLUMN db_pipeline.card_ai_call.call_status IS '호출 상태';
+COMMENT ON COLUMN db_pipeline.card_ai_call.call_resp_raw IS '응답 원문';
+COMMENT ON COLUMN db_pipeline.card_ai_call.call_resp_json IS '응답 JSON';
 COMMENT ON COLUMN db_pipeline.card_ai_call.call_error_msg IS '오류 메시지';
 COMMENT ON COLUMN db_pipeline.card_ai_call.call_input_token_cnt IS '입력 토큰 수';
 COMMENT ON COLUMN db_pipeline.card_ai_call.call_output_token_cnt IS '출력 토큰 수';
-COMMENT ON COLUMN db_pipeline.card_ai_call.call_latency_ms IS '응답 시간(밀리초)';
+COMMENT ON COLUMN db_pipeline.card_ai_call.call_latency_ms IS '응답 시간';
 COMMENT ON COLUMN db_pipeline.card_ai_call.call_req_date IS '요청 일시';
 COMMENT ON COLUMN db_pipeline.card_ai_call.create_date IS '생성 일시';
-COMMENT ON COLUMN db_pipeline.card_ai_call.create_user_id IS '생성 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_ai_call.create_user_id IS '생성 사용자 아이디';
 COMMENT ON COLUMN db_pipeline.card_ai_call.update_date IS '수정 일시';
-COMMENT ON COLUMN db_pipeline.card_ai_call.update_user_id IS '수정 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_ai_call.update_user_id IS '수정 사용자 아이디';
 
 CREATE TABLE db_pipeline.card_extr_stg (
     card_ai_run_id character varying(20) NOT NULL,
@@ -1134,34 +1134,34 @@ CREATE TABLE db_pipeline.card_extr_stg (
     CONSTRAINT card_extr_stg_stg_item_seq_check CHECK ((stg_item_seq > 0))
 );
 
-COMMENT ON TABLE db_pipeline.card_extr_stg IS 'AI 추출 혜택·조건 staging(정제 전 원 항목, 정제 후 값, 검증·승인 상태)';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.card_ai_run_id IS 'AI 추출 실행 ID';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.card_doc_id IS '원본 문서 ID(card_ai_call 부모 PK 승계)';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.page_no IS 'PDF 페이지 번호(card_ai_call 부모 PK 승계)';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.card_doc_chunk_id IS '근거 청크 ID';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.call_seq IS '응답을 만든 호출 순번(card_ai_call)';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.card_extr_stg_id IS '추출 staging ID';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_item_seq IS '응답 내 항목 순번(1부터)';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.card_id IS '추출 실행의 대상 상품 ID. 공유 문서는 상품 연결 범위를 별도 검증';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_kind_cd IS '[공통코드:STG_KIND] 항목 종류(BENEFIT: 혜택, CONDITION: 조건)';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_parent_card_extr_stg_id IS '조건이 걸린 혜택의 staging ID(카드 전체 조건이면 NULL)';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_raw_item IS 'AI가 추출한 개별 혜택 또는 조건의 원본 JSON';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_normalized_item IS 'AI 추출 원본을 정제 및 표준화한 JSON';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_evidence_txt IS 'AI가 제시한 근거 원문 문장';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_evidence_start_pos IS '근거 청크 원문 내 시작 문자 위치(1부터)';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_evidence_end_pos IS '근거 청크 원문 내 종료 문자 위치(포함)';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.card_excl_item_id IS '매핑된 표준 제외 항목 ID(미매핑 NULL)';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_sql_check_cd IS '정제 JSON, 원문 근거, 참조 관계 등을 검증한 SQL 검증 결과';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_ai_vrfy_cd IS '[공통코드:STG_AI_VRFY] AI 의미 검증 결과(NULL: 미실행, MATCH, MISMATCH, UNCERTAIN)';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_ai_vrfy_card_ai_run_id IS 'AI 의미 검증 실행 ID';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_status IS '[공통코드:STG_STATUS] 검토 상태(PENDING_REVIEW, AUTO_APPROVED, MANUAL_APPROVED, REJECTED)';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_review_note IS '검증 결과 및 검토 메모';
+COMMENT ON TABLE db_pipeline.card_extr_stg IS 'AI 추출 항목';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.card_ai_run_id IS 'AI 실행 아이디';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.card_doc_id IS '문서 아이디';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.page_no IS '페이지 번호';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.card_doc_chunk_id IS '청크 아이디';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.call_seq IS '호출 순번';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.card_extr_stg_id IS '추출 항목 아이디';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_item_seq IS '추출 항목 순번';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.card_id IS '카드 아이디';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_kind_cd IS '추출 항목 종류';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_parent_card_extr_stg_id IS '상위 추출 항목 아이디';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_raw_item IS '추출 원본';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_normalized_item IS '정제 항목';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_evidence_txt IS '추출 근거 문장';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_evidence_start_pos IS '근거 시작 위치';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_evidence_end_pos IS '근거 종료 위치';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.card_excl_item_id IS '제외 항목 아이디';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_sql_check_cd IS 'SQL 검증 결과';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_ai_vrfy_cd IS 'AI 검증 결과';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_ai_vrfy_card_ai_run_id IS 'AI 검증 실행 아이디';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_status IS '검토 상태';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_review_note IS '검토 메모';
 COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_approved_date IS '승인 일시';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_approved_user_id IS '승인 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_approved_user_id IS '승인 사용자 아이디';
 COMMENT ON COLUMN db_pipeline.card_extr_stg.create_date IS '생성 일시';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.create_user_id IS '생성 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.create_user_id IS '생성 사용자 아이디';
 COMMENT ON COLUMN db_pipeline.card_extr_stg.update_date IS '수정 일시';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.update_user_id IS '수정 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_extr_stg.update_user_id IS '수정 사용자 아이디';
 
 CREATE TABLE db_pipeline.card_excl_item (
     card_excl_item_id character varying(20) DEFAULT db_pipeline.fn_get_biz_id('card_excl_item'::text) NOT NULL,
@@ -1176,17 +1176,17 @@ CREATE TABLE db_pipeline.card_excl_item (
     update_user_id character varying(50) NOT NULL
 );
 
-COMMENT ON TABLE db_pipeline.card_excl_item IS '표준 제외 항목 사전(카드사 범위 개념, 정책 아님). 원문 표기 별칭을 excl_alias_nms로 포함';
-COMMENT ON COLUMN db_pipeline.card_excl_item.card_excl_item_id IS '표준 제외 항목 ID';
-COMMENT ON COLUMN db_pipeline.card_excl_item.issuer IS '카드사(card_product.issuer와 같은 표기). 병합은 같은 카드사 안에서만';
-COMMENT ON COLUMN db_pipeline.card_excl_item.excl_item_nm IS '표준 제외 항목명(예: 상품권·기프트카드 구매)';
-COMMENT ON COLUMN db_pipeline.card_excl_item.excl_concept_cd IS '카드사 공통 분류 개념 코드(예: GIFT_CERT_PURCHASE). 분류용이며 정책 동일을 뜻하지 않음';
-COMMENT ON COLUMN db_pipeline.card_excl_item.excl_item_desc IS '항목 설명·포함 범위';
+COMMENT ON TABLE db_pipeline.card_excl_item IS '제외 항목 사전';
+COMMENT ON COLUMN db_pipeline.card_excl_item.card_excl_item_id IS '제외 항목 아이디';
+COMMENT ON COLUMN db_pipeline.card_excl_item.issuer IS '카드사';
+COMMENT ON COLUMN db_pipeline.card_excl_item.excl_item_nm IS '제외 항목명';
+COMMENT ON COLUMN db_pipeline.card_excl_item.excl_concept_cd IS '제외 분류 개념';
+COMMENT ON COLUMN db_pipeline.card_excl_item.excl_item_desc IS '제외 항목 설명';
 COMMENT ON COLUMN db_pipeline.card_excl_item.create_date IS '생성 일시';
-COMMENT ON COLUMN db_pipeline.card_excl_item.create_user_id IS '생성 사용자 ID';
+COMMENT ON COLUMN db_pipeline.card_excl_item.create_user_id IS '생성 사용자 아이디';
 COMMENT ON COLUMN db_pipeline.card_excl_item.update_date IS '수정 일시';
-COMMENT ON COLUMN db_pipeline.card_excl_item.update_user_id IS '수정 사용자 ID';
-COMMENT ON COLUMN db_pipeline.card_excl_item.excl_alias_nms IS '제외 항목 원문 표기 별칭 목록(공백 제거 비교 기준). 의미가 불확실한 표기는 등록하지 않음. V5 card_excl_item_als 대체';
+COMMENT ON COLUMN db_pipeline.card_excl_item.update_user_id IS '수정 사용자 아이디';
+COMMENT ON COLUMN db_pipeline.card_excl_item.excl_alias_nms IS '제외 항목 별칭';
 
 CREATE TABLE db_pipeline.card_source_evidence (
     evidence_id varchar(20) DEFAULT db_pipeline.fn_get_biz_id('card_source_evidence') NOT NULL,
@@ -1203,16 +1203,16 @@ CREATE TABLE db_pipeline.card_source_evidence (
     CONSTRAINT card_source_evidence_ck_2 CHECK (end_pos IS NULL OR start_pos IS NULL OR end_pos >= start_pos)
 );
 
-COMMENT ON TABLE db_pipeline.card_source_evidence IS '승인된 문장/청크 근거. 독립 evidence_id; 문서키는 업무 PK로 전파되지 않음';
-COMMENT ON COLUMN db_pipeline.card_source_evidence.evidence_id IS '원문 근거 ID';
-COMMENT ON COLUMN db_pipeline.card_source_evidence.card_doc_id IS '원본 문서 ID';
-COMMENT ON COLUMN db_pipeline.card_source_evidence.page_no IS 'PDF 페이지 번호';
-COMMENT ON COLUMN db_pipeline.card_source_evidence.card_doc_chunk_id IS '근거 청크 ID';
-COMMENT ON COLUMN db_pipeline.card_source_evidence.card_extr_stg_id IS '근거를 만든 추출 staging ID';
-COMMENT ON COLUMN db_pipeline.card_source_evidence.quote_txt IS '근거 원문 문장';
-COMMENT ON COLUMN db_pipeline.card_source_evidence.start_pos IS '청크 원문 내 시작 문자 위치(1부터)';
-COMMENT ON COLUMN db_pipeline.card_source_evidence.end_pos IS '청크 원문 내 끝 문자 위치(포함)';
-COMMENT ON COLUMN db_pipeline.card_source_evidence.approval_status_cd IS '[공통코드:APPROVAL_STATUS] 근거 승인 상태';
+COMMENT ON TABLE db_pipeline.card_source_evidence IS '원문 근거';
+COMMENT ON COLUMN db_pipeline.card_source_evidence.evidence_id IS '원문 근거 아이디';
+COMMENT ON COLUMN db_pipeline.card_source_evidence.card_doc_id IS '문서 아이디';
+COMMENT ON COLUMN db_pipeline.card_source_evidence.page_no IS '페이지 번호';
+COMMENT ON COLUMN db_pipeline.card_source_evidence.card_doc_chunk_id IS '청크 아이디';
+COMMENT ON COLUMN db_pipeline.card_source_evidence.card_extr_stg_id IS '추출 항목 아이디';
+COMMENT ON COLUMN db_pipeline.card_source_evidence.quote_txt IS '원문 인용 문장';
+COMMENT ON COLUMN db_pipeline.card_source_evidence.start_pos IS '인용 시작 위치';
+COMMENT ON COLUMN db_pipeline.card_source_evidence.end_pos IS '인용 종료 위치';
+COMMENT ON COLUMN db_pipeline.card_source_evidence.approval_status_cd IS '승인 상태';
 
 ALTER TABLE ONLY db_pipeline.card_ai_call
     ADD CONSTRAINT card_ai_call_pkey PRIMARY KEY (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq);
