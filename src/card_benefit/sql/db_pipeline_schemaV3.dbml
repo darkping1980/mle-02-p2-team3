@@ -1,0 +1,365 @@
+// Logical ERD for db_pipeline V3. Ref lines are documentation only.
+// The SQL DDL intentionally creates NO physical foreign keys.
+// Tables include every column in db_pipeline_schemaV3.sql; indexes below mark PK/UNIQUE.
+
+Table db_pipeline.card_ai_call [note: 'Existing pipeline table.'] {
+  card_ai_run_id varchar(20) [not null]
+  card_doc_id varchar(20) [not null]
+  page_no smallint [not null]
+  card_doc_chunk_id varchar(20) [not null]
+  call_seq smallint [not null]
+  call_input_sha256 varchar(64) [not null]
+  call_status varchar(20) [not null]
+  call_resp_raw text
+  call_resp_json jsonb
+  call_error_msg text
+  call_input_token_cnt integer
+  call_output_token_cnt integer
+  call_latency_ms integer
+  call_req_date timestamptz [not null]
+  create_date timestamptz [not null]
+  create_user_id varchar(50) [not null]
+  update_date timestamptz [not null]
+  update_user_id varchar(50) [not null]
+  Indexes {
+    (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq) [pk]
+  }
+}
+
+Table db_pipeline.card_ai_run [note: 'Existing pipeline table.'] {
+  card_ai_run_id varchar(20) [not null, pk]
+  run_stage_cd varchar(20) [not null]
+  run_call_mthd_cd varchar(20) [not null]
+  run_model_nm varchar(100) [not null]
+  run_prompt_ver varchar(50) [not null]
+  run_prompt_txt text [not null]
+  run_param jsonb
+  run_target_card_doc_id varchar(20)
+  run_status varchar(20) [not null]
+  run_start_date timestamptz [not null]
+  run_end_date timestamptz
+  run_note text
+  create_date timestamptz [not null]
+  create_user_id varchar(50) [not null]
+  update_date timestamptz [not null]
+  update_user_id varchar(50) [not null]
+}
+
+Table db_pipeline.card_bnft [note: 'EXISTING DOCUMENT-KEYED POLICY; PK(card_doc_id,card_bnft_id) is a future redesign target.'] {
+  card_doc_id varchar(20) [not null]
+  card_bnft_id varchar(20) [not null]
+  card_id bigint [not null]
+  bnft_nm text [not null]
+  bnft_grp_nm text
+  bnft_type_cd varchar(20) [not null]
+  bnft_target_txt text
+  bnft_rate numeric(6,3)
+  bnft_amt numeric(12,0)
+  bnft_value_txt text
+  card_doc_chunk_id varchar(20) [not null]
+  bnft_evidence_txt text [not null]
+  bnft_evidence_start_pos integer [not null]
+  bnft_evidence_end_pos integer [not null]
+  card_extr_stg_id varchar(20) [not null]
+  bnft_status varchar(20) [not null]
+  create_date timestamptz [not null]
+  create_user_id varchar(50) [not null]
+  update_date timestamptz [not null]
+  update_user_id varchar(50) [not null]
+  Indexes {
+    (card_doc_id, card_bnft_id) [pk]
+    card_bnft_id [unique, name: 'card_bnft_card_bnft_id_key']
+    (card_doc_id, bnft_nm) [unique, name: 'card_bnft_card_doc_id_bnft_nm_key']
+    card_extr_stg_id [unique, name: 'card_bnft_card_extr_stg_id_key']
+  }
+}
+
+Table db_pipeline.card_bnft_cond [note: 'Existing benefit-condition N:M; logical relationship only.'] {
+  card_doc_id varchar(20) [not null]
+  card_bnft_id varchar(20) [not null]
+  card_cond_id varchar(20) [not null]
+  create_date timestamptz [not null]
+  create_user_id varchar(50) [not null]
+  update_date timestamptz [not null]
+  update_user_id varchar(50) [not null]
+  Indexes {
+    (card_doc_id, card_bnft_id, card_cond_id) [pk]
+  }
+}
+
+Table db_pipeline.card_cond [note: 'EXISTING DOCUMENT-KEYED POLICY; card_bnft_id and card_bnft_cond overlap; future redesign target.'] {
+  card_doc_id varchar(20) [not null]
+  card_cond_id varchar(20) [not null]
+  card_id bigint [not null]
+  card_bnft_id varchar(20)
+  cond_apply_lvl_cd varchar(20) [not null]
+  cond_type_cd varchar(20) [not null]
+  card_excl_item_id varchar(20)
+  cond_excl_raw_txt text
+  cond_basis_cd varchar(20) [not null]
+  cond_min_amt numeric(12,0)
+  cond_max_amt numeric(12,0)
+  cond_rate numeric(6,3)
+  cond_amt numeric(12,0)
+  cond_limit_amt numeric(12,0)
+  cond_limit_cnt integer
+  cond_period_cd varchar(20) [not null]
+  cond_modality_cd varchar(20) [not null]
+  cond_value_txt text
+  cond_target_txt text
+  cond_natural_key varchar(64) [not null]
+  cond_policy_cand_key varchar(64)
+  card_doc_chunk_id varchar(20) [not null]
+  cond_evidence_txt text [not null]
+  cond_evidence_start_pos integer [not null]
+  cond_evidence_end_pos integer [not null]
+  card_extr_stg_id varchar(20) [not null]
+  cond_status varchar(20) [not null]
+  create_date timestamptz [not null]
+  create_user_id varchar(50) [not null]
+  update_date timestamptz [not null]
+  update_user_id varchar(50) [not null]
+  cond_rule_json jsonb [not null]
+  Indexes {
+    (card_doc_id, card_cond_id) [pk]
+    card_cond_id [unique, name: 'card_cond_card_cond_id_key']
+    (card_doc_id, cond_natural_key) [unique, name: 'card_cond_card_doc_id_cond_natural_key_key']
+    card_extr_stg_id [unique, name: 'card_cond_card_extr_stg_id_key']
+  }
+}
+
+Table db_pipeline.card_doc [note: 'Document edition. card_id is a nullable legacy hint; product applicability is in link tables.'] {
+  card_doc_id varchar(20) [not null, pk]
+  card_id bigint
+  doc_cd varchar(50) [not null]
+  doc_family_cd varchar(100)
+  doc_type_cd varchar(20) [not null]
+  doc_title text [not null]
+  doc_source_url text
+  doc_file_nm text [not null]
+  doc_file_size bigint
+  doc_sha256 varchar(64) [not null]
+  doc_page_cnt smallint
+  doc_review_no text
+  doc_review_date date
+  doc_release_date date
+  doc_collect_date timestamptz [not null]
+  doc_version_no smallint [not null]
+  doc_status varchar(20) [not null]
+  doc_note text
+  create_date timestamptz [not null]
+  create_user_id varchar(50) [not null]
+  update_date timestamptz [not null]
+  update_user_id varchar(50) [not null]
+  Indexes {
+    doc_cd [unique, name: 'card_doc_doc_cd_key']
+    doc_sha256 [unique, name: 'card_doc_doc_sha256_key']
+  }
+}
+
+Table db_pipeline.card_doc_chunk [note: 'Existing pipeline table.'] {
+  card_doc_id varchar(20) [not null]
+  page_no smallint [not null]
+  card_doc_chunk_id varchar(20) [not null]
+  chunk_seq integer [not null]
+  chunk_section_nm text
+  chunk_type_cd varchar(20) [not null]
+  chunk_start_pos integer [not null]
+  chunk_end_pos integer [not null]
+  chunk_raw_txt text [not null]
+  chunk_clean_txt text
+  chunk_status varchar(20) [not null]
+  chunk_split_rule_ver varchar(50) [not null]
+  chunk_clean_rule_ver varchar(50)
+  create_date timestamptz [not null]
+  create_user_id varchar(50) [not null]
+  update_date timestamptz [not null]
+  update_user_id varchar(50) [not null]
+  Indexes {
+    (card_doc_id, page_no, card_doc_chunk_id) [pk]
+    card_doc_chunk_id [unique, name: 'card_doc_chunk_card_doc_chunk_id_key']
+    (card_doc_id, chunk_seq) [unique, name: 'card_doc_chunk_card_doc_id_chunk_seq_key']
+  }
+}
+
+Table db_pipeline.card_doc_page [note: 'Existing pipeline table.'] {
+  card_doc_id varchar(20) [not null]
+  page_no smallint [not null]
+  page_raw_txt text [not null]
+  page_char_cnt integer [not null]
+  page_txt_sha256 varchar(64) [not null]
+  page_layer_cd varchar(20) [not null]
+  page_extractor_nm varchar(50) [not null]
+  page_extractor_ver varchar(50)
+  page_note text
+  create_date timestamptz [not null]
+  create_user_id varchar(50) [not null]
+  update_date timestamptz [not null]
+  update_user_id varchar(50) [not null]
+  Indexes {
+    (card_doc_id, page_no) [pk]
+  }
+}
+
+Table db_pipeline.card_excl_item [note: 'Existing pipeline table.'] {
+  card_excl_item_id varchar(20) [not null, pk]
+  issuer text [not null]
+  excl_item_nm text [not null]
+  excl_concept_cd varchar(50)
+  excl_item_desc text
+  create_date timestamptz [not null]
+  create_user_id varchar(50) [not null]
+  update_date timestamptz [not null]
+  update_user_id varchar(50) [not null]
+  Indexes {
+    (issuer, excl_item_nm) [unique, name: 'card_excl_item_issuer_excl_item_nm_key']
+  }
+}
+
+Table db_pipeline.card_excl_item_als [note: 'Existing pipeline table.'] {
+  card_excl_item_id varchar(20) [not null]
+  card_excl_item_als_id varchar(20) [not null]
+  excl_item_als_nm text [not null]
+  create_date timestamptz [not null]
+  create_user_id varchar(50) [not null]
+  update_date timestamptz [not null]
+  update_user_id varchar(50) [not null]
+  Indexes {
+    (card_excl_item_id, card_excl_item_als_id) [pk]
+    (card_excl_item_id, excl_item_als_nm) [unique, name: 'card_excl_item_als_card_excl_item_id_excl_item_als_nm_key']
+  }
+}
+
+Table db_pipeline.card_extr_stg [note: 'Existing extraction staging; card_id is extraction context, not proof of common-document applicability.'] {
+  card_ai_run_id varchar(20) [not null]
+  card_doc_id varchar(20) [not null]
+  page_no smallint [not null]
+  card_doc_chunk_id varchar(20) [not null]
+  call_seq smallint [not null]
+  card_extr_stg_id varchar(20) [not null]
+  stg_item_seq smallint [not null]
+  card_id bigint [not null]
+  stg_kind_cd varchar(20) [not null]
+  stg_parent_card_extr_stg_id varchar(20)
+  stg_raw_item jsonb [not null]
+  stg_normalized_item jsonb
+  stg_evidence_txt text [not null]
+  stg_evidence_start_pos integer
+  stg_evidence_end_pos integer
+  card_excl_item_id varchar(20)
+  stg_sql_check_cd varchar(30)
+  stg_ai_vrfy_cd varchar(20)
+  stg_ai_vrfy_card_ai_run_id varchar(20)
+  stg_status varchar(20) [not null]
+  stg_review_note text
+  stg_approved_date timestamptz
+  stg_approved_user_id varchar(50)
+  create_date timestamptz [not null]
+  create_user_id varchar(50) [not null]
+  update_date timestamptz [not null]
+  update_user_id varchar(50) [not null]
+  Indexes {
+    (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, card_extr_stg_id) [pk]
+    (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, stg_item_seq) [unique, name: 'card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key']
+    card_extr_stg_id [unique, name: 'card_extr_stg_card_extr_stg_id_key']
+  }
+}
+
+Table db_pipeline.card_product [note: 'Top-level product master.'] {
+  card_id bigint [not null, pk]
+  product_cd varchar(80) [not null]
+  product_nm text [not null]
+  issuer varchar(50) [not null]
+  card_kind_cd varchar(10) [not null]
+  product_status_cd varchar(20) [not null]
+  launched_on date
+  discontinued_on date
+  create_date timestamptz [not null]
+  create_user_id varchar(50) [not null]
+  update_date timestamptz [not null]
+  update_user_id varchar(50) [not null]
+  Indexes {
+    product_cd [unique, name: 'card_product_product_cd_key']
+  }
+}
+
+Table db_pipeline.card_product_variant [note: 'Identifying child of card_product; brand, grade and service type.'] {
+  card_id bigint [not null]
+  card_variant_id varchar(20) [not null]
+  variant_cd varchar(80) [not null]
+  variant_nm text [not null]
+  brand_cd varchar(30) [not null]
+  service_grade_cd varchar(30) [not null]
+  service_type_cd varchar(30) [not null]
+  variant_status_cd varchar(20) [not null]
+  create_date timestamptz [not null]
+  create_user_id varchar(50) [not null]
+  update_date timestamptz [not null]
+  update_user_id varchar(50) [not null]
+  Indexes {
+    (card_id, card_variant_id) [pk]
+    card_variant_id [unique, name: 'card_product_variant_id_key']
+    (card_id, variant_cd) [unique, name: 'card_product_variant_cd_key']
+  }
+}
+
+Table db_pipeline.card_product_doc [note: 'Product-wide document N:M; PK inherits both parent IDs.'] {
+  card_id bigint [not null]
+  card_doc_id varchar(20) [not null]
+  doc_role_cd varchar(20) [not null]
+  effective_from date
+  effective_to_excl date
+  approval_status_cd varchar(20) [not null]
+  applicability_basis_txt text [not null]
+  approval_note text
+  create_date timestamptz [not null]
+  create_user_id varchar(50) [not null]
+  update_date timestamptz [not null]
+  update_user_id varchar(50) [not null]
+  Indexes {
+    (card_id, card_doc_id) [pk]
+  }
+}
+
+Table db_pipeline.card_product_variant_doc [note: 'Variant-specific document N:M; PK inherits variant composite parent and document ID.'] {
+  card_id bigint [not null]
+  card_variant_id varchar(20) [not null]
+  card_doc_id varchar(20) [not null]
+  doc_role_cd varchar(20) [not null]
+  effective_from date
+  effective_to_excl date
+  approval_status_cd varchar(20) [not null]
+  applicability_basis_txt text [not null]
+  approval_note text
+  create_date timestamptz [not null]
+  create_user_id varchar(50) [not null]
+  update_date timestamptz [not null]
+  update_user_id varchar(50) [not null]
+  Indexes {
+    (card_id, card_variant_id, card_doc_id) [pk]
+  }
+}
+
+// Product and document applicability (not physical foreign keys).
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_product_variant.card_id
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_product_doc.card_id
+Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_product_doc.card_doc_id
+Ref: db_pipeline.card_product_variant.(card_id, card_variant_id) < db_pipeline.card_product_variant_doc.(card_id, card_variant_id)
+Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_product_variant_doc.card_doc_id
+
+// Original parse, extraction and policy pipeline.
+Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_doc_page.card_doc_id
+Ref: db_pipeline.card_doc_page.(card_doc_id, page_no) < db_pipeline.card_doc_chunk.(card_doc_id, page_no)
+Ref: db_pipeline.card_ai_run.card_ai_run_id < db_pipeline.card_ai_call.card_ai_run_id
+Ref: db_pipeline.card_doc_chunk.(card_doc_id, page_no, card_doc_chunk_id) < db_pipeline.card_ai_call.(card_doc_id, page_no, card_doc_chunk_id)
+Ref: db_pipeline.card_ai_call.(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq) < db_pipeline.card_extr_stg.(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq)
+Ref: db_pipeline.card_excl_item.card_excl_item_id < db_pipeline.card_excl_item_als.card_excl_item_id
+Ref: db_pipeline.card_excl_item.card_excl_item_id < db_pipeline.card_cond.card_excl_item_id
+Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_bnft.card_doc_id
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_bnft.card_id
+Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_cond.card_doc_id
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_cond.card_id
+Ref: db_pipeline.card_bnft.(card_doc_id, card_bnft_id) < db_pipeline.card_bnft_cond.(card_doc_id, card_bnft_id)
+Ref: db_pipeline.card_cond.(card_doc_id, card_cond_id) < db_pipeline.card_bnft_cond.(card_doc_id, card_cond_id)
+// card_cond.card_bnft_id also encodes an optional Benefit anchor. It overlaps
+// card_bnft_cond; its final role is deferred. card_doc.card_id is not a link.
