@@ -33,7 +33,7 @@ PageRole = Literal["SUMMARY", "DETAIL", "NOTICE", "MIXED"]
 Certainty = Literal["HIGH", "LOW"]
 CondScope = Literal["ALL_BENEFITS", "NAMED_BENEFITS", "THIS_BENEFIT", "UNKNOWN"]
 LinkBasis = Literal["SAME_TEXT", "TABLE_IMAGE", "NOT_SURE"]
-EvidenceSubject = Literal["BNFT", "RULE", "LIMIT", "TARGET", "REL"]
+EvidenceSubject = Literal["BNFT", "RULE", "LIMIT", "COND", "TARGET", "REL"]
 
 # LLM 스키마에는 숫자로만 보이게 한다. Pydantic 기본 표현은 문자열도 허용해 제공자 호환 범위가 좁아진다.
 NumberValue = Annotated[Decimal, WithJsonSchema({"type": "number"})]
@@ -99,6 +99,7 @@ class RuleItem(ExtractionModel):
     value_unit_cd: ValueUnit | None = None
     payout_unit_cd: PayoutUnit | None = None
     min_txn_amt: int | None = None
+    min_txn_raw_txt: str | None = None
     conditions: list[ConditionItem] = Field(default_factory=list)
     limit_keys: list[str] = Field(default_factory=list)
 

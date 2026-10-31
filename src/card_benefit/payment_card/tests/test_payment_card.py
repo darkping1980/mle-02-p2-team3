@@ -52,7 +52,7 @@ class NewCardValidationTests(unittest.TestCase):
 class MapperCompatibilityTests(unittest.TestCase):
     def test_common_session_registers_payment_card_mapper_without_connecting(self):
         session = PostgresDbSession(mapper_root=MAPPER_ROOT, camel_case_keys=False, sql_log_mode="none")
-        self.assertEqual(sorted(session.mappers), ["document_repository", "payment_card"])  # 패키지 아래의 named SQL 파일 둘이 등록된다
+        self.assertEqual(sorted(session.mappers), ["document_repository", "extraction_repository", "payment_card"])  # 패키지 아래의 named SQL 파일 둘이 등록된다
         self.assertLessEqual({"insert_card", "list_cards", "find_card"}, set(session.mappers["payment_card"].available_queries))
         self.assertEqual(session.database_manager._pools, {})                 # pool은 첫 SQL 실행 전까지 열리지 않는다
         insert_sql = session._query("payment_card.insert_card").sql

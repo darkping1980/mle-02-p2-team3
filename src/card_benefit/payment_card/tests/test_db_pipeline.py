@@ -272,7 +272,7 @@ class MapperTests(unittest.TestCase):
         self.session = PostgresDbSession(mapper_root=MAPPER_ROOT, camel_case_keys=False, sql_log_mode="none")
 
     def test_mapper_registers_without_connecting(self):
-        self.assertEqual(list(self.session.mappers), ["document_repository"])
+        self.assertEqual(sorted(self.session.mappers), ["document_repository", "extraction_repository"])
         self.assertEqual(self.session.database_manager._pools, {})
 
     def test_every_statement_names_the_schema(self):
