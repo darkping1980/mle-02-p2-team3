@@ -1,0 +1,511 @@
+// V5 draft physical-column mirror of db_pipeline_schemaV5_draft.sql. Generated from the executed DDL catalog.
+// Ref lines are logical only; SQL has 0 FKs. Refs from JSONB keys and exclusive-arc evidence are checked by gate SQL.
+
+Table db_pipeline.card_product [note: '카드 상품 마스터. 상품 PK는 정책판·문서 관계의 부모. 브랜드 선택지는 brand_opt_list에 통합'] {
+  card_id bigint [not null, pk, note: 'bigint 상품 ID. 기존 card_id 타입과 일치; seq_card_product.nextval 발급']
+  product_cd varchar(80) [not null, unique, note: '문서 파일명과 독립된 상품 업무 코드']
+  product_nm text [not null, note: '카드 상품명']
+  issuer varchar(50) [not null, note: '발급 카드사; 제외 항목 issuer와 논리적 범위 일치']
+  card_kind_cd varchar(10) [not null, note: 'CREDIT 또는 DEBIT']
+  product_status_cd varchar(20) [not null, note: '상품 출시/중단 상태']
+  launched_on date [note: '상품 출시일(확인된 경우)']
+  discontinued_on date [note: '상품 중단일(확인된 경우)']
+  brand_opt_list jsonb [not null, note: '브랜드 선택지 JSONB 배열. [{brand_opt_cd,brand_opt_nm,brand_cd,service_grade_cd,service_type_cd,brand_opt_status_cd}]. V4 card_product_variant 대체']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 ID']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 ID']
+}
+
+Table db_pipeline.card_product_doc [note: '상품↔문서판 N:M. PK는 상품/문서 양 부모 키. 브랜드 서비스 문서는 brand_opt_cds로 적용 브랜드 표시'] {
+  card_id bigint [not null, note: '부모 상품 ID']
+  card_doc_id varchar(20) [not null, note: '부모 원천 문서판 ID']
+  doc_role_cd varchar(20) [not null, note: '상품에 적용되는 문서 역할(PRODUCT_GUIDE, COMMON_TERMS, BRAND_SERVICE, OTHER)']
+  brand_opt_cds "text[]" [note: '문서가 적용되는 brand_opt_cd 목록. BRAND_SERVICE 문서는 필수, NULL이면 상품 전체. V4 card_product_variant_doc 대체']
+  effective_from date [note: '상품에 문서판 적용 시작일(포함)']
+  effective_to_excl date [note: '상품에 문서판 적용 종료일(미포함)']
+  approval_status_cd varchar(20) [not null, note: '관계 검증/승인 상태']
+  applicability_basis_txt text [not null, note: '상품에 이 문서가 적용된다는 원문/출처 근거']
+  approval_note text [note: '승인·검토 메모']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 ID']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 ID']
+  Indexes {
+    (card_id, card_doc_id) [pk]
+  }
+}
+
+Table db_pipeline.card_policy_version [note: '상품 정책 개정판. 상품당 같은 시점의 승인 정책은 1개. 승인일/적용일/문서일 분리'] {
+  card_id bigint [not null, note: '부모 상품 ID 상속']
+  policy_ver_id varchar(20) [not null, note: '정책판 로컬 업무 ID']
+  policy_ver_no integer [not null, note: '상품 안의 정책판 번호(1부터)']
+  policy_cond_expr jsonb [note: '카드 전체 조건식. 실적 산정 기준, 실적 제외, 유예 조건처럼 특정 혜택에 속하지 않는 조건']
+  valid_from date [not null, note: '정책 적용 시작일(포함)']
+  valid_to_excl date [note: '정책 적용 종료일(미포함)']
+  approved_at timestamptz [note: '정책 승인 일시']
+  policy_status_cd varchar(20) [not null, note: '정책 상태(DRAFT, APPROVED, RETIRED)']
+  Indexes {
+    (card_id, policy_ver_id) [pk]
+    (card_id, policy_ver_no) [unique]
+  }
+}
+
+Table db_pipeline.card_policy_doc [note: '승인 정책판의 원천 문서 연결. 문서 개정판과 정책 개정판은 별개'] {
+  card_id bigint [not null, note: '부모 정책판 키 상속']
+  policy_ver_id varchar(20) [not null, note: '부모 정책판 키 상속']
+  card_doc_id varchar(20) [not null, note: '부모 원천 문서판 ID']
+  source_role_cd varchar(20) [not null, note: '정책판에서 문서가 맡는 역할']
+  Indexes {
+    (card_id, policy_ver_id, card_doc_id) [pk]
+  }
+}
+
+Table db_pipeline.card_bnft [note: '상품 정책의 혜택 인스턴스. LOCAL 또는 COMMON_LINK; 계산값 없음. 혜택 전체 조건은 bnft_cond_expr'] {
+  card_id bigint [not null, note: '부모 정책판 키 상속']
+  policy_ver_id varchar(20) [not null, note: '부모 정책판 키 상속']
+  card_bnft_id varchar(20) [not null, note: '혜택 로컬 업무 ID']
+  bnft_cd varchar(80) [not null, note: '정책판 안의 혜택 업무 코드']
+  bnft_nm text [not null, note: '혜택명']
+  bnft_type_cd varchar(20) [not null, note: '혜택 유형(DISCOUNT, CASHBACK, POINT, FEE_WAIVER, SERVICE, INSTALLMENT, ETC)']
+  bnft_origin_cd varchar(20) [not null, note: 'LOCAL: 상품 고유 규칙 사용, COMMON_LINK: card_bnft_common으로 공통 규칙 사용']
+  bnft_scope_cd varchar(20) [not null, note: 'PRODUCT: 상품 전체, BRAND: bnft_brand_opt_cds에 있는 브랜드 선택지만 적용']
+  bnft_brand_opt_cds "text[]" [note: '적용 brand_opt_cd 목록. V4 card_bnft_variant 대체']
+  bnft_cond_expr jsonb [note: '혜택 전체 조건식. 규칙 조건 및 공통 규칙 조건과 AND로 결합. V4 card_bnft_cond 대체']
+  rule_select_cd varchar(30) [note: '한 혜택 안에서 규칙이 겹칠 때 선택 방식(EXCLUSIVE_BY_SCOPE, PRIORITY, MAX_BENEFIT_VALUE)']
+  verification_status_cd varchar(25) [not null, note: '혜택 검증 상태']
+  Indexes {
+    (card_id, policy_ver_id, card_bnft_id) [pk]
+    (card_id, policy_ver_id, bnft_cd) [unique]
+  }
+}
+
+Table db_pipeline.card_bnft_rule [note: 'LOCAL 혜택의 유일한 계산값 원천. 규칙 조건과 대상은 cond_expr, target_list에 내장. COMMON_LINK에는 로컬 규칙 없음'] {
+  card_id bigint [not null, note: '부모 혜택 키 상속']
+  policy_ver_id varchar(20) [not null, note: '부모 혜택 키 상속']
+  card_bnft_id varchar(20) [not null, note: '부모 혜택 키 상속']
+  rule_id varchar(20) [not null, note: '규칙 로컬 업무 ID']
+  cond_expr jsonb [note: '규칙 조건식. NULL은 무조건을 뜻하지 않으며 predicate_state_cd로 판정. V4 expr_id, card_cond_expr, card_cond_expr_atom, card_cond 대체']
+  spend_min_amt numeric(18,2) [note: 'cond_expr에서 파생한 전월 실적 하한(포함). 직접 입력 금지. OR식은 NULL']
+  spend_max_amt_excl numeric(18,2) [note: 'cond_expr에서 파생한 전월 실적 상한(미포함). 직접 입력 금지. OR식은 NULL']
+  target_list jsonb [not null, note: '규칙 대상 JSONB 배열. [{target_type_cd,target_key,target_nm}]. V4 card_bnft_target, card_bnft_rule_target 대체']
+  predicate_state_cd varchar(30) [not null, note: 'CONDITIONAL, VERIFIED_UNCONDITIONAL(원문 확인된 무조건), PENDING_REVIEW']
+  calc_method_cd varchar(40) [not null, note: '계산 방법 코드. card_method_catalog 논리 참조']
+  method_ver integer [not null, note: '계산 방법 버전']
+  value_num numeric(18,4) [note: '방법 코드별로 의미가 고정된 값. PERCENT_OF_TXN의 1.5는 1.5%']
+  value_unit_cd varchar(30) [note: 'value_num의 단위']
+  payout_unit_cd varchar(30) [not null, note: '실제 보상 단위(KRW, HANAMONEY, UNIMILE 등)']
+  basis_amt numeric(18,2) [note: '기준 금액(1,500원당 적립의 1500 등)']
+  calc_params jsonb [note: '방법별 가변 파라미터. card_method_catalog.param_schema로 검증']
+  rule_priority integer [note: '원문에 명시된 규칙 우선순위']
+  rule_status_cd varchar(20) [not null, note: '규칙 상태(DRAFT, CONFIRMED, RETIRED)']
+  Indexes {
+    (card_id, policy_ver_id, card_bnft_id, rule_id) [pk]
+  }
+}
+
+Table db_pipeline.card_limit_pool [note: '상품 정책판의 독립 한도. 여러 규칙이 공유; 혜택의 자식이 아님. 한도 구간은 tier_list에 내장'] {
+  card_id bigint [not null, note: '부모 정책판 키 상속']
+  policy_ver_id varchar(20) [not null, note: '부모 정책판 키 상속']
+  pool_id varchar(20) [not null, note: '한도 풀 로컬 업무 ID']
+  pool_scope_cd varchar(30) [not null, note: '한도 범위(영역, 카드 전체 등)']
+  period_cd varchar(20) [not null, note: '한도 기간(TXN, DAY, MONTH, YEAR 등)']
+  cap_unit_cd varchar(30) [not null, note: '한도 단위(KRW, HANAMONEY, COUNT 등)']
+  aggregation_key_cd varchar(30) [not null, note: '누적 집계 기준']
+  tier_list jsonb [not null, note: '한도 구간 JSONB 배열. [{tier_key,tier_priority,predicate_state_cd,limit_num,cond_expr}]. V4 card_limit_tier 대체']
+  Indexes {
+    (card_id, policy_ver_id, pool_id) [pk]
+  }
+}
+
+Table db_pipeline.card_bnft_rule_pool [note: '규칙이 소비하는 한도 풀 N:M. 영역/전체 풀 동시 연결 가능'] {
+  card_id bigint [not null, note: '부모 규칙 키 상속']
+  policy_ver_id varchar(20) [not null, note: '부모 규칙 키 상속']
+  card_bnft_id varchar(20) [not null, note: '부모 규칙 키 상속']
+  rule_id varchar(20) [not null, note: '부모 규칙 키 상속']
+  pool_id varchar(20) [not null, note: '부모 한도 풀 키 상속']
+  pool_role_cd varchar(30) [not null, note: '규칙에서 풀이 맡는 역할']
+  Indexes {
+    (card_id, policy_ver_id, card_bnft_id, rule_id, pool_id) [pk]
+  }
+}
+
+Table db_pipeline.card_bnft_rel [note: '같은 정책판의 두 혜택 간 배타/우선/대체. 소진 후 대체는 trigger_pool_id 필수'] {
+  card_id bigint [not null, note: '부모 정책판 키 상속']
+  policy_ver_id varchar(20) [not null, note: '부모 정책판 키 상속. 발급형 추가 정책판 제거로 from/to 구분 불필요']
+  from_bnft_id varchar(20) [not null, note: '관계 시작 혜택 ID']
+  to_bnft_id varchar(20) [not null, note: '관계 도착 혜택 ID']
+  rel_type_cd varchar(30) [not null, note: '관계 유형(MUTUALLY_EXCLUSIVE, FALLBACK_AFTER_CAP, OVERRIDES 등)']
+  trigger_pool_id varchar(20) [note: '소진 시 대체를 일으키는 한도 풀 ID']
+  rel_priority integer [note: '관계 우선순위']
+  Indexes {
+    (card_id, policy_ver_id, from_bnft_id, to_bnft_id, rel_type_cd) [pk]
+  }
+}
+
+Table db_pipeline.card_method_catalog [note: '상품/공통 양쪽 계산·술어 코드와 JSON 계약. 글로벌 독립 코드'] {
+  method_kind_cd varchar(20) [not null, note: 'method_kind_cd 업무 속성']
+  method_cd varchar(40) [not null, note: 'method_cd 업무 속성']
+  method_ver integer [not null, note: 'method_ver 업무 속성']
+  param_schema jsonb [not null, note: 'param_schema 업무 속성']
+  handler_key varchar(100) [not null, note: 'handler_key 업무 속성']
+  method_status_cd varchar(20) [not null, note: 'method_status_cd 업무 속성']
+  Indexes {
+    (method_kind_cd, method_cd, method_ver) [pk]
+  }
+}
+
+Table db_pipeline.card_common_bnft [note: '특정 카드에 종속되지 않는 공통 서비스 정체성. 동일 이름이나 같은 PDF만으로 병합 금지'] {
+  common_bnft_id varchar(20) [not null, pk, note: '공통 혜택 업무 ID']
+  provider_cd varchar(30) [not null, note: '제공 주체(국제 브랜드 등)']
+  service_grade_cd varchar(30) [not null, note: '브랜드 서비스 등급(PLATINUM, WORLD 등). 해당 없으면 NONE']
+  service_type_cd varchar(30) [not null, note: '서비스 유형(COMMON: 등급 공통, 01~04: 선택서비스 유형). 해당 없으면 NONE']
+  common_bnft_cd varchar(80) [not null, unique, note: '공통 혜택 업무 코드']
+  common_bnft_nm text [not null, note: '공통 혜택명']
+}
+
+Table db_pipeline.card_common_policy_version [note: '공통 서비스 정책 개정판; 카드 상품/문서 버전과 별개'] {
+  common_bnft_id varchar(20) [not null, note: '부모 공통 혜택 키 상속']
+  common_ver_id varchar(20) [not null, note: '공통 정책판 로컬 업무 ID']
+  common_ver_no integer [not null, note: '공통 혜택 안의 정책판 번호(1부터)']
+  valid_from date [not null, note: '공통 정책 적용 시작일(포함)']
+  valid_to_excl date [note: '공통 정책 적용 종료일(미포함)']
+  approved_at timestamptz [note: '공통 정책 승인 일시']
+  policy_status_cd varchar(20) [not null, note: '정책 상태(DRAFT, APPROVED, RETIRED)']
+  Indexes {
+    (common_bnft_id, common_ver_id) [pk]
+    (common_bnft_id, common_ver_no) [unique]
+  }
+}
+
+Table db_pipeline.card_common_bnft_rule [note: '공통 혜택 계산값의 단일 기준. 조건·대상·한도를 JSONB로 내장; 상품 로컬 규칙에 값 복제 금지'] {
+  common_bnft_id varchar(20) [not null, note: '부모 공통 정책판 키 상속']
+  common_ver_id varchar(20) [not null, note: '부모 공통 정책판 키 상속']
+  common_rule_id varchar(20) [not null, note: '공통 규칙 로컬 업무 ID']
+  cond_expr jsonb [note: '공통 조건식. card_cond_expr와 같은 계약. 상품별 추가 조건은 card_bnft.bnft_cond_expr에 두고 AND 결합']
+  target_list jsonb [not null, note: '공통 대상 JSONB 배열. card_bnft_rule.target_list와 같은 계약']
+  limit_list jsonb [not null, note: '공통 한도 JSONB 배열. [{limit_key,pool_key,period_cd,cap_unit_cd,aggregation_key_cd,predicate_state_cd,limit_num,cond_expr}]. 같은 정책판의 같은 pool_key는 공유 한도']
+  predicate_state_cd varchar(30) [not null, note: 'CONDITIONAL, VERIFIED_UNCONDITIONAL, PENDING_REVIEW']
+  calc_method_cd varchar(40) [not null, note: '계산 방법 코드. card_method_catalog 논리 참조']
+  method_ver integer [not null, note: '계산 방법 버전']
+  value_num numeric(18,4) [note: '방법 코드별로 의미가 고정된 값']
+  value_unit_cd varchar(30) [note: 'value_num의 단위']
+  payout_unit_cd varchar(30) [not null, note: '실제 보상 단위']
+  basis_amt numeric(18,2) [note: '기준 금액']
+  calc_params jsonb [note: '방법별 가변 파라미터']
+  rule_status_cd varchar(20) [not null, note: '규칙 상태(DRAFT, CONFIRMED, RETIRED)']
+  Indexes {
+    (common_bnft_id, common_ver_id, common_rule_id) [pk]
+  }
+}
+
+Table db_pipeline.card_bnft_common [note: '상품 혜택 인스턴스↔승인된 공통 정책판 N:M. COMMON_LINK에서만 사용; 상품별 조건은 card_bnft.bnft_cond_expr로 AND 추가'] {
+  card_id bigint [not null, note: '부모 혜택 키 상속']
+  policy_ver_id varchar(20) [not null, note: '부모 혜택 키 상속']
+  card_bnft_id varchar(20) [not null, note: '부모 혜택 키 상속']
+  common_bnft_id varchar(20) [not null, note: '부모 공통 정책판 키 상속']
+  common_ver_id varchar(20) [not null, note: '부모 공통 정책판 키 상속']
+  apply_status_cd varchar(20) [not null, note: '적용 승인 상태(PENDING, APPROVED, REJECTED)']
+  Indexes {
+    (card_id, policy_ver_id, card_bnft_id, common_bnft_id, common_ver_id) [pk]
+  }
+}
+
+Table db_pipeline.card_source_evidence [note: '승인된 문장/청크 근거. 독립 evidence_id; 문서키는 업무 PK로 전파되지 않음'] {
+  evidence_id varchar(20) [not null, pk, note: '로컬 업무 ID']
+  card_doc_id varchar(20) [not null, note: '부모 키 상속 또는 관계 키']
+  page_no smallint [not null, note: 'page_no 업무 속성']
+  card_doc_chunk_id varchar(20) [not null, note: 'card_doc_chunk_id 업무 속성']
+  card_extr_stg_id varchar(20) [note: 'card_extr_stg_id 업무 속성']
+  quote_txt text [not null, note: 'quote_txt 업무 속성']
+  start_pos integer [note: 'start_pos 업무 속성']
+  end_pos integer [note: 'end_pos 업무 속성']
+  approval_status_cd varchar(20) [not null, note: 'approval_status_cd 업무 속성']
+}
+
+Table db_pipeline.card_policy_evidence [note: '상품 정책 대상↔원문 근거 연결. 대상 유형별 타입 컬럼을 CHECK로 고정해 논리 FK 검사 가능. V4 근거 연결 4종 통합'] {
+  card_id bigint [not null, note: '부모 정책판 키 상속']
+  policy_ver_id varchar(20) [not null, note: '부모 정책판 키 상속']
+  ev_link_id varchar(20) [not null, note: '근거 연결 로컬 업무 ID']
+  ev_subject_cd varchar(10) [not null, note: '근거 대상 유형(POLICY, BNFT, RULE, POOL, REL)']
+  card_bnft_id varchar(20) [note: 'BNFT, RULE의 혜택 ID 또는 REL의 from_bnft_id']
+  rule_id varchar(20) [note: 'RULE의 규칙 ID']
+  pool_id varchar(20) [note: 'POOL의 한도 풀 ID']
+  to_bnft_id varchar(20) [note: 'REL의 to_bnft_id']
+  rel_type_cd varchar(30) [note: 'REL의 관계 유형']
+  ev_item_cd varchar(10) [not null, note: '대상 안의 JSONB 항목 유형(SELF: 행 전체, COND: 조건 atom, TARGET: 대상, TIER: 한도 구간)']
+  ev_item_key varchar(100) [not null, note: 'JSONB 항목 키(atom_key, target_key, tier_key). SELF는 -']
+  evidence_id varchar(20) [not null, note: '부모 원문 근거 ID']
+  Indexes {
+    (card_id, policy_ver_id, ev_link_id) [pk]
+    (card_id, policy_ver_id, ev_subject_cd, card_bnft_id, rule_id, pool_id, to_bnft_id, rel_type_cd, ev_item_cd, ev_item_key, evidence_id) [unique]
+  }
+}
+
+Table db_pipeline.card_common_rule_evidence [note: '공통 규칙↔원문 근거 N:M. 규칙에 내장된 조건·대상·한도 근거는 ev_item_cd/ev_item_key로 구분'] {
+  common_bnft_id varchar(20) [not null, note: '부모 공통 규칙 키 상속']
+  common_ver_id varchar(20) [not null, note: '부모 공통 규칙 키 상속']
+  common_rule_id varchar(20) [not null, note: '부모 공통 규칙 키 상속']
+  evidence_id varchar(20) [not null, note: '부모 원문 근거 ID']
+  ev_item_cd varchar(10) [not null, note: '규칙 안의 항목 유형(SELF, COND, TARGET, LIMIT)']
+  ev_item_key varchar(100) [not null, note: 'JSONB 항목 키(atom_key, target_key, limit_key). SELF는 -']
+  Indexes {
+    (common_bnft_id, common_ver_id, common_rule_id, evidence_id, ev_item_cd, ev_item_key) [pk]
+  }
+}
+
+Table db_pipeline.card_doc [note: '원천 PDF 파일/문서판. 상품 적용은 card_product_doc에서 관리'] {
+  card_doc_id varchar(20) [not null, pk, note: '원본 문서 ID']
+  card_id bigint [note: '기존 파이프라인의 단일 상품 힌트. 신규 문서에서는 NULL; 적용 기준은 상품-문서 관계 테이블']
+  doc_cd varchar(50) [not null, unique, note: '파이프라인 공통 문서 코드(예: HANA_15650_20260429). 결과 A·B 비교 키 후보']
+  doc_family_cd varchar(100) [note: '개정판을 묶는 문서 계열 코드. 동일 계열의 각 판은 별도 card_doc_id']
+  doc_type_cd varchar(20) [not null, note: '문서 유형(PRODUCT_GUIDE, TERMS, BRAND_SERVICE, ETC)']
+  doc_title text [not null, note: '문서 제목']
+  doc_source_url text [note: '공식 출처 URL']
+  doc_file_nm text [not null, note: '수집 파일명']
+  doc_file_size bigint [note: '수집 파일 크기(바이트)']
+  doc_sha256 varchar(64) [not null, unique, note: '수집 파일 SHA-256(소문자 16진수 64자)']
+  doc_page_cnt smallint [note: 'PDF 페이지 수']
+  doc_review_no text [note: '준법심의·여신협회 심의필 번호 원문']
+  doc_review_date date [note: '심의일']
+  doc_release_date date [note: '기존 상품 출시일 기록; 공통 문서는 확인된 문서 발행일만 기재. 관계 적용 시작일과 구별']
+  doc_collect_date timestamptz [not null, note: '파일 수집(다운로드) 일시']
+  doc_version_no smallint [not null, note: '문서판 번호(1부터). 상품별 적용 기간은 관계 테이블에서 관리']
+  doc_status varchar(20) [not null, note: '원천 문서 상태(ACTIVE, SUPERSEDED, EXCLUDED). 상품별 현재 적용 여부는 승인된 문서 관계의 기간으로 판정']
+  doc_note text [note: '문서 범위·확인 사항 메모']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 ID']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 ID']
+}
+
+Table db_pipeline.card_doc_page [note: '문서 페이지별 추출 원문(정제 전, 적재 후 변경 금지)'] {
+  card_doc_id varchar(20) [not null, note: '원본 문서 ID']
+  page_no smallint [not null, note: 'PDF 페이지 번호(1부터)']
+  page_raw_txt text [not null, note: '추출기가 반환한 페이지 텍스트 원문(가공 없음)']
+  page_char_cnt integer [not null, note: '페이지 원문 문자 수']
+  page_txt_sha256 varchar(64) [not null, note: '페이지 원문 SHA-256(재추출 시 변경 감지)']
+  page_layer_cd varchar(20) [not null, note: '텍스트 레이어 유형(TEXT, IMAGE, MIXED: 일부 표가 이미지, UNKNOWN)']
+  page_extractor_nm varchar(50) [not null, note: '텍스트 추출기명(예: PyMuPDF)']
+  page_extractor_ver varchar(50) [note: '텍스트 추출기 버전']
+  page_note text [note: '추출 한계·확인 메모(표 미탐지 등)']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 ID']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 ID']
+  Indexes {
+    (card_doc_id, page_no) [pk]
+  }
+}
+
+Table db_pipeline.card_doc_chunk [note: '문서 청크(조항·표·안내 단위) 원문과 SQL 정제 결과'] {
+  card_doc_id varchar(20) [not null, note: '원본 문서 ID']
+  page_no smallint [not null, note: '청크가 속한 페이지 번호(청크는 페이지를 넘지 않음)']
+  card_doc_chunk_id varchar(20) [not null, unique, note: '청크 ID']
+  chunk_seq integer [not null, note: '문서 내 청크 순번(1부터)']
+  chunk_section_nm text [note: '원문 절 제목(예: [실적 산정 기준], 서비스 제외 대상)']
+  chunk_type_cd varchar(20) [not null, note: '청크 유형(BODY, TABLE, NOTICE: 유의사항, HEADER_FOOTER: 머리말·꼬리말, ETC)']
+  chunk_start_pos integer [not null, note: 'page_raw_txt 내 시작 문자 위치(1부터, PostgreSQL substr 기준)']
+  chunk_end_pos integer [not null, note: 'page_raw_txt 내 끝 문자 위치(포함)']
+  chunk_raw_txt text [not null, note: '청크 원문(정제 전, page_raw_txt의 부분 문자열)']
+  chunk_clean_txt text [note: 'SQL 정제 후 텍스트(AI 입력)']
+  chunk_status varchar(20) [not null, note: '청크 상태(RAW: 분리만 됨, CLEANED: 정제 완료, EXCLUDED: 추출 대상 제외)']
+  chunk_split_rule_ver varchar(50) [not null, note: '청크 분리 규칙 버전']
+  chunk_clean_rule_ver varchar(50) [note: 'SQL 정제 규칙 버전']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 ID']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 ID']
+  Indexes {
+    (card_doc_id, page_no, card_doc_chunk_id) [pk]
+    (card_doc_id, chunk_seq) [unique]
+  }
+}
+
+Table db_pipeline.card_ai_run [note: 'AI 추출·검증 실행 이력(실행 회차 단위)'] {
+  card_ai_run_id varchar(20) [not null, pk, note: 'AI 실행 ID']
+  run_stage_cd varchar(20) [not null, note: '실행 단계(EXTRACT: 혜택·조건 추출, VERIFY: 추출 결과 의미 검증)']
+  run_call_mthd_cd varchar(20) [not null, note: 'AI 호출 방식(PYTHON_RELAY, PGAI, EDGE_FUNCTION, ETC). 기술 검증 후 확정']
+  run_model_nm varchar(100) [not null, note: '사용 모델명']
+  run_prompt_ver varchar(50) [not null, note: '프롬프트 버전']
+  run_prompt_txt text [not null, note: '실행에 사용한 프롬프트 템플릿 원문']
+  run_param jsonb [note: '모델 호출 파라미터(temperature, 출력 스키마 등)']
+  run_target_card_doc_id varchar(20) [note: '대상 원본 문서 ID(여러 문서 실행이면 NULL)']
+  run_status varchar(20) [not null, note: '실행 상태(RUNNING, SUCCEEDED, PARTIAL: 일부 호출 실패, FAILED)']
+  run_start_date timestamptz [not null, note: '실행 시작 일시']
+  run_end_date timestamptz [note: '실행 종료 일시']
+  run_note text [note: '실행 메모']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 ID']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 ID']
+}
+
+Table db_pipeline.card_ai_call [note: 'AI 실행 내 청크별 호출 원 응답(정제 전 AI 출력)'] {
+  card_ai_run_id varchar(20) [not null, note: 'AI 실행 ID']
+  card_doc_id varchar(20) [not null, note: '원본 문서 ID(card_doc_chunk 부모 PK 승계)']
+  page_no smallint [not null, note: '청크가 속한 PDF 페이지 번호(card_doc_chunk 부모 PK 승계)']
+  card_doc_chunk_id varchar(20) [not null, note: '입력 청크 ID']
+  call_seq smallint [not null, note: '같은 실행·청크 내 호출 순번(재시도 시 증가)']
+  call_input_sha256 varchar(64) [not null, note: '실제 입력(프롬프트+청크) SHA-256']
+  call_status varchar(20) [not null, note: '호출 상태(SUCCEEDED, FAILED: 호출 실패, PARSE_ERROR: JSON 파싱 실패)']
+  call_resp_raw text [note: '모델 응답 원문']
+  call_resp_json jsonb [note: '파싱한 응답 JSON']
+  call_error_msg text [note: '오류 메시지']
+  call_input_token_cnt integer [note: '입력 토큰 수']
+  call_output_token_cnt integer [note: '출력 토큰 수']
+  call_latency_ms integer [note: '응답 시간(밀리초)']
+  call_req_date timestamptz [not null, note: '요청 일시']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 ID']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 ID']
+  Indexes {
+    (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq) [pk]
+  }
+}
+
+Table db_pipeline.card_extr_stg [note: 'AI 추출 혜택·조건 staging(정제 전 원 항목, 정제 후 값, 검증·승인 상태)'] {
+  card_ai_run_id varchar(20) [not null, note: 'AI 추출 실행 ID']
+  card_doc_id varchar(20) [not null, note: '원본 문서 ID(card_ai_call 부모 PK 승계)']
+  page_no smallint [not null, note: 'PDF 페이지 번호(card_ai_call 부모 PK 승계)']
+  card_doc_chunk_id varchar(20) [not null, note: '근거 청크 ID']
+  call_seq smallint [not null, note: '응답을 만든 호출 순번(card_ai_call)']
+  card_extr_stg_id varchar(20) [not null, unique, note: '추출 staging ID']
+  stg_item_seq smallint [not null, note: '응답 내 항목 순번(1부터)']
+  card_id bigint [not null, note: '추출 실행의 대상 상품 ID. 공유 문서는 상품 연결 범위를 별도 검증']
+  stg_kind_cd varchar(20) [not null, note: '항목 종류(BENEFIT: 혜택, CONDITION: 조건)']
+  stg_parent_card_extr_stg_id varchar(20) [note: '조건이 걸린 혜택의 staging ID(카드 전체 조건이면 NULL)']
+  stg_raw_item jsonb [not null, note: 'AI가 추출한 개별 혜택 또는 조건의 원본 JSON']
+  stg_normalized_item jsonb [note: 'AI 추출 원본을 정제 및 표준화한 JSON']
+  stg_evidence_txt text [not null, note: 'AI가 제시한 근거 원문 문장']
+  stg_evidence_start_pos integer [note: '근거 청크 원문 내 시작 문자 위치(1부터)']
+  stg_evidence_end_pos integer [note: '근거 청크 원문 내 종료 문자 위치(포함)']
+  card_excl_item_id varchar(20) [note: '매핑된 표준 제외 항목 ID(미매핑 NULL)']
+  stg_sql_check_cd varchar(30) [note: '정제 JSON, 원문 근거, 참조 관계 등을 검증한 SQL 검증 결과']
+  stg_ai_vrfy_cd varchar(20) [note: 'AI 의미 검증 결과(NULL: 미실행, MATCH, MISMATCH, UNCERTAIN)']
+  stg_ai_vrfy_card_ai_run_id varchar(20) [note: 'AI 의미 검증 실행 ID']
+  stg_status varchar(20) [not null, note: '검토 상태(PENDING_REVIEW, AUTO_APPROVED, MANUAL_APPROVED, REJECTED)']
+  stg_review_note text [note: '검증 결과 및 검토 메모']
+  stg_approved_date timestamptz [note: '승인 일시']
+  stg_approved_user_id varchar(50) [note: '승인 사용자 ID']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 ID']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 ID']
+  Indexes {
+    (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, card_extr_stg_id) [pk]
+    (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, stg_item_seq) [unique]
+  }
+}
+
+Table db_pipeline.card_excl_item [note: '표준 제외 항목(카드사 범위 개념, 정책 아님)'] {
+  card_excl_item_id varchar(20) [not null, pk, note: '표준 제외 항목 ID']
+  issuer text [not null, note: '카드사(card_product.issuer와 같은 표기). 병합은 같은 카드사 안에서만']
+  excl_item_nm text [not null, note: '표준 제외 항목명(예: 상품권·기프트카드 구매)']
+  excl_concept_cd varchar(50) [note: '카드사 공통 분류 개념 코드(예: GIFT_CERT_PURCHASE). 분류용이며 정책 동일을 뜻하지 않음']
+  excl_item_desc text [note: '항목 설명·포함 범위']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 ID']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 ID']
+  Indexes {
+    (issuer, excl_item_nm) [unique]
+  }
+}
+
+Table db_pipeline.card_excl_item_als [note: '제외 항목 원문 표기 별칭(SQL 정규화 사전)'] {
+  card_excl_item_id varchar(20) [not null, note: '표준 제외 항목 ID']
+  card_excl_item_als_id varchar(20) [not null, note: '제외 항목 별칭 ID']
+  excl_item_als_nm text [not null, note: '원문 표기(공백 제거 비교 기준). 의미가 불확실한 표기(예: 상품/)는 등록하지 않음']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 ID']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 ID']
+  Indexes {
+    (card_excl_item_id, card_excl_item_als_id) [pk]
+    (card_excl_item_id, excl_item_als_nm) [unique]
+  }
+}
+
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_policy_version.card_id
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_product_doc.card_id
+Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_product_doc.card_doc_id
+Ref: db_pipeline.card_policy_version.(card_id, policy_ver_id) < db_pipeline.card_policy_doc.(card_id, policy_ver_id)
+Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_policy_doc.card_doc_id
+Ref: db_pipeline.card_policy_version.(card_id, policy_ver_id) < db_pipeline.card_bnft.(card_id, policy_ver_id)
+Ref: db_pipeline.card_bnft.(card_id, policy_ver_id, card_bnft_id) < db_pipeline.card_bnft_rule.(card_id, policy_ver_id, card_bnft_id)
+Ref: db_pipeline.card_policy_version.(card_id, policy_ver_id) < db_pipeline.card_limit_pool.(card_id, policy_ver_id)
+Ref: db_pipeline.card_bnft_rule.(card_id, policy_ver_id, card_bnft_id, rule_id) < db_pipeline.card_bnft_rule_pool.(card_id, policy_ver_id, card_bnft_id, rule_id)
+Ref: db_pipeline.card_limit_pool.(card_id, policy_ver_id, pool_id) < db_pipeline.card_bnft_rule_pool.(card_id, policy_ver_id, pool_id)
+Ref: db_pipeline.card_bnft.(card_id, policy_ver_id, card_bnft_id) < db_pipeline.card_bnft_rel.(card_id, policy_ver_id, from_bnft_id)
+Ref: db_pipeline.card_bnft.(card_id, policy_ver_id, card_bnft_id) < db_pipeline.card_bnft_rel.(card_id, policy_ver_id, to_bnft_id)
+Ref: db_pipeline.card_limit_pool.(card_id, policy_ver_id, pool_id) < db_pipeline.card_bnft_rel.(card_id, policy_ver_id, trigger_pool_id)
+Ref: db_pipeline.card_common_bnft.common_bnft_id < db_pipeline.card_common_policy_version.common_bnft_id
+Ref: db_pipeline.card_common_policy_version.(common_bnft_id, common_ver_id) < db_pipeline.card_common_bnft_rule.(common_bnft_id, common_ver_id)
+Ref: db_pipeline.card_bnft.(card_id, policy_ver_id, card_bnft_id) < db_pipeline.card_bnft_common.(card_id, policy_ver_id, card_bnft_id)
+Ref: db_pipeline.card_common_policy_version.(common_bnft_id, common_ver_id) < db_pipeline.card_bnft_common.(common_bnft_id, common_ver_id)
+Ref: db_pipeline.card_policy_version.(card_id, policy_ver_id) < db_pipeline.card_policy_evidence.(card_id, policy_ver_id)
+Ref: db_pipeline.card_bnft.(card_id, policy_ver_id, card_bnft_id) < db_pipeline.card_policy_evidence.(card_id, policy_ver_id, card_bnft_id)
+Ref: db_pipeline.card_bnft_rule.(card_id, policy_ver_id, card_bnft_id, rule_id) < db_pipeline.card_policy_evidence.(card_id, policy_ver_id, card_bnft_id, rule_id)
+Ref: db_pipeline.card_limit_pool.(card_id, policy_ver_id, pool_id) < db_pipeline.card_policy_evidence.(card_id, policy_ver_id, pool_id)
+Ref: db_pipeline.card_source_evidence.evidence_id < db_pipeline.card_policy_evidence.evidence_id
+Ref: db_pipeline.card_common_bnft_rule.(common_bnft_id, common_ver_id, common_rule_id) < db_pipeline.card_common_rule_evidence.(common_bnft_id, common_ver_id, common_rule_id)
+Ref: db_pipeline.card_source_evidence.evidence_id < db_pipeline.card_common_rule_evidence.evidence_id
+Ref: db_pipeline.card_doc_chunk.(card_doc_id, page_no, card_doc_chunk_id) < db_pipeline.card_source_evidence.(card_doc_id, page_no, card_doc_chunk_id)
+Ref: db_pipeline.card_extr_stg.card_extr_stg_id < db_pipeline.card_source_evidence.card_extr_stg_id
+Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_doc_page.card_doc_id
+Ref: db_pipeline.card_doc_page.(card_doc_id, page_no) < db_pipeline.card_doc_chunk.(card_doc_id, page_no)
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_doc.card_id
+Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_ai_run.run_target_card_doc_id
+Ref: db_pipeline.card_ai_run.card_ai_run_id < db_pipeline.card_ai_call.card_ai_run_id
+Ref: db_pipeline.card_doc_chunk.(card_doc_id, page_no, card_doc_chunk_id) < db_pipeline.card_ai_call.(card_doc_id, page_no, card_doc_chunk_id)
+Ref: db_pipeline.card_ai_call.(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq) < db_pipeline.card_extr_stg.(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq)
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_extr_stg.card_id
+Ref: db_pipeline.card_excl_item.card_excl_item_id < db_pipeline.card_extr_stg.card_excl_item_id
+Ref: db_pipeline.card_ai_run.card_ai_run_id < db_pipeline.card_extr_stg.stg_ai_vrfy_card_ai_run_id
+Ref: db_pipeline.card_extr_stg.card_extr_stg_id < db_pipeline.card_extr_stg.stg_parent_card_extr_stg_id
+Ref: db_pipeline.card_excl_item.card_excl_item_id < db_pipeline.card_excl_item_als.card_excl_item_id
+
+TableGroup product_policy {
+  db_pipeline.card_product
+  db_pipeline.card_product_doc
+  db_pipeline.card_policy_version
+  db_pipeline.card_policy_doc
+}
+
+TableGroup product_benefit {
+  db_pipeline.card_bnft
+  db_pipeline.card_bnft_rule
+  db_pipeline.card_limit_pool
+  db_pipeline.card_bnft_rule_pool
+  db_pipeline.card_bnft_rel
+  db_pipeline.card_method_catalog
+}
+
+TableGroup common_benefit {
+  db_pipeline.card_common_bnft
+  db_pipeline.card_common_policy_version
+  db_pipeline.card_common_bnft_rule
+  db_pipeline.card_bnft_common
+}
+
+TableGroup source_evidence {
+  db_pipeline.card_source_evidence
+  db_pipeline.card_policy_evidence
+  db_pipeline.card_common_rule_evidence
+}
+
+TableGroup source_document {
+  db_pipeline.card_doc
+  db_pipeline.card_doc_page
+  db_pipeline.card_doc_chunk
+}
+
+TableGroup ai_parsing {
+  db_pipeline.card_ai_run
+  db_pipeline.card_ai_call
+  db_pipeline.card_extr_stg
+  db_pipeline.card_excl_item
+  db_pipeline.card_excl_item_als
+}
