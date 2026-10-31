@@ -1,5 +1,7 @@
 # db_pipeline — PostgreSQL 중심 처리 방식 (담당: 김병주)
 
+개발 현황과 인수인계 내용은 [PROJECT_STATUS.md](PROJECT_STATUS.md)를 참고합니다.
+
 원천 문서의 텍스트·메타데이터를 PostgreSQL에 저장하고, DB 데이터를 대상으로 전처리·AI 추출·검증까지 수행하는 방식입니다.
 `file_pipeline/`(이현근)과 **같은 원천 문서를 다른 방식으로 처리하는 독립 구현**이며, 서로의 결과를 입력으로 쓰지 않습니다.
 
@@ -62,6 +64,7 @@ uv run python -m payment_card.db_pipeline.storage_main restore --pdf "debit/파�
 
 Terra 단일 페이지 실행은 `python -m payment_card.db_pipeline.terra_main --help`를 참고합니다.
 `--execute`가 없으면 예상 비용만 표시합니다. 실제 실행은 유료 호출과 DB 중간 결과 저장을 수행합니다.
+`--preflight`는 읽기 전용 DB 연결로 상품·문서 관계, PAGE_V1 청크, 로컬 PDF 해시와 입력 이미지를 검증하며 API를 호출하지 않습니다.
 페이지별 실행은 새 실행 ID를 발급하며, 서로 다른 실행의 페이지는 자동 병합하지 않습니다.
 2쪽 실행 전 1쪽 결과와 사용량을 검토하고 실제 누적 비용을 `--previous-spend-usd`에 입력합니다.
 같은 문서의 DB 호출 이력도 합산하며 사용량을 알 수 없는 이력이 있으면 중단합니다.
