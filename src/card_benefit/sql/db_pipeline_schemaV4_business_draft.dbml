@@ -1,0 +1,609 @@
+// V4 LOGICAL REVIEW ONLY. No PostgreSQL DDL or physical FK is created by this file.
+// Business PKs never contain card_doc_id. Composite Ref lines are logical checks.
+// Independent common-policy keys intentionally do not contain card_id.
+// Local ID columns would use fn_get_biz_id + seq_<table> in a later approved DDL.
+
+Table db_pipeline.card_product [note: '상품 마스터. 확정 상품 정책의 최상위 부모'] {
+  card_id bigint [pk]
+  product_cd varchar(80) [unique, not null]
+  product_nm text [not null]
+  issuer varchar(50) [not null]
+  card_kind_cd varchar(10) [not null]
+  product_status_cd varchar(20) [not null]
+}
+
+Table db_pipeline.card_product_variant [note: '발급형. 부모 상품 PK 상속. 동일 브랜드/등급의 선택서비스 코드 구분'] {
+  card_id bigint [not null]
+  card_variant_id varchar(20) [not null]
+  variant_cd varchar(80) [not null]
+  brand_cd varchar(30) [not null]
+  service_grade_cd varchar(30) [not null]
+  service_type_cd varchar(30) [not null]
+  Indexes {
+    (card_id, card_variant_id) [pk]
+    (card_id, variant_cd) [unique]
+  }
+}
+
+Table db_pipeline.card_policy_version [note: '상품 정책 개정판. PRODUCT=전체, VARIANT=지정 발급형 추가 정책. 승인일/적용일/문서일 분리'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  policy_ver_no integer [not null]
+  policy_scope_cd varchar(20) [not null]
+  policy_effect_cd varchar(20) [not null]
+  valid_from date [not null]
+  valid_to_excl date
+  approved_at timestamptz
+  policy_status_cd varchar(20) [not null]
+  Indexes {
+    (card_id, policy_ver_id) [pk]
+    (card_id, policy_ver_no) [unique]
+  }
+}
+
+Table db_pipeline.card_policy_variant [note: 'VARIANT 정책판에 한해 적용 발급형 명시; 관계 PK는 양 부모 키 상속'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  card_variant_id varchar(20) [not null]
+  Indexes { (card_id, policy_ver_id, card_variant_id) [pk] }
+}
+
+Table db_pipeline.card_policy_doc [note: '승인 정책판의 원천 문서 연결. 문서 개정판과 정책 개정판은 별개'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  card_doc_id varchar(20) [not null]
+  source_role_cd varchar(20) [not null]
+  Indexes { (card_id, policy_ver_id, card_doc_id) [pk] }
+}
+
+Table db_pipeline.card_bnft [note: '상품 정책의 혜택 인스턴스. LOCAL 또는 COMMON_LINK; 계산값 없음. V3 문서 PK를 교체'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  card_bnft_id varchar(20) [not null]
+  bnft_cd varchar(80) [not null]
+  bnft_nm text [not null]
+  bnft_type_cd varchar(20) [not null]
+  bnft_origin_cd varchar(20) [not null]
+  bnft_scope_cd varchar(20) [not null]
+  rule_select_cd varchar(30)
+  verification_status_cd varchar(25) [not null]
+  Indexes {
+    (card_id, policy_ver_id, card_bnft_id) [pk]
+    (card_id, policy_ver_id, bnft_cd) [unique]
+  }
+}
+
+Table db_pipeline.card_bnft_variant [note: 'VARIANT 혜택에만 사용. 혜택의 부모 PK와 발급형의 부모 PK를 연결'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  card_bnft_id varchar(20) [not null]
+  card_variant_id varchar(20) [not null]
+  Indexes { (card_id, policy_ver_id, card_bnft_id, card_variant_id) [pk] }
+}
+
+Table db_pipeline.card_bnft_rule [note: 'LOCAL 혜택의 유일한 계산값 원천. COMMON_LINK에는 로컬 규칙 없음'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  card_bnft_id varchar(20) [not null]
+  rule_id varchar(20) [not null]
+  expr_id varchar(20)
+  predicate_state_cd varchar(30) [not null]
+  calc_method_cd varchar(40) [not null]
+  method_ver integer [not null]
+  value_num numeric(18,4)
+  value_unit_cd varchar(30)
+  payout_unit_cd varchar(30) [not null]
+  basis_amt numeric(18,2)
+  calc_params jsonb
+  rule_priority integer
+  rule_status_cd varchar(20) [not null]
+  Indexes { (card_id, policy_ver_id, card_bnft_id, rule_id) [pk] }
+}
+
+Table db_pipeline.card_bnft_target [note: '혜택 소속 대상. 비율/금액 저장하지 않음'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  card_bnft_id varchar(20) [not null]
+  target_id varchar(20) [not null]
+  target_type_cd varchar(30) [not null]
+  target_key varchar(100) [not null]
+  target_nm text [not null]
+  Indexes { (card_id, policy_ver_id, card_bnft_id, target_id) [pk] }
+}
+
+Table db_pipeline.card_bnft_rule_target [note: '규칙↔대상. 각 부모의 식별 키 전체 상속'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  card_bnft_id varchar(20) [not null]
+  rule_id varchar(20) [not null]
+  target_id varchar(20) [not null]
+  Indexes { (card_id, policy_ver_id, card_bnft_id, rule_id, target_id) [pk] }
+}
+
+Table db_pipeline.card_cond [note: '상품 정책판의 재사용 원자 조건. 혜택의 직접 자식 아님; 출력값/한도 없음'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  card_cond_id varchar(20) [not null]
+  cond_type_cd varchar(30) [not null]
+  cond_basis_cd varchar(30)
+  cond_min_amt numeric(18,2)
+  cond_max_amt_excl numeric(18,2)
+  predicate_method_cd varchar(40)
+  predicate_method_ver integer
+  cond_params jsonb
+  card_excl_item_id varchar(20)
+  cond_status_cd varchar(20) [not null]
+  Indexes { (card_id, policy_ver_id, card_cond_id) [pk] }
+}
+
+Table db_pipeline.card_bnft_cond [note: '혜택 전체↔공유 원자 조건. V3의 문서 PK/중복 card_cond.card_bnft_id 제거'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  card_bnft_id varchar(20) [not null]
+  card_cond_id varchar(20) [not null]
+  link_role_cd varchar(25) [not null]
+  Indexes { (card_id, policy_ver_id, card_bnft_id, card_cond_id) [pk] }
+}
+
+Table db_pipeline.card_cond_expr [note: '상품 정책판의 DNF 조건식. 규칙 또는 한도 tier에서 재사용'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  expr_id varchar(20) [not null]
+  expr_status_cd varchar(20) [not null]
+  Indexes { (card_id, policy_ver_id, expr_id) [pk] }
+}
+
+Table db_pipeline.card_cond_expr_atom [note: '같은 branch의 atom은 AND, branch 사이 OR, negate는 NOT'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  expr_id varchar(20) [not null]
+  branch_no integer [not null]
+  atom_seq integer [not null]
+  card_cond_id varchar(20) [not null]
+  negate_yn boolean [not null]
+  Indexes { (card_id, policy_ver_id, expr_id, branch_no, atom_seq) [pk] }
+}
+
+Table db_pipeline.card_limit_pool [note: '상품 정책판의 독립 한도. 여러 규칙이 공유; 혜택의 자식이 아님'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  pool_id varchar(20) [not null]
+  pool_scope_cd varchar(30) [not null]
+  period_cd varchar(20) [not null]
+  cap_unit_cd varchar(30) [not null]
+  aggregation_key_cd varchar(30) [not null]
+  Indexes { (card_id, policy_ver_id, pool_id) [pk] }
+}
+
+Table db_pipeline.card_limit_tier [note: '풀의 조건식별 한도값. 상한 값은 여기만 저장'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  pool_id varchar(20) [not null]
+  tier_id varchar(20) [not null]
+  expr_id varchar(20)
+  predicate_state_cd varchar(30) [not null]
+  limit_num numeric(18,2) [not null]
+  tier_priority integer
+  Indexes { (card_id, policy_ver_id, pool_id, tier_id) [pk] }
+}
+
+Table db_pipeline.card_bnft_rule_pool [note: '규칙이 소비하는 한도 풀. 영역/전체 풀 동시 연결 가능'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  card_bnft_id varchar(20) [not null]
+  rule_id varchar(20) [not null]
+  pool_id varchar(20) [not null]
+  pool_role_cd varchar(30) [not null]
+  Indexes { (card_id, policy_ver_id, card_bnft_id, rule_id, pool_id) [pk] }
+}
+
+Table db_pipeline.card_bnft_rel [note: '한 상품의 동시 유효한 두 혜택 간 배타/우선/대체. BASE와 VARIANT SUPPLEMENT 사이도 가능'] {
+  card_id bigint [not null]
+  from_policy_ver_id varchar(20) [not null]
+  from_bnft_id varchar(20) [not null]
+  to_policy_ver_id varchar(20) [not null]
+  to_bnft_id varchar(20) [not null]
+  rel_type_cd varchar(30) [not null]
+  trigger_pool_id varchar(20)
+  rel_priority integer
+  Indexes { (card_id, from_policy_ver_id, from_bnft_id, to_policy_ver_id, to_bnft_id, rel_type_cd) [pk] }
+}
+
+Table db_pipeline.card_method_catalog [note: '상품/공통 양쪽 계산·술어 코드와 JSON 계약. 글로벌 독립 코드'] {
+  method_kind_cd varchar(20) [not null]
+  method_cd varchar(40) [not null]
+  method_ver integer [not null]
+  param_schema jsonb [not null]
+  handler_key varchar(100) [not null]
+  method_status_cd varchar(20) [not null]
+  Indexes { (method_kind_cd, method_cd, method_ver) [pk] }
+}
+
+// A common PDF is NOT itself a common policy. Common policy rows require
+// clause-level equivalence and separately approved applicability.
+Table db_pipeline.card_common_bnft [note: '특정 카드에 종속되지 않는 공통 서비스 정체성. 동일 이름만으로 병합 금지'] {
+  common_bnft_id varchar(20) [pk]
+  provider_cd varchar(30) [not null]
+  common_bnft_cd varchar(80) [unique, not null]
+  common_bnft_nm text [not null]
+}
+
+Table db_pipeline.card_common_policy_version [note: '공통 서비스 정책 개정판; 카드 상품/문서 버전과 별개'] {
+  common_bnft_id varchar(20) [not null]
+  common_ver_id varchar(20) [not null]
+  common_ver_no integer [not null]
+  valid_from date [not null]
+  valid_to_excl date
+  approved_at timestamptz
+  policy_status_cd varchar(20) [not null]
+  Indexes {
+    (common_bnft_id, common_ver_id) [pk]
+    (common_bnft_id, common_ver_no) [unique]
+  }
+}
+
+Table db_pipeline.card_common_bnft_rule [note: '공통 혜택 계산값의 단일 기준; 상품 로컬 규칙과 값 복제 금지'] {
+  common_bnft_id varchar(20) [not null]
+  common_ver_id varchar(20) [not null]
+  common_rule_id varchar(20) [not null]
+  common_expr_id varchar(20)
+  predicate_state_cd varchar(30) [not null]
+  calc_method_cd varchar(40) [not null]
+  method_ver integer [not null]
+  value_num numeric(18,4)
+  value_unit_cd varchar(30)
+  payout_unit_cd varchar(30) [not null]
+  basis_amt numeric(18,2)
+  calc_params jsonb
+  rule_status_cd varchar(20) [not null]
+  Indexes { (common_bnft_id, common_ver_id, common_rule_id) [pk] }
+}
+
+Table db_pipeline.card_common_cond [note: '공통 서비스판의 원자 조건. 카드별 추가 조건과 구분'] {
+  common_bnft_id varchar(20) [not null]
+  common_ver_id varchar(20) [not null]
+  common_cond_id varchar(20) [not null]
+  cond_type_cd varchar(30) [not null]
+  cond_basis_cd varchar(30)
+  cond_min_amt numeric(18,2)
+  cond_max_amt_excl numeric(18,2)
+  predicate_method_cd varchar(40)
+  predicate_method_ver integer
+  cond_params jsonb
+  cond_status_cd varchar(20) [not null]
+  Indexes { (common_bnft_id, common_ver_id, common_cond_id) [pk] }
+}
+
+Table db_pipeline.card_common_cond_expr [note: '공통 정책판의 DNF 조건식'] {
+  common_bnft_id varchar(20) [not null]
+  common_ver_id varchar(20) [not null]
+  common_expr_id varchar(20) [not null]
+  Indexes { (common_bnft_id, common_ver_id, common_expr_id) [pk] }
+}
+
+Table db_pipeline.card_common_expr_atom [note: '공통 조건식의 AND/OR/NOT atom'] {
+  common_bnft_id varchar(20) [not null]
+  common_ver_id varchar(20) [not null]
+  common_expr_id varchar(20) [not null]
+  branch_no integer [not null]
+  atom_seq integer [not null]
+  common_cond_id varchar(20) [not null]
+  negate_yn boolean [not null]
+  Indexes { (common_bnft_id, common_ver_id, common_expr_id, branch_no, atom_seq) [pk] }
+}
+
+Table db_pipeline.card_common_target [note: '공통 정책의 가맹점/업종/채널 대상'] {
+  common_bnft_id varchar(20) [not null]
+  common_ver_id varchar(20) [not null]
+  common_target_id varchar(20) [not null]
+  target_type_cd varchar(30) [not null]
+  target_key varchar(100) [not null]
+  Indexes { (common_bnft_id, common_ver_id, common_target_id) [pk] }
+}
+
+Table db_pipeline.card_common_rule_target [note: '공통 규칙↔공통 대상'] {
+  common_bnft_id varchar(20) [not null]
+  common_ver_id varchar(20) [not null]
+  common_rule_id varchar(20) [not null]
+  common_target_id varchar(20) [not null]
+  Indexes { (common_bnft_id, common_ver_id, common_rule_id, common_target_id) [pk] }
+}
+
+Table db_pipeline.card_common_limit_pool [note: '공통 정책의 공유 한도; 상품 고유 한도와 분리'] {
+  common_bnft_id varchar(20) [not null]
+  common_ver_id varchar(20) [not null]
+  common_pool_id varchar(20) [not null]
+  period_cd varchar(20) [not null]
+  cap_unit_cd varchar(30) [not null]
+  aggregation_key_cd varchar(30) [not null]
+  Indexes { (common_bnft_id, common_ver_id, common_pool_id) [pk] }
+}
+
+Table db_pipeline.card_common_limit_tier [note: '공통 풀의 조건별 한도 수치'] {
+  common_bnft_id varchar(20) [not null]
+  common_ver_id varchar(20) [not null]
+  common_pool_id varchar(20) [not null]
+  common_tier_id varchar(20) [not null]
+  common_expr_id varchar(20)
+  predicate_state_cd varchar(30) [not null]
+  limit_num numeric(18,2) [not null]
+  Indexes { (common_bnft_id, common_ver_id, common_pool_id, common_tier_id) [pk] }
+}
+
+Table db_pipeline.card_common_rule_pool [note: '공통 규칙↔공통 한도 풀'] {
+  common_bnft_id varchar(20) [not null]
+  common_ver_id varchar(20) [not null]
+  common_rule_id varchar(20) [not null]
+  common_pool_id varchar(20) [not null]
+  Indexes { (common_bnft_id, common_ver_id, common_rule_id, common_pool_id) [pk] }
+}
+
+Table db_pipeline.card_bnft_common [note: '상품 혜택 인스턴스↔승인된 공통 정책판 N:M. COMMON_LINK에서만 사용; 로컬 조건은 card_bnft_cond로 AND 추가'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  card_bnft_id varchar(20) [not null]
+  common_bnft_id varchar(20) [not null]
+  common_ver_id varchar(20) [not null]
+  apply_status_cd varchar(20) [not null]
+  Indexes { (card_id, policy_ver_id, card_bnft_id, common_bnft_id, common_ver_id) [pk] }
+}
+
+// Source data and evidence. V3 source parsing columns remain unchanged; only
+// logical keys and attributes needed for V4 lineage are shown here.
+Table db_pipeline.card_doc [note: '원천 PDF 파일/판본; 업무 혜택의 부모가 아님'] {
+  card_doc_id varchar(20) [pk]
+  doc_cd varchar(50) [unique]
+  doc_family_cd varchar(100)
+  doc_type_cd varchar(20)
+  doc_version_no smallint
+  doc_release_date date
+  doc_status varchar(20)
+  doc_sha256 varchar(64) [unique]
+}
+
+Table db_pipeline.card_product_doc [note: '상품 전체↔문서 N:M; 문서 공유와 혜택 정책 공유는 별개'] {
+  card_id bigint [not null]
+  card_doc_id varchar(20) [not null]
+  doc_role_cd varchar(20)
+  effective_from date
+  effective_to_excl date
+  approval_status_cd varchar(20)
+  Indexes { (card_id, card_doc_id) [pk] }
+}
+
+Table db_pipeline.card_product_variant_doc [note: '발급형↔브랜드 안내서 N:M'] {
+  card_id bigint [not null]
+  card_variant_id varchar(20) [not null]
+  card_doc_id varchar(20) [not null]
+  effective_from date
+  effective_to_excl date
+  approval_status_cd varchar(20)
+  Indexes { (card_id, card_variant_id, card_doc_id) [pk] }
+}
+
+Table db_pipeline.card_doc_page [note: '원천 페이지; V3 세부 컬럼 유지'] {
+  card_doc_id varchar(20) [not null]
+  page_no smallint [not null]
+  page_raw_txt text
+  Indexes { (card_doc_id, page_no) [pk] }
+}
+
+Table db_pipeline.card_doc_chunk [note: '원천 청크; V3 세부 컬럼 유지'] {
+  card_doc_id varchar(20) [not null]
+  page_no smallint [not null]
+  card_doc_chunk_id varchar(20) [not null]
+  chunk_raw_txt text
+  Indexes { (card_doc_id, page_no, card_doc_chunk_id) [pk] }
+}
+
+Table db_pipeline.card_ai_run [note: 'AI 실행 이력; V3 유지'] {
+  card_ai_run_id varchar(20) [pk]
+  run_target_card_doc_id varchar(20)
+  run_status varchar(20)
+}
+
+Table db_pipeline.card_ai_call [note: 'AI 청크 호출; V3 유지'] {
+  card_ai_run_id varchar(20) [not null]
+  card_doc_id varchar(20) [not null]
+  page_no smallint [not null]
+  card_doc_chunk_id varchar(20) [not null]
+  call_seq smallint [not null]
+  Indexes { (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq) [pk] }
+}
+
+Table db_pipeline.card_extr_stg [note: '추출 후보/승인 이력; V3 유지. 확정 업무 PK에 포함하지 않음'] {
+  card_ai_run_id varchar(20) [not null]
+  card_doc_id varchar(20) [not null]
+  page_no smallint [not null]
+  card_doc_chunk_id varchar(20) [not null]
+  call_seq smallint [not null]
+  card_extr_stg_id varchar(20) [not null]
+  stg_status varchar(20)
+  Indexes {
+    (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, card_extr_stg_id) [pk]
+    card_extr_stg_id [unique]
+  }
+}
+
+Table db_pipeline.card_excl_item [note: '표준 제외 개념 사전; V3 유지'] {
+  card_excl_item_id varchar(20) [pk]
+  issuer text
+  excl_item_nm text
+}
+
+Table db_pipeline.card_excl_item_als [note: '표준 제외 개념 별칭; V3 유지'] {
+  card_excl_item_id varchar(20) [not null]
+  card_excl_item_als_id varchar(20) [not null]
+  excl_item_als_nm text
+  Indexes { (card_excl_item_id, card_excl_item_als_id) [pk] }
+}
+
+Table db_pipeline.card_source_evidence [note: '승인된 문장/청크 근거. 독립 evidence_id; 문서키는 업무 PK로 전파되지 않음'] {
+  evidence_id varchar(20) [pk]
+  card_doc_id varchar(20) [not null]
+  page_no smallint [not null]
+  card_doc_chunk_id varchar(20) [not null]
+  card_extr_stg_id varchar(20)
+  quote_txt text [not null]
+  start_pos integer
+  end_pos integer
+  approval_status_cd varchar(20) [not null]
+}
+
+Table db_pipeline.card_bnft_rule_evidence [note: '상품 규칙↔원문 근거 N:M; 한 규칙에 여러 PDF 근거 가능'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  card_bnft_id varchar(20) [not null]
+  rule_id varchar(20) [not null]
+  evidence_id varchar(20) [not null]
+  Indexes { (card_id, policy_ver_id, card_bnft_id, rule_id, evidence_id) [pk] }
+}
+
+Table db_pipeline.card_cond_evidence [note: '상품 원자 조건↔원문 근거 N:M'] {
+  card_id bigint [not null]
+  policy_ver_id varchar(20) [not null]
+  card_cond_id varchar(20) [not null]
+  evidence_id varchar(20) [not null]
+  Indexes { (card_id, policy_ver_id, card_cond_id, evidence_id) [pk] }
+}
+
+Table db_pipeline.card_common_rule_evidence [note: '공통 규칙↔원문 근거 N:M'] {
+  common_bnft_id varchar(20) [not null]
+  common_ver_id varchar(20) [not null]
+  common_rule_id varchar(20) [not null]
+  evidence_id varchar(20) [not null]
+  Indexes { (common_bnft_id, common_ver_id, common_rule_id, evidence_id) [pk] }
+}
+
+Table db_pipeline.card_common_cond_evidence [note: '공통 원자 조건↔원문 근거 N:M'] {
+  common_bnft_id varchar(20) [not null]
+  common_ver_id varchar(20) [not null]
+  common_cond_id varchar(20) [not null]
+  evidence_id varchar(20) [not null]
+  Indexes { (common_bnft_id, common_ver_id, common_cond_id, evidence_id) [pk] }
+}
+
+TableGroup product_policy {
+  db_pipeline.card_product
+  db_pipeline.card_product_variant
+  db_pipeline.card_policy_version
+  db_pipeline.card_policy_variant
+  db_pipeline.card_policy_doc
+}
+TableGroup confirmed_benefit {
+  db_pipeline.card_bnft
+  db_pipeline.card_bnft_variant
+  db_pipeline.card_bnft_rule
+  db_pipeline.card_bnft_target
+  db_pipeline.card_bnft_rule_target
+  db_pipeline.card_cond
+  db_pipeline.card_bnft_cond
+  db_pipeline.card_cond_expr
+  db_pipeline.card_cond_expr_atom
+  db_pipeline.card_limit_pool
+  db_pipeline.card_limit_tier
+  db_pipeline.card_bnft_rule_pool
+  db_pipeline.card_bnft_rel
+  db_pipeline.card_method_catalog
+}
+TableGroup common_benefit {
+  db_pipeline.card_common_bnft
+  db_pipeline.card_common_policy_version
+  db_pipeline.card_common_bnft_rule
+  db_pipeline.card_common_cond
+  db_pipeline.card_common_cond_expr
+  db_pipeline.card_common_expr_atom
+  db_pipeline.card_common_target
+  db_pipeline.card_common_rule_target
+  db_pipeline.card_common_limit_pool
+  db_pipeline.card_common_limit_tier
+  db_pipeline.card_common_rule_pool
+  db_pipeline.card_bnft_common
+}
+TableGroup source_and_evidence {
+  db_pipeline.card_doc
+  db_pipeline.card_product_doc
+  db_pipeline.card_product_variant_doc
+  db_pipeline.card_doc_page
+  db_pipeline.card_doc_chunk
+  db_pipeline.card_ai_run
+  db_pipeline.card_ai_call
+  db_pipeline.card_extr_stg
+  db_pipeline.card_excl_item
+  db_pipeline.card_excl_item_als
+  db_pipeline.card_source_evidence
+  db_pipeline.card_bnft_rule_evidence
+  db_pipeline.card_cond_evidence
+  db_pipeline.card_common_rule_evidence
+  db_pipeline.card_common_cond_evidence
+}
+
+// Each Ref is logical. V4 PostgreSQL DDL has not been written or executed.
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_product_variant.card_id
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_policy_version.card_id
+Ref: db_pipeline.card_policy_version.(card_id, policy_ver_id) < db_pipeline.card_policy_variant.(card_id, policy_ver_id)
+Ref: db_pipeline.card_product_variant.(card_id, card_variant_id) < db_pipeline.card_policy_variant.(card_id, card_variant_id)
+Ref: db_pipeline.card_policy_version.(card_id, policy_ver_id) < db_pipeline.card_policy_doc.(card_id, policy_ver_id)
+Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_policy_doc.card_doc_id
+Ref: db_pipeline.card_policy_version.(card_id, policy_ver_id) < db_pipeline.card_bnft.(card_id, policy_ver_id)
+Ref: db_pipeline.card_bnft.(card_id, policy_ver_id, card_bnft_id) < db_pipeline.card_bnft_variant.(card_id, policy_ver_id, card_bnft_id)
+Ref: db_pipeline.card_product_variant.(card_id, card_variant_id) < db_pipeline.card_bnft_variant.(card_id, card_variant_id)
+Ref: db_pipeline.card_bnft.(card_id, policy_ver_id, card_bnft_id) < db_pipeline.card_bnft_rule.(card_id, policy_ver_id, card_bnft_id)
+Ref: db_pipeline.card_bnft.(card_id, policy_ver_id, card_bnft_id) < db_pipeline.card_bnft_target.(card_id, policy_ver_id, card_bnft_id)
+Ref: db_pipeline.card_bnft_rule.(card_id, policy_ver_id, card_bnft_id, rule_id) < db_pipeline.card_bnft_rule_target.(card_id, policy_ver_id, card_bnft_id, rule_id)
+Ref: db_pipeline.card_bnft_target.(card_id, policy_ver_id, card_bnft_id, target_id) < db_pipeline.card_bnft_rule_target.(card_id, policy_ver_id, card_bnft_id, target_id)
+Ref: db_pipeline.card_policy_version.(card_id, policy_ver_id) < db_pipeline.card_cond.(card_id, policy_ver_id)
+Ref: db_pipeline.card_bnft.(card_id, policy_ver_id, card_bnft_id) < db_pipeline.card_bnft_cond.(card_id, policy_ver_id, card_bnft_id)
+Ref: db_pipeline.card_cond.(card_id, policy_ver_id, card_cond_id) < db_pipeline.card_bnft_cond.(card_id, policy_ver_id, card_cond_id)
+Ref: db_pipeline.card_policy_version.(card_id, policy_ver_id) < db_pipeline.card_cond_expr.(card_id, policy_ver_id)
+Ref: db_pipeline.card_cond_expr.(card_id, policy_ver_id, expr_id) < db_pipeline.card_cond_expr_atom.(card_id, policy_ver_id, expr_id)
+Ref: db_pipeline.card_cond.(card_id, policy_ver_id, card_cond_id) < db_pipeline.card_cond_expr_atom.(card_id, policy_ver_id, card_cond_id)
+Ref: db_pipeline.card_cond_expr.(card_id, policy_ver_id, expr_id) < db_pipeline.card_bnft_rule.(card_id, policy_ver_id, expr_id)
+Ref: db_pipeline.card_policy_version.(card_id, policy_ver_id) < db_pipeline.card_limit_pool.(card_id, policy_ver_id)
+Ref: db_pipeline.card_limit_pool.(card_id, policy_ver_id, pool_id) < db_pipeline.card_limit_tier.(card_id, policy_ver_id, pool_id)
+Ref: db_pipeline.card_cond_expr.(card_id, policy_ver_id, expr_id) < db_pipeline.card_limit_tier.(card_id, policy_ver_id, expr_id)
+Ref: db_pipeline.card_bnft_rule.(card_id, policy_ver_id, card_bnft_id, rule_id) < db_pipeline.card_bnft_rule_pool.(card_id, policy_ver_id, card_bnft_id, rule_id)
+Ref: db_pipeline.card_limit_pool.(card_id, policy_ver_id, pool_id) < db_pipeline.card_bnft_rule_pool.(card_id, policy_ver_id, pool_id)
+Ref: db_pipeline.card_bnft.(card_id, policy_ver_id, card_bnft_id) < db_pipeline.card_bnft_rel.(card_id, from_policy_ver_id, from_bnft_id)
+Ref: db_pipeline.card_bnft.(card_id, policy_ver_id, card_bnft_id) < db_pipeline.card_bnft_rel.(card_id, to_policy_ver_id, to_bnft_id)
+Ref: db_pipeline.card_limit_pool.(card_id, policy_ver_id, pool_id) < db_pipeline.card_bnft_rel.(card_id, from_policy_ver_id, trigger_pool_id)
+Ref: db_pipeline.card_excl_item.card_excl_item_id < db_pipeline.card_cond.card_excl_item_id
+
+Ref: db_pipeline.card_common_bnft.common_bnft_id < db_pipeline.card_common_policy_version.common_bnft_id
+Ref: db_pipeline.card_common_policy_version.(common_bnft_id, common_ver_id) < db_pipeline.card_common_bnft_rule.(common_bnft_id, common_ver_id)
+Ref: db_pipeline.card_common_policy_version.(common_bnft_id, common_ver_id) < db_pipeline.card_common_cond.(common_bnft_id, common_ver_id)
+Ref: db_pipeline.card_common_policy_version.(common_bnft_id, common_ver_id) < db_pipeline.card_common_cond_expr.(common_bnft_id, common_ver_id)
+Ref: db_pipeline.card_common_cond_expr.(common_bnft_id, common_ver_id, common_expr_id) < db_pipeline.card_common_expr_atom.(common_bnft_id, common_ver_id, common_expr_id)
+Ref: db_pipeline.card_common_cond.(common_bnft_id, common_ver_id, common_cond_id) < db_pipeline.card_common_expr_atom.(common_bnft_id, common_ver_id, common_cond_id)
+Ref: db_pipeline.card_common_cond_expr.(common_bnft_id, common_ver_id, common_expr_id) < db_pipeline.card_common_bnft_rule.(common_bnft_id, common_ver_id, common_expr_id)
+Ref: db_pipeline.card_common_policy_version.(common_bnft_id, common_ver_id) < db_pipeline.card_common_target.(common_bnft_id, common_ver_id)
+Ref: db_pipeline.card_common_bnft_rule.(common_bnft_id, common_ver_id, common_rule_id) < db_pipeline.card_common_rule_target.(common_bnft_id, common_ver_id, common_rule_id)
+Ref: db_pipeline.card_common_target.(common_bnft_id, common_ver_id, common_target_id) < db_pipeline.card_common_rule_target.(common_bnft_id, common_ver_id, common_target_id)
+Ref: db_pipeline.card_common_policy_version.(common_bnft_id, common_ver_id) < db_pipeline.card_common_limit_pool.(common_bnft_id, common_ver_id)
+Ref: db_pipeline.card_common_limit_pool.(common_bnft_id, common_ver_id, common_pool_id) < db_pipeline.card_common_limit_tier.(common_bnft_id, common_ver_id, common_pool_id)
+Ref: db_pipeline.card_common_cond_expr.(common_bnft_id, common_ver_id, common_expr_id) < db_pipeline.card_common_limit_tier.(common_bnft_id, common_ver_id, common_expr_id)
+Ref: db_pipeline.card_common_bnft_rule.(common_bnft_id, common_ver_id, common_rule_id) < db_pipeline.card_common_rule_pool.(common_bnft_id, common_ver_id, common_rule_id)
+Ref: db_pipeline.card_common_limit_pool.(common_bnft_id, common_ver_id, common_pool_id) < db_pipeline.card_common_rule_pool.(common_bnft_id, common_ver_id, common_pool_id)
+Ref: db_pipeline.card_bnft.(card_id, policy_ver_id, card_bnft_id) < db_pipeline.card_bnft_common.(card_id, policy_ver_id, card_bnft_id)
+Ref: db_pipeline.card_common_policy_version.(common_bnft_id, common_ver_id) < db_pipeline.card_bnft_common.(common_bnft_id, common_ver_id)
+
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_product_doc.card_id
+Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_product_doc.card_doc_id
+Ref: db_pipeline.card_product_variant.(card_id, card_variant_id) < db_pipeline.card_product_variant_doc.(card_id, card_variant_id)
+Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_product_variant_doc.card_doc_id
+Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_doc_page.card_doc_id
+Ref: db_pipeline.card_doc_page.(card_doc_id, page_no) < db_pipeline.card_doc_chunk.(card_doc_id, page_no)
+Ref: db_pipeline.card_ai_run.card_ai_run_id < db_pipeline.card_ai_call.card_ai_run_id
+Ref: db_pipeline.card_doc_chunk.(card_doc_id, page_no, card_doc_chunk_id) < db_pipeline.card_ai_call.(card_doc_id, page_no, card_doc_chunk_id)
+Ref: db_pipeline.card_ai_call.(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq) < db_pipeline.card_extr_stg.(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq)
+Ref: db_pipeline.card_excl_item.card_excl_item_id < db_pipeline.card_excl_item_als.card_excl_item_id
+Ref: db_pipeline.card_doc_chunk.(card_doc_id, page_no, card_doc_chunk_id) < db_pipeline.card_source_evidence.(card_doc_id, page_no, card_doc_chunk_id)
+Ref: db_pipeline.card_extr_stg.card_extr_stg_id < db_pipeline.card_source_evidence.card_extr_stg_id
+Ref: db_pipeline.card_bnft_rule.(card_id, policy_ver_id, card_bnft_id, rule_id) < db_pipeline.card_bnft_rule_evidence.(card_id, policy_ver_id, card_bnft_id, rule_id)
+Ref: db_pipeline.card_source_evidence.evidence_id < db_pipeline.card_bnft_rule_evidence.evidence_id
+Ref: db_pipeline.card_cond.(card_id, policy_ver_id, card_cond_id) < db_pipeline.card_cond_evidence.(card_id, policy_ver_id, card_cond_id)
+Ref: db_pipeline.card_source_evidence.evidence_id < db_pipeline.card_cond_evidence.evidence_id
+Ref: db_pipeline.card_common_bnft_rule.(common_bnft_id, common_ver_id, common_rule_id) < db_pipeline.card_common_rule_evidence.(common_bnft_id, common_ver_id, common_rule_id)
+Ref: db_pipeline.card_source_evidence.evidence_id < db_pipeline.card_common_rule_evidence.evidence_id
+Ref: db_pipeline.card_common_cond.(common_bnft_id, common_ver_id, common_cond_id) < db_pipeline.card_common_cond_evidence.(common_bnft_id, common_ver_id, common_cond_id)
+Ref: db_pipeline.card_source_evidence.evidence_id < db_pipeline.card_common_cond_evidence.evidence_id
