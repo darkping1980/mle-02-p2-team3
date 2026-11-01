@@ -1,8 +1,43 @@
 # Codex → Claude Code 인수인계
 
-기준: 2026-11-01, A10-3 Cypher 파일 분리와 Neo4j 재동기화 완료(노드 108, 관계 189, PostgreSQL 차이 0), P4·P5 보류. 프로젝트 루트 `D:\Bootcamp\vscode\workspace\mle-02-p2-team3`. 카드 발급 전 혜택 검색·비교 GraphRAG. PostgreSQL V6에서 원문·추출·검증을 관리하고 Neo4j로 DRAFT를 전환했다. 현재 목표는 `db_pipeline_origin_search` 로컬 Streamlit Neo4j 조회 MVP이며 LLM·챗봇은 범위 밖이다.
+기준: 2026-11-01, 개발 검증 모드 구현 완료, A10-3 재동기화 상태 유지(노드 108, 관계 189, PostgreSQL 차이 0), P4·P5 보류. 프로젝트 루트 `D:\Bootcamp\vscode\workspace\mle-02-p2-team3`. 카드 발급 전 혜택 검색·비교 GraphRAG. PostgreSQL V6에서 원문·추출·검증을 관리하고 Neo4j로 DRAFT를 전환했다. 현재 목표는 `db_pipeline_origin_search` 로컬 Streamlit Neo4j 조회 MVP이며 LLM·챗봇은 범위 밖이다.
 
-## A10-3 Cypher 정리와 재동기화 (2026-11-01, 최신)
+## Neo4j DF/PF 전환 (2026-11-01, 최신)
+
+- 설계와 완료 기준: `db_pipeline/NEO4J_DF_PF_DESIGN.md`.
+- 2단계 완료: 코드가 `df_` 레이블과 `df_one_pick_style`만 쓴다. Neo4j에는 아직 A8만 있어 **DF 적재 전까지 검색 화면, 실제 Neo4j 테스트, `neo4j_validate`는 동작하지 않는다.**
+- 다음 단계는 Neo4j 백업이고 별도 승인이 필요하다. 수정 전 코드 백업은 `D:\Bootcamp\backups\card_benefit\source\20261101_155114`에 있다.
+
+## 공통 Neo4j 연결·쿼리 로그 설정 (2026-11-01)
+
+- `src/common/neo4j_connection.py`(TLS·드라이버 생성)와 `src/common/query_log_config.py`(`.env` 로딩, 스위치, handler)로 옮겼다. 레시피의 기존 import 경로는 유지했다.
+- 카드는 `recipe_recommender`, `src.common`, `sys.path` 변경을 쓰지 않는다. `common`, `card_benefit`은 `.venv` 편집 설치로 찾는다. 앱과 테스트는 `card_benefit...` 경로를 쓴다.
+- 레시피: `RECIPE_QUERY_LOG` → `DB_QUERY_LOG` → 소스 기본값. 카드: `DB_QUERY_LOG` → 로컬 개발이면 켬. 상세 레벨은 `CARD_SEARCH_LOG_LEVEL`.
+- ON 뒤 OFF가 되면 공통 함수가 붙인 handler를 떼고 logger를 기본값으로 되돌린다. 붙인 적이 없으면 아무것도 바꾸지 않아 CLI가 정한 레벨을 유지한다.
+- handler 표시 속성은 `recipe_query_log`에서 `common_query_log`로 바뀌었다. handler를 공유하므로 레시피와 카드를 한 프로세스에서 함께 실행하면 한쪽의 OFF가 다른 쪽 출력도 끈다. 지금은 앱이 별도 프로세스라 해당하지 않는다.
+
+## 로그 기본값 (2026-11-01)
+
+`CARD_SEARCH_LOG_LEVEL` 기본값을 `DEBUG`로 바꿨다(`card_graphrag.DEFAULT_LOG_LEVEL`). 개발 단계 설정이며 운영 전 `INFO`로 되돌려야 한다. 프롬프트 전문도 함께 출력된다. `DB_QUERY_LOG=0`이면 출력되지 않는다.
+
+## DBeaver 42001 원인과 공통 렌더링 연결 (2026-11-01)
+
+- **원인:** `$ns`를 값 없이 실행한 것이다. 문법 오류가 아니다. DBeaver와 같은 `neo4j-jdbc-full-bundle-6.15.1.jar`로 같은 메시지를 재현했다. 서버의 하위 원인은 `42N81 missing request parameter`다.
+- **코드 원인:** `CARD_LOG`가 `separate` 모드라 터미널에 원문이 나왔다. 레시피는 `combined` + `render_cypher_log`다.
+- **수정:** `neo4j_search.py`에서 `combined`로 바꾸고 `render_combined`로 공통 `render_cypher_log`를 연결했다. 실행은 계속 바인딩이다. `src/common`, `src/recipe` 변경 없음.
+- **미확인:** DBeaver UI 자체. JDBC 드라이버로만 확인했다.
+- **선택 사항:** `Neo4jSearch._query`를 `select_list`로 바꾸는 안은 `READ_ACCESS`와 로그 형식이 달라져 승인 대상이다.
+
+## 개발 검증 모드 (2026-11-01)
+
+설명은 `README.md`의 "개발 검증 모드"를 따른다.
+
+- 신규: `verify_view.py`. 수정: `neo4j_search.py`(`DETAIL_LOG`, `flatten_record`, `statement_plan`, `detail_plan`), `card_graphrag.py`(`verify_*`, `merge_state`, `next_step`, `plan_key`), `streamlit_app.py`(실행 모드 선택).
+- 그래프는 그대로다. 같은 노드와 라우팅 함수를 직접 호출하고 체크포인트를 쓰지 않는다.
+- 공통 재사용: `render_cypher_inline`(복사용 Cypher), `log_query`, `log_result_data`.
+- 검증: Mock LLM·실제 Neo4j. 화면 Cypher를 드라이버로 그대로 실행해 앱 조회와 건수를 대조했다. Neo4j Browser UI 자체에서는 실행하지 않았다. 유료 호출 없음.
+
+## A10-3 Cypher 정리와 재동기화 (2026-11-01)
 
 - **신규:** `graph_questions.cypher`(검색 7개), `../db_pipeline/neo4j_validation.cypher`, `neo4j_validation.sql`, `neo4j_validate.py`, `test_neo4j_validate.py`.
 - **읽기:** 공통 `Neo4jDbSession(mapper_root=...).mappers`를 재사용한다. 새 로더는 없다.

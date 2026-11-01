@@ -20,10 +20,14 @@ from time import perf_counter
 from typing import Annotated, Literal, TypedDict
 from uuid import uuid4
 
+from common.query_log_config import (
+    attach_query_log_handlers, detach_query_log_handlers, is_local_dev, load_project_environment, query_log_switch,
+)
 from pydantic import BaseModel, Field
 
-from .neo4j_search import ALL_SECTIONS, CARD_LOG, CARD_LOGGER_NAME, REQUEST_ID, source  # src/recipe를 import 경로에 넣는다
-from recipe_recommender.config import configure_query_logging, load_project_environment, local_dev_query_log_default  # noqa: E402, I001
+from .neo4j_search import (
+    ALL_SECTIONS, CARD_LOG, CARD_LOGGER_NAME, DETAIL_LOG, REQUEST_ID, detail_plan, detail_statements, source, statement_plan,
+)
 
 # region 1. 설정과 출력 형식
 DEFAULT_MODEL = "gpt-6-luna"
@@ -32,6 +36,8 @@ INTERPRET_MAX_TOKENS = 600             # 추론 토큰을 포함한 출력 상�
 ANSWER_MAX_TOKENS = 2000
 LLM_TIMEOUT_SECONDS = 60
 MAX_QUESTION_CHARS = 500
+QUERY_LOG_ENV = "DB_QUERY_LOG"          # 카드는 레시피 전용 스위치를 보지 않는다.
+DEFAULT_LOG_LEVEL = "DEBUG"            # 개발 단계 기본값. CARD_SEARCH_LOG_LEVEL=INFO로 Cypher 전문 출력을 끈다.
 # USD / 100만 토큰 (입력, 캐시 입력, 출력). OpenAI 가격표 2026-11-01 확인. 272K 입력 이하 Standard 단가.
 MODEL_PRICES = {"gpt-6-luna": (0.10, 0.01, 0.50)}
 
@@ -163,9 +169,11 @@ class CardState(TypedDict, total=False):
     request_id: str  # run이 만든 요청 식별자.
     started: float  # run이 기록한 시작 시각(perf_counter).
     question: str  # run 입력.
+    catalog: list[dict]  # interpret가 읽은 혜택 목록.
     intent: str  # interpret가 고른 질문 유형.
     search_parameters: dict  # interpret가 검증한 조회 조건; retrieve는 이 값만 사용한다.
     retrieved_data: list[dict]  # retrieve가 만든 혜택별 Neo4j 조회 원본.
+    retrieved_for: str  # 검증 모드: 조회에 쓴 질문·검색 조건.
     evidence: list[dict]  # retrieve가 evidence_id 기준으로 합친 근거.
     statements: list[str]  # retrieve가 실행한 Cypher 식별자.
     unresolved: list[str]  # 조회 결과에서 판별한 미확정 사항.
@@ -178,14 +186,16 @@ class CardState(TypedDict, total=False):
 
 
 def configure_card_logging() -> None:
-    """공통 쿼리 로그 설정을 재사용한다. handler는 공통 함수가 한 번만 붙인다.
+    """공통 쿼리 로그 설정을 재사용한다. handler는 공통 함수가 한 번만 붙이고, OFF로 바뀌면 제거한다.
 
-    ``CARD_SEARCH_LOG_LEVEL=DEBUG`` 이면 이 모듈의 로그만 DEBUG로 낮춰 프롬프트와 Cypher 전문을 출력한다.
+    ``DB_QUERY_LOG`` 가 없으면 로컬 개발 환경에서 켠다. ``CARD_SEARCH_LOG_LEVEL`` 의 기본값은 DEBUG이며,
+    이 모듈의 로그만 낮춰 프롬프트와 Cypher 전문을 출력한다. 쿼리 로그가 꺼져 있으면 낮추지 않는다.
     """
     load_project_environment()
-    configure_query_logging(default=local_dev_query_log_default())
-    debug = os.getenv("CARD_SEARCH_LOG_LEVEL", "").strip().upper() == "DEBUG"
-    logging.getLogger(CARD_LOGGER_NAME).setLevel(logging.DEBUG if debug else logging.NOTSET)
+    enabled = query_log_switch((QUERY_LOG_ENV,), is_local_dev())
+    (attach_query_log_handlers if enabled else detach_query_log_handlers)()
+    level = (os.getenv("CARD_SEARCH_LOG_LEVEL") or DEFAULT_LOG_LEVEL).strip().upper()
+    logging.getLogger(CARD_LOGGER_NAME).setLevel(logging.DEBUG if enabled and level == "DEBUG" else logging.NOTSET)
 
 
 def card_model() -> str:
@@ -247,7 +257,7 @@ def condition_groups(rows: list[dict]) -> list[dict]:
     """조건 행을 조건식 → 분기 → 조건으로 묶어 OR/AND/NOT 구조를 유지한다."""
     groups: dict[str, dict] = {}
     for row in rows:
-        scope = row["rule_key"] or ("카드 공통" if "A8Policy" in row["owner_labels"] else "혜택")
+        scope = row["rule_key"] or ("카드 공통" if row["owner_cd"] == "POLICY" else "혜택")
         group = groups.setdefault(row["expression"]["key"], {"scope": scope, "branches": {}})
         atom = source(row["atom"])
         group["branches"].setdefault(row["branch_no"], []).append({
@@ -553,6 +563,37 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
             "message": reason}, warnings
 
 
+def merge_state(state: CardState, update: CardState) -> CardState:
+    """노드 결과를 LangGraph reducer와 같은 규칙으로 State에 합친다."""
+    merged = dict(state)
+    for key, value in update.items():
+        merged[key] = [*merged.get(key, []), *value] if key in ("warnings", "llm_calls", "path") else value
+    return merged
+
+
+def next_step(state: CardState) -> str:
+    """검증 모드의 다음 단계. retrieve, answer, done 중 하나."""
+    if "finish" in state["path"]:
+        return "done"
+    return "answer" if "retrieve" in state["path"] else "retrieve"
+
+
+def plan_key(state: CardState) -> str:
+    """조회 결과가 어떤 질문과 검색 조건에서 나왔는지 나타내는 값."""
+    return json.dumps([state["question"], state.get("search_parameters")], ensure_ascii=False, sort_keys=True)
+
+
+def catalog_plan() -> dict:
+    """Interpret 전에 실행하는 카탈로그 Cypher."""
+    return statement_plan("card.catalog")
+
+
+def verification_plan(state: CardState) -> list[dict]:
+    """검색 조건으로 실행할 Cypher 목록을 만든다. ``get_detail`` 과 같은 쿼리와 순서다."""
+    parameters = state["search_parameters"]
+    return detail_plan(parameters["benefit_keys"], tuple(parameters["sections"]))
+
+
 # endregion
 # region 3. LangGraph 노드
 class CardGraphRAG:
@@ -581,13 +622,47 @@ class CardGraphRAG:
         builder.add_edge("finish", END)
         return builder.compile()
 
+    def _initial_state(self, question: str, mode: str | None = None) -> CardState:
+        """요청을 기록하고 그래프 입력 State를 만든다."""
+        request_id = uuid4().hex[:8]
+        CARD_LOG.log_summary("REQUEST", request_id, question=repr(question), model=self.model, mode=mode,
+                             started_at=datetime.now().astimezone().isoformat(timespec="seconds"))
+        return {"request_id": request_id, "started": perf_counter(), "question": question.strip(),
+                "error": None, "warnings": [], "llm_calls": [], "path": []}
+
     def run(self, question: str) -> CardState:
         """질문 하나로 그래프를 한 번 실행하고 최종 State를 반환한다."""
-        request_id = uuid4().hex[:8]
-        CARD_LOG.log_summary("REQUEST", request_id, question=repr(question), model=self.model,
-                             started_at=datetime.now().astimezone().isoformat(timespec="seconds"))
-        return self.graph.invoke({"request_id": request_id, "started": perf_counter(), "question": question.strip(),
-                                  "error": None, "warnings": [], "llm_calls": [], "path": []})
+        return self.graph.invoke(self._initial_state(question))
+
+    # 개발 검증 모드. 그래프와 같은 노드·라우팅 함수를 사용자가 누른 단계까지만 호출한다.
+    def _step(self, state: CardState, node, route=None) -> CardState:
+        """노드 하나를 실행하고, 라우팅이 finish면 마무리까지 진행한다. Cypher 전문과 레코드를 로그에 남긴다."""
+        token = DETAIL_LOG.set(True)
+        try:
+            state = merge_state(state, node(state))
+            if route is None or route(state) == "finish":
+                state = merge_state(state, self.finish(state))
+            return state
+        finally:
+            DETAIL_LOG.reset(token)
+
+    def verify_interpret(self, question: str) -> CardState:
+        """1단계: 카탈로그 조회와 Interpret만 실행한다."""
+        return self._step(self._initial_state(question, mode="verify"), self.interpret, self.after_interpret)
+
+    def verify_retrieve(self, state: CardState) -> CardState:
+        """3단계: 혜택 상세 Cypher를 실행한다. 이미 실행했으면 다시 실행하지 않는다."""
+        if next_step(state) != "retrieve":
+            return state
+        return {**self._step(state, self.retrieve, self.after_retrieve), "retrieved_for": plan_key(state)}
+
+    def verify_answer(self, state: CardState) -> CardState:
+        """4단계: 조회 결과로 Answer를 실행한다. 이미 실행했으면 LLM을 호출하지 않는다."""
+        if next_step(state) != "answer":
+            return state
+        if state.get("retrieved_for") != plan_key(state):
+            raise ValueError("조회 결과가 현재 질문·검색 조건과 다릅니다.")
+        return self._step(state, self.answer)
 
     def _call_llm(self, node: str, llm, schema, prompt: str, request_id: str) -> tuple[object | None, dict]:
         """구조화 출력을 한 번 호출한다. 호출 기록은 형식 오류일 때도 사용량을 보존한다."""
@@ -629,6 +704,7 @@ class CardGraphRAG:
             return {**update, "error": {"stage": "interpret", "code": "NEO4J_FAILED", "type": type(error).__name__}}
         rows = [{"id": row["id"], "name": row["name"], "card": row["card"], "targets": row["targets"],
                  "payment_min_amounts": row.get("payment_min_amounts", [])} for row in catalog]
+        update["catalog"] = rows
         prompt = INTERPRET_PROMPT.format(catalog=json.dumps(rows, ensure_ascii=False), question=question)
         try:
             parsed, call = self._call_llm("interpret", self.interpret_llm, Interpretation, prompt, request_id)
@@ -673,7 +749,7 @@ class CardGraphRAG:
         request_id, parameters, intent = state["request_id"], state["search_parameters"], state["intent"]
         REQUEST_ID.set(request_id)
         sections = tuple(parameters["sections"])
-        statements = ["card.context", *(f"card.{name}" for name in sections)]
+        statements = detail_statements(sections)
         started = perf_counter()
         CARD_LOG.log_summary("RETRIEVE START", request_id, statements=statements, benefit_ids=parameters["benefit_ids"])
         details, missing = [], []

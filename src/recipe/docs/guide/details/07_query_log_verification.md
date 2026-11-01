@@ -215,11 +215,11 @@ RESULT [recipe_graph_queries.find_recipe_by_name] rows=0 counters={} session_ms=
 2026-10-24 추가. 로컬에서 Streamlit 앱을 실행하고 버튼을 누르면 실행한 터미널(VS Code Terminal)에 실제 Cypher와 바인딩 값이 출력되게 했다. 기존 `QueryLogger`·DB 실행 방식은 바꾸지 않고 로깅 설정만 더했다.
 
 - `cypher_log_mode="none"`이었던 이유: 2026-10-22 그래프 적재 구현(`e7dfc2e`) 때 들어갔고 커밋·문서에 이유는 남아 있지 않다. 당시 이 Repository는 적재 CLI 전용이었고 적재 쿼리의 `$rows`(배치당 최대 1,000행)가 `combined` 로그로 매우 길게 찍히기 때문으로 **추정**한다. 이후 Streamlit이 같은 Repository를 재사용하면서 화면 쪽 로그도 꺼진 상태가 되었다.
-- 스위치: [config.py](../../../recipe_recommender/config.py)의 `query_log_enabled(default)`(환경변수 `RECIPE_QUERY_LOG`에 값이 있으면 그 값 — `1`·`true`·`yes`·`on`만 켜짐 —, 없으면 `default`) / `configure_query_logging(default)`(켜질 때만 `car_search_rag.neo4j`·`car_search_rag.sql` logger를 INFO + stderr handler 1개, 중복 방지).
+- 스위치: [config.py](../../../recipe_recommender/config.py)의 `query_log_enabled(default)`(`RECIPE_QUERY_LOG` → `DB_QUERY_LOG` 순서로 값이 있는 첫 변수 — `1`·`true`·`yes`·`on`만 켜짐 —, 둘 다 없으면 `default`) / `configure_query_logging(default)`(켜질 때 `car_search_rag.neo4j`·`car_search_rag.sql` logger를 INFO + stderr handler 1개, 중복 방지. 켠 뒤 꺼지면 handler를 제거하고 기본값으로 복원, 켠 적이 없으면 변경 없음).
 - 기본값(11절 추가 요구 반영): Streamlit 앱은 `default=local_dev_query_log_default()` = 소스 설정값 `LOCAL_DEV_QUERY_LOG_DEFAULT = True` **그리고** 저장소 루트 `.env` 존재. 로컬 개발 PC에서는 일반 `python -m streamlit run .\streamlit_app.py`만으로 켜지고, `.env`가 없는(`.gitignore` 대상) Streamlit Cloud에서는 꺼진다. CLI는 기본 꺼짐(환경변수로만 켬).
 - 적용 위치: `streamlit_app.py` 시작, `RecipeGraphRepository.__init__`(켜지면 `cypher_log_mode="combined"`), `create_recipe_sql_session(sql_log=None)`(켜지면 `sql_log_mode="combined"`, 명시값 우선).
 - 화면: 모드 B의 "실행 Cypher와 파라미터" 펼침 영역을 없앴다. 관계 경로·hop·결과 표는 그대로다. 과제용 Cypher는 [docs/assignment](../../assignment/README.md) 문서와 노트북에 있다.
-- 운영: Streamlit Cloud에는 `.env`가 없어 기본 꺼짐이다. Secrets에 `RECIPE_QUERY_LOG`를 넣지 않는다(Streamlit은 최상위 Secrets를 환경변수로도 노출하므로 넣으면 켜진다).
+- 운영: Streamlit Cloud에는 `.env`가 없어 기본 꺼짐이다. Secrets에 `RECIPE_QUERY_LOG`, `DB_QUERY_LOG`를 넣지 않는다(Streamlit은 최상위 Secrets를 환경변수로도 노출하므로 넣으면 켜진다).
 - 모드 A의 추천 자체는 Neo4j 결과를 사용한다. 로그 ON에서는 첫 추천 레시피의 PostgreSQL 상세를 추가 SELECT하여 SQL 4개를 같은 터미널에 남기되 화면에는 사용하지 않는다. 로그 OFF의 모드 A와 모드 B는 이 추가 조회를 하지 않는다.
 - 로그 모드는 Repository를 만들 때 정해진다(`st.cache_resource`). 스위치를 바꾸면 Streamlit을 다시 시작한다.
 - 켜 둔 채 그래프 적재 CLI(`load_recipe_graph --apply`)를 실행하면 `$rows` 전체가 `:param` 줄로 출력되므로 적재할 때는 끈다.

@@ -5,8 +5,6 @@ CLI와 Repository가 단독 실행될 때 저장소 루트와 ``common`` 패키�
 
 from __future__ import annotations
 
-import logging
-import os
 import sys
 from pathlib import Path
 
@@ -14,26 +12,25 @@ from pathlib import Path
 # region 1. 프로젝트 경로와 SQL·Cypher 로그 설정값
 PACKAGE_DIR = Path(__file__).resolve().parent
 TASK_DIR = PACKAGE_DIR.parent
-# 개발용 SQL/Cypher 상세 로그 스위치. 값을 명시하면(1/true/yes/on 또는 그 밖의 값) 그 값이 우선한다.
+# 개발용 SQL/Cypher 상세 로그 스위치. 레시피 전용 값이 공통 값보다 우선한다.
 QUERY_LOG_ENV = "RECIPE_QUERY_LOG"
+SHARED_QUERY_LOG_ENV = "DB_QUERY_LOG"
+# streamlit_app.py의 DB 진단 스위치도 쓰는 값. 판정 기준은 common.query_log_config와 같다.
 QUERY_LOG_ON_VALUES = frozenset({"1", "true", "yes", "on"})
 # 소스 설정값: 환경변수를 정하지 않았을 때 로컬 개발(저장소 루트에 .env가 있는 PC)의 Streamlit 앱은 로그를 켠다.
 # .env는 .gitignore 대상이라 Streamlit Cloud에는 없으므로 운영에서는 기본 꺼짐이 된다. CLI는 이 기본값을 쓰지 않는다.
 LOCAL_DEV_QUERY_LOG_DEFAULT = True
 _query_log_active = False          # configure_query_logging()이 이 프로세스에서 로그를 켰는지
-# common 세션이 쓰는 logger 이름(PostgresDbSession / Neo4jDbSession).
-QUERY_LOGGER_NAMES = ("car_search_rag.sql", "car_search_rag.neo4j")
-QUERY_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
 
 
 # endregion
 # region 2. import 경로와 로컬 환경변수 준비
+# ``recipe_recommender`` 패키지가 이 모듈을 먼저 읽으므로 ``common`` 은 함수 안에서 가져온다.
 def project_root() -> Path:
     """현재 작업 디렉터리와 무관하게 .git 또는 .env가 있는 저장소 루트를 찾는다."""
-    for candidate in TASK_DIR.parents:
-        if (candidate / ".git").exists() or (candidate / ".env").is_file():
-            return candidate
-    return TASK_DIR
+    from common.query_log_config import project_root as shared_project_root
+
+    return shared_project_root()
 
 
 def prepare_common_imports() -> None:
@@ -48,11 +45,9 @@ def prepare_common_imports() -> None:
 
 def load_project_environment() -> None:
     """저장소의 .env를 읽되 이미 설정된 프로세스 환경변수는 덮어쓰지 않는다."""
-    from dotenv import load_dotenv
+    from common.query_log_config import load_project_environment as load_shared_environment
 
-    env_file = project_root() / ".env"
-    if env_file.is_file():
-        load_dotenv(env_file, override=False)
+    load_shared_environment()
 
 
 # endregion
@@ -62,7 +57,9 @@ def load_project_environment() -> None:
 # =========================================================
 def is_local_dev() -> bool:
     """저장소 루트에 ``.env`` 가 있으면 로컬 개발 환경으로 본다(``.env`` 는 커밋하지 않으므로 Cloud에는 없다)."""
-    return (project_root() / ".env").is_file()
+    from common.query_log_config import is_local_dev as shared_is_local_dev
+
+    return shared_is_local_dev()
 
 
 def local_dev_query_log_default() -> bool:
@@ -78,45 +75,39 @@ def query_logging_active() -> bool:
 def query_log_enabled(default: bool = False) -> bool:
     """개발용 SQL/Cypher 상세 로그를 켤지 판단한다.
 
-    환경변수 ``RECIPE_QUERY_LOG`` 에 값이 있으면 그 값이 우선한다(``1``·``true``·``yes``·``on`` 만 켜짐,
-    ``0`` 등 그 밖의 값은 꺼짐). 비어 있으면 ``default`` 를 따른다.
+    ``RECIPE_QUERY_LOG`` → ``DB_QUERY_LOG`` 순서로 값이 있는 첫 변수를 따른다(``1``·``true``·``yes``·``on`` 만 켜짐,
+    ``0`` 등 그 밖의 값은 꺼짐). 둘 다 비어 있으면 ``default`` 를 따른다.
 
     Args:
         default (bool): 환경변수가 없을 때의 값. Streamlit 앱은 ``local_dev_query_log_default()`` 를 넘긴다.
     """
-    raw = os.getenv(QUERY_LOG_ENV, "").strip().lower()
-    return raw in QUERY_LOG_ON_VALUES if raw else default
+    from common.query_log_config import query_log_switch
+
+    return query_log_switch((QUERY_LOG_ENV, SHARED_QUERY_LOG_ENV), default)
 
 
 def configure_query_logging(default: bool = False) -> bool:
-    """``RECIPE_QUERY_LOG`` 가 켜져 있으면 공통 SQL/Cypher logger를 INFO 레벨로 터미널(stderr)에 출력한다.
+    """스위치가 켜져 있으면 공통 SQL/Cypher logger를 INFO 레벨로 터미널(stderr)에 출력한다.
 
     기존 ``QueryLogger`` 의 출력을 보이게 하는 표준 ``logging`` 설정만 한다(로그 형식·DB 실행은 바꾸지 않음).
-    Streamlit은 위젯 조작마다 스크립트를 다시 실행하므로 handler는 logger마다 한 번만 붙인다.
-    상위 logger로 전파하지 않아 같은 줄이 두 번 찍히지 않게 한다.
 
     Args:
         default (bool): 환경변수가 없을 때의 값(``query_log_enabled`` 참고). 이미 이 프로세스에서 켰다면
             Repository·세션이 같은 결정을 따르도록 True로 본다.
 
     Returns:
-        bool: 로그를 켰으면 True, 꺼져 있으면 아무것도 바꾸지 않고 False.
+        bool: 로그를 켰으면 True. 꺼져 있으면 False이며, 앞서 켠 handler가 있을 때만 제거한다.
     """
     global _query_log_active
+    from common.query_log_config import attach_query_log_handlers, detach_query_log_handlers
+
     if not query_log_enabled(default or _query_log_active):
-        # Streamlit 재실행 사이에 명시적으로 OFF가 되면 PostgreSQL 로그 검증 조회도 멈춘다.
+        # Streamlit 재실행 사이에 명시적으로 OFF가 되면 PostgreSQL 로그 검증 조회와 터미널 출력을 함께 멈춘다.
         _query_log_active = False
+        detach_query_log_handlers()
         return False
     _query_log_active = True
-    for name in QUERY_LOGGER_NAMES:
-        logger = logging.getLogger(name)
-        logger.setLevel(logging.INFO)
-        if not any(getattr(handler, "recipe_query_log", False) for handler in logger.handlers):
-            handler = logging.StreamHandler(sys.stderr)
-            handler.setFormatter(logging.Formatter(QUERY_LOG_FORMAT))
-            handler.recipe_query_log = True          # 이 함수가 붙인 handler 표시(중복 방지)
-            logger.addHandler(handler)
-        logger.propagate = False
+    attach_query_log_handlers()
     return True
 
 # endregion

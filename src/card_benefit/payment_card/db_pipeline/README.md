@@ -51,9 +51,9 @@ load_snapshot() → build() → prepare() → write_transaction()
 | 전체 대조 | `run` | `neo4j_validate.py` |
 
 ```powershell
-.\.venv\Scripts\python.exe -m src.card_benefit.payment_card.db_pipeline.neo4j_dry_run --dry-run   # 변환 건수
-.\.venv\Scripts\python.exe -m src.card_benefit.payment_card.db_pipeline.neo4j_load_draft          # PREVIEW
-.\.venv\Scripts\python.exe -m src.card_benefit.payment_card.db_pipeline.neo4j_validate            # 대조
+.\.venv\Scripts\python.exe -m card_benefit.payment_card.db_pipeline.neo4j_dry_run --dry-run   # 변환 건수
+.\.venv\Scripts\python.exe -m card_benefit.payment_card.db_pipeline.neo4j_load_draft          # PREVIEW
+.\.venv\Scripts\python.exe -m card_benefit.payment_card.db_pipeline.neo4j_validate            # 대조
 ```
 
 `MERGE`는 파이썬에 둡니다. 레시피의 `recipe_graph_load.cypher`는 라벨이 고정된 모델이라 `UNWIND $rows`가 맞지만, 카드 로더는 13개 라벨과 12개 관계 유형을 허용 목록에서 동적으로 넣습니다. Cypher 라벨은 파라미터가 될 수 없어 파일로 옮기면 25개 복제나 문자열 치환이 됩니다. 그래서 `neo4j_load.cypher`는 만들지 않습니다.

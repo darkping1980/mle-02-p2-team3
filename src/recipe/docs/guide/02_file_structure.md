@@ -71,8 +71,10 @@
 | --- | --- | --- |
 | [database_manager](api/common/database_manager.md) | PostgreSQL connection pool 관리 모듈. | [database_manager.py](../../common/database_manager.py) |
 | [document_reader](api/common/document_reader.md) | PDF/CSV 문서를 읽어 페이지별 텍스트 목록으로 만드는 도우미 모듈. | [document_reader.py](../../common/document_reader.py) |
+| neo4j_connection | Neo4j 드라이버 생성 — TLS 인증서 검증을 유지하면서 신뢰할 CA 번들을 명시한다. | [neo4j_connection.py](../../../common/neo4j_connection.py) |
 | [neo4j_db_session](api/common/neo4j_db_session.md) | 외부에서 주입한 Neo4j 공식 드라이버로 Cypher를 실행하는 ``QuerySession`` 구현 모듈. | [neo4j_db_session.py](../../common/neo4j_db_session.py) |
 | [postgres_db_session](api/common/postgres_db_session.md) | PostgreSQL용 ``QuerySession`` 구현 모듈. | [postgres_db_session.py](../../common/postgres_db_session.py) |
+| query_log_config | 프로젝트가 함께 쓰는 ``.env`` 로딩과 SQL/Cypher 터미널 로그 설정. | [query_log_config.py](../../../common/query_log_config.py) |
 | [query_logger](api/common/query_logger.md) | PostgreSQL / Neo4j 세션이 함께 쓰는 쿼리 로그 포매터. | [query_logger.py](../../common/query_logger.py) |
 | [query_session](api/common/query_session.md) | DB 종류와 무관한 동기식 쿼리 세션 계약(인터페이스). | [query_session.py](../../common/query_session.py) |
 | [storage_manager](api/common/storage_manager.md) | Supabase Storage 이미지 업로드 모듈. | [storage_manager.py](../../common/storage_manager.py) |

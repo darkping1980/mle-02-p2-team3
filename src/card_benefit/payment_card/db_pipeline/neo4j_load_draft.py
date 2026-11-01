@@ -1,26 +1,30 @@
-"""Explicitly guarded A8 card-only loader. Never run --apply without approval."""
+"""Explicitly guarded DF card loader. Never run --apply without approval."""
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
 import os
-import sys
 from pathlib import Path
 
 import psycopg
 from dotenv import load_dotenv
 
-from src.common.neo4j_db_session import Neo4jDbSession
+from common.neo4j_connection import create_neo4j_driver
+from common.neo4j_db_session import Neo4jDbSession
 
 from .neo4j_dry_run import NS, build, canonical, load_snapshot
 
 EXPECTED_DB = "6ac1f0f8"
 # 정적 조회는 neo4j_validation.cypher에 있다. 아래 MERGE는 라벨·관계 유형이 동적이라 파일로 옮기지 않는다.
 CYPHER = Neo4jDbSession(mapper_root=Path(__file__).resolve().parent).mappers
-CONFIRM = "APPROVED_ONE_PICK_STYLE_A8"
-NODE_LABELS = frozenset("A8Card A8Policy A8Benefit A8Rule A8Expression A8Branch A8Condition A8Target A8LimitPool A8Evidence A8Chunk A8Page A8Document".split())
-REL_TYPES = frozenset("A8_HAS_POLICY A8_HAS_BENEFIT A8_HAS_RULE A8_HAS_EXPR A8_HAS_BRANCH A8_HAS_ATOM A8_TARGETS A8_CONSUMES A8_SUPPORTED_BY A8_IN_CHUNK A8_ON_PAGE A8_IN_DOCUMENT".split())
+CONFIRM = "APPROVED_DF_ONE_PICK_STYLE"
+NODE_LABELS = frozenset("df_card_product df_card_policy_version df_card_bnft df_bnft_rule df_cond_expr df_cond_branch df_cond_atom df_rule_target "
+                        "df_card_limit_pool df_card_source_evidence df_card_doc_chunk df_card_doc_page df_card_doc".split())
+REL_TYPES = frozenset("df_has_policy df_has_benefit df_has_rule df_has_expr df_has_branch df_has_atom df_targets df_consumes df_supported_by "
+                      "df_in_chunk df_on_page df_in_document".split())
+# 쓰기 구문이므로 읽기 전용 neo4j_validation.cypher에 두지 않는다. --apply에서만 실행한다.
+CREATE_CONSTRAINT = "CREATE CONSTRAINT df_node_key IF NOT EXISTS FOR (n:df_node) REQUIRE (n.namespace, n.key) IS UNIQUE"
 # A10-3 기준 원본 건수. 원본이 바뀌면 검토 후 함께 수정한다(168 + 규칙 근거 11 + 조건 근거 10).
 EXPECTED_NODES = 108
 EXPECTED_RELATIONSHIPS = 189
@@ -29,7 +33,7 @@ EXPECTED_RELATIONSHIPS = 189
 def node_properties(node):
     raw = json.loads(node["source_json"])
     row = raw.get("source", raw)
-    props = {"namespace": NS, "key": node["key"], "source_json": node["source_json"], "test_only": True}
+    props = {"namespace": NS, "key": node["key"], "source_json": node["source_json"]}
     # Queryable scalar columns, leaving NULL represented in source_json.
     aliases = {"bnft_nm": "name", "verification_status_cd": "verification_status",
                "period_cd": "period", "cap_unit_cd": "unit", "atom_key": "key_name",
@@ -48,7 +52,7 @@ def node_properties(node):
         props["valid_from_is_assumption"] = True
     if raw.get("aggregation_is_assumption"):
         props["aggregation_is_assumption"] = True
-    if node["label"] == "A8LimitPool" and row.get("tier_list"):
+    if node["label"] == "df_card_limit_pool" and row.get("tier_list"):
         props["value"] = row["tier_list"][0].get("limit_num")
     return props
 
@@ -75,7 +79,7 @@ def write_transaction(tx, nodes, relationships):
     # Dedicated label and namespace only. No delete, no schema change.
     for n in nodes:
         label = n["label"]  # verified against constant allowlist in prepare
-        result = tx.run(f"MERGE (n:A8Test:{label} {{namespace:$namespace,key:$key}}) SET n += $props RETURN count(n) AS n",
+        result = tx.run(f"MERGE (n:df_node:{label} {{namespace:$namespace,key:$key}}) SET n += $props RETURN count(n) AS n",
                         namespace=NS, key=n["props"]["key"], props=n["props"]).single(strict=True)
         if result["n"] != 1:
             raise ValueError("node creation mismatch")
@@ -85,7 +89,7 @@ def write_transaction(tx, nodes, relationships):
         extra = {k: v for k, v in original.items()
                  if k in ("ev_link_id", "ev_subject_cd", "ev_item_cd", "ev_item_key", "atom_seq")
                  and isinstance(v, (str, int, float, bool))}
-        result = tx.run(f"MATCH (a:A8Test {{namespace:$namespace,key:$start}}), (b:A8Test {{namespace:$namespace,key:$end}}) "
+        result = tx.run(f"MATCH (a:df_node {{namespace:$namespace,key:$start}}), (b:df_node {{namespace:$namespace,key:$end}}) "
                         f"MERGE (a)-[r:{kind} {{namespace:$namespace,key:$key}}]->(b) "
                         "SET r.source_json=$source_json, r += $extra RETURN count(r) AS n", namespace=NS, extra=extra, **{k: e[k] for k in ("start", "end", "key", "source_json")}).single(strict=True)
         if result["n"] != 1:
@@ -114,12 +118,11 @@ def main():
     if args.confirm != CONFIRM or os.getenv("NEO4J_DATABASE") != EXPECTED_DB:
         raise SystemExit("explicit approval confirmation and exact target database required")
     # Reuse verified project TLS implementation; no certificate verification bypass.
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "recipe"))
-    from recipe_recommender.neo4j_connection import create_neo4j_driver
     with create_neo4j_driver() as driver, driver.session(database=EXPECTED_DB) as session:
+        session.run(CREATE_CONSTRAINT).consume()
         constraints = list(session.run(CYPHER["neo4j_validation.card_constraints"]))
-        if not any(x["type"] == "NODE_PROPERTY_UNIQUENESS" and x["labelsOrTypes"] == ["A8Test"] and x["properties"] == ["namespace", "key"] for x in constraints):
-            raise SystemExit("required A8Test(namespace,key) uniqueness constraint absent")
+        if not any(x["type"] == "NODE_PROPERTY_UNIQUENESS" and x["labelsOrTypes"] == ["df_node"] and x["properties"] == ["namespace", "key"] for x in constraints):
+            raise SystemExit("required df_node(namespace,key) uniqueness constraint absent")
         existing = session.run(CYPHER["neo4j_validation.existing_node_keys"], ns=NS).single(strict=True)["keys"]
         if existing and (len(existing) != len(nodes) or set(existing) != {n["props"]["key"] for n in nodes}):
             raise SystemExit("namespace differs from snapshot; refuse implicit deletion")

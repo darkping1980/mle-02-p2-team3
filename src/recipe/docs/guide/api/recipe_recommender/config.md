@@ -24,9 +24,9 @@
 | [query_log_enabled](#function-query_log_enabled) | `bool` | 개발용 SQL/Cypher 상세 로그를 켤지 판단한다(환경변수 값 우선, 없으면 `default`). |
 | [configure_query_logging](#function-configure_query_logging) | `bool` | 켜져 있으면 공통 SQL/Cypher logger를 INFO 레벨로 터미널(stderr)에 출력한다. |
 
-상수: `QUERY_LOG_ENV = "RECIPE_QUERY_LOG"`, `QUERY_LOG_ON_VALUES = {"1", "true", "yes", "on"}`(대소문자·앞뒤 공백 무시),
-`QUERY_LOGGER_NAMES = ("car_search_rag.sql", "car_search_rag.neo4j")`, `QUERY_LOG_FORMAT`,
+상수: `QUERY_LOG_ENV = "RECIPE_QUERY_LOG"`, `SHARED_QUERY_LOG_ENV = "DB_QUERY_LOG"`, `QUERY_LOG_ON_VALUES = {"1", "true", "yes", "on"}`(대소문자·앞뒤 공백 무시),
 `LOCAL_DEV_QUERY_LOG_DEFAULT = True`(소스 설정값: 로컬 개발 Streamlit 기본 켜짐), `_query_log_active`(이 프로세스에서 켰는지).
+`project_root`, `load_project_environment`, `is_local_dev`, 스위치 판정과 handler 설정은 `common.query_log_config`에 있고 이 모듈은 함수 안에서 호출한다.
 
 ## Function project_root
 
@@ -105,7 +105,7 @@ def query_log_enabled(default: bool = False) -> bool:
 ```
 
 - **호출자:** `configure_query_logging`
-- **반환:** `bool`. `RECIPE_QUERY_LOG`에 값이 있으면 그 값(`1`·`true`·`yes`·`on`만 켜짐, `0` 등은 꺼짐), 비어 있으면 `default`.
+- **반환:** `bool`. `RECIPE_QUERY_LOG` → `DB_QUERY_LOG` 순서로 값이 있는 첫 변수를 따른다(`1`·`true`·`yes`·`on`만 켜짐, `0` 등은 꺼짐). 둘 다 비어 있으면 `default`.
 - **원본:** [config.py](../../../../recipe_recommender/config.py) (85행)
 
 ## Function configure_query_logging
@@ -115,10 +115,10 @@ def configure_query_logging(default: bool = False) -> bool:
 ```
 
 - **호출자:** `streamlit_app` 최상위(`default=local_dev_query_log_default()`), `RecipeGraphRepository.__init__`·`database.create_recipe_sql_session`(`sql_log=None`, 기본값 False — 이미 이 프로세스에서 켰다면 같은 결정을 따름)
-- **반환:** `bool`. 켰으면 True. 꺼져 있으면 활성 상태를 False로 되돌리고 logger 설정은 건드리지 않는다. CLI는 기본값 False라 환경변수를 켜야 출력한다.
+- **반환:** `bool`. 켰으면 True. 꺼져 있으면 활성 상태를 False로 되돌린다. 앞서 켠 handler가 있으면 제거하고 logger를 기본값으로 돌리며, 없으면 logger 설정을 건드리지 않는다. CLI는 기본값 False라 환경변수를 켜야 출력한다.
 - **원본:** [config.py](../../../../recipe_recommender/config.py) (98행)
 
-**처리 흐름:** `QUERY_LOGGER_NAMES`의 logger마다 레벨 INFO, `StreamHandler(sys.stderr)` 1개(표시 속성 `recipe_query_log`로 중복 방지), `propagate=False`. 로그 형식·DB 실행은 공통 `QueryLogger`가 그대로 맡는다.
+**처리 흐름:** `common.query_log_config.QUERY_LOGGER_NAMES`의 logger마다 레벨 INFO, `StreamHandler(sys.stderr)` 1개(표시 속성 `common_query_log`로 중복 방지), `propagate=False`. 로그 형식·DB 실행은 공통 `QueryLogger`가 그대로 맡는다.
 
 ## 관련 가이드
 

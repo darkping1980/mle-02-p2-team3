@@ -377,4 +377,4 @@ RETURN p;
 대조: neo4j_validate.py → neo4j_validation.sql + neo4j_validation.cypher → 차이 보고
 ```
 
-`neo4j_validation.condition_structure`와 `evidence_links`는 SQL과 Cypher에 같은 이름으로 있어 두 DB의 결과를 직접 비교할 수 있다. `.sql`은 DBeaver에서, `.cypher` 조회는 `$ns='ONE_PICK_STYLE_A8'`을 지정해 Neo4j Browser에서 실행할 수 있다.
+`neo4j_validation.condition_structure`와 `evidence_links`는 SQL과 Cypher에 같은 이름으로 있어 두 DB의 결과를 직접 비교할 수 있다. `.sql`은 DBeaver에서 그대로 실행한다. `.cypher`의 `$ns`는 DBeaver JDBC에 값을 줄 방법이 없어 `42001`이 나므로 `$ns`를 `'ONE_PICK_STYLE_A8'`로 바꿔 실행한다. 검색 쿼리는 터미널 `QUERY` 블록이나 검증 화면에서 값이 들어간 Cypher를 복사한다.

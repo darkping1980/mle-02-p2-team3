@@ -11,7 +11,8 @@ import psycopg
 from dotenv import load_dotenv
 from psycopg.rows import dict_row
 
-NS = "ONE_PICK_STYLE_A8"
+NS = "df_one_pick_style"
+PREFIX = "df_"
 CARD_ID = 2
 POLICY_ID = "20261101_000001"
 DOC_ID = "20261101_000002"
@@ -33,8 +34,7 @@ class Preview:
 
     def node(self, label, parts, data):
         k = key(label, *parts)
-        entry = {"label": "A8" + label, "key": k, "namespace": NS,
-                 "source_json": canonical(data), "test_only": True}
+        entry = {"label": PREFIX + label, "key": k, "namespace": NS, "source_json": canonical(data)}
         if k in self.nodes and self.nodes[k] != entry:
             raise ValueError(f"conflicting node: {k}")
         self.nodes[k] = entry
@@ -44,7 +44,7 @@ class Preview:
         k = key("relationship", kind, start, end, source)
         if k in self.edges:
             raise ValueError(f"duplicate edge: {k}")
-        self.edges[k] = {"type": "A8_" + kind, "start": start, "end": end,
+        self.edges[k] = {"type": PREFIX + kind, "start": start, "end": end,
                          "source_json": canonical(source), "namespace": NS}
 
     def validate(self):
@@ -95,56 +95,56 @@ def build(snapshot):
     document = one(snapshot["document"], "document")
     if policy["policy_status_cd"] != "DRAFT":
         raise ValueError("expected DRAFT policy")
-    c = g.node("Card", [CARD_ID], product)
-    p = g.node("Policy", [CARD_ID, POLICY_ID], {"source": policy, "valid_from_is_assumption": True, "product_doc": product_doc})
-    g.edge("HAS_POLICY", c, p, {})
-    doc = g.node("Document", [DOC_ID], document)
+    c = g.node("card_product", [CARD_ID], product)
+    p = g.node("card_policy_version", [CARD_ID, POLICY_ID], {"source": policy, "valid_from_is_assumption": True, "product_doc": product_doc})
+    g.edge("has_policy", c, p, {})
+    doc = g.node("card_doc", [DOC_ID], document)
     pages, chunks, evidence, pools, benefits, rules = {}, {}, {}, {}, {}, {}
     for row in snapshot["pages"]:
-        pg = g.node("Page", [DOC_ID, row["page_no"]], row); pages[row["page_no"]] = pg
-        g.edge("IN_DOCUMENT", pg, doc, {})
+        pg = g.node("card_doc_page", [DOC_ID, row["page_no"]], row); pages[row["page_no"]] = pg
+        g.edge("in_document", pg, doc, {})
     for row in snapshot["chunks"]:
         k = row["card_doc_chunk_id"]
-        chunk = g.node("Chunk", [DOC_ID, row["page_no"], k], row); chunks[k] = chunk
-        g.edge("ON_PAGE", chunk, pages[row["page_no"]], {})
+        chunk = g.node("card_doc_chunk", [DOC_ID, row["page_no"], k], row); chunks[k] = chunk
+        g.edge("on_page", chunk, pages[row["page_no"]], {})
     for row in snapshot["evidence"]:
         match = [x for x in snapshot["chunks"] if x["card_doc_chunk_id"] == row["card_doc_chunk_id"]
                  and x["card_doc_id"] == row["card_doc_id"] and x["page_no"] == row["page_no"]]
         if len(match) != 1:
             raise ValueError("evidence references missing or mismatched chunk")
-        ev = g.node("Evidence", [row["evidence_id"]], row); evidence[row["evidence_id"]] = ev
-        g.edge("IN_CHUNK", ev, chunks[row["card_doc_chunk_id"]], {})
+        ev = g.node("card_source_evidence", [row["evidence_id"]], row); evidence[row["evidence_id"]] = ev
+        g.edge("in_chunk", ev, chunks[row["card_doc_chunk_id"]], {})
     for row in snapshot["pools"]:
-        pools[row["pool_id"]] = g.node("LimitPool", [CARD_ID, POLICY_ID, row["pool_id"]], {"source": row, "aggregation_is_assumption": True})
+        pools[row["pool_id"]] = g.node("card_limit_pool", [CARD_ID, POLICY_ID, row["pool_id"]], {"source": row, "aggregation_is_assumption": True})
 
     def expression(owner, owner_key, expr):
         if expr is None:
             return
-        ex = g.node("Expression", [*owner_key], expr); g.edge("HAS_EXPR", owner, ex, {})
+        ex = g.node("cond_expr", [*owner_key], expr); g.edge("has_expr", owner, ex, {})
         for branch in expr["branches"]:
             bk = [*owner_key, branch["branch_no"]]
-            b = g.node("Branch", bk, branch); g.edge("HAS_BRANCH", ex, b, {})
+            b = g.node("cond_branch", bk, branch); g.edge("has_branch", ex, b, {})
             for atom in branch["atoms"]:
-                a = g.node("Condition", [*bk, atom["atom_key"]], atom)
-                g.edge("HAS_ATOM", b, a, {"atom_seq": atom["atom_seq"]})
+                a = g.node("cond_atom", [*bk, atom["atom_key"]], atom)
+                g.edge("has_atom", b, a, {"atom_seq": atom["atom_seq"]})
 
     expression(p, ["policy", CARD_ID, POLICY_ID], policy["policy_cond_expr"])
     for row in snapshot["benefits"]:
         bid = row["card_bnft_id"]
-        b = g.node("Benefit", [CARD_ID, POLICY_ID, bid], row); benefits[bid] = b
-        g.edge("HAS_BENEFIT", p, b, {})
+        b = g.node("card_bnft", [CARD_ID, POLICY_ID, bid], row); benefits[bid] = b
+        g.edge("has_benefit", p, b, {})
         expression(b, ["benefit", CARD_ID, POLICY_ID, bid], row["bnft_cond_expr"])
         for rule in row["rule_list"]:
             rk = rule["rule_key"]
-            r = g.node("Rule", [CARD_ID, POLICY_ID, bid, rk], rule); g.edge("HAS_RULE", b, r, {})
+            r = g.node("bnft_rule", [CARD_ID, POLICY_ID, bid, rk], rule); g.edge("has_rule", b, r, {})
             rules[(bid, rk)] = r
             expression(r, ["rule", CARD_ID, POLICY_ID, bid, rk], rule.get("cond_expr"))
             for target in rule["target_list"]:
-                t = g.node("Target", [CARD_ID, POLICY_ID, target["target_type_cd"], target["target_nm"]],
+                t = g.node("rule_target", [CARD_ID, POLICY_ID, target["target_type_cd"], target["target_nm"]],
                            {"target_type_cd": target["target_type_cd"], "target_nm": target["target_nm"]})
-                g.edge("TARGETS", r, t, target)
+                g.edge("targets", r, t, target)
             for ref in rule["pool_refs"]:
-                g.edge("CONSUMES", r, pools[ref["pool_id"]], ref)
+                g.edge("consumes", r, pools[ref["pool_id"]], ref)
     for link in snapshot["links"]:
         subject = link["ev_subject_cd"]
         if subject == "POLICY": owner = p
@@ -152,23 +152,23 @@ def build(snapshot):
         elif subject == "RULE": owner = rules[(link["card_bnft_id"], link["rule_key"])]
         elif subject == "POOL": owner = pools[link["pool_id"]]
         else: raise ValueError(f"unsupported evidence subject: {subject}")
-        g.edge("SUPPORTED_BY", owner, evidence[link["evidence_id"]], link)
+        g.edge("supported_by", owner, evidence[link["evidence_id"]], link)
     stats = g.validate()
     # Check source/preview coverage independently of expected historic counts.
-    for label, rows in (("Evidence", snapshot["evidence"]), ("LimitPool", snapshot["pools"]),
-                        ("Benefit", snapshot["benefits"])):
-        if stats["nodes"].get("A8" + label, 0) != len(rows):
+    for label, rows in (("card_source_evidence", snapshot["evidence"]), ("card_limit_pool", snapshot["pools"]),
+                        ("card_bnft", snapshot["benefits"])):
+        if stats["nodes"].get(PREFIX + label, 0) != len(rows):
             raise ValueError(f"source count mismatch: {label}")
-    if stats["relationships"].get("A8_SUPPORTED_BY", 0) != len(snapshot["links"]):
+    if stats["relationships"].get(PREFIX + "supported_by", 0) != len(snapshot["links"]):
         raise ValueError("source count mismatch: evidence links")
     for row in snapshot["benefits"]:
         for rule in row["rule_list"]:
-            rk = key("Rule", CARD_ID, POLICY_ID, row["card_bnft_id"], rule["rule_key"])
+            rk = key("bnft_rule", CARD_ID, POLICY_ID, row["card_bnft_id"], rule["rule_key"])
             if json.loads(g.nodes[rk]["source_json"]) != rule:
                 raise ValueError("rule JSON mismatch")
     for row in snapshot["benefits"]:
         for owner_key, expr in [(["benefit", CARD_ID, POLICY_ID, row["card_bnft_id"]], row["bnft_cond_expr"])]:
-            if expr is not None and json.loads(g.nodes[key("Expression", *owner_key)]["source_json"]) != expr:
+            if expr is not None and json.loads(g.nodes[key("cond_expr", *owner_key)]["source_json"]) != expr:
                 raise ValueError("benefit condition JSON mismatch")
     return g, stats
 

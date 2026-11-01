@@ -22,9 +22,10 @@ if str(TASK_DIR) not in sys.path:
 
 import recipe_recommender.config as config  # noqa: E402
 from recipe_recommender.config import (  # noqa: E402
-    QUERY_LOG_ENV, QUERY_LOGGER_NAMES, configure_query_logging, load_project_environment,
+    QUERY_LOG_ENV, SHARED_QUERY_LOG_ENV, configure_query_logging, load_project_environment,
     local_dev_query_log_default, query_log_enabled,
 )
+from common.query_log_config import QUERY_LOGGER_NAMES  # noqa: E402
 
 load_project_environment()
 APP_PATH = str(TASK_DIR / "streamlit_app.py")
@@ -36,17 +37,18 @@ def reset_query_loggers():
     config._query_log_active = False
     for name in QUERY_LOGGER_NAMES:
         logger = logging.getLogger(name)
-        for handler in [h for h in logger.handlers if getattr(h, "recipe_query_log", False)]:
+        for handler in [h for h in logger.handlers if getattr(h, "common_query_log", False)]:
             logger.removeHandler(handler)
         logger.setLevel(logging.NOTSET)
         logger.propagate = True
 
 
 def without_env():
-    """RECIPE_QUERY_LOG를 지운 환경(테스트 종료 시 원래 값 복원)."""
+    """RECIPE_QUERY_LOG와 DB_QUERY_LOG를 지운 환경(테스트 종료 시 원래 값 복원)."""
     patcher = patch.dict(os.environ, {}, clear=False)
     patcher.start()
     os.environ.pop(QUERY_LOG_ENV, None)
+    os.environ.pop(SHARED_QUERY_LOG_ENV, None)
     return patcher
 
 
@@ -71,7 +73,7 @@ class QueryLogSwitchTests(unittest.TestCase):
         self.assertTrue(query_log_enabled(default=True))
         self.assertFalse(configure_query_logging())                 # CLI 기본값: 꺼짐
         for name in QUERY_LOGGER_NAMES:
-            self.assertFalse(any(getattr(h, "recipe_query_log", False) for h in logging.getLogger(name).handlers))
+            self.assertFalse(any(getattr(h, "common_query_log", False) for h in logging.getLogger(name).handlers))
 
     def test_local_dev_default_follows_env_file_and_source_constant(self):
         with patch.object(config, "is_local_dev", return_value=True):
@@ -88,7 +90,7 @@ class QueryLogSwitchTests(unittest.TestCase):
         for name in QUERY_LOGGER_NAMES:
             logger = logging.getLogger(name)
             self.assertEqual(logger.level, logging.INFO)
-            self.assertEqual(sum(getattr(h, "recipe_query_log", False) for h in logger.handlers), 1)
+            self.assertEqual(sum(getattr(h, "common_query_log", False) for h in logger.handlers), 1)
             self.assertFalse(logger.propagate)
 
     def test_explicit_off_after_on_disables_extra_lookup_gate(self):
@@ -98,6 +100,39 @@ class QueryLogSwitchTests(unittest.TestCase):
         with patch.dict(os.environ, {QUERY_LOG_ENV: "0"}):
             self.assertFalse(configure_query_logging(default=True))
             self.assertFalse(config.query_logging_active())
+
+    def test_explicit_off_after_on_stops_terminal_logging(self):
+        with patch.dict(os.environ, {QUERY_LOG_ENV: "1"}):
+            configure_query_logging()
+        with patch.dict(os.environ, {QUERY_LOG_ENV: "0"}):
+            configure_query_logging()
+        for name in QUERY_LOGGER_NAMES:
+            logger = logging.getLogger(name)
+            self.assertEqual(logger.handlers, [])
+            self.assertEqual(logger.level, logging.NOTSET)
+            self.assertTrue(logger.propagate)
+
+    def test_first_run_off_keeps_logger_level_set_by_cli(self):
+        logger = logging.getLogger("car_search_rag.sql")
+        logger.setLevel(logging.WARNING)                     # setup/register_recipe_csv.py와 같은 설정
+        with patch.dict(os.environ, {QUERY_LOG_ENV: "0"}):
+            self.assertFalse(configure_query_logging())
+        self.assertEqual(logger.level, logging.WARNING)
+
+    def test_on_values_match_common_switch(self):
+        from common.query_log_config import QUERY_LOG_ON_VALUES
+
+        self.assertEqual(config.QUERY_LOG_ON_VALUES, QUERY_LOG_ON_VALUES)
+
+    def test_recipe_switch_takes_priority_over_shared_switch(self):
+        patcher = without_env()
+        self.addCleanup(patcher.stop)
+        for values, default, expected in (({SHARED_QUERY_LOG_ENV: "0"}, True, False),
+                                          ({SHARED_QUERY_LOG_ENV: "1"}, False, True),
+                                          ({QUERY_LOG_ENV: "1", SHARED_QUERY_LOG_ENV: "0"}, False, True),
+                                          ({QUERY_LOG_ENV: "0", SHARED_QUERY_LOG_ENV: "1"}, True, False)):
+            with self.subTest(values=values), patch.dict(os.environ, values):
+                self.assertEqual(query_log_enabled(default), expected)
 
     def test_sessions_follow_the_process_decision(self):
         from recipe_recommender.database import create_recipe_sql_session
@@ -182,6 +217,7 @@ class PostgresRecommendationLogCheckTests(unittest.TestCase):
                      patch("recipe_recommender.config.load_project_environment", return_value=None):
                     if env is None:
                         os.environ.pop(QUERY_LOG_ENV, None)
+                        os.environ.pop(SHARED_QUERY_LOG_ENV, None)
                     _, factory = self.click_recommend(Mock())
                 factory.assert_not_called()
 

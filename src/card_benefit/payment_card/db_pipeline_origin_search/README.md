@@ -1,6 +1,6 @@
 # db_pipeline_origin_search
 
-`db_pipeline`이 PostgreSQL V6에서 변환한 Neo4j 그래프를 자연어로 묻고 답하는 로컬 LangGraph GraphRAG 개발 프로그램입니다. ONE PICK STYLE의 `ONE_PICK_STYLE_A8` DRAFT 시험 데이터만 조회하며 확정 상품 정보가 아닙니다. Neo4j는 읽기 전용이고 PostgreSQL에는 접속하지 않습니다.
+`db_pipeline`이 PostgreSQL V6에서 변환한 Neo4j 그래프를 자연어로 묻고 답하는 로컬 LangGraph GraphRAG 개발 프로그램입니다. ONE PICK STYLE의 `df_one_pick_style` namespace에 있는 DF DRAFT 데이터만 조회하며 확정 상품 정보가 아닙니다. Neo4j는 읽기 전용이고 PostgreSQL에는 접속하지 않습니다.
 
 ## 실행
 
@@ -17,13 +17,41 @@
 | 이름 | 필수 | 설명 |
 |---|---|---|
 | `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD` | 필수 | 기존 `.env` 사용 |
-| `NEO4J_DATABASE`, `NEO4J_TRUSTED_CA_FILE` | 선택 | 기존 연결 함수가 사용 |
+| `NEO4J_DATABASE`, `NEO4J_TRUSTED_CA_FILE` | 선택 | `common.neo4j_connection`이 사용 |
 | `OPENAI_API_KEY` | 필수 | 없으면 질문 실행 시 안내만 표시 |
 | `CARD_SEARCH_MODEL` | 선택 | 기본 `gpt-6-luna`. 다른 모델로 자동 전환하지 않음 |
-| `CARD_SEARCH_LOG_LEVEL` | 선택 | `DEBUG`이면 프롬프트와 Cypher 전문 출력 |
-| `RECIPE_QUERY_LOG` | 선택 | 공통 로그 스위치. `0`이면 끔. 로컬 기본값은 켜짐 |
+| `CARD_SEARCH_LOG_LEVEL` | 선택 | 기본 `DEBUG`. 프롬프트, 실행 가능한 Cypher, 레코드 표 출력. `INFO`로 끔 |
+| `DB_QUERY_LOG` | 선택 | 공통 쿼리 로그 스위치. `0`이면 끔. 없으면 로컬 개발 환경에서 켜짐. `RECIPE_QUERY_LOG`는 카드에 영향을 주지 않음 |
 
 LLM 호출 값은 `card_graphrag.py` 위쪽 상수에 있습니다. reasoning effort는 interpret와 answer 모두 `low`, 출력 상한은 각각 600, 2000토큰, 제한 시간은 60초, 재시도는 0회입니다.
+
+## 개발 검증 모드
+
+화면 위 **실행 모드**에서 **개발 검증**을 고르면 단계를 버튼으로 진행합니다. 자동 실행은 그대로입니다.
+
+| 단계 | 버튼 | 실행되는 것 | 화면 |
+|---|---|---|---|
+| 1 | 질문 해석 실행 | 카탈로그 Cypher, Interpret LLM 1회 | 유형, 혜택 ID, 검색 조건, 토큰, 카탈로그 Cypher와 결과 |
+| 2 | 없음 | 실행 없음 | 실행 예정 Cypher 전문과 파라미터 |
+| 3 | DB 조회 실행 | 혜택 상세 Cypher, 읽기 전용 | 문장별 레코드 표, 원본 JSON, 합쳐진 근거, 미확정 사항 |
+| 4 | LLM 답변 생성 | Answer LLM 1회 | 자동 실행과 같은 답변 화면 |
+
+2단계 코드 블록의 복사 버튼으로 Neo4j Browser에 붙여넣으면 바로 실행됩니다. 공통 `render_cypher_inline`이 값을 넣은 Cypher이며, 실제 실행은 바인딩 방식이고 결과는 같습니다.
+
+자동 실행과 같은 노드(`interpret`, `retrieve`, `answer`, `finish`)와 라우팅 함수를 직접 호출합니다. 체크포인트는 쓰지 않습니다.
+
+```text
+verify_view.render → verify_interpret → interpret
+                   → verification_plan → detail_plan (get_detail과 같은 쿼리·순서)
+                   → verify_retrieve → retrieve → get_detail
+                   → verify_answer → answer → finish
+```
+
+- 결과는 `session_state.verify`에 있어 위젯 재실행으로 다시 호출되지 않습니다.
+- 이미 실행한 단계를 다시 호출해도 아무 일도 하지 않습니다.
+- 질문을 바꾸면 이전 결과를 지웁니다. 검색 조건이 조회 당시와 다르면 `verify_answer`가 거부합니다.
+
+터미널에는 Cypher 전문, 파라미터, 레코드 표가 함께 출력됩니다. 개발 단계라 자동 실행도 기본값 `DEBUG`로 같은 내용을 출력합니다.
 
 ## LangGraph 구조
 
@@ -158,20 +186,28 @@ Streamlit → LangGraph → neo4j_search.py → graph_questions.cypher → Neo4j
 
 값은 `tx.run(query, ns=NAMESPACE, **params)`로 바인딩합니다. Cypher 문자열에 값을 잇지 않습니다.
 
+| 구분 | 텍스트 | 사용처 |
+|---|---|---|
+| 실행용 | `$ns`가 있는 `.cypher` 원문, 값은 별도 전달 | 드라이버 |
+| 복사용 | 값이 들어간 Cypher, 공통 `render_cypher_log`·`render_cypher_inline` | 터미널 로그, 검증 화면, DBeaver |
+
+`.cypher` 파일 원문을 DBeaver에서 그대로 실행하면 값이 없어 `42001`이 납니다. JDBC가 상위 코드의 "invalid syntax" 문구만 보여 줄 뿐, 실제 원인은 `42N81 missing request parameter`입니다. 터미널의 `QUERY` 블록에서 `====` 사이 또는 검증 화면의 코드 블록을 복사하세요. `:param` 줄은 드라이버와 JDBC에서 실행되지 않습니다.
+
 ## 로그
 
-`src/common/query_logger.py`의 `QueryLogger`를 재사용합니다. logger 이름은 공통 `car_search_rag.neo4j`의 자식인 `car_search_rag.neo4j.card_graphrag`입니다. handler는 `recipe_recommender.config.configure_query_logging`이 부모에 한 번만 붙이므로 Streamlit이 재실행되어도 중복되지 않습니다.
+`src/common/query_logger.py`의 `QueryLogger`를 재사용합니다. logger 이름은 공통 `car_search_rag.neo4j`의 자식인 `car_search_rag.neo4j.card_graphrag`입니다. handler는 `common.query_log_config`가 부모에 한 번만 붙이므로 Streamlit이 재실행되어도 중복되지 않습니다. 실행 중 `.env`에 `DB_QUERY_LOG=0`을 추가하면 다음 재실행에서 handler를 제거합니다. 이미 읽은 값을 바꾸거나 지우려면 앱을 다시 시작해야 합니다(`.env`는 프로세스 환경변수를 덮어쓰지 않습니다).
 
 | 이벤트 | 내용 |
 |---|---|
 | `REQUEST` | 요청 식별자, 질문, 시작 시각, 모델 |
 | `CYPHER` | Cypher 식별자, 파라미터, 건수, 노드·관계 경로, 시간 |
+| `QUERY`, `RESULT DATA` | Cypher 전문과 레코드 표. 검증 모드 또는 DEBUG |
 | `INTERPRET` | 모델, 유형, 대상 혜택, 제외한 혜택, 결제 금액, 모호한 점, 토큰, 비용, 시간 |
 | `RETRIEVE START`, `RETRIEVE DONE` | 식별자, 항목별 건수, 근거 ID, 시간 |
 | `ANSWER` | 모델, 입력 근거 수, 미확정 규칙 혜택, 결론, 답변, 값 일치 판정, 인용 근거, 토큰, 비용, 시간 |
 | `FINAL` | 실행 경로, 호출별 토큰, 합계, 추정 비용, 경고 수, 오류, 전체 시간 |
 
-PDF 원문과 프롬프트, Cypher 전문은 `CARD_SEARCH_LOG_LEVEL=DEBUG`에서만 출력합니다. API 오류는 예외 형식 이름만 기록합니다.
+기본값 `DEBUG`에서는 프롬프트(조회된 PDF 인용 포함), 값이 들어간 Cypher, 레코드 표를 출력합니다. `CARD_SEARCH_LOG_LEVEL=INFO`이면 요약 줄만 남고, 검증 모드는 Cypher와 레코드를 계속 출력합니다. `DB_QUERY_LOG=0`이면 쿼리 로그가 꺼져 출력되지 않습니다. API 오류는 예외 형식 이름만 기록합니다.
 
 ## 비용
 
@@ -183,13 +219,15 @@ PDF 원문과 프롬프트, Cypher 전문은 `CARD_SEARCH_LOG_LEVEL=DEBUG`에서
 
 ```powershell
 # Mock LLM·Mock Neo4j, 외부 호출 없음
-.\.venv\Scripts\python.exe -m unittest src.card_benefit.payment_card.tests.test_card_graphrag src.card_benefit.payment_card.tests.test_neo4j_origin_search
+.\.venv\Scripts\python.exe -m unittest card_benefit.payment_card.tests.test_card_graphrag card_benefit.payment_card.tests.test_neo4j_origin_search
 
 # 실제 Neo4j 읽기 테스트 추가. LLM은 Mock이며 A9-3 실제 응답을 재생한다
-$env:RUN_NEO4J_INTEGRATION='1'; .\.venv\Scripts\python.exe -m unittest src.card_benefit.payment_card.tests.test_card_graphrag src.card_benefit.payment_card.tests.test_neo4j_origin_search
+$env:RUN_NEO4J_INTEGRATION='1'; .\.venv\Scripts\python.exe -m unittest card_benefit.payment_card.tests.test_card_graphrag card_benefit.payment_card.tests.test_neo4j_origin_search
 ```
 
 `run_offline_tests.py`에는 카드 테스트가 포함되어 있지 않습니다.
+
+`common`과 `card_benefit`은 `uv sync`의 편집 설치가 `src`를 import 경로에 넣어 찾습니다. 코드에서 `sys.path`를 바꾸지 않으므로 프로젝트 `.venv`의 Python으로 실행합니다.
 
 ## 데이터 주의
 

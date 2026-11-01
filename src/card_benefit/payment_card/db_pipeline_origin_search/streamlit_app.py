@@ -1,15 +1,9 @@
-"""카드 혜택 GraphRAG 로컬 개발 화면. 질문 실행 버튼을 눌렀을 때만 LangGraph를 실행한다."""
-from pathlib import Path
+"""카드 혜택 GraphRAG 로컬 개발 화면. 자동 실행과 단계별 개발 검증 모드를 제공한다."""
 import re
-import sys
 
+from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag, verify_view
+from card_benefit.payment_card.db_pipeline_origin_search.neo4j_search import NAMESPACE, QUERIES, connect
 import streamlit as st
-
-ROOT = Path(__file__).resolve().parents[4]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-from src.card_benefit.payment_card.db_pipeline_origin_search import card_graphrag  # noqa: E402
-from src.card_benefit.payment_card.db_pipeline_origin_search.neo4j_search import NAMESPACE, QUERIES, connect  # noqa: E402
 
 EXAMPLES = [
     "ONE PICK STYLE 카드의 대중교통 혜택은?",
@@ -118,6 +112,10 @@ def show_outcome(outcome: dict) -> None:
 st.set_page_config(page_title="카드 혜택 GraphRAG", layout="wide")
 st.title("카드 혜택 GraphRAG — 개발 테스트", anchor=False)
 st.warning("ONE PICK STYLE 개발용 DRAFT·미승인 데이터입니다. 실제 카드 혜택으로 사용하지 마세요.")
+
+if st.radio("실행 모드", ("자동 실행", "개발 검증"), horizontal=True, key="run_mode") == "개발 검증":
+    verify_view.render(get_pipeline, show_outcome)
+    st.stop()
 
 st.pills("예시 질문", EXAMPLES, key="example", on_change=use_example)
 with st.form("question_form"):

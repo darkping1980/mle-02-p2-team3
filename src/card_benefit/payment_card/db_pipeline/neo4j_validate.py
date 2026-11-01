@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from pathlib import Path
 
 import psycopg
 from dotenv import load_dotenv
 
-from src.common.postgres_db_session import PostgresDbSession
+from common.neo4j_connection import create_neo4j_driver
+from common.postgres_db_session import PostgresDbSession
 
 from .neo4j_dry_run import NS, build, load_snapshot
 from .neo4j_load_draft import CYPHER, EXPECTED_DB, prepare
@@ -44,6 +44,12 @@ def compare_graph(nodes: list[dict], edges: list[dict], graph_nodes: list[dict],
     }
 
 
+def graph_ok(differences: int, outside: dict, orphans: list, conditions_equal: bool, links_equal: bool) -> bool:
+    """DF 그래프만 판정한다. A8 공존과 PF 적재는 ``other_graphs`` 로 보고하며 여기에 넣지 않는다."""
+    return (differences == 0 and conditions_equal and links_equal and not orphans
+            and outside == {"outside_nodes": 0, "outside_relationships": 0})
+
+
 def run() -> dict:
     """양쪽을 읽어 대조 결과를 만든다."""
     load_dotenv(".env")
@@ -57,9 +63,7 @@ def run() -> dict:
         sql.database_manager.close()
     graph, stats = build(snapshot)
     nodes, edges = prepare(graph)
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "recipe"))
     from neo4j import READ_ACCESS
-    from recipe_recommender.neo4j_connection import create_neo4j_driver
 
     def read(session, name):
         return session.execute_read(lambda tx: [r.data() for r in tx.run(CYPHER[f"neo4j_validation.{name}"], ns=NS)])
@@ -67,6 +71,7 @@ def run() -> dict:
     with create_neo4j_driver() as driver, driver.session(database=EXPECTED_DB, default_access_mode=READ_ACCESS) as session:
         result = compare_graph(nodes, edges, read(session, "node_sources"), read(session, "relationship_sources"))
         outside = read(session, "outside_scope_counts")[0]
+        other_graphs = read(session, "other_graph_counts")[0]
         orphans = read(session, "orphan_nodes")
         cypher_conditions = read(session, "condition_structure")
         cypher_links = read(session, "evidence_links")
@@ -80,11 +85,10 @@ def run() -> dict:
     return {"expected": {"nodes": stats["node_total"], "relationships": stats["relationship_total"]},
             "neo4j": {"nodes": sum(r["n"] for r in labels), "relationships": sum(r["n"] for r in relationships)},
             "relationship_counts": relationships, "differences": {k: len(v) for k, v in result.items()}, "difference_keys": result,
-            "outside_scope": outside, "orphan_nodes": orphans,
+            "outside_scope": outside, "other_graphs": other_graphs, "orphan_nodes": orphans,
             "sql_cypher": {"conditions": [len(sql_conditions), len(cypher_conditions), conditions_equal],
                            "evidence_links": [len(sql_links), len(cypher_links), links_equal]},
-            "ok": mismatch == 0 and conditions_equal and links_equal and not orphans
-            and outside == {"outside_nodes": 0, "outside_relationships": 0}}
+            "ok": graph_ok(mismatch, outside, orphans, conditions_equal, links_equal)}
 
 
 def main() -> None:

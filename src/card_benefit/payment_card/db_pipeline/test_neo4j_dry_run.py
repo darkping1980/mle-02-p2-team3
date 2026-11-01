@@ -1,7 +1,7 @@
 import copy
 import unittest
 
-from src.card_benefit.payment_card.db_pipeline.neo4j_dry_run import Preview, build, key
+from card_benefit.payment_card.db_pipeline.neo4j_dry_run import NS, Preview, build, key
 
 
 def fixture():
@@ -27,11 +27,11 @@ class PreviewTests(unittest.TestCase):
     def test_or_negation_and_source_are_preserved(self):
         snapshot = fixture()
         graph, stats = build(snapshot)
-        self.assertEqual(stats["nodes"]["A8Branch"], 2)
-        self.assertEqual(stats["nodes"]["A8Condition"], 2)
-        self.assertIn('"negate_yn":true', graph.nodes[key("Condition", "benefit", 2, "20261101_000001", "benefit", 2, "grace")]["source_json"])
-        self.assertEqual(stats["relationships"]["A8_SUPPORTED_BY"], 1)
-        self.assertEqual(stats["relationships"]["A8_CONSUMES"], 1)
+        self.assertEqual(stats["nodes"]["df_cond_branch"], 2)
+        self.assertEqual(stats["nodes"]["df_cond_atom"], 2)
+        self.assertIn('"negate_yn":true', graph.nodes[key("cond_atom", "benefit", 2, "20261101_000001", "benefit", 2, "grace")]["source_json"])
+        self.assertEqual(stats["relationships"]["df_supported_by"], 1)
+        self.assertEqual(stats["relationships"]["df_consumes"], 1)
 
     def test_missing_pool_is_rejected(self):
         data = fixture(); data["pools"] = []
@@ -50,12 +50,12 @@ class PreviewTests(unittest.TestCase):
         data["links"].append({"ev_subject_cd": "RULE", "card_bnft_id": "benefit", "rule_key": "rule",
                               "evidence_id": "ev", "ev_link_id": "rule_link"})
         graph, stats = build(data)
-        self.assertEqual(stats["relationships"]["A8_SUPPORTED_BY"], 2)
-        self.assertEqual(stats["nodes"]["A8Rule"], 1)
+        self.assertEqual(stats["relationships"]["df_supported_by"], 2)
+        self.assertEqual(stats["nodes"]["df_bnft_rule"], 1)
         edge = next(e for e in graph.edges.values() if '"rule_link"' in e["source_json"])
-        self.assertEqual(edge["type"], "A8_SUPPORTED_BY")
-        self.assertEqual(edge["start"], key("Rule", 2, "20261101_000001", "benefit", "rule"))
-        self.assertEqual(edge["end"], key("Evidence", "ev"))
+        self.assertEqual(edge["type"], "df_supported_by")
+        self.assertEqual(edge["start"], key("bnft_rule", 2, "20261101_000001", "benefit", "rule"))
+        self.assertEqual(edge["end"], key("card_source_evidence", "ev"))
 
     def test_rule_evidence_for_missing_rule_is_rejected(self):
         data = fixture()
@@ -77,6 +77,17 @@ class PreviewTests(unittest.TestCase):
     def test_dangling_edge_is_rejected(self):
         graph = Preview(); graph.edge("X", "missing", "missing", {})
         with self.assertRaises(ValueError): graph.validate()
+
+    def test_every_label_and_type_uses_df_prefix_and_namespace(self):
+        graph, stats = build(fixture())
+        self.assertTrue(all(label.startswith("df_") for label in stats["nodes"]))
+        self.assertTrue(all(kind.startswith("df_") for kind in stats["relationships"]))
+        self.assertTrue(all(n["namespace"] == NS and n["key"].startswith(f'["{NS}",') for n in graph.nodes.values()))
+        self.assertTrue(all(e["namespace"] == NS for e in graph.edges.values()))
+
+    def test_node_has_no_test_marker(self):
+        graph, _ = build(fixture())
+        self.assertTrue(all("test_only" not in node for node in graph.nodes.values()))
 
     def test_key_components_are_not_ambiguous(self):
         self.assertNotEqual(key("T", "a|b", "c"), key("T", "a", "b|c"))

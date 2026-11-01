@@ -6,11 +6,11 @@
 
 - **모듈:** `recipe_recommender.neo4j_connection`
 - **소스:** [recipe_recommender/neo4j_connection.py](../../../../recipe_recommender/neo4j_connection.py)
-- **역할:** Neo4j 드라이버 생성 — TLS 인증서 검증을 유지하면서 신뢰할 CA 번들을 명시한다.
+- **역할:** 기존 import 경로 유지. 구현은 [common/neo4j_connection.py](../../../../../common/neo4j_connection.py)에 있다(TLS 인증서 검증을 유지하면서 신뢰할 CA 번들을 명시).
 - **주요 호출자:** 웹 진입점, 조회 CLI, 초기 구축 프로그램
-- **정의:** 클래스 0개, 모듈 함수 3개
+- **정의:** 클래스 0개, 재노출 함수 3개
 
-- **직접 의존:** `.config`
+- **직접 의존:** `common.neo4j_connection`
 
 ## Function Summary
 
@@ -28,7 +28,7 @@ def trusted_ca_file() -> str:
 
 - **호출자:** 웹 진입점, 조회 CLI, 초기 구축 프로그램
 - **반환:** `str`. 신뢰할 CA 번들 PEM 경로. 지정 파일이 없으면 오류(조용히 검증을 끄지 않는다).
-- **원본:** [neo4j_connection.py](../../../../recipe_recommender/neo4j_connection.py) (26행)
+- **원본:** [common/neo4j_connection.py](../../../../../common/neo4j_connection.py) (27행)
 
 ## Function driver_arguments
 
@@ -38,7 +38,7 @@ def driver_arguments(uri: str) -> tuple[str, dict]:
 
 - **호출자:** 웹 진입점, 조회 CLI, 초기 구축 프로그램
 - **반환:** `tuple[str, dict]`. ``GraphDatabase.driver`` 에 넘길 URI와 TLS 설정. 검증하는 TLS 스킴만 CA 번들을 명시한다.
-- **원본:** [neo4j_connection.py](../../../../recipe_recommender/neo4j_connection.py) (40행)
+- **원본:** [common/neo4j_connection.py](../../../../../common/neo4j_connection.py) (41행)
 
 | 매개변수 | 타입 힌트 | 의미 |
 | --- | --- | --- |
@@ -52,7 +52,7 @@ def create_neo4j_driver():
 
 - **호출자:** 웹 진입점, 조회 CLI, 초기 구축 프로그램
 - **반환:** `타입 힌트 없음`. 저장소 ``.env`` 의 ``NEO4J_URI`` / ``NEO4J_USERNAME`` / ``NEO4J_PASSWORD`` 로 드라이버를 만든다.
-- **원본:** [neo4j_connection.py](../../../../recipe_recommender/neo4j_connection.py) (58행)
+- **원본:** [common/neo4j_connection.py](../../../../../common/neo4j_connection.py) (64행)
 
 ## 관련 가이드
 

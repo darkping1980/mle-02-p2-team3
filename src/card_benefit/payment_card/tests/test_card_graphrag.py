@@ -10,8 +10,8 @@ from unittest.mock import patch
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
-from src.card_benefit.payment_card.db_pipeline_origin_search import card_graphrag, neo4j_search
-from src.card_benefit.payment_card.db_pipeline_origin_search.card_graphrag import (
+from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag, neo4j_search
+from card_benefit.payment_card.db_pipeline_origin_search.card_graphrag import (
     AnswerPoint, CardAnswer, CardGraphRAG, Interpretation, rule_conflicts, validate_answer, value_tokens)
 
 APP = str(Path(__file__).resolve().parents[1] / "db_pipeline_origin_search" / "streamlit_app.py")
@@ -24,7 +24,7 @@ def js(value):
 
 
 def evidence_row(evidence_id, subject="BNFT", quote="월 1천원 5% 캐시백"):
-    return {"owner_labels": ["A8Benefit"], "pool_id": None,
+    return {"owner_labels": ["df_card_bnft"], "pool_id": None,
             "link": {"ev_subject_cd": subject, "ev_item_key": "-"},
             "evidence": {"source_json": js({"evidence_id": evidence_id, "page_no": 1, "approval_status_cd": "PENDING",
                                             "quote_txt": quote})}}
@@ -41,7 +41,7 @@ def detail(evidence=None):
                                 "source_json": js({"card_bnft_id": BENEFIT_ID, "bnft_nm": "ONE MORE 대중교통 캐시백",
                                                    "rule_select_cd": None})}},
         "rules": [{"rule": {"rule_key": "transit_rate", "source_json": js(rule)}, "targets": ["버스", "지하철"]}],
-        "conditions": [{"owner_labels": ["A8Rule"], "rule_key": "transit_rate", "expression": {"key": "e1"}, "branch_no": 1,
+        "conditions": [{"owner_cd": "RULE", "rule_key": "transit_rate", "expression": {"key": "e1"}, "branch_no": 1,
                         "atom": {"key_name": "transit_exclusions", "source_json": js(atom)}}],
         "limits": [{"pool": {"period": "MONTH", "value": 1000, "unit": "KRW", "aggregation_is_assumption": True},
                     "rule_keys": ["transit_rate"]}],
@@ -535,6 +535,84 @@ class TargetSelectionTests(unittest.TestCase):
         self.assertEqual(state["search_parameters"]["benefit_ids"], ["P1"])
 
 
+class VerificationStepTests(unittest.TestCase):
+    def pipeline(self, search=None, first=None, second=None):
+        self.search, self.first, self.second = search or FakeSearch(), first or interpret_llm(), second or answer_llm()
+        return CardGraphRAG(self.search, self.first, self.second)
+
+    def test_interpret_stops_before_detail_queries_and_answer(self):
+        rag = self.pipeline()
+        state = rag.verify_interpret("대중교통 혜택은?")
+        self.assertEqual(state["path"], ["interpret"])
+        self.assertEqual(self.search.calls, ["catalog"])
+        self.assertEqual(self.second.prompts, [])
+        self.assertEqual(card_graphrag.next_step(state), "retrieve")
+        self.assertEqual(state["catalog"][0]["id"], BENEFIT_ID)
+
+    def test_retrieve_stops_before_answer(self):
+        rag = self.pipeline()
+        state = rag.verify_retrieve(rag.verify_interpret("대중교통 혜택은?"))
+        self.assertEqual(state["path"], ["interpret", "retrieve"])
+        self.assertEqual(len(self.search.calls), 2)
+        self.assertEqual(self.second.prompts, [])
+        self.assertEqual(card_graphrag.next_step(state), "answer")
+
+    def test_full_steps_match_automatic_run(self):
+        rag = self.pipeline()
+        state = rag.verify_answer(rag.verify_retrieve(rag.verify_interpret("대중교통 혜택은?")))
+        automatic = self.pipeline().run("대중교통 혜택은?")
+        self.assertEqual(state["path"], automatic["path"])
+        for key in ("intent", "search_parameters", "statements", "unresolved", "evidence", "answer", "error", "warnings"):
+            self.assertEqual(state[key], automatic[key], key)
+        self.assertEqual([c["node"] for c in state["llm_calls"]], [c["node"] for c in automatic["llm_calls"]])
+
+    def test_repeated_steps_do_not_call_again(self):
+        rag = self.pipeline()
+        state = rag.verify_retrieve(rag.verify_interpret("대중교통 혜택은?"))
+        self.assertIs(rag.verify_retrieve(state), state)
+        done = rag.verify_answer(state)
+        self.assertIs(rag.verify_answer(done), done)
+        self.assertIs(rag.verify_retrieve(done), done)
+        self.assertEqual((len(self.first.prompts), len(self.second.prompts), len(self.search.calls)), (1, 1, 2))
+
+    def test_changed_parameters_block_answer(self):
+        rag = self.pipeline()
+        state = rag.verify_retrieve(rag.verify_interpret("대중교통 혜택은?"))
+        stale = {**state, "search_parameters": {**state["search_parameters"], "benefit_ids": ["OTHER"]}}
+        with self.assertRaises(ValueError):
+            rag.verify_answer(stale)
+        self.assertEqual(self.second.prompts, [])
+
+    def test_unknown_question_finishes_at_first_step(self):
+        rag = self.pipeline(first=interpret_llm("UNKNOWN", ()))
+        state = rag.verify_interpret("날씨")
+        self.assertEqual(state["path"], ["interpret", "finish"])
+        self.assertEqual(card_graphrag.next_step(state), "done")
+        self.assertIs(rag.verify_retrieve(state), state)
+
+    def test_no_evidence_finishes_after_retrieve(self):
+        rag = self.pipeline(search=FakeSearch(result=detail(evidence=[])))
+        state = rag.verify_retrieve(rag.verify_interpret("대중교통 혜택은?"))
+        self.assertEqual(state["path"][-1], "finish")
+        self.assertEqual(self.second.prompts, [])
+
+    def test_plan_lists_catalog_and_detail_statements(self):
+        state = self.pipeline().verify_interpret("대중교통 혜택은?")
+        plan = card_graphrag.verification_plan(state)
+        self.assertEqual([p["statement_id"] for p in plan], ["card.context", "card.rules", "card.conditions", "card.limits", "card.evidence"])
+        self.assertEqual({p["parameters"]["key"] for p in plan}, {KEY})
+        self.assertEqual(card_graphrag.catalog_plan()["statement_id"], "card.catalog")
+
+    def test_step_logs_detail_and_automatic_run_does_not(self):
+        with self.assertLogs(neo4j_search.CARD_LOGGER_NAME, "INFO") as logs:
+            state = self.pipeline().verify_interpret("대중교통 혜택은?")
+        self.assertIn("mode=verify", logs.output[0])
+        with self.assertLogs(neo4j_search.CARD_LOGGER_NAME, "INFO") as logs:
+            run()
+        self.assertNotIn("mode=", logs.output[0])
+        self.assertEqual(state["error"], None)
+
+
 class LoggingTests(unittest.TestCase):
     def test_steps_are_logged_without_quote_text(self):
         with self.assertLogs(neo4j_search.CARD_LOGGER_NAME, "INFO") as logs:
@@ -552,17 +630,89 @@ class LoggingTests(unittest.TestCase):
             run()
         self.assertIn("LLM PROMPT", "\n".join(logs.output))
 
+    def effective_level(self, env):
+        logger = logging.getLogger(neo4j_search.CARD_LOGGER_NAME)
+        parent = logging.getLogger("car_search_rag.neo4j")
+        before = list(parent.handlers), parent.level, parent.propagate, logger.level
+        try:
+            with patch.dict(os.environ, env), patch.object(card_graphrag, "load_project_environment"), \
+                 patch.object(card_graphrag, "is_local_dev", return_value=True):
+                for name in ("DB_QUERY_LOG", "CARD_SEARCH_LOG_LEVEL"):
+                    if name not in env:
+                        os.environ.pop(name, None)
+                card_graphrag.configure_card_logging()
+                return logger.level
+        finally:
+            parent.handlers[:], parent.level, parent.propagate = before[0], before[1], before[2]
+            logger.setLevel(before[3])
+
+    def test_debug_is_default_without_environment_variable(self):
+        self.assertEqual(self.effective_level({"DB_QUERY_LOG": "1"}), logging.DEBUG)
+
+    def test_info_overrides_default(self):
+        self.assertEqual(self.effective_level({"DB_QUERY_LOG": "1", "CARD_SEARCH_LOG_LEVEL": "INFO"}), logging.NOTSET)
+
+    def test_common_log_switch_still_turns_detail_off(self):
+        self.assertEqual(self.effective_level({"DB_QUERY_LOG": "0"}), logging.NOTSET)
+
+    def test_recipe_switch_does_not_change_card_logging(self):
+        self.assertEqual(self.effective_level({"RECIPE_QUERY_LOG": "0"}), logging.DEBUG)
+        self.assertEqual(self.effective_level({"RECIPE_QUERY_LOG": "1", "DB_QUERY_LOG": "0"}), logging.NOTSET)
+
+    def test_local_default_is_on_and_cloud_default_is_off(self):
+        self.assertEqual(self.effective_level({}), logging.DEBUG)
+        with patch.object(card_graphrag, "is_local_dev", return_value=False):
+            parent = logging.getLogger("car_search_rag.neo4j")
+            self.addCleanup(logging.getLogger(neo4j_search.CARD_LOGGER_NAME).setLevel, logging.NOTSET)
+            with patch.dict(os.environ, {}), patch.object(card_graphrag, "load_project_environment"):
+                os.environ.pop("DB_QUERY_LOG", None)
+                card_graphrag.configure_card_logging()
+            self.assertEqual(logging.getLogger(neo4j_search.CARD_LOGGER_NAME).level, logging.NOTSET)
+            self.assertFalse(any(getattr(h, "common_query_log", False) for h in parent.handlers))
+
+    def test_off_during_session_stops_card_output(self):
+        """실행 중 .env에 OFF를 넣고 화면이 재실행되는 경우: handler, 레벨, 전파를 처음 상태로 돌린다."""
+        parent = logging.getLogger("car_search_rag.neo4j")
+        logger = logging.getLogger(neo4j_search.CARD_LOGGER_NAME)
+        before = list(parent.handlers), parent.level, parent.propagate, logger.level
+        try:
+            parent.handlers.clear()
+            with patch.object(card_graphrag, "load_project_environment"):
+                with patch.dict(os.environ, {"DB_QUERY_LOG": "1"}):
+                    card_graphrag.configure_card_logging()
+                self.assertTrue(logger.isEnabledFor(logging.DEBUG))
+                with patch.dict(os.environ, {"DB_QUERY_LOG": "0"}):
+                    card_graphrag.configure_card_logging()
+                self.assertEqual((parent.handlers, parent.level, parent.propagate, logger.level), ([], logging.NOTSET, True, logging.NOTSET))
+                self.assertFalse(logger.isEnabledFor(logging.INFO))
+                with patch.dict(os.environ, {"DB_QUERY_LOG": "1"}):
+                    card_graphrag.configure_card_logging()
+                self.assertEqual(len(parent.handlers), 1)
+        finally:
+            parent.handlers[:], parent.level, parent.propagate = before[0], before[1], before[2]
+            logger.setLevel(before[3])
+
     def test_common_handler_not_duplicated_on_rerun(self):
         parent = logging.getLogger("car_search_rag.neo4j")
         before = list(parent.handlers), parent.level, parent.propagate
         try:
-            with patch.dict(os.environ, {"RECIPE_QUERY_LOG": "1"}):
+            with patch.dict(os.environ, {"DB_QUERY_LOG": "1"}):
                 for _ in range(3):
                     card_graphrag.configure_card_logging()
-            self.assertEqual(sum(getattr(h, "recipe_query_log", False) for h in parent.handlers), 1)
+            self.assertEqual(sum(getattr(h, "common_query_log", False) for h in parent.handlers), 1)
             self.assertEqual(logging.getLogger(neo4j_search.CARD_LOGGER_NAME).handlers, [])
         finally:
             parent.handlers[:], parent.level, parent.propagate = before[0], before[1], before[2]
+
+
+class ConditionGroupTests(unittest.TestCase):
+    def rows(self, owner, rule_key=None):
+        return [{"owner_cd": owner, "rule_key": rule_key, "expression": {"key": owner}, "branch_no": 1,
+                 "atom": {"source_json": js({"atom_key": "a", "negate_yn": False})}}]
+
+    def test_scope_comes_from_owner_code(self):
+        rows = self.rows("BNFT") + self.rows("POLICY") + self.rows("RULE", "rule_1")
+        self.assertEqual([group["scope"] for group in card_graphrag.condition_groups(rows)], ["혜택", "카드 공통", "rule_1"])
 
 
 class CreateLlmTests(unittest.TestCase):
@@ -692,6 +842,61 @@ class StreamlitTests(unittest.TestCase):
         app = self.ask(AppTest.from_file(APP).run(timeout=30))
         self.assertEqual(app.error[0].value, card_graphrag.MESSAGES["NEO4J_FAILED"])
 
+    def verify_app(self):
+        app = AppTest.from_file(APP).run(timeout=30)
+        app.radio(key="run_mode").set_value("개발 검증").run(timeout=30)
+        app.text_area(key="verify_question").set_value("대중교통 혜택은?").run(timeout=30)
+        return app
+
+    def test_verify_mode_makes_no_call_until_button(self):
+        app = self.verify_app()
+        self.assertFalse(app.exception)
+        self.assertEqual(self.first.prompts, [])
+        neo4j_search.connect.assert_not_called()
+
+    def test_verify_steps_show_cypher_records_and_answer(self):
+        search = neo4j_search.connect.return_value
+        app = self.verify_app()
+        app.button(key="verify_interpret").click().run(timeout=30)
+        self.assertFalse(app.exception)
+        self.assertEqual(search.calls, ["catalog"])
+        codes = " ".join(block.value for block in app.code)
+        self.assertIn("MATCH (b:df_card_bnft", codes)
+        self.assertIn(neo4j_search.NAMESPACE, codes)
+        self.assertNotIn("$key", codes)
+        self.assertEqual(self.second.prompts, [])
+
+        app.button(key="verify_retrieve").click().run(timeout=30)
+        self.assertFalse(app.exception)
+        self.assertEqual(len(search.calls), 2)
+        self.assertNotIn("verify_retrieve", [item.key for item in app.button])
+        page = " ".join(item.value for item in app.markdown)
+        self.assertIn("card.evidence", page)
+        self.assertEqual(self.second.prompts, [])
+
+        app.button(key="verify_answer").click().run(timeout=30)
+        self.assertFalse(app.exception)
+        self.assertEqual((len(self.first.prompts), len(self.second.prompts), len(search.calls)), (1, 1, 2))
+        self.assertNotIn("verify_answer", [item.key for item in app.button])
+        self.assertTrue(any("1000원" in item.value for item in app.markdown))
+        app.run(timeout=30)
+        self.assertEqual((len(self.first.prompts), len(self.second.prompts)), (1, 1))
+
+    def test_verify_question_change_clears_previous_result(self):
+        app = self.verify_app()
+        app.button(key="verify_interpret").click().run(timeout=30)
+        app.text_area(key="verify_question").set_value("다른 질문").run(timeout=30)
+        self.assertIsNone(app.session_state["verify"])
+        self.assertTrue(any("이전 검증 결과" in item.value for item in app.info))
+        self.assertEqual(len(self.first.prompts), 1)
+
+    def test_verify_connection_failure_is_sanitized(self):
+        neo4j_search.connect.side_effect = RuntimeError("SECRET_VALUE")
+        app = self.verify_app()
+        app.button(key="verify_interpret").click().run(timeout=30)
+        self.assertFalse(app.exception)
+        self.assertNotIn("SECRET_VALUE", app.error[0].value)
+
     def test_failed_question_can_run_again(self):
         neo4j_search.connect.return_value = FakeSearch(catalog_fail=OSError("x"))
         app = self.ask(AppTest.from_file(APP).run(timeout=30))
@@ -718,6 +923,22 @@ class LiveAccuracyTests(unittest.TestCase):
 
     def ask(self, question, intent, ids, parsed):
         return CardGraphRAG(self.search, interpret_llm(intent, ids), FakeLLM(parsed)).run(question)
+
+    def test_verify_steps_with_real_neo4j(self):
+        transit = self.benefit("대중교통")
+        raw = card_answer([point("월 1,000원 한도입니다.", ("20261101_000046",), transit)], conclusion="대중교통 혜택입니다.")
+        first, second = interpret_llm("BENEFIT_DETAIL", (transit,)), FakeLLM(raw)
+        rag = CardGraphRAG(self.search, first, second)
+        state = rag.verify_interpret("대중교통 혜택은?")
+        plan = card_graphrag.verification_plan(state)
+        self.assertEqual(len(plan), 5)
+        state = rag.verify_retrieve(state)
+        detail_row = state["retrieved_data"][0]
+        self.assertEqual((len(detail_row["rules"]), len(detail_row["conditions"]), len(detail_row["limits"])), (1, 7, 1))
+        self.assertEqual(second.prompts, [])
+        state = rag.verify_answer(state)
+        self.assertEqual(state["answer"]["status"], "ANSWERED")
+        self.assertEqual((len(first.prompts), len(second.prompts)), (1, 1))
 
     def test_catalog_has_payment_minimums_only_for_tier_benefits(self):
         rows = {row["name"]: sorted(row["payment_min_amounts"]) for row in self.search.list_catalog()}
