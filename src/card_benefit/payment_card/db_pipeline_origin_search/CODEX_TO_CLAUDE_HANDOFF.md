@@ -5,8 +5,12 @@
 ## Neo4j DF/PF 전환 (2026-11-01, 최신)
 
 - 설계와 완료 기준: `db_pipeline/NEO4J_DF_PF_DESIGN.md`.
-- 2단계 완료: 코드가 `df_` 레이블과 `df_one_pick_style`만 쓴다. Neo4j에는 아직 A8만 있어 **DF 적재 전까지 검색 화면, 실제 Neo4j 테스트, `neo4j_validate`는 동작하지 않는다.**
-- 다음 단계는 Neo4j 백업이고 별도 승인이 필요하다. 수정 전 코드 백업은 `D:\Bootcamp\backups\card_benefit\source\20261101_155114`에 있다.
+- 2단계 완료: 코드가 `df_` 레이블과 `df_one_pick_style`만 쓴다.
+- 4단계 완료: Neo4j에 DF 108/189 적재, Named Cypher 7개 결과 동일.
+- 3단계 완료: A8 백업은 `D:\Bootcamp\backups\card_benefit\neo4j\20261101_160805`. 실제 서버 복원은 미검증이다.
+- 5단계 완료: Streamlit과 실제 DF 조회를 Mock LLM으로 검증했다. 설계 문서 17절 참고.
+- 6·7단계 완료: A8 노드 108, 관계 189, `a8_test_key`를 제거했다. Neo4j는 DF 108/189 단독이고 PF 0이다. `neo4j_validate` `ok: true`, 카드 테스트 157건 통과, 화면 동일. 설계 문서 18절 참고.
+- 남은 미검증: 실제 LLM 답변 품질, DBeaver GUI 직접 실행, A8 백업의 실제 서버 복원. 2단계 수정 전 코드 백업은 `D:\Bootcamp\backups\card_benefit\source\20261101_155114`에 있다.
 
 ## 공통 Neo4j 연결·쿼리 로그 설정 (2026-11-01)
 

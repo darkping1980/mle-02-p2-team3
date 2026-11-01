@@ -1,6 +1,6 @@
 # Neo4j DF/PF 구조 설계 (1단계)
 
-기준: 2026-11-01. 설계는 승인되었고 코드는 2단계에서 DF로 전환했다. Neo4j에는 아직 A8만 있고 DF 데이터가 없다. 13절의 완료 기준을 채우기 전까지 전환은 끝난 것이 아니다.
+기준: 2026-11-01. 전환 완료. Neo4j는 DF 단독이며 최종 결과는 18절에 있다. 1~12절은 설계 당시 기록이다.
 
 ## 1. 결론
 
@@ -234,7 +234,7 @@ FOR (n:df_node) REQUIRE (n.namespace, n.key) IS UNIQUE
 - **복원 검증:** 쓰기 없이 백업을 메모리에서 재구성해 현재 그래프, PostgreSQL 변환 결과와 비교한다. 실제 복원 실행 여부는 3단계에서 따로 보고한다.
 - **최종 안전망:** Neo4j는 파생 데이터이므로 PostgreSQL에서 다시 만들 수 있다.
 - **백업 위치:** `D:\Bootcamp\backups\card_benefit\neo4j\`. 제약과 인덱스 정의도 함께 저장한다. JSON 내보내기를 완전한 복원 보장으로 보지 않고, 복원 절차와 실제 검증 범위를 3단계에서 기록한다.
-- **코드 롤백:** 2단계 수정 전 미커밋 작업 30건을 `D:\Bootcamp\backups\card_benefit\source\20261101_155114`에 백업했다. 번들 clone + 패치 + 신규 파일로 복원 검증을 마쳤다. 기준 커밋은 보류 상태다.
+- **코드 롤백:** 2단계 수정 전 미커밋 작업 30건을 `D:\Bootcamp\backups\card_benefit\source\20261101_155114`에 백업했다. 번들 clone + 패치 + 신규 파일로 복원 검증을 마쳤다. 2단계 반영 소스는 `D:\Bootcamp\backups\card_benefit\source\20261101_161003`에 있다. 기준 커밋은 사용자가 만든 `56208cf`(`origin/main` 반영)이며 코드 롤백 기준점이다.
 
 ## 11. 검증 계획
 
@@ -268,7 +268,7 @@ FOR (n:df_node) REQUIRE (n.namespace, n.key) IS UNIQUE
 | 4 | 속성 별칭 | 유지 |
 | 5 | 마이그레이션 순서 | DF 적재 → 검증 → 프로그램 전환 검증 → A8 삭제 |
 | 6 | PF 제약 | PF 모델과 키가 확정될 때 팀원이 생성 |
-| 7 | 기준 커밋 | 보류. Git Commit/Push는 별도 승인 전까지 금지 |
+| 7 | 기준 커밋 | `56208cf`. 사용자가 직접 커밋·Push. 추가 Git Commit/Push는 별도 지시 전까지 금지 |
 | 8 | Neo4j 백업 위치 | `D:\Bootcamp\backups\card_benefit\neo4j\` |
 
 ## 13. 최종 완료 기준
@@ -284,3 +284,146 @@ FOR (n:df_node) REQUIRE (n.namespace, n.key) IS UNIQUE
 7. A8 0건, PF 0건, DF 정상 유지 확인
 
 최종 보고서에는 실제 실행 결과, 데이터 건수, 정합성 검증 결과, 검색 테스트 결과를 포함한다.
+
+## 14. 3단계 Neo4j 백업
+
+- 위치: `D:\Bootcamp\backups\card_benefit\neo4j\20261101_160805`
+- 내용: 노드 108, 관계 189, 전체 속성(`test_only` 포함), 관계 끝점, 제약·인덱스 정의, 레이블·유형·속성 이름 목록, 복원 스크립트
+- 검증: 해시, 식별키, 끝점, Aura 재조회, PostgreSQL 변환 결과 대조, 메모리 복원 시험 통과. 백업 결과는 사용자가 승인했다.
+- **미검증: 실제 Neo4j 서버 복원.** 빈 별도 Neo4j 인스턴스가 없어 현재 단계에서는 시험하지 않는다. 절차와 검증 범위는 백업 폴더의 `RESTORE.md`에 있다.
+
+## 15. 기존 실패 테스트 19개
+
+`run_offline_tests.py`의 recipe 묶음에서 실패한다. 이번 단계에서 수정하지 않는다.
+
+| 테스트 | 원인 |
+|---|---|
+| `test_graph_questions.GraphExplorerAppTests.test_graph_db_error_is_shown_without_crash` | `AppTest.form_submit_button` 없음 |
+| `test_graph_questions.GraphExplorerAppTests.test_pantry_mode_is_unchanged` | `AppTest.form_submit_button` 없음 |
+| `test_graph_questions.GraphExplorerAppTests.test_q1_shows_hop_path_and_neo4j_rows` | `AppTest.form_submit_button` 없음 |
+| `test_graph_questions.GraphExplorerAppTests.test_q3_three_hop_table` | `AppTest.form_submit_button` 없음 |
+| `test_graph_questions.GraphExplorerAppTests.test_q5_steps_table_uses_https_image_urls` | `AppTest.form_submit_button` 없음 |
+| `test_graph_questions.GraphExplorerAppTests.test_unknown_ingredient_and_empty_result_are_explained` | `AppTest.form_submit_button` 없음 |
+| `test_query_log_config.PostgresRecommendationLogCheckTests.test_local_default_without_env_runs_postgres_selects` | `AppTest.form_submit_button` 없음 |
+| `test_query_log_config.PostgresRecommendationLogCheckTests.test_log_off_and_cloud_default_do_not_create_postgres_session` | `AppTest.form_submit_button` 없음 |
+| `test_query_log_config.PostgresRecommendationLogCheckTests.test_log_on_uses_existing_search_service_and_four_selects` | `AppTest.form_submit_button` 없음 |
+| `test_query_log_config.PostgresRecommendationLogCheckTests.test_postgres_failure_keeps_neo4j_recommendations` | `AppTest.form_submit_button` 없음 |
+| `test_recipe_search.PackageLayoutTests.test_dry_run_cli_runs_with_python_m` | `DB_URL` 차단으로 PostgreSQL `PoolTimeout`, CLI rc 2 |
+| `test_streamlit_app.StreamlitAppTests.test_llm_answer_is_marked_as_llm` | `AppTest.form_submit_button` 없음 |
+| `test_streamlit_app.StreamlitAppTests.test_llm_failure_shows_rule_based_fallback` | `AppTest.form_submit_button` 없음 |
+| `test_streamlit_app.StreamlitAppTests.test_neo4j_connection_failure_is_shown` | `AppTest.form_submit_button` 없음 |
+| `test_streamlit_app.StreamlitAppTests.test_partially_replaced_llm_answer_shows_both_sources` | `AppTest.form_submit_button` 없음 |
+| `test_streamlit_app.StreamlitAppTests.test_recipe_images_and_steps_are_shown` | `AppTest.form_submit_button` 없음 |
+| `test_streamlit_app.StreamlitAppTests.test_rule_based_answer_when_llm_is_not_configured` | `AppTest.form_submit_button` 없음 |
+| `test_streamlit_app.StreamlitAppTests.test_step_query_failure_keeps_recommendations` | `AppTest.form_submit_button` 없음 |
+| `test_streamlit_app.StreamlitAppTests.test_unknown_ingredient_is_reported` | `AppTest.form_submit_button` 없음 |
+
+DF 변경과 무관하다고 판단한 근거:
+
+- 실패 이름 19개가 공통화 작업 전, 2단계 수정 전, 현재에 모두 같다.
+- 모든 테스트가 `src/recipe` 소속이고, `src/recipe`에는 카드·DF 참조가 0건이다.
+- `src/recipe`의 2단계 변경이 없다. 2단계 전 백업과 해시가 같다.
+- 18개는 설치된 Streamlit의 `AppTest`에 `form_submit_button`이 없어 버튼 조작 전에 끝난다. 임시 shim으로 속성을 제공하면 모두 통과했다(공통화 작업 시점).
+- `test_dry_run_cli_runs_with_python_m`은 자격증명을 막는 실행 환경 때문이다. 자격증명이 있는 단독 실행은 통과했다.
+
+## 16. 4단계 DF 적재 결과
+
+- 실행: `neo4j_load_draft --apply`. 두 번째 실행 후 DF 노드·관계가 elementId까지 첫 실행과 같아 중복이 없다.
+- 건수: DF 노드 108, 관계 189, 레이블 13종, 유형 12종, 연결 형태 17종. PF 0. A8 108/189는 백업과 elementId까지 같다.
+- 제약: `df_node_key` 생성. `a8_test_key` 유지.
+- 정합성: `neo4j_validate` `ok: true`. PostgreSQL 변환값, A8 대응값과 속성·끝점 전체 일치.
+- 검색: Named Cypher 7개 결과가 변경 전 A8 결과와 필드 단위로 같다. 조건과 근거의 행 순서도 같다.
+- 이후 A8 삭제와 재검증을 마쳤다(18절).
+
+## 17. 5단계 Streamlit·검색 검증 결과
+
+- 근거: `D:\Bootcamp\backups\card_benefit\verification\stage5_20261101_162333` (화면 캡처, 터미널 로그, JDBC 시험 Cypher, 비교 결과)
+- 방식: 프로그램에 Mock 옵션이 없어 저장소 밖 실행기에서 `create_llms`만 교체했다. Neo4j 조회는 실제 코드이고 OpenAI 주소는 닫힌 포트로 막았다.
+- 화면: 질문 6개와 개발 검증 3단계에서 예외 0, 콘솔 오류 0, 화면의 A8·`pf_` 표기 0.
+- 흐름: 5개 질문이 interpret → retrieve → answer → finish, 모호한 질문 1개가 interpret → finish로 실행됐다.
+- A8 대조: 같은 Mock으로 DF와 A8 검색을 비교해 LLM 프롬프트 11건과 최종 결과가 같다(측정 시각 제외).
+- 로그: 값이 들어간 Cypher 15종을 파라미터 없이 드라이버로 재실행해 바인딩 실행과 결과가 같다. DBeaver의 JDBC 드라이버 6.15.1로도 30회 실행해 행 수가 일치했다.
+- `카드 공통`: LLM 컨텍스트에서 혜택 → 카드 공통 → 규칙 순서로 유지된다. 화면에는 이 문구가 직접 나오지 않고 개발 검증 표의 `owner_cd`가 `BNFT → POLICY → RULE`로 나온다.
+- `list_benefits`: 질문 흐름에서 호출되지 않는 진단용 조회다. 실제 DF 실행 검증은 4단계에서 했다.
+- 미완료: DBeaver GUI 직접 실행, 실제 LLM 호출, 실제 서버 복원. 18절에서도 미검증으로 유지한다.
+
+## 18. 6·7단계 최종 결과
+
+A8 시험 그래프를 제거했고 Neo4j는 DF 단독 상태다. 13절의 완료 기준 7개를 모두 수행했다.
+
+### 최종 구조
+
+- 대상: Aura `6ac1f0f8`
+- namespace: `df_one_pick_style`
+- 전체 노드 108, 관계 189. 모두 DF다. A8 0, PF 0
+- 공통 레이블 `df_node` 108건, 업무 레이블 13종, 관계 유형 12종, 연결 형태 17종
+- 제약: `df_node_key`
+- 인덱스: `df_node_key`(RANGE), `index_1b9dcc97`, `index_460996c0`(시스템 LOOKUP)
+
+| 노드 레이블 | 건수 |
+|---|---:|
+| `df_bnft_rule` | 6 |
+| `df_card_bnft` | 4 |
+| `df_card_doc` | 1 |
+| `df_card_doc_chunk` | 2 |
+| `df_card_doc_page` | 2 |
+| `df_card_limit_pool` | 9 |
+| `df_card_policy_version` | 1 |
+| `df_card_product` | 1 |
+| `df_card_source_evidence` | 31 |
+| `df_cond_atom` | 15 |
+| `df_cond_branch` | 9 |
+| `df_cond_expr` | 8 |
+| `df_rule_target` | 19 |
+
+| 관계 유형 | 건수 |
+|---|---:|
+| `df_consumes` | 15 |
+| `df_has_atom` | 15 |
+| `df_has_benefit` | 4 |
+| `df_has_branch` | 9 |
+| `df_has_expr` | 8 |
+| `df_has_policy` | 1 |
+| `df_has_rule` | 6 |
+| `df_in_chunk` | 31 |
+| `df_in_document` | 2 |
+| `df_on_page` | 2 |
+| `df_supported_by` | 62 |
+| `df_targets` | 34 |
+
+레이블별 속성과 연결 형태 전체는 `D:\Bootcamp\backups\card_benefit\verification\stage7_20261101_163910\final_structure.json`에 있다. ERD를 다시 만들 때 이 파일과 4·5절의 한글 명칭을 쓴다.
+
+### A8 제거
+
+- 삭제 전 조건 16개를 모두 확인했다.
+- 삭제는 `A8Test` + `ONE_PICK_STYLE_A8`로 한정했다. 트랜잭션 안에서 외부 관계 0을 재확인했고, 삭제 건수는 노드 108, 관계 189다.
+- 결과 확인 후 `a8_test_key`를 별도로 제거했다.
+- `db.propertyKeys()`에 `test_only` 이름이 남아 있다. 값이 없는 이름 목록이며 이를 가진 노드는 0건이다.
+- A8 백업은 `D:\Bootcamp\backups\card_benefit\neo4j\20261101_160805`에 보존한다.
+
+### DF 단독 검증
+
+| 항목 | 결과 |
+|---|---|
+| DF 속성, `source_json`, elementId | 삭제 전과 전체 일치, 변경 0 |
+| `neo4j_validate` | `ok: true`, 차이 0, 범위 위반 0, 고아 노드 0 |
+| PostgreSQL 정합성 | 원본 해시 동일, 변환값과 노드 108·관계 189 일치, 조건 15·근거 연결 62 일치 |
+| Named Cypher 7개 | 변경 전 A8 결과와 차이 0 |
+| 카드 테스트 | 실제 Neo4j 포함 157건 통과, 전체 641개 이름 기준 신규 실패 0 |
+| GraphRAG 대표 질문 6개 | 삭제 전과 결과·프롬프트 11건 동일 |
+| Streamlit | 질문 6개, 개발 검증 3단계 화면 삭제 전과 동일, 예외 0, 콘솔 오류 0 |
+| Cypher DEBUG 로그 | 42건 출력, 15종을 드라이버로 재실행해 결과 동일 |
+| DBeaver JDBC 드라이버 | 읽기 전용 30회 실행, 행 수 일치 |
+| A8·PF 혼입 | 조회 로그, 프롬프트, 결과, 화면 모두 0건 |
+
+LLM은 모두 Mock이다. 근거 파일은 `D:\Bootcamp\backups\card_benefit\verification\stage7_20261101_163910`에 있다.
+
+### 코드에 남은 A8
+
+`neo4j_validation.cypher`의 `other_graph_counts`가 A8 잔존 건수를 센다. 재발 감시용으로 유지한다. 나머지는 주석과 이 검사의 테스트다. 검색 코드에는 없다.
+
+### 남은 미검증 항목
+
+- 실제 LLM 답변 품질
+- DBeaver GUI 직접 실행
+- A8 백업의 실제 서버 복원
