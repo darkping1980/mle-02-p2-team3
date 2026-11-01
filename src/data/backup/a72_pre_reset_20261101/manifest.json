@@ -1,0 +1,1487 @@
+{
+  "created_at": "2026-11-01T01:05:39.454235+00:00",
+  "schema": "db_pipeline",
+  "tables": {
+    "card_ai_call": {
+      "rows": 1,
+      "columns": [
+        {
+          "attname": "card_ai_run_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_doc_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "page_no",
+          "typ": "smallint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_doc_chunk_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "call_seq",
+          "typ": "smallint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "call_input_sha256",
+          "typ": "character varying(64)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "call_status",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "call_resp_raw",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "call_resp_json",
+          "typ": "jsonb",
+          "attgenerated": ""
+        },
+        {
+          "attname": "call_error_msg",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "call_input_token_cnt",
+          "typ": "integer",
+          "attgenerated": ""
+        },
+        {
+          "attname": "call_output_token_cnt",
+          "typ": "integer",
+          "attgenerated": ""
+        },
+        {
+          "attname": "call_latency_ms",
+          "typ": "integer",
+          "attgenerated": ""
+        },
+        {
+          "attname": "call_req_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "451f50b661958829b53d1c0b6d4cf294ab8819b9ce988fe627bdaea72ac8e133"
+    },
+    "card_ai_run": {
+      "rows": 1,
+      "columns": [
+        {
+          "attname": "card_ai_run_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "run_stage_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "run_call_mthd_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "run_model_nm",
+          "typ": "character varying(100)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "run_prompt_ver",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "run_prompt_txt",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "run_param",
+          "typ": "jsonb",
+          "attgenerated": ""
+        },
+        {
+          "attname": "run_target_card_doc_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "run_status",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "run_start_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "run_end_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "run_note",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "4ab27c2f9df919ec9211b0a3c9ec39cc121302163136f1f74cd658c3cc61986d"
+    },
+    "card_bnft": {
+      "rows": 0,
+      "columns": [
+        {
+          "attname": "card_id",
+          "typ": "bigint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "policy_ver_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_bnft_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "bnft_cd",
+          "typ": "character varying(80)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "bnft_nm",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "bnft_type_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "bnft_origin_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "bnft_scope_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "bnft_brand_opt_cds",
+          "typ": "text[]",
+          "attgenerated": ""
+        },
+        {
+          "attname": "bnft_cond_expr",
+          "typ": "jsonb",
+          "attgenerated": ""
+        },
+        {
+          "attname": "rule_select_cd",
+          "typ": "character varying(30)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "rule_list",
+          "typ": "jsonb",
+          "attgenerated": ""
+        },
+        {
+          "attname": "relation_list",
+          "typ": "jsonb",
+          "attgenerated": ""
+        },
+        {
+          "attname": "verification_status_cd",
+          "typ": "character varying(25)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "3c4f3f67c6e6dff78246078484f6019976bd7e338e8bd9a61040058c9a9bf1af"
+    },
+    "card_bnft_common": {
+      "rows": 0,
+      "columns": [
+        {
+          "attname": "card_id",
+          "typ": "bigint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "policy_ver_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_bnft_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "common_bnft_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "common_ver_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "apply_status_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "a1590283bf4d0c5cc3532309a90b5eef6ef86b9966f502ebeac2474b1a674412"
+    },
+    "card_common_bnft": {
+      "rows": 0,
+      "columns": [
+        {
+          "attname": "common_bnft_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "provider_cd",
+          "typ": "character varying(30)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "service_grade_cd",
+          "typ": "character varying(30)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "service_type_cd",
+          "typ": "character varying(30)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "common_bnft_cd",
+          "typ": "character varying(80)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "common_bnft_nm",
+          "typ": "text",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "358d443b245407c968fc2d9be1129054c3f295ce1b5f32b48c463a5bcd0c36cd"
+    },
+    "card_common_policy_version": {
+      "rows": 0,
+      "columns": [
+        {
+          "attname": "common_bnft_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "common_ver_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "common_ver_no",
+          "typ": "integer",
+          "attgenerated": ""
+        },
+        {
+          "attname": "rule_list",
+          "typ": "jsonb",
+          "attgenerated": ""
+        },
+        {
+          "attname": "valid_from",
+          "typ": "date",
+          "attgenerated": ""
+        },
+        {
+          "attname": "valid_to_excl",
+          "typ": "date",
+          "attgenerated": ""
+        },
+        {
+          "attname": "approved_at",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "policy_status_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "12859ad812280d3a5e4eca0e90ba9d67cd2ba4835d1772a9f2c329fa4daf68d0"
+    },
+    "card_common_rule_evidence": {
+      "rows": 0,
+      "columns": [
+        {
+          "attname": "common_bnft_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "common_ver_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "rule_key",
+          "typ": "character varying(40)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "evidence_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "ev_item_cd",
+          "typ": "character varying(10)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "ev_item_key",
+          "typ": "character varying(100)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "3a6242eece7a83ac27c3ca556ba388ca620b724ee4fbfd24aa53a019372fa853"
+    },
+    "card_doc": {
+      "rows": 1,
+      "columns": [
+        {
+          "attname": "card_doc_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_id",
+          "typ": "bigint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_cd",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_family_cd",
+          "typ": "character varying(100)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_type_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_title",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_source_url",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_file_nm",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_file_size",
+          "typ": "bigint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_sha256",
+          "typ": "character varying(64)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_page_cnt",
+          "typ": "smallint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_review_no",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_review_date",
+          "typ": "date",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_release_date",
+          "typ": "date",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_collect_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_version_no",
+          "typ": "smallint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_status",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_note",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "0e3fe12d5f838bebb56bac1e8bad4b77050cf3272378b398a30a480222bcd259"
+    },
+    "card_doc_chunk": {
+      "rows": 2,
+      "columns": [
+        {
+          "attname": "card_doc_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "page_no",
+          "typ": "smallint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_doc_chunk_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "chunk_seq",
+          "typ": "integer",
+          "attgenerated": ""
+        },
+        {
+          "attname": "chunk_section_nm",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "chunk_type_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "chunk_start_pos",
+          "typ": "integer",
+          "attgenerated": ""
+        },
+        {
+          "attname": "chunk_end_pos",
+          "typ": "integer",
+          "attgenerated": ""
+        },
+        {
+          "attname": "chunk_raw_txt",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "chunk_clean_txt",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "chunk_status",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "chunk_split_rule_ver",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "chunk_clean_rule_ver",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "8d8daea57a5d9e3a8ce5805035f89bb9f2ed6a0b7facdf4779ec8b16e7c8007d"
+    },
+    "card_doc_page": {
+      "rows": 2,
+      "columns": [
+        {
+          "attname": "card_doc_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "page_no",
+          "typ": "smallint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "page_raw_txt",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "page_char_cnt",
+          "typ": "integer",
+          "attgenerated": ""
+        },
+        {
+          "attname": "page_txt_sha256",
+          "typ": "character varying(64)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "page_layer_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "page_extractor_nm",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "page_extractor_ver",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "page_note",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "6613d32355fbef105380d547bbd10e3a04afce0484428b0badd1d5a723ff4c7a"
+    },
+    "card_excl_item": {
+      "rows": 0,
+      "columns": [
+        {
+          "attname": "card_excl_item_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "issuer",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "excl_item_nm",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "excl_concept_cd",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "excl_item_desc",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "excl_alias_nms",
+          "typ": "text[]",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "b121e0bce7ccabeacaf1c62c2367c1b7895a564f8be587bd5b3d59c907180e97"
+    },
+    "card_extr_stg": {
+      "rows": 8,
+      "columns": [
+        {
+          "attname": "card_ai_run_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_doc_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "page_no",
+          "typ": "smallint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_doc_chunk_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "call_seq",
+          "typ": "smallint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_extr_stg_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "stg_item_seq",
+          "typ": "smallint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_id",
+          "typ": "bigint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "stg_kind_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "stg_parent_card_extr_stg_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "stg_raw_item",
+          "typ": "jsonb",
+          "attgenerated": ""
+        },
+        {
+          "attname": "stg_normalized_item",
+          "typ": "jsonb",
+          "attgenerated": ""
+        },
+        {
+          "attname": "stg_evidence_txt",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "stg_evidence_start_pos",
+          "typ": "integer",
+          "attgenerated": ""
+        },
+        {
+          "attname": "stg_evidence_end_pos",
+          "typ": "integer",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_excl_item_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "stg_sql_check_cd",
+          "typ": "character varying(30)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "stg_ai_vrfy_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "stg_ai_vrfy_card_ai_run_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "stg_status",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "stg_review_note",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "stg_approved_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "stg_approved_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "4c116e887fbfbd8b7aae04f45b05859a4267e7c10d5a548a491aeb0c84e8b834"
+    },
+    "card_limit_pool": {
+      "rows": 0,
+      "columns": [
+        {
+          "attname": "card_id",
+          "typ": "bigint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "policy_ver_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "pool_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "pool_scope_cd",
+          "typ": "character varying(30)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "period_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "cap_unit_cd",
+          "typ": "character varying(30)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "aggregation_key_cd",
+          "typ": "character varying(30)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "tier_list",
+          "typ": "jsonb",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "9637831b66bb69094b3949ae5214bd195cd0b850ab230fdeb865ae205a9258c5"
+    },
+    "card_method_catalog": {
+      "rows": 0,
+      "columns": [
+        {
+          "attname": "method_kind_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "method_cd",
+          "typ": "character varying(40)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "method_ver",
+          "typ": "integer",
+          "attgenerated": ""
+        },
+        {
+          "attname": "param_schema",
+          "typ": "jsonb",
+          "attgenerated": ""
+        },
+        {
+          "attname": "handler_key",
+          "typ": "character varying(100)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "method_status_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "aabf8f4ffb2cf42b458c1e69f8281c150373ab6e6a562c9f6c321d95395599d8"
+    },
+    "card_policy_evidence": {
+      "rows": 0,
+      "columns": [
+        {
+          "attname": "card_id",
+          "typ": "bigint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "policy_ver_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "ev_link_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "ev_subject_cd",
+          "typ": "character varying(10)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_bnft_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "rule_key",
+          "typ": "character varying(40)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "relation_key",
+          "typ": "character varying(40)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "pool_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "ev_item_cd",
+          "typ": "character varying(10)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "ev_item_key",
+          "typ": "character varying(100)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "evidence_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "d2cefbbfb3c6e446664c85cfd27473bf2d7dbc46782f602dc99271a437e07c77"
+    },
+    "card_policy_version": {
+      "rows": 0,
+      "columns": [
+        {
+          "attname": "card_id",
+          "typ": "bigint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "policy_ver_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "policy_ver_no",
+          "typ": "integer",
+          "attgenerated": ""
+        },
+        {
+          "attname": "policy_cond_expr",
+          "typ": "jsonb",
+          "attgenerated": ""
+        },
+        {
+          "attname": "source_doc_list",
+          "typ": "jsonb",
+          "attgenerated": ""
+        },
+        {
+          "attname": "valid_from",
+          "typ": "date",
+          "attgenerated": ""
+        },
+        {
+          "attname": "valid_to_excl",
+          "typ": "date",
+          "attgenerated": ""
+        },
+        {
+          "attname": "approved_at",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "policy_status_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "a3ff8f462e7d0ab8943cc6546a97ebd5ef4da7b69eae283986fc0efaebed7bd0"
+    },
+    "card_product": {
+      "rows": 1,
+      "columns": [
+        {
+          "attname": "card_id",
+          "typ": "bigint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "product_cd",
+          "typ": "character varying(80)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "product_nm",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "issuer",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_kind_cd",
+          "typ": "character varying(10)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "product_status_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "launched_on",
+          "typ": "date",
+          "attgenerated": ""
+        },
+        {
+          "attname": "discontinued_on",
+          "typ": "date",
+          "attgenerated": ""
+        },
+        {
+          "attname": "brand_opt_list",
+          "typ": "jsonb",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "8c062f602981026c6d28996735f38002ed0bf0efaa771eb1d7db379e0849c9ce"
+    },
+    "card_product_doc": {
+      "rows": 1,
+      "columns": [
+        {
+          "attname": "card_id",
+          "typ": "bigint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_doc_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "doc_role_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "brand_opt_cds",
+          "typ": "text[]",
+          "attgenerated": ""
+        },
+        {
+          "attname": "effective_from",
+          "typ": "date",
+          "attgenerated": ""
+        },
+        {
+          "attname": "effective_to_excl",
+          "typ": "date",
+          "attgenerated": ""
+        },
+        {
+          "attname": "approval_status_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "applicability_basis_txt",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "approval_note",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "5fde6be8b5e3a5b8e95cc3dc3f9e2cf7c6cdd1cb11ba622a58e26eec7a69b4cb"
+    },
+    "card_source_evidence": {
+      "rows": 30,
+      "columns": [
+        {
+          "attname": "evidence_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_doc_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "page_no",
+          "typ": "smallint",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_doc_chunk_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "card_extr_stg_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "quote_txt",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "start_pos",
+          "typ": "integer",
+          "attgenerated": ""
+        },
+        {
+          "attname": "end_pos",
+          "typ": "integer",
+          "attgenerated": ""
+        },
+        {
+          "attname": "approval_status_cd",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "00a823edaf1b79f7731c8c82a3764cb8f1a20ab22118ac4b3658357fd1a65217"
+    },
+    "common_cd": {
+      "rows": 162,
+      "columns": [
+        {
+          "attname": "common_code_grp_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "common_cd",
+          "typ": "character varying(40)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "common_cd_nm",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "fe85a74e82eaffab8030f335e3da2c0682ad6ccdf99df9829be5f43ec0ab35fe"
+    },
+    "common_code_grp": {
+      "rows": 44,
+      "columns": [
+        {
+          "attname": "common_code_grp_id",
+          "typ": "character varying(20)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "common_code_grp_nm",
+          "typ": "text",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "create_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_date",
+          "typ": "timestamp with time zone",
+          "attgenerated": ""
+        },
+        {
+          "attname": "update_user_id",
+          "typ": "character varying(50)",
+          "attgenerated": ""
+        }
+      ],
+      "sha256": "b2379717ca2e39d2a799f5da56906b3e454e8a2a780dc1db93b06d1348b219eb"
+    }
+  },
+  "sequences": [
+    {
+      "sequencename": "seq_card_ai_run",
+      "start_value": 1,
+      "increment_by": 1,
+      "max_value": 999999,
+      "cycle": true,
+      "last_value": 1,
+      "is_called": true
+    },
+    {
+      "sequencename": "seq_card_bnft",
+      "start_value": 1,
+      "increment_by": 1,
+      "max_value": 999999,
+      "cycle": true,
+      "last_value": 1,
+      "is_called": false
+    },
+    {
+      "sequencename": "seq_card_common_bnft",
+      "start_value": 1,
+      "increment_by": 1,
+      "max_value": 999999,
+      "cycle": true,
+      "last_value": 1,
+      "is_called": false
+    },
+    {
+      "sequencename": "seq_card_common_policy_version",
+      "start_value": 1,
+      "increment_by": 1,
+      "max_value": 999999,
+      "cycle": true,
+      "last_value": 1,
+      "is_called": false
+    },
+    {
+      "sequencename": "seq_card_doc",
+      "start_value": 1,
+      "increment_by": 1,
+      "max_value": 999999,
+      "cycle": true,
+      "last_value": 1,
+      "is_called": true
+    },
+    {
+      "sequencename": "seq_card_doc_chunk",
+      "start_value": 1,
+      "increment_by": 1,
+      "max_value": 999999,
+      "cycle": true,
+      "last_value": 11,
+      "is_called": true
+    },
+    {
+      "sequencename": "seq_card_excl_item",
+      "start_value": 1,
+      "increment_by": 1,
+      "max_value": 999999,
+      "cycle": true,
+      "last_value": 1,
+      "is_called": false
+    },
+    {
+      "sequencename": "seq_card_extr_stg",
+      "start_value": 1,
+      "increment_by": 1,
+      "max_value": 999999,
+      "cycle": true,
+      "last_value": 8,
+      "is_called": true
+    },
+    {
+      "sequencename": "seq_card_limit_pool",
+      "start_value": 1,
+      "increment_by": 1,
+      "max_value": 999999,
+      "cycle": true,
+      "last_value": 1,
+      "is_called": false
+    },
+    {
+      "sequencename": "seq_card_policy_evidence",
+      "start_value": 1,
+      "increment_by": 1,
+      "max_value": 999999,
+      "cycle": true,
+      "last_value": 1,
+      "is_called": false
+    },
+    {
+      "sequencename": "seq_card_policy_version",
+      "start_value": 1,
+      "increment_by": 1,
+      "max_value": 999999,
+      "cycle": true,
+      "last_value": 1,
+      "is_called": false
+    },
+    {
+      "sequencename": "seq_card_product",
+      "start_value": 1,
+      "increment_by": 1,
+      "max_value": 9223372036854775807,
+      "cycle": false,
+      "last_value": 1,
+      "is_called": true
+    },
+    {
+      "sequencename": "seq_card_source_evidence",
+      "start_value": 1,
+      "increment_by": 1,
+      "max_value": 999999,
+      "cycle": true,
+      "last_value": 30,
+      "is_called": true
+    }
+  ],
+  "target": {
+    "db": "postgres",
+    "usr": "postgres",
+    "addr": "2a05:d018:cb1:bb01:8ebd:ef70:d08:18a0/128",
+    "port": 5432
+  },
+  "pdf": {
+    "path": "src\\card_benefit\\data\\raw\\hana_all\\debit\\체크_ONEPICKSTYLE하나체크카드_상품설명서(공식PDF,URL추정확인)_15650_20260429.pdf",
+    "sha256": "6ec9641c2e318ce9429a916f5d01c0468ccc3cffb238eb1162a43b280e25c6d2"
+  },
+  "external_catalog_dependencies": []
+}

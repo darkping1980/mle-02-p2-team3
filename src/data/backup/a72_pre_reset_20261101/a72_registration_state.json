@@ -1,0 +1,23 @@
+{
+  "card_id": 2,
+  "card_doc_id": "20261101_000002",
+  "replay_run_id": "20261101_000002",
+  "policy_ver_id": "20261101_000001",
+  "pools": {
+    "one_pick_day": "20261101_000001",
+    "one_pick_month_count": "20261101_000002",
+    "one_pick_month_amount": "20261101_000003",
+    "style_day": "20261101_000004",
+    "style_month_count": "20261101_000005",
+    "style_month_amount": "20261101_000006",
+    "transit_month_amount": "20261101_000007",
+    "amusement_month": "20261101_000008",
+    "amusement_year": "20261101_000009"
+  },
+  "benefits": {
+    "1": "20261101_000001",
+    "2": "20261101_000002",
+    "3": "20261101_000003",
+    "4": "20261101_000004"
+  }
+}

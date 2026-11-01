@@ -1,0 +1,63 @@
+[
+  {
+    "name": "ingr_key",
+    "type": "NODE_PROPERTY_UNIQUENESS",
+    "entityType": "NODE",
+    "labelsOrTypes": [
+      "ingr"
+    ],
+    "properties": [
+      "ingr_id"
+    ],
+    "createStatement": "CREATE CONSTRAINT `ingr_key` FOR (n:`ingr`) REQUIRE (n.`ingr_id`) IS UNIQUE"
+  },
+  {
+    "name": "rcp_cat_key",
+    "type": "NODE_PROPERTY_UNIQUENESS",
+    "entityType": "NODE",
+    "labelsOrTypes": [
+      "rcp_cat"
+    ],
+    "properties": [
+      "rcp_cat_id"
+    ],
+    "createStatement": "CREATE CONSTRAINT `rcp_cat_key` FOR (n:`rcp_cat`) REQUIRE (n.`rcp_cat_id`) IS UNIQUE"
+  },
+  {
+    "name": "rcp_key",
+    "type": "NODE_PROPERTY_UNIQUENESS",
+    "entityType": "NODE",
+    "labelsOrTypes": [
+      "rcp"
+    ],
+    "properties": [
+      "rcp_id"
+    ],
+    "createStatement": "CREATE CONSTRAINT `rcp_key` FOR (n:`rcp`) REQUIRE (n.`rcp_id`) IS UNIQUE"
+  },
+  {
+    "name": "rcp_seq_key",
+    "type": "NODE_PROPERTY_UNIQUENESS",
+    "entityType": "NODE",
+    "labelsOrTypes": [
+      "rcp"
+    ],
+    "properties": [
+      "rcp_seq"
+    ],
+    "createStatement": "CREATE CONSTRAINT `rcp_seq_key` FOR (n:`rcp`) REQUIRE (n.`rcp_seq`) IS UNIQUE"
+  },
+  {
+    "name": "rcp_step_key",
+    "type": "NODE_PROPERTY_UNIQUENESS",
+    "entityType": "NODE",
+    "labelsOrTypes": [
+      "rcp_step"
+    ],
+    "properties": [
+      "rcp_id",
+      "step_no"
+    ],
+    "createStatement": "CREATE CONSTRAINT `rcp_step_key` FOR (n:`rcp_step`) REQUIRE (n.`rcp_id`, n.`step_no`) IS UNIQUE"
+  }
+]

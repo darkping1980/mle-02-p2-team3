@@ -45,9 +45,9 @@ PDF + manifest → 문서·페이지·PAGE_V1 청크 → 텍스트 + 페이지 �
 - 예산 검사는 입력 토큰 추정, 최대 출력과 기록된 사용량을 이용한다. 이미지 토큰 추정과 실제 청구액이 다를 수 있으므로 목표 예산 $1은 절대적인 청구 상한이 아니다. 사용량이 없는 기존 호출은 후속 실행을 막는다.
 - 상품·문서 관계 `PENDING`과 추출 항목 `PENDING_REVIEW`는 승인 완료를 뜻하지 않는다. 원천 문서의 최신판 여부도 별도 확인한다.
 
-## 4. A3 상품 등록 현황
+## 4. A3 초기 상품 등록 이력
 
-개발 DB의 읽기 전용 조회에서 다음 관계를 확인했다. 상품 등록 시 동일 트랜잭션에서 상품·문서 관계를 확인하고 커밋한 이력이 있다.
+초기 A3 등록 이력이다. A7-2 초기화 후 아래 ID는 더 이상 현재 DB의 상품·문서 ID가 아니다. 현재 상태는 8절을 참고한다.
 
 | 항목 | 확인값 |
 |---|---|
@@ -59,9 +59,9 @@ PDF + manifest → 문서·페이지·PAGE_V1 청크 → 텍스트 + 페이지 �
 
 출시일은 분석 PDF 2쪽에 기재된 2026-03-30이다. 상품 `ACTIVE`는 2026-10-30 수집 당시 발급 가능 기록을 근거로 한 개발 데이터이며 실시간 발급 상태를 보증하지 않는다. PDF는 공식 서버에서 확인됐으나 상품 페이지의 해당 PDF 직접 링크와 최신판 여부는 미확인이다.
 
-## 5. Terra 1페이지 실측
+## 5. Terra 1페이지 최초 실측 이력
 
-개발 DB를 읽기 전용으로 재조회했다. 모델 설정은 코드의 `medium`이며, 실행 이력의 `run_param`에는 reasoning effort가 별도 필드로 기록돼 있지 않다.
+초기화 전 개발 DB에서 확인한 최초 실측 이력이다. 원본은 백업됐고 현재 DB에는 재생 실행이 저장돼 있다(8절). 모델 설정은 코드의 `medium`이며, 실행 이력의 `run_param`에는 reasoning effort가 별도 필드로 기록돼 있지 않다.
 
 | 항목 | 결과 |
 |---|---|
@@ -75,7 +75,7 @@ PDF + manifest → 문서·페이지·PAGE_V1 청크 → 텍스트 + 페이지 �
 | `card_source_evidence` | 30건, 위치 미확인 0건. 근거 승인 대기 |
 | 확정 업무 데이터 | `card_id=1`의 `card_bnft`, `card_limit_pool` 0건 확인 |
 
-2026-10-31 실행의 원본과 정규화 결과는 DB에 남아 있다. 실행 ID와 문서 ID가 같은 문자열이지만 서로 다른 테이블의 독립 식별자다. 조회용 Named SQL은 [extraction_repository.sql](extraction_repository.sql)의 `select_run_calls`, `select_review_queue`, `select_merged_benefits`, `select_merged_rules`, `select_merged_limits`, `select_merged_conditions`, `select_item_evidence`, `select_contract_check`를 참고한다.
+2026-10-31 최초 실행 원본은 초기화 전 로컬 백업에 남아 있고 현재 DB는 새 실행 ID의 재생 결과다. 실행 ID와 문서 ID가 같은 문자열이어도 서로 다른 테이블의 독립 식별자다. 조회용 Named SQL은 [extraction_repository.sql](extraction_repository.sql)의 `select_run_calls`, `select_review_queue`, `select_merged_benefits`, `select_merged_rules`, `select_merged_limits`, `select_merged_conditions`, `select_item_evidence`, `select_contract_check`를 참고한다.
 
 ## 6. 정확도와 검토 필요 항목
 
@@ -105,3 +105,21 @@ PDF 1쪽 표 이미지와 추출 결과를 대조한 결과, ONE PICK→월 30�
 7. PostgreSQL과 Neo4j 검색을 각각 구현하고 비교한다.
 
 README의 ‘실제 모델 연결 전’이라는 기존 문구는 이번 상태 문서 작성 시점의 Terra 연결·1쪽 실측 결과보다 오래된 설명이다. README 본문 수정은 별도 범위에서 정리한다.
+
+## 8. A7-2 개발 DB DRAFT 적재 시험
+
+사용자 승인 후 19개 테이블을 초기화하고 공통코드·시퀀스·Storage는 유지했다. 상품 `card_id=2`, 문서 `20261101_000002`를 재등록하고, 기존 응답을 네트워크 없는 Mock으로 재생한 AI 실행 `20261101_000002`을 생성했다. 재생 모델명은 `REPLAY:gpt-6.1-terra`이며 기록된 토큰은 원래 실측 사용량이다. 최초 이력 CSV 백업은 비상용으로 보관하며 전체 CSV 복원 실행은 하지 않았다.
+
+정책 `20261101_000001` DRAFT 1건, 혜택 PENDING_REVIEW 4건, 한도 9건, 방법 UNEXECUTABLE 2건, 근거 관계 40건을 시험 등록했다. **`valid_from=2026-03-30`과 한도 집계 `CARD_MEMBER`는 원문으로 확정되지 않은 테스트 가정이다.** 현재 게이트는 source evidence 미승인 `evidence_not_approved` 30건이다. `method_not_in_catalog` 2건을 확인 후 설명용 방법 2건으로 해소했고, 풀 고아·공통코드 오류는 SAVEPOINT 오류 주입 후 롤백으로 검출을 확인했다. 상세·한계는 [A7-2 실제 적재 검증](A7_2_V6_ACTUAL_LOAD_TEST.md)을 참고한다.
+
+이 데이터는 검토·승인되지 않은 시험 데이터다. `v_card_bnft_rule_effective`는 LOCAL DRAFT를 자동으로 배제하지 않으므로 소비 시 승인·검증 상태를 별도 검사해야 한다. 기존 Terra 비용 조회는 REPLAY 모델명을 집계하지 않아 과거 실제 비용 $0.040869를 후속 실측 예산에서 별도로 고려해야 한다. Neo4j 확정 변환은 보류한다.
+
+## 9. A7-4 정책 원문 근거 보완
+
+2026-11-01 개발 DB에서 PDF 2쪽 부가서비스 유지·변경·고지 원문을 PENDING source evidence `20261101_000061`과 정책 연결 `20261101_000041`로 추가했다. 현재 원문 근거 31건, 정책 근거 연결 41건이며 `evidence_not_approved` 31건이다. 나머지 혜택 4건·규칙 6건·풀 9건은 DRAFT 시험 상태 그대로다. 2쪽 전체는 이미 페이지·청크로 저장됐지만 각 조항의 업무 구조화와 업무 승인 완료는 아니다. 상세 조회·그래프 초안은 [PostgreSQL과 Neo4j 구조 비교](POSTGRESQL_TO_NEO4J_STRUCTURE_COMPARISON.md)를 참조한다. Neo4j 실제 적재는 별도 승인 전 미실행이다.
+
+최종 재조회에서 구조 검증은 구현된 게이트 범위에서 완료, 원문 의미 검증은 부분 완료로 판정했다. 해외 수수료·부가서비스 고지 등은 원문 보존만 됐으며 MVP 전체 구조화는 미완료다. staging AND 재전파 차단과 정정 이력 절차도 아직 미구현이다. Neo4j는 DRAFT 격리 시험 후보이며 실제 적재 및 서비스 사용은 승인되지 않았다.
+
+## 10. A8 Neo4j 개발 시험 적재
+
+사용자 승인으로 Aura `6ac1f0f8`의 레시피 노드 8,154·관계 18,301 및 레시피 전용 제약 5·독립 인덱스 2를 백업 대조 후 삭제했다. 레시피 백업의 실제 복원 시험은 미실시다. ONE PICK STYLE DRAFT를 카드 전용 고유성 제약과 함께 노드 108·관계 168개 적재했고 같은 데이터를 순차 재실행해 중복 없이 동일 건수임을 확인했다. PostgreSQL 스냅샷과 노드·관계의 키·원본 JSON 및 관계 끝점 비교는 불일치 0건이다. 실제 조회 예시와 시험 데이터 한계는 [구조 비교](POSTGRESQL_TO_NEO4J_STRUCTURE_COMPARISON.md) 참조. 사용자용 승인 데이터는 아니며 GraphRAG·벡터 RAG 비교와 팀원 계정 접속은 미검증이다.

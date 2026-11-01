@@ -1,0 +1,112 @@
+[
+  {
+    "name": "index_1b9dcc97",
+    "type": "LOOKUP",
+    "entityType": "RELATIONSHIP",
+    "labelsOrTypes": null,
+    "properties": null,
+    "owningConstraint": null,
+    "createStatement": "CREATE LOOKUP INDEX `index_1b9dcc97` FOR ()-[r]-() ON EACH type(r)"
+  },
+  {
+    "name": "index_460996c0",
+    "type": "LOOKUP",
+    "entityType": "NODE",
+    "labelsOrTypes": null,
+    "properties": null,
+    "owningConstraint": null,
+    "createStatement": "CREATE LOOKUP INDEX `index_460996c0` FOR (n) ON EACH labels(n)"
+  },
+  {
+    "name": "ingr_key",
+    "type": "RANGE",
+    "entityType": "NODE",
+    "labelsOrTypes": [
+      "ingr"
+    ],
+    "properties": [
+      "ingr_id"
+    ],
+    "owningConstraint": "ingr_key",
+    "createStatement": "CREATE CONSTRAINT `ingr_key` FOR (n:`ingr`) REQUIRE (n.`ingr_id`) IS UNIQUE"
+  },
+  {
+    "name": "ingr_nm_norm_idx",
+    "type": "RANGE",
+    "entityType": "NODE",
+    "labelsOrTypes": [
+      "ingr"
+    ],
+    "properties": [
+      "ingr_nm_norm"
+    ],
+    "owningConstraint": null,
+    "createStatement": "CREATE RANGE INDEX `ingr_nm_norm_idx` FOR (n:`ingr`) ON (n.`ingr_nm_norm`)"
+  },
+  {
+    "name": "rcp_cat_key",
+    "type": "RANGE",
+    "entityType": "NODE",
+    "labelsOrTypes": [
+      "rcp_cat"
+    ],
+    "properties": [
+      "rcp_cat_id"
+    ],
+    "owningConstraint": "rcp_cat_key",
+    "createStatement": "CREATE CONSTRAINT `rcp_cat_key` FOR (n:`rcp_cat`) REQUIRE (n.`rcp_cat_id`) IS UNIQUE"
+  },
+  {
+    "name": "rcp_key",
+    "type": "RANGE",
+    "entityType": "NODE",
+    "labelsOrTypes": [
+      "rcp"
+    ],
+    "properties": [
+      "rcp_id"
+    ],
+    "owningConstraint": "rcp_key",
+    "createStatement": "CREATE CONSTRAINT `rcp_key` FOR (n:`rcp`) REQUIRE (n.`rcp_id`) IS UNIQUE"
+  },
+  {
+    "name": "rcp_nm_idx",
+    "type": "RANGE",
+    "entityType": "NODE",
+    "labelsOrTypes": [
+      "rcp"
+    ],
+    "properties": [
+      "rcp_nm"
+    ],
+    "owningConstraint": null,
+    "createStatement": "CREATE RANGE INDEX `rcp_nm_idx` FOR (n:`rcp`) ON (n.`rcp_nm`)"
+  },
+  {
+    "name": "rcp_seq_key",
+    "type": "RANGE",
+    "entityType": "NODE",
+    "labelsOrTypes": [
+      "rcp"
+    ],
+    "properties": [
+      "rcp_seq"
+    ],
+    "owningConstraint": "rcp_seq_key",
+    "createStatement": "CREATE CONSTRAINT `rcp_seq_key` FOR (n:`rcp`) REQUIRE (n.`rcp_seq`) IS UNIQUE"
+  },
+  {
+    "name": "rcp_step_key",
+    "type": "RANGE",
+    "entityType": "NODE",
+    "labelsOrTypes": [
+      "rcp_step"
+    ],
+    "properties": [
+      "rcp_id",
+      "step_no"
+    ],
+    "owningConstraint": "rcp_step_key",
+    "createStatement": "CREATE CONSTRAINT `rcp_step_key` FOR (n:`rcp_step`) REQUIRE (n.`rcp_id`, n.`step_no`) IS UNIQUE"
+  }
+]

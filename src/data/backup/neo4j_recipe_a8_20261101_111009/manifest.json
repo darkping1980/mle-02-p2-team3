@@ -1,0 +1,33 @@
+{
+  "nodes": {
+    "count": 8154,
+    "sha256": "0c98ca5790f4f5be9cbeb999bfbaa610b054bf2ae1424cd8474d2b92a28501a4",
+    "groups": {
+      "rcp_step": 6717,
+      "rcp_cat": 6,
+      "ingr": 275,
+      "rcp": 1156
+    },
+    "live_recheck_match": true,
+    "file_hash_match": true
+  },
+  "relationships": {
+    "count": 18301,
+    "sha256": "ed03c6ba06f708072c4126d094074b00828266156230c189653b5c3487e7b08d",
+    "groups": {
+      "RCP_IN_RECIPE_CATEGORY": 1156,
+      "RCP_USES": 10428,
+      "RCP_HAS_STEP": 6717
+    },
+    "live_recheck_match": true,
+    "file_hash_match": true
+  },
+  "constraints": {
+    "count": 5
+  },
+  "indexes": {
+    "count": 9
+  },
+  "database": "6ac1f0f8",
+  "restore_test": "NOT PERFORMED"
+}

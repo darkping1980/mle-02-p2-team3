@@ -1,0 +1,2 @@
+card_id,card_doc_id,doc_role_cd,brand_opt_cds,effective_from,effective_to_excl,approval_status_cd,applicability_basis_txt,approval_note,create_date,create_user_id,update_date,update_user_id
+"1","20261031_000001","PRODUCT_GUIDE",,,,"PENDING","PDF 상품명 일치; 공식 서버 URL 추정 확인, 적용 승인 대기",,"2026-10-31 12:30:28.730002+00","SYSTEM","2026-10-31 12:30:28.730002+00","SYSTEM"

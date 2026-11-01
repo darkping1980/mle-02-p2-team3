@@ -2,6 +2,8 @@
 
 개발 현황과 인수인계 내용은 [PROJECT_STATUS.md](PROJECT_STATUS.md)를 참고합니다.
 
+현재 구현과 검증 결과는 위 상태 문서를 우선합니다. PDF·PAGE_V1·Storage → AI 후보·원문 근거 → V6 DRAFT 검증 → `neo4j_dry_run.py` 미리보기 및 `neo4j_load_draft.py` 승인 후 적재 흐름입니다. Neo4j의 승인되지 않은 시험 그래프를 읽는 독립 화면은 [db_pipeline_origin_search](../db_pipeline_origin_search/README.md)입니다. 변환 결과와 실제 SQL/Cypher는 [구조 비교](POSTGRESQL_TO_NEO4J_STRUCTURE_COMPARISON.md), 원문·조건 검토는 [매핑 검토](ONE_PICK_STYLE_V6_MAPPING_REVIEW.md)를 참고합니다. 변환 테스트는 프로젝트 루트에서 `\.venv\Scripts\python.exe -m unittest src.card_benefit.payment_card.db_pipeline.test_neo4j_dry_run src.card_benefit.payment_card.db_pipeline.test_neo4j_load_draft`로 실행합니다.
+
 원천 문서의 텍스트·메타데이터를 PostgreSQL에 저장하고, DB 데이터를 대상으로 전처리·AI 추출·검증까지 수행하는 방식입니다.
 `file_pipeline/`(이현근)과 **같은 원천 문서를 다른 방식으로 처리하는 독립 구현**이며, 서로의 결과를 입력으로 쓰지 않습니다.
 
@@ -71,7 +73,7 @@ Terra 단일 페이지 실행은 `python -m payment_card.db_pipeline.terra_main 
 입력 토큰은 이미지 포함 보수적인 추정치를 직접 지정해야 하며 $1은 청구 상한을 보장하지 않습니다.
 
 페이지 텍스트와 페이지 이미지를 LLM에 보내고 결과를 `card_ai_run`, `card_ai_call`, `card_extr_stg`, `card_source_evidence` 에 저장합니다.
-LLM 클라이언트는 `ExtractionService` 에 주입하며, 아직 실제 모델은 연결하지 않았습니다.
+LLM 클라이언트는 `ExtractionService`에 주입합니다. Terra 연결 및 1쪽 실측 이력은 상태 문서를 참고하며, 추가 유료 호출은 별도 승인 후 수행합니다.
 
 - 호출 전에 `card_product` 가 있어야 합니다. `card_extr_stg.card_id` 가 NOT NULL입니다.
 - `chunk_status` 가 RAW·CLEANED가 아니거나 `OCR_REVIEW` 인 페이지는 입력에서 뺍니다.
@@ -81,7 +83,7 @@ LLM 클라이언트는 `ExtractionService` 에 주입하며, 아직 실제 모�
 - `stg_sql_check_cd`: `OK`, `NO_EVIDENCE`, `QUOTE_NOT_FOUND`, `VALUE_NOT_IN_QUOTE`, `VALUE_PARSE_DIFF`, `CONTRACT_INVALID`, `MERGE_CONFLICT`, `SCOPE_UNRESOLVED`, `LINK_REVIEW`, `MERGED_DUP`.
 
 개발 예정:
-- 실제 LLM 연결과 ONE PICK STYLE 실측
+- 추가 페이지 검토와 승인된 범위의 실측
 - 검토 완료 항목의 V6 업무 테이블 반영
 - 추출 결과와 원문 근거 관리 → 공통 형식으로 내보낸 결과(**결과 B**)
 

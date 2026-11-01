@@ -1,0 +1,18 @@
+card_ai_run_id,run_stage_cd,run_call_mthd_cd,run_model_nm,run_prompt_ver,run_prompt_txt,run_param,run_target_card_doc_id,run_status,run_start_date,run_end_date,run_note,create_date,create_user_id,update_date,update_user_id
+"20261031_000001","EXTRACT","PYTHON_RELAY","gpt-6.1-terra","EXTRACT_V1","당신은 카드 상품설명서에서 혜택 정보를 구조화하는 추출기입니다.
+입력은 페이지 전체 텍스트와 같은 페이지의 이미지입니다.
+
+역할을 구분합니다.
+- 텍스트: 혜택명, 금액, 비율, 횟수, 조건의 값을 확인합니다.
+- 이미지: 표의 행과 열을 보고 어떤 값이 어떤 혜택에 속하는지 판단합니다.
+
+규칙:
+1. 값은 페이지 텍스트에 있는 것만 씁니다. 이미지에서만 보이는 값은 unresolved에 적습니다.
+2. 원문에 없는 값, 구간, 우선순위를 추정하지 않습니다. 모르면 null 또는 UNKNOWN입니다.
+3. evidence.quote_txt는 페이지 텍스트를 그대로 복사합니다. 요약하거나 고치지 않습니다.
+4. 금액과 횟수는 정수로 씁니다. 예: 3천원은 3000, 월 30회는 30입니다. 원문 표기는 *_raw_txt에 그대로 둡니다.
+5. 표에서 읽은 값의 근거는 link_basis를 TABLE_IMAGE로 씁니다. 값과 혜택이 같은 문장에 있으면 SAME_TEXT입니다.
+6. 조건이 적용되는 범위를 scope로 구분합니다. 판단할 수 없으면 UNKNOWN입니다.
+7. 값이 같다는 이유로 한도를 공유한다고 판단하지 않습니다. 원문에 공유 표현이 있을 때만 shared_scope_txt를 씁니다.
+8. 해석하지 못한 문구는 버리지 말고 unresolved에 사유와 함께 적습니다.
+","{""image_dpi"": 150, ""input_mode"": ""TEXT_IMAGE"", ""schema_ver"": ""EXTRACT_SCHEMA_V1"", ""schema_sha256"": ""78e3aee5954a7ce5a75b7c5e181fd9af4750b584236719543f213dc5beb8b770"", ""split_rule_ver"": ""PAGE_V1""}","20261031_000001","PARTIAL","2026-10-31 12:36:07.753915+00","2026-10-31 12:37:37.979295+00","AI 입력 제외 페이지: [2]","2026-10-31 12:36:07.753915+00","SYSTEM","2026-10-31 12:37:37.979295+00","SYSTEM"

@@ -1,0 +1,442 @@
+card_ai_run_id,card_doc_id,page_no,card_doc_chunk_id,call_seq,call_input_sha256,call_status,call_resp_raw,call_resp_json,call_error_msg,call_input_token_cnt,call_output_token_cnt,call_latency_ms,call_req_date,create_date,create_user_id,update_date,update_user_id
+"20261031_000001","20261031_000001","1","20261031_000010","1","d4c1b3d3693a0700e9685bc9b52cc6eb57301bd91b38382bdc1f8b0d1fc19c54","SUCCEEDED","{
+  ""page_no"": 1,
+  ""page_role"": ""MIXED"",
+  ""product"": {
+    ""product_nm"": ""ONE PICK STYLE 하나 체크카드"",
+    ""issuer"": ""하나카드"",
+    ""card_kind_cd"": ""DEBIT"",
+    ""brand_txts"": [""국내전용"", ""국내외겸용(Mastercard)""],
+    ""annual_fee_txt"": ""없음"",
+    ""issue_target_txt"": ""7세부터 발급 가능""
+  },
+  ""benefits"": [
+    {
+      ""item_key"": ""one_pick"",
+      ""bnft_nm"": ""ONE PICK 편의점·카페 캐시백"",
+      ""bnft_type_cd"": ""CASHBACK"",
+      ""is_common_candidate"": false,
+      ""no_condition_stated"": false,
+      ""certainty"": ""HIGH"",
+      ""targets"": [
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""CU""},
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""GS25""},
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""세븐일레븐""},
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""메가MGC커피""},
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""이디야커피""},
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""컴포즈커피""}
+      ],
+      ""rules"": [
+        {
+          ""rule_key"": ""one_pick_100"",
+          ""calc_method_cd"": ""FIXED_PER_TXN"",
+          ""value_num"": 100,
+          ""value_raw_txt"": ""결제 건당\n3천원 이상 시 \n100원"",
+          ""value_unit_cd"": ""KRW"",
+          ""payout_unit_cd"": ""KRW"",
+          ""min_txn_amt"": 3000,
+          ""min_txn_raw_txt"": ""결제 건당\n3천원 이상 시"",
+          ""conditions"": [],
+          ""limit_keys"": [""one_pick_day"", ""one_pick_month_count"", ""one_pick_month_amount""]
+        },
+        {
+          ""rule_key"": ""one_pick_500"",
+          ""calc_method_cd"": ""FIXED_PER_TXN"",
+          ""value_num"": 500,
+          ""value_raw_txt"": ""결제 건당\n1만원 이상 시 \n500원"",
+          ""value_unit_cd"": ""KRW"",
+          ""payout_unit_cd"": ""KRW"",
+          ""min_txn_amt"": 10000,
+          ""min_txn_raw_txt"": ""결제 건당\n1만원 이상 시"",
+          ""conditions"": [],
+          ""limit_keys"": [""one_pick_day"", ""one_pick_month_count"", ""one_pick_month_amount""]
+        }
+      ],
+      ""limits"": [
+        {
+          ""limit_key"": ""one_pick_day"",
+          ""period_cd"": ""DAY"",
+          ""cap_unit_cd"": ""COUNT"",
+          ""limit_num"": 1,
+          ""limit_raw_txt"": ""일 1회\n/ 월 30회"",
+          ""shared_scope_txt"": null,
+          ""applies_to_benefit_nms"": [""ONE PICK 편의점·카페 캐시백""]
+        },
+        {
+          ""limit_key"": ""one_pick_month_count"",
+          ""period_cd"": ""MONTH"",
+          ""cap_unit_cd"": ""COUNT"",
+          ""limit_num"": 30,
+          ""limit_raw_txt"": ""일 1회\n/ 월 30회"",
+          ""shared_scope_txt"": null,
+          ""applies_to_benefit_nms"": [""ONE PICK 편의점·카페 캐시백""]
+        },
+        {
+          ""limit_key"": ""one_pick_month_amount"",
+          ""period_cd"": ""MONTH"",
+          ""cap_unit_cd"": ""KRW"",
+          ""limit_num"": 5000,
+          ""limit_raw_txt"": ""월 5천원"",
+          ""shared_scope_txt"": null,
+          ""applies_to_benefit_nms"": [""ONE PICK 편의점·카페 캐시백""]
+        }
+      ],
+      ""conditions"": [],
+      ""relations"": [],
+      ""evidence"": [
+        {""quote_txt"": ""(지난달 실적 조건 없는 서비스)"", ""supports"": ""COND"", ""support_key"": null, ""link_basis"": ""TABLE_IMAGE""},
+        {""quote_txt"": ""CU, GS25, \n세븐일레븐"", ""supports"": ""TARGET"", ""support_key"": null, ""link_basis"": ""TABLE_IMAGE""},
+        {""quote_txt"": ""메가MGC커피, \n이디야커피, \n컴포즈커피"", ""supports"": ""TARGET"", ""support_key"": null, ""link_basis"": ""TABLE_IMAGE""},
+        {""quote_txt"": ""결제 건당\n3천원 이상 시 \n100원\n/\n결제 건당\n1만원 이상 시 \n500원"", ""supports"": ""RULE"", ""support_key"": ""one_pick_100"", ""link_basis"": ""TABLE_IMAGE""},
+        {""quote_txt"": ""결제 건당\n3천원 이상 시 \n100원\n/\n결제 건당\n1만원 이상 시 \n500원"", ""supports"": ""RULE"", ""support_key"": ""one_pick_500"", ""link_basis"": ""TABLE_IMAGE""},
+        {""quote_txt"": ""일 1회\n/ 월 30회"", ""supports"": ""LIMIT"", ""support_key"": ""one_pick_month_count"", ""link_basis"": ""TABLE_IMAGE""},
+        {""quote_txt"": ""월 5천원"", ""supports"": ""LIMIT"", ""support_key"": ""one_pick_month_amount"", ""link_basis"": ""TABLE_IMAGE""}
+      ],
+      ""uncertainty_note"": ""결제금액 1만원 이상에서 두 정액 캐시백 조건의 적용 관계는 원문에 명시되지 않음.""
+    },
+    {
+      ""item_key"": ""style"",
+      ""bnft_nm"": ""STYLE 쇼핑·서점/문구·패션 캐시백"",
+      ""bnft_type_cd"": ""CASHBACK"",
+      ""is_common_candidate"": false,
+      ""no_condition_stated"": false,
+      ""certainty"": ""HIGH"",
+      ""targets"": [
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""다이소""},
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""올리브영""},
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""교보문고""},
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""영풍문고""},
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""알라딘""},
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""yes24""},
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""아트박스""},
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""무신사""},
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""에이블리""}
+      ],
+      ""rules"": [
+        {
+          ""rule_key"": ""style_100"",
+          ""calc_method_cd"": ""FIXED_PER_TXN"",
+          ""value_num"": 100,
+          ""value_raw_txt"": ""결제 건당\n3천원 이상 시 \n100원"",
+          ""value_unit_cd"": ""KRW"",
+          ""payout_unit_cd"": ""KRW"",
+          ""min_txn_amt"": 3000,
+          ""min_txn_raw_txt"": ""결제 건당\n3천원 이상 시"",
+          ""conditions"": [],
+          ""limit_keys"": [""style_day"", ""style_month_count"", ""style_month_amount""]
+        },
+        {
+          ""rule_key"": ""style_500"",
+          ""calc_method_cd"": ""FIXED_PER_TXN"",
+          ""value_num"": 500,
+          ""value_raw_txt"": ""결제 건당\n1만원 이상 시 \n500원"",
+          ""value_unit_cd"": ""KRW"",
+          ""payout_unit_cd"": ""KRW"",
+          ""min_txn_amt"": 10000,
+          ""min_txn_raw_txt"": ""결제 건당\n1만원 이상 시"",
+          ""conditions"": [],
+          ""limit_keys"": [""style_day"", ""style_month_count"", ""style_month_amount""]
+        }
+      ],
+      ""limits"": [
+        {
+          ""limit_key"": ""style_day"",
+          ""period_cd"": ""DAY"",
+          ""cap_unit_cd"": ""COUNT"",
+          ""limit_num"": 1,
+          ""limit_raw_txt"": ""일 1회\n/ 월 10회"",
+          ""shared_scope_txt"": null,
+          ""applies_to_benefit_nms"": [""STYLE 쇼핑·서점/문구·패션 캐시백""]
+        },
+        {
+          ""limit_key"": ""style_month_count"",
+          ""period_cd"": ""MONTH"",
+          ""cap_unit_cd"": ""COUNT"",
+          ""limit_num"": 10,
+          ""limit_raw_txt"": ""일 1회\n/ 월 10회"",
+          ""shared_scope_txt"": null,
+          ""applies_to_benefit_nms"": [""STYLE 쇼핑·서점/문구·패션 캐시백""]
+        },
+        {
+          ""limit_key"": ""style_month_amount"",
+          ""period_cd"": ""MONTH"",
+          ""cap_unit_cd"": ""KRW"",
+          ""limit_num"": 5000,
+          ""limit_raw_txt"": ""월 5천원"",
+          ""shared_scope_txt"": null,
+          ""applies_to_benefit_nms"": [""STYLE 쇼핑·서점/문구·패션 캐시백""]
+        }
+      ],
+      ""conditions"": [],
+      ""relations"": [],
+      ""evidence"": [
+        {""quote_txt"": ""(지난달 실적 조건 없는 서비스)"", ""supports"": ""COND"", ""support_key"": null, ""link_basis"": ""TABLE_IMAGE""},
+        {""quote_txt"": ""다이소, 올리브영\n교보문고, 영풍문고,\n알라딘, yes24,\n아트박스\n무신사, 에이블리"", ""supports"": ""TARGET"", ""support_key"": null, ""link_basis"": ""TABLE_IMAGE""},
+        {""quote_txt"": ""결제 건당\n3천원 이상 시 \n100원\n/\n결제 건당\n1만원 이상 시 \n500원"", ""supports"": ""RULE"", ""support_key"": ""style_100"", ""link_basis"": ""TABLE_IMAGE""},
+        {""quote_txt"": ""결제 건당\n3천원 이상 시 \n100원\n/\n결제 건당\n1만원 이상 시 \n500원"", ""supports"": ""RULE"", ""support_key"": ""style_500"", ""link_basis"": ""TABLE_IMAGE""},
+        {""quote_txt"": ""일 1회\n/ 월 10회"", ""supports"": ""LIMIT"", ""support_key"": ""style_month_count"", ""link_basis"": ""TABLE_IMAGE""},
+        {""quote_txt"": ""월 5천원"", ""supports"": ""LIMIT"", ""support_key"": ""style_month_amount"", ""link_basis"": ""TABLE_IMAGE""}
+      ],
+      ""uncertainty_note"": ""결제금액 1만원 이상에서 두 정액 캐시백 조건의 적용 관계는 원문에 명시되지 않음.""
+    },
+    {
+      ""item_key"": ""transit"",
+      ""bnft_nm"": ""ONE MORE 대중교통 캐시백"",
+      ""bnft_type_cd"": ""CASHBACK"",
+      ""is_common_candidate"": false,
+      ""no_condition_stated"": false,
+      ""certainty"": ""HIGH"",
+      ""targets"": [
+        {""target_type_cd"": ""SERVICE"", ""target_nm"": ""버스""},
+        {""target_type_cd"": ""SERVICE"", ""target_nm"": ""지하철""}
+      ],
+      ""rules"": [
+        {
+          ""rule_key"": ""transit_rate"",
+          ""calc_method_cd"": ""PERCENT_OF_TXN"",
+          ""value_num"": 5,
+          ""value_raw_txt"": ""5%\n캐시백"",
+          ""value_unit_cd"": ""PERCENT"",
+          ""payout_unit_cd"": ""KRW"",
+          ""min_txn_amt"": null,
+          ""min_txn_raw_txt"": null,
+          ""conditions"": [],
+          ""limit_keys"": [""transit_month_amount""]
+        }
+      ],
+      ""limits"": [
+        {
+          ""limit_key"": ""transit_month_amount"",
+          ""period_cd"": ""MONTH"",
+          ""cap_unit_cd"": ""KRW"",
+          ""limit_num"": 1000,
+          ""limit_raw_txt"": ""월 1천원"",
+          ""shared_scope_txt"": null,
+          ""applies_to_benefit_nms"": [""ONE MORE 대중교통 캐시백""]
+        }
+      ],
+      ""conditions"": [
+        {
+          ""cond_key"": ""transit_spend"",
+          ""cond_type_cd"": ""SPEND_REQ"",
+          ""cond_basis_cd"": ""PREV_MONTH_SPEND"",
+          ""cond_min_amt"": 100000,
+          ""cond_max_amt_excl"": null,
+          ""negate_yn"": false,
+          ""excl_raw_txt"": null,
+          ""cond_raw_txt"": ""지난달 실적\n대중교통\n버스, 지하철\n월 1천원\n5%\n캐시백\n10만원"",
+          ""scope"": ""THIS_BENEFIT"",
+          ""target_benefit_nms"": [""ONE MORE 대중교통 캐시백""],
+          ""evidence"": [
+            {""quote_txt"": ""대중교통\n버스, 지하철\n월 1천원\n5%\n캐시백\n10만원"", ""supports"": ""COND"", ""support_key"": ""transit_spend"", ""link_basis"": ""TABLE_IMAGE""},
+            {""quote_txt"": ""- 지난달 1일부터 말일(승인 시점 기준)까지 국내외 일시불 이용금액 10만원/20만원 이상 시\n ONE MORE 서비스 제공"", ""supports"": ""COND"", ""support_key"": ""transit_spend"", ""link_basis"": ""SAME_TEXT""}
+          ]
+        },
+        {
+          ""cond_key"": ""transit_grace"",
+          ""cond_type_cd"": ""GRACE"",
+          ""cond_basis_cd"": ""PREV_MONTH_SPEND"",
+          ""cond_min_amt"": null,
+          ""cond_max_amt_excl"": null,
+          ""negate_yn"": false,
+          ""excl_raw_txt"": null,
+          ""cond_raw_txt"": ""- ONE MORE 대중교통 서비스는 최초 카드 사용 등록일로부터 다음 달 말일까지 지난달 카드 실적\n 10만원 미만 이어도 10만원 이상 기준으로 서비스 제공"",
+          ""scope"": ""THIS_BENEFIT"",
+          ""target_benefit_nms"": [""ONE MORE 대중교통 캐시백""],
+          ""evidence"": [
+            {""quote_txt"": ""- ONE MORE 대중교통 서비스는 최초 카드 사용 등록일로부터 다음 달 말일까지 지난달 카드 실적\n 10만원 미만 이어도 10만원 이상 기준으로 서비스 제공"", ""supports"": ""COND"", ""support_key"": ""transit_grace"", ""link_basis"": ""SAME_TEXT""}
+          ]
+        },
+        {
+          ""cond_key"": ""transit_exclusions"",
+          ""cond_type_cd"": ""BNFT_EXCL"",
+          ""cond_basis_cd"": null,
+          ""cond_min_amt"": null,
+          ""cond_max_amt_excl"": null,
+          ""negate_yn"": true,
+          ""excl_raw_txt"": ""시외버스, 고속버스, 철도(KTX/SRT/ITX)는 제외"",
+          ""cond_raw_txt"": ""- 대중교통 : 시외버스, 고속버스, 철도(KTX/SRT/ITX)는 제외"",
+          ""scope"": ""THIS_BENEFIT"",
+          ""target_benefit_nms"": [""ONE MORE 대중교통 캐시백""],
+          ""evidence"": [
+            {""quote_txt"": ""- 대중교통 : 시외버스, 고속버스, 철도(KTX/SRT/ITX)는 제외"", ""supports"": ""COND"", ""support_key"": ""transit_exclusions"", ""link_basis"": ""SAME_TEXT""}
+          ]
+        }
+      ],
+      ""relations"": [],
+      ""evidence"": [
+        {""quote_txt"": ""대중교통\n버스, 지하철\n월 1천원\n5%\n캐시백\n10만원"", ""supports"": ""BNFT"", ""support_key"": null, ""link_basis"": ""TABLE_IMAGE""},
+        {""quote_txt"": ""5%\n캐시백"", ""supports"": ""RULE"", ""support_key"": ""transit_rate"", ""link_basis"": ""TABLE_IMAGE""},
+        {""quote_txt"": ""월 1천원"", ""supports"": ""LIMIT"", ""support_key"": ""transit_month_amount"", ""link_basis"": ""TABLE_IMAGE""}
+      ],
+      ""uncertainty_note"": null
+    },
+    {
+      ""item_key"": ""amusement"",
+      ""bnft_nm"": ""ONE MORE 놀이공원 현장할인"",
+      ""bnft_type_cd"": ""DISCOUNT"",
+      ""is_common_candidate"": false,
+      ""no_condition_stated"": false,
+      ""certainty"": ""HIGH"",
+      ""targets"": [
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""에버랜드""},
+        {""target_type_cd"": ""MERCHANT"", ""target_nm"": ""롯데월드""}
+      ],
+      ""rules"": [
+        {
+          ""rule_key"": ""amusement_rate"",
+          ""calc_method_cd"": ""PERCENT_OF_TXN"",
+          ""value_num"": 50,
+          ""value_raw_txt"": ""50% \n현장할인\n(1인 1매)"",
+          ""value_unit_cd"": ""PERCENT"",
+          ""payout_unit_cd"": ""KRW"",
+          ""min_txn_amt"": null,
+          ""min_txn_raw_txt"": null,
+          ""conditions"": [],
+          ""limit_keys"": [""amusement_month"", ""amusement_year"", ""amusement_person""]
+        }
+      ],
+      ""limits"": [
+        {
+          ""limit_key"": ""amusement_month"",
+          ""period_cd"": ""MONTH"",
+          ""cap_unit_cd"": ""COUNT"",
+          ""limit_num"": 1,
+          ""limit_raw_txt"": ""월 1회 \n/ 연 2회"",
+          ""shared_scope_txt"": null,
+          ""applies_to_benefit_nms"": [""ONE MORE 놀이공원 현장할인""]
+        },
+        {
+          ""limit_key"": ""amusement_year"",
+          ""period_cd"": ""YEAR"",
+          ""cap_unit_cd"": ""COUNT"",
+          ""limit_num"": 2,
+          ""limit_raw_txt"": ""월 1회 \n/ 연 2회"",
+          ""shared_scope_txt"": null,
+          ""applies_to_benefit_nms"": [""ONE MORE 놀이공원 현장할인""]
+        },
+        {
+          ""limit_key"": ""amusement_person"",
+          ""period_cd"": ""UNKNOWN"",
+          ""cap_unit_cd"": ""COUNT"",
+          ""limit_num"": 1,
+          ""limit_raw_txt"": ""(1인 1매)"",
+          ""shared_scope_txt"": null,
+          ""applies_to_benefit_nms"": [""ONE MORE 놀이공원 현장할인""]
+        }
+      ],
+      ""conditions"": [
+        {
+          ""cond_key"": ""amusement_spend"",
+          ""cond_type_cd"": ""SPEND_REQ"",
+          ""cond_basis_cd"": ""PREV_MONTH_SPEND"",
+          ""cond_min_amt"": 200000,
+          ""cond_max_amt_excl"": null,
+          ""negate_yn"": false,
+          ""excl_raw_txt"": null,
+          ""cond_raw_txt"": ""* ONE MORE 놀이공원 서비스는 지난달 실적 20만원 이상 시 서비스 제공"",
+          ""scope"": ""THIS_BENEFIT"",
+          ""target_benefit_nms"": [""ONE MORE 놀이공원 현장할인""],
+          ""evidence"": [
+            {""quote_txt"": ""* ONE MORE 놀이공원 서비스는 지난달 실적 20만원 이상 시 서비스 제공"", ""supports"": ""COND"", ""support_key"": ""amusement_spend"", ""link_basis"": ""SAME_TEXT""}
+          ]
+        },
+        {
+          ""cond_key"": ""amusement_first_month"",
+          ""cond_type_cd"": ""GRACE"",
+          ""cond_basis_cd"": null,
+          ""cond_min_amt"": null,
+          ""cond_max_amt_excl"": null,
+          ""negate_yn"": true,
+          ""excl_raw_txt"": ""최초 발급 월에는\n서비스 미제공"",
+          ""cond_raw_txt"": ""최초 발급 월에는\n서비스 미제공"",
+          ""scope"": ""THIS_BENEFIT"",
+          ""target_benefit_nms"": [""ONE MORE 놀이공원 현장할인""],
+          ""evidence"": [
+            {""quote_txt"": ""최초 발급 월에는\n서비스 미제공"", ""supports"": ""COND"", ""support_key"": ""amusement_first_month"", ""link_basis"": ""TABLE_IMAGE""}
+          ]
+        }
+      ],
+      ""relations"": [],
+      ""evidence"": [
+        {""quote_txt"": ""놀이공원\n에버랜드, 롯데월드\n월 1회 \n/ 연 2회\n50% \n현장할인\n(1인 1매)\n20만원\n최초 발급 월에는\n서비스 미제공"", ""supports"": ""BNFT"", ""support_key"": null, ""link_basis"": ""TABLE_IMAGE""},
+        {""quote_txt"": ""50% \n현장할인\n(1인 1매)"", ""supports"": ""RULE"", ""support_key"": ""amusement_rate"", ""link_basis"": ""TABLE_IMAGE""},
+        {""quote_txt"": ""월 1회 \n/ 연 2회"", ""supports"": ""LIMIT"", ""support_key"": ""amusement_year"", ""link_basis"": ""TABLE_IMAGE""}
+      ],
+      ""uncertainty_note"": null
+    }
+  ],
+  ""card_conditions"": [
+    {
+      ""cond_key"": ""common_service_exclusion"",
+      ""cond_type_cd"": ""BNFT_EXCL"",
+      ""cond_basis_cd"": null,
+      ""cond_min_amt"": null,
+      ""cond_max_amt_excl"": null,
+      ""negate_yn"": true,
+      ""excl_raw_txt"": ""상품권 및 기프트카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액 제외"",
+      ""cond_raw_txt"": ""- 공통 : 상품권 및 기프트카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액 제외,\n 대상 가맹점의 공식 홈페이지(온라인/모바일 앱) 및 오프라인을 통한 결제 시에만 서비스가 제공되며,\n 배달 앱이나 식당 예약 앱을 통한 주문 결제, 대형시설(백화점, 할인점, 아울렛, 쇼핑몰, 휴게소,\n 호텔, 리조트, 공항, 역사, 마트) 입점 점포 및 임대 매장 결제 시 제외"",
+      ""scope"": ""ALL_BENEFITS"",
+      ""target_benefit_nms"": [],
+      ""evidence"": [
+        {""quote_txt"": ""- 공통 : 상품권 및 기프트카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액 제외,\n 대상 가맹점의 공식 홈페이지(온라인/모바일 앱) 및 오프라인을 통한 결제 시에만 서비스가 제공되며,\n 배달 앱이나 식당 예약 앱을 통한 주문 결제, 대형시설(백화점, 할인점, 아울렛, 쇼핑몰, 휴게소,\n 호텔, 리조트, 공항, 역사, 마트) 입점 점포 및 임대 매장 결제 시 제외"", ""supports"": ""COND"", ""support_key"": ""common_service_exclusion"", ""link_basis"": ""SAME_TEXT""}
+      ]
+    },
+    {
+      ""cond_key"": ""common_channel"",
+      ""cond_type_cd"": ""PAYMENT_METHOD"",
+      ""cond_basis_cd"": null,
+      ""cond_min_amt"": null,
+      ""cond_max_amt_excl"": null,
+      ""negate_yn"": false,
+      ""excl_raw_txt"": ""배달 앱이나 식당 예약 앱을 통한 주문 결제, 대형시설(백화점, 할인점, 아울렛, 쇼핑몰, 휴게소,\n 호텔, 리조트, 공항, 역사, 마트) 입점 점포 및 임대 매장 결제 시 제외"",
+      ""cond_raw_txt"": ""대상 가맹점의 공식 홈페이지(온라인/모바일 앱) 및 오프라인을 통한 결제 시에만 서비스가 제공되며,\n 배달 앱이나 식당 예약 앱을 통한 주문 결제, 대형시설(백화점, 할인점, 아울렛, 쇼핑몰, 휴게소,\n 호텔, 리조트, 공항, 역사, 마트) 입점 점포 및 임대 매장 결제 시 제외"",
+      ""scope"": ""ALL_BENEFITS"",
+      ""target_benefit_nms"": [],
+      ""evidence"": [
+        {""quote_txt"": ""대상 가맹점의 공식 홈페이지(온라인/모바일 앱) 및 오프라인을 통한 결제 시에만 서비스가 제공되며,\n 배달 앱이나 식당 예약 앱을 통한 주문 결제, 대형시설(백화점, 할인점, 아울렛, 쇼핑몰, 휴게소,\n 호텔, 리조트, 공항, 역사, 마트) 입점 점포 및 임대 매장 결제 시 제외"", ""supports"": ""COND"", ""support_key"": ""common_channel"", ""link_basis"": ""SAME_TEXT""}
+      ]
+    },
+    {
+      ""cond_key"": ""spend_exclusions"",
+      ""cond_type_cd"": ""SPEND_EXCL"",
+      ""cond_basis_cd"": ""PREV_MONTH_SPEND"",
+      ""cond_min_amt"": null,
+      ""cond_max_amt_excl"": null,
+      ""negate_yn"": true,
+      ""excl_raw_txt"": ""- 국세, 지방세, 수도/전기요금, 그 외 공과금[우편요금, 과태료, 범칙금, 벌금, 국가/공공기관/ \n 공공단체가 부과하는 부담금], 도시가스 요금, 아파트관리비, 국민연금/고용보험료/산재보험료/ \n 건강보험료 납부 금액, 스쿨뱅킹, 초·중·고 학교납입금, 대학등록금, 대학원등록금, 상품권 및 기프트 \n 카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액, 부동산 임대료, 국내외 ATM \n 이용금액, ONE PICK STYLE 하나 체크카드로 서비스 적용 받은 매출 제외"",
+      ""cond_raw_txt"": ""- 국세, 지방세, 수도/전기요금, 그 외 공과금[우편요금, 과태료, 범칙금, 벌금, 국가/공공기관/ \n 공공단체가 부과하는 부담금], 도시가스 요금, 아파트관리비, 국민연금/고용보험료/산재보험료/ \n 건강보험료 납부 금액, 스쿨뱅킹, 초·중·고 학교납입금, 대학등록금, 대학원등록금, 상품권 및 기프트 \n 카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액, 부동산 임대료, 국내외 ATM \n 이용금액, ONE PICK STYLE 하나 체크카드로 서비스 적용 받은 매출 제외"",
+      ""scope"": ""NAMED_BENEFITS"",
+      ""target_benefit_nms"": [""ONE MORE 대중교통 캐시백"", ""ONE MORE 놀이공원 현장할인""],
+      ""evidence"": [
+        {""quote_txt"": ""- 국세, 지방세, 수도/전기요금, 그 외 공과금[우편요금, 과태료, 범칙금, 벌금, 국가/공공기관/ \n 공공단체가 부과하는 부담금], 도시가스 요금, 아파트관리비, 국민연금/고용보험료/산재보험료/ \n 건강보험료 납부 금액, 스쿨뱅킹, 초·중·고 학교납입금, 대학등록금, 대학원등록금, 상품권 및 기프트 \n 카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액, 부동산 임대료, 국내외 ATM \n 이용금액, ONE PICK STYLE 하나 체크카드로 서비스 적용 받은 매출 제외"", ""supports"": ""COND"", ""support_key"": ""spend_exclusions"", ""link_basis"": ""SAME_TEXT""}
+      ]
+    },
+    {
+      ""cond_key"": ""merchant_classification"",
+      ""cond_type_cd"": ""MERCHANT_RULE"",
+      ""cond_basis_cd"": null,
+      ""cond_min_amt"": null,
+      ""cond_max_amt_excl"": null,
+      ""negate_yn"": false,
+      ""excl_raw_txt"": null,
+      ""cond_raw_txt"": ""- 모든 서비스는 하나카드에 등록된 국내 가맹점 및 업종 기준에 따라 제공"",
+      ""scope"": ""ALL_BENEFITS"",
+      ""target_benefit_nms"": [],
+      ""evidence"": [
+        {""quote_txt"": ""- 모든 서비스는 하나카드에 등록된 국내 가맹점 및 업종 기준에 따라 제공"", ""supports"": ""COND"", ""support_key"": ""merchant_classification"", ""link_basis"": ""SAME_TEXT""},
+        {""quote_txt"": ""- 가맹점 정보가 해당 업체가 아닌 결제대행업체(PG) 또는 간편결제 전용 가맹점으로 확인되는 \n 경우 ‘결제대행업체’ 또는 ‘간편결제’ 가맹점으로 분류되어 각 서비스 영역에 따른 혜택이 제공됨"", ""supports"": ""COND"", ""support_key"": ""merchant_classification"", ""link_basis"": ""SAME_TEXT""}
+      ]
+    }
+  ],
+  ""unresolved"": [
+    {
+      ""raw_txt"": ""결제 건당\n3천원 이상 시 \n100원\n/\n결제 건당\n1만원 이상 시 \n500원"",
+      ""reason"": ""1만원 이상 결제 시 두 조건이 중첩되며, 중복 적용 또는 우선 적용 여부는 명시되지 않음.""
+    },
+    {
+      ""raw_txt"": ""12~17세 이상 손님"",
+      ""reason"": ""연령 범위와 ‘이상’이 함께 사용되어 발급 대상 연령 표현이 불명확함.""
+    }
+  ]
+}","{""page_no"": 1, ""product"": {""issuer"": ""하나카드"", ""brand_txts"": [""국내전용"", ""국내외겸용(Mastercard)""], ""product_nm"": ""ONE PICK STYLE 하나 체크카드"", ""card_kind_cd"": ""DEBIT"", ""annual_fee_txt"": ""없음"", ""issue_target_txt"": ""7세부터 발급 가능""}, ""benefits"": [{""rules"": [{""rule_key"": ""one_pick_100"", ""value_num"": ""100"", ""conditions"": [], ""limit_keys"": [""one_pick_day"", ""one_pick_month_count"", ""one_pick_month_amount""], ""min_txn_amt"": 3000, ""value_raw_txt"": ""결제 건당\n3천원 이상 시 \n100원"", ""value_unit_cd"": ""KRW"", ""calc_method_cd"": ""FIXED_PER_TXN"", ""payout_unit_cd"": ""KRW"", ""min_txn_raw_txt"": ""결제 건당\n3천원 이상 시""}, {""rule_key"": ""one_pick_500"", ""value_num"": ""500"", ""conditions"": [], ""limit_keys"": [""one_pick_day"", ""one_pick_month_count"", ""one_pick_month_amount""], ""min_txn_amt"": 10000, ""value_raw_txt"": ""결제 건당\n1만원 이상 시 \n500원"", ""value_unit_cd"": ""KRW"", ""calc_method_cd"": ""FIXED_PER_TXN"", ""payout_unit_cd"": ""KRW"", ""min_txn_raw_txt"": ""결제 건당\n1만원 이상 시""}], ""limits"": [{""limit_key"": ""one_pick_day"", ""limit_num"": 1, ""period_cd"": ""DAY"", ""cap_unit_cd"": ""COUNT"", ""limit_raw_txt"": ""일 1회\n/ 월 30회"", ""shared_scope_txt"": null, ""applies_to_benefit_nms"": [""ONE PICK 편의점·카페 캐시백""]}, {""limit_key"": ""one_pick_month_count"", ""limit_num"": 30, ""period_cd"": ""MONTH"", ""cap_unit_cd"": ""COUNT"", ""limit_raw_txt"": ""일 1회\n/ 월 30회"", ""shared_scope_txt"": null, ""applies_to_benefit_nms"": [""ONE PICK 편의점·카페 캐시백""]}, {""limit_key"": ""one_pick_month_amount"", ""limit_num"": 5000, ""period_cd"": ""MONTH"", ""cap_unit_cd"": ""KRW"", ""limit_raw_txt"": ""월 5천원"", ""shared_scope_txt"": null, ""applies_to_benefit_nms"": [""ONE PICK 편의점·카페 캐시백""]}], ""bnft_nm"": ""ONE PICK 편의점·카페 캐시백"", ""targets"": [{""target_nm"": ""CU"", ""target_type_cd"": ""MERCHANT""}, {""target_nm"": ""GS25"", ""target_type_cd"": ""MERCHANT""}, {""target_nm"": ""세븐일레븐"", ""target_type_cd"": ""MERCHANT""}, {""target_nm"": ""메가MGC커피"", ""target_type_cd"": ""MERCHANT""}, {""target_nm"": ""이디야커피"", ""target_type_cd"": ""MERCHANT""}, {""target_nm"": ""컴포즈커피"", ""target_type_cd"": ""MERCHANT""}], ""evidence"": [{""supports"": ""COND"", ""quote_txt"": ""(지난달 실적 조건 없는 서비스)"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": null}, {""supports"": ""TARGET"", ""quote_txt"": ""CU, GS25, \n세븐일레븐"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": null}, {""supports"": ""TARGET"", ""quote_txt"": ""메가MGC커피, \n이디야커피, \n컴포즈커피"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": null}, {""supports"": ""RULE"", ""quote_txt"": ""결제 건당\n3천원 이상 시 \n100원\n/\n결제 건당\n1만원 이상 시 \n500원"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": ""one_pick_100""}, {""supports"": ""RULE"", ""quote_txt"": ""결제 건당\n3천원 이상 시 \n100원\n/\n결제 건당\n1만원 이상 시 \n500원"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": ""one_pick_500""}, {""supports"": ""LIMIT"", ""quote_txt"": ""일 1회\n/ 월 30회"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": ""one_pick_month_count""}, {""supports"": ""LIMIT"", ""quote_txt"": ""월 5천원"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": ""one_pick_month_amount""}], ""item_key"": ""one_pick"", ""certainty"": ""HIGH"", ""relations"": [], ""conditions"": [], ""bnft_type_cd"": ""CASHBACK"", ""uncertainty_note"": ""결제금액 1만원 이상에서 두 정액 캐시백 조건의 적용 관계는 원문에 명시되지 않음."", ""is_common_candidate"": false, ""no_condition_stated"": false}, {""rules"": [{""rule_key"": ""style_100"", ""value_num"": ""100"", ""conditions"": [], ""limit_keys"": [""style_day"", ""style_month_count"", ""style_month_amount""], ""min_txn_amt"": 3000, ""value_raw_txt"": ""결제 건당\n3천원 이상 시 \n100원"", ""value_unit_cd"": ""KRW"", ""calc_method_cd"": ""FIXED_PER_TXN"", ""payout_unit_cd"": ""KRW"", ""min_txn_raw_txt"": ""결제 건당\n3천원 이상 시""}, {""rule_key"": ""style_500"", ""value_num"": ""500"", ""conditions"": [], ""limit_keys"": [""style_day"", ""style_month_count"", ""style_month_amount""], ""min_txn_amt"": 10000, ""value_raw_txt"": ""결제 건당\n1만원 이상 시 \n500원"", ""value_unit_cd"": ""KRW"", ""calc_method_cd"": ""FIXED_PER_TXN"", ""payout_unit_cd"": ""KRW"", ""min_txn_raw_txt"": ""결제 건당\n1만원 이상 시""}], ""limits"": [{""limit_key"": ""style_day"", ""limit_num"": 1, ""period_cd"": ""DAY"", ""cap_unit_cd"": ""COUNT"", ""limit_raw_txt"": ""일 1회\n/ 월 10회"", ""shared_scope_txt"": null, ""applies_to_benefit_nms"": [""STYLE 쇼핑·서점/문구·패션 캐시백""]}, {""limit_key"": ""style_month_count"", ""limit_num"": 10, ""period_cd"": ""MONTH"", ""cap_unit_cd"": ""COUNT"", ""limit_raw_txt"": ""일 1회\n/ 월 10회"", ""shared_scope_txt"": null, ""applies_to_benefit_nms"": [""STYLE 쇼핑·서점/문구·패션 캐시백""]}, {""limit_key"": ""style_month_amount"", ""limit_num"": 5000, ""period_cd"": ""MONTH"", ""cap_unit_cd"": ""KRW"", ""limit_raw_txt"": ""월 5천원"", ""shared_scope_txt"": null, ""applies_to_benefit_nms"": [""STYLE 쇼핑·서점/문구·패션 캐시백""]}], ""bnft_nm"": ""STYLE 쇼핑·서점/문구·패션 캐시백"", ""targets"": [{""target_nm"": ""다이소"", ""target_type_cd"": ""MERCHANT""}, {""target_nm"": ""올리브영"", ""target_type_cd"": ""MERCHANT""}, {""target_nm"": ""교보문고"", ""target_type_cd"": ""MERCHANT""}, {""target_nm"": ""영풍문고"", ""target_type_cd"": ""MERCHANT""}, {""target_nm"": ""알라딘"", ""target_type_cd"": ""MERCHANT""}, {""target_nm"": ""yes24"", ""target_type_cd"": ""MERCHANT""}, {""target_nm"": ""아트박스"", ""target_type_cd"": ""MERCHANT""}, {""target_nm"": ""무신사"", ""target_type_cd"": ""MERCHANT""}, {""target_nm"": ""에이블리"", ""target_type_cd"": ""MERCHANT""}], ""evidence"": [{""supports"": ""COND"", ""quote_txt"": ""(지난달 실적 조건 없는 서비스)"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": null}, {""supports"": ""TARGET"", ""quote_txt"": ""다이소, 올리브영\n교보문고, 영풍문고,\n알라딘, yes24,\n아트박스\n무신사, 에이블리"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": null}, {""supports"": ""RULE"", ""quote_txt"": ""결제 건당\n3천원 이상 시 \n100원\n/\n결제 건당\n1만원 이상 시 \n500원"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": ""style_100""}, {""supports"": ""RULE"", ""quote_txt"": ""결제 건당\n3천원 이상 시 \n100원\n/\n결제 건당\n1만원 이상 시 \n500원"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": ""style_500""}, {""supports"": ""LIMIT"", ""quote_txt"": ""일 1회\n/ 월 10회"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": ""style_month_count""}, {""supports"": ""LIMIT"", ""quote_txt"": ""월 5천원"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": ""style_month_amount""}], ""item_key"": ""style"", ""certainty"": ""HIGH"", ""relations"": [], ""conditions"": [], ""bnft_type_cd"": ""CASHBACK"", ""uncertainty_note"": ""결제금액 1만원 이상에서 두 정액 캐시백 조건의 적용 관계는 원문에 명시되지 않음."", ""is_common_candidate"": false, ""no_condition_stated"": false}, {""rules"": [{""rule_key"": ""transit_rate"", ""value_num"": ""5"", ""conditions"": [], ""limit_keys"": [""transit_month_amount""], ""min_txn_amt"": null, ""value_raw_txt"": ""5%\n캐시백"", ""value_unit_cd"": ""PERCENT"", ""calc_method_cd"": ""PERCENT_OF_TXN"", ""payout_unit_cd"": ""KRW"", ""min_txn_raw_txt"": null}], ""limits"": [{""limit_key"": ""transit_month_amount"", ""limit_num"": 1000, ""period_cd"": ""MONTH"", ""cap_unit_cd"": ""KRW"", ""limit_raw_txt"": ""월 1천원"", ""shared_scope_txt"": null, ""applies_to_benefit_nms"": [""ONE MORE 대중교통 캐시백""]}], ""bnft_nm"": ""ONE MORE 대중교통 캐시백"", ""targets"": [{""target_nm"": ""버스"", ""target_type_cd"": ""SERVICE""}, {""target_nm"": ""지하철"", ""target_type_cd"": ""SERVICE""}], ""evidence"": [{""supports"": ""BNFT"", ""quote_txt"": ""대중교통\n버스, 지하철\n월 1천원\n5%\n캐시백\n10만원"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": null}, {""supports"": ""RULE"", ""quote_txt"": ""5%\n캐시백"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": ""transit_rate""}, {""supports"": ""LIMIT"", ""quote_txt"": ""월 1천원"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": ""transit_month_amount""}], ""item_key"": ""transit"", ""certainty"": ""HIGH"", ""relations"": [], ""conditions"": [{""scope"": ""THIS_BENEFIT"", ""cond_key"": ""transit_spend"", ""evidence"": [{""supports"": ""COND"", ""quote_txt"": ""대중교통\n버스, 지하철\n월 1천원\n5%\n캐시백\n10만원"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": ""transit_spend""}, {""supports"": ""COND"", ""quote_txt"": ""- 지난달 1일부터 말일(승인 시점 기준)까지 국내외 일시불 이용금액 10만원/20만원 이상 시\n ONE MORE 서비스 제공"", ""link_basis"": ""SAME_TEXT"", ""support_key"": ""transit_spend""}], ""negate_yn"": false, ""cond_min_amt"": 100000, ""cond_raw_txt"": ""지난달 실적\n대중교통\n버스, 지하철\n월 1천원\n5%\n캐시백\n10만원"", ""cond_type_cd"": ""SPEND_REQ"", ""excl_raw_txt"": null, ""cond_basis_cd"": ""PREV_MONTH_SPEND"", ""cond_max_amt_excl"": null, ""target_benefit_nms"": [""ONE MORE 대중교통 캐시백""]}, {""scope"": ""THIS_BENEFIT"", ""cond_key"": ""transit_grace"", ""evidence"": [{""supports"": ""COND"", ""quote_txt"": ""- ONE MORE 대중교통 서비스는 최초 카드 사용 등록일로부터 다음 달 말일까지 지난달 카드 실적\n 10만원 미만 이어도 10만원 이상 기준으로 서비스 제공"", ""link_basis"": ""SAME_TEXT"", ""support_key"": ""transit_grace""}], ""negate_yn"": false, ""cond_min_amt"": null, ""cond_raw_txt"": ""- ONE MORE 대중교통 서비스는 최초 카드 사용 등록일로부터 다음 달 말일까지 지난달 카드 실적\n 10만원 미만 이어도 10만원 이상 기준으로 서비스 제공"", ""cond_type_cd"": ""GRACE"", ""excl_raw_txt"": null, ""cond_basis_cd"": ""PREV_MONTH_SPEND"", ""cond_max_amt_excl"": null, ""target_benefit_nms"": [""ONE MORE 대중교통 캐시백""]}, {""scope"": ""THIS_BENEFIT"", ""cond_key"": ""transit_exclusions"", ""evidence"": [{""supports"": ""COND"", ""quote_txt"": ""- 대중교통 : 시외버스, 고속버스, 철도(KTX/SRT/ITX)는 제외"", ""link_basis"": ""SAME_TEXT"", ""support_key"": ""transit_exclusions""}], ""negate_yn"": true, ""cond_min_amt"": null, ""cond_raw_txt"": ""- 대중교통 : 시외버스, 고속버스, 철도(KTX/SRT/ITX)는 제외"", ""cond_type_cd"": ""BNFT_EXCL"", ""excl_raw_txt"": ""시외버스, 고속버스, 철도(KTX/SRT/ITX)는 제외"", ""cond_basis_cd"": null, ""cond_max_amt_excl"": null, ""target_benefit_nms"": [""ONE MORE 대중교통 캐시백""]}], ""bnft_type_cd"": ""CASHBACK"", ""uncertainty_note"": null, ""is_common_candidate"": false, ""no_condition_stated"": false}, {""rules"": [{""rule_key"": ""amusement_rate"", ""value_num"": ""50"", ""conditions"": [], ""limit_keys"": [""amusement_month"", ""amusement_year"", ""amusement_person""], ""min_txn_amt"": null, ""value_raw_txt"": ""50% \n현장할인\n(1인 1매)"", ""value_unit_cd"": ""PERCENT"", ""calc_method_cd"": ""PERCENT_OF_TXN"", ""payout_unit_cd"": ""KRW"", ""min_txn_raw_txt"": null}], ""limits"": [{""limit_key"": ""amusement_month"", ""limit_num"": 1, ""period_cd"": ""MONTH"", ""cap_unit_cd"": ""COUNT"", ""limit_raw_txt"": ""월 1회 \n/ 연 2회"", ""shared_scope_txt"": null, ""applies_to_benefit_nms"": [""ONE MORE 놀이공원 현장할인""]}, {""limit_key"": ""amusement_year"", ""limit_num"": 2, ""period_cd"": ""YEAR"", ""cap_unit_cd"": ""COUNT"", ""limit_raw_txt"": ""월 1회 \n/ 연 2회"", ""shared_scope_txt"": null, ""applies_to_benefit_nms"": [""ONE MORE 놀이공원 현장할인""]}, {""limit_key"": ""amusement_person"", ""limit_num"": 1, ""period_cd"": ""UNKNOWN"", ""cap_unit_cd"": ""COUNT"", ""limit_raw_txt"": ""(1인 1매)"", ""shared_scope_txt"": null, ""applies_to_benefit_nms"": [""ONE MORE 놀이공원 현장할인""]}], ""bnft_nm"": ""ONE MORE 놀이공원 현장할인"", ""targets"": [{""target_nm"": ""에버랜드"", ""target_type_cd"": ""MERCHANT""}, {""target_nm"": ""롯데월드"", ""target_type_cd"": ""MERCHANT""}], ""evidence"": [{""supports"": ""BNFT"", ""quote_txt"": ""놀이공원\n에버랜드, 롯데월드\n월 1회 \n/ 연 2회\n50% \n현장할인\n(1인 1매)\n20만원\n최초 발급 월에는\n서비스 미제공"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": null}, {""supports"": ""RULE"", ""quote_txt"": ""50% \n현장할인\n(1인 1매)"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": ""amusement_rate""}, {""supports"": ""LIMIT"", ""quote_txt"": ""월 1회 \n/ 연 2회"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": ""amusement_year""}], ""item_key"": ""amusement"", ""certainty"": ""HIGH"", ""relations"": [], ""conditions"": [{""scope"": ""THIS_BENEFIT"", ""cond_key"": ""amusement_spend"", ""evidence"": [{""supports"": ""COND"", ""quote_txt"": ""* ONE MORE 놀이공원 서비스는 지난달 실적 20만원 이상 시 서비스 제공"", ""link_basis"": ""SAME_TEXT"", ""support_key"": ""amusement_spend""}], ""negate_yn"": false, ""cond_min_amt"": 200000, ""cond_raw_txt"": ""* ONE MORE 놀이공원 서비스는 지난달 실적 20만원 이상 시 서비스 제공"", ""cond_type_cd"": ""SPEND_REQ"", ""excl_raw_txt"": null, ""cond_basis_cd"": ""PREV_MONTH_SPEND"", ""cond_max_amt_excl"": null, ""target_benefit_nms"": [""ONE MORE 놀이공원 현장할인""]}, {""scope"": ""THIS_BENEFIT"", ""cond_key"": ""amusement_first_month"", ""evidence"": [{""supports"": ""COND"", ""quote_txt"": ""최초 발급 월에는\n서비스 미제공"", ""link_basis"": ""TABLE_IMAGE"", ""support_key"": ""amusement_first_month""}], ""negate_yn"": true, ""cond_min_amt"": null, ""cond_raw_txt"": ""최초 발급 월에는\n서비스 미제공"", ""cond_type_cd"": ""GRACE"", ""excl_raw_txt"": ""최초 발급 월에는\n서비스 미제공"", ""cond_basis_cd"": null, ""cond_max_amt_excl"": null, ""target_benefit_nms"": [""ONE MORE 놀이공원 현장할인""]}], ""bnft_type_cd"": ""DISCOUNT"", ""uncertainty_note"": null, ""is_common_candidate"": false, ""no_condition_stated"": false}], ""page_role"": ""MIXED"", ""unresolved"": [{""reason"": ""1만원 이상 결제 시 두 조건이 중첩되며, 중복 적용 또는 우선 적용 여부는 명시되지 않음."", ""raw_txt"": ""결제 건당\n3천원 이상 시 \n100원\n/\n결제 건당\n1만원 이상 시 \n500원""}, {""reason"": ""연령 범위와 ‘이상’이 함께 사용되어 발급 대상 연령 표현이 불명확함."", ""raw_txt"": ""12~17세 이상 손님""}], ""card_conditions"": [{""scope"": ""ALL_BENEFITS"", ""cond_key"": ""common_service_exclusion"", ""evidence"": [{""supports"": ""COND"", ""quote_txt"": ""- 공통 : 상품권 및 기프트카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액 제외,\n 대상 가맹점의 공식 홈페이지(온라인/모바일 앱) 및 오프라인을 통한 결제 시에만 서비스가 제공되며,\n 배달 앱이나 식당 예약 앱을 통한 주문 결제, 대형시설(백화점, 할인점, 아울렛, 쇼핑몰, 휴게소,\n 호텔, 리조트, 공항, 역사, 마트) 입점 점포 및 임대 매장 결제 시 제외"", ""link_basis"": ""SAME_TEXT"", ""support_key"": ""common_service_exclusion""}], ""negate_yn"": true, ""cond_min_amt"": null, ""cond_raw_txt"": ""- 공통 : 상품권 및 기프트카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액 제외,\n 대상 가맹점의 공식 홈페이지(온라인/모바일 앱) 및 오프라인을 통한 결제 시에만 서비스가 제공되며,\n 배달 앱이나 식당 예약 앱을 통한 주문 결제, 대형시설(백화점, 할인점, 아울렛, 쇼핑몰, 휴게소,\n 호텔, 리조트, 공항, 역사, 마트) 입점 점포 및 임대 매장 결제 시 제외"", ""cond_type_cd"": ""BNFT_EXCL"", ""excl_raw_txt"": ""상품권 및 기프트카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액 제외"", ""cond_basis_cd"": null, ""cond_max_amt_excl"": null, ""target_benefit_nms"": []}, {""scope"": ""ALL_BENEFITS"", ""cond_key"": ""common_channel"", ""evidence"": [{""supports"": ""COND"", ""quote_txt"": ""대상 가맹점의 공식 홈페이지(온라인/모바일 앱) 및 오프라인을 통한 결제 시에만 서비스가 제공되며,\n 배달 앱이나 식당 예약 앱을 통한 주문 결제, 대형시설(백화점, 할인점, 아울렛, 쇼핑몰, 휴게소,\n 호텔, 리조트, 공항, 역사, 마트) 입점 점포 및 임대 매장 결제 시 제외"", ""link_basis"": ""SAME_TEXT"", ""support_key"": ""common_channel""}], ""negate_yn"": false, ""cond_min_amt"": null, ""cond_raw_txt"": ""대상 가맹점의 공식 홈페이지(온라인/모바일 앱) 및 오프라인을 통한 결제 시에만 서비스가 제공되며,\n 배달 앱이나 식당 예약 앱을 통한 주문 결제, 대형시설(백화점, 할인점, 아울렛, 쇼핑몰, 휴게소,\n 호텔, 리조트, 공항, 역사, 마트) 입점 점포 및 임대 매장 결제 시 제외"", ""cond_type_cd"": ""PAYMENT_METHOD"", ""excl_raw_txt"": ""배달 앱이나 식당 예약 앱을 통한 주문 결제, 대형시설(백화점, 할인점, 아울렛, 쇼핑몰, 휴게소,\n 호텔, 리조트, 공항, 역사, 마트) 입점 점포 및 임대 매장 결제 시 제외"", ""cond_basis_cd"": null, ""cond_max_amt_excl"": null, ""target_benefit_nms"": []}, {""scope"": ""NAMED_BENEFITS"", ""cond_key"": ""spend_exclusions"", ""evidence"": [{""supports"": ""COND"", ""quote_txt"": ""- 국세, 지방세, 수도/전기요금, 그 외 공과금[우편요금, 과태료, 범칙금, 벌금, 국가/공공기관/ \n 공공단체가 부과하는 부담금], 도시가스 요금, 아파트관리비, 국민연금/고용보험료/산재보험료/ \n 건강보험료 납부 금액, 스쿨뱅킹, 초·중·고 학교납입금, 대학등록금, 대학원등록금, 상품권 및 기프트 \n 카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액, 부동산 임대료, 국내외 ATM \n 이용금액, ONE PICK STYLE 하나 체크카드로 서비스 적용 받은 매출 제외"", ""link_basis"": ""SAME_TEXT"", ""support_key"": ""spend_exclusions""}], ""negate_yn"": true, ""cond_min_amt"": null, ""cond_raw_txt"": ""- 국세, 지방세, 수도/전기요금, 그 외 공과금[우편요금, 과태료, 범칙금, 벌금, 국가/공공기관/ \n 공공단체가 부과하는 부담금], 도시가스 요금, 아파트관리비, 국민연금/고용보험료/산재보험료/ \n 건강보험료 납부 금액, 스쿨뱅킹, 초·중·고 학교납입금, 대학등록금, 대학원등록금, 상품권 및 기프트 \n 카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액, 부동산 임대료, 국내외 ATM \n 이용금액, ONE PICK STYLE 하나 체크카드로 서비스 적용 받은 매출 제외"", ""cond_type_cd"": ""SPEND_EXCL"", ""excl_raw_txt"": ""- 국세, 지방세, 수도/전기요금, 그 외 공과금[우편요금, 과태료, 범칙금, 벌금, 국가/공공기관/ \n 공공단체가 부과하는 부담금], 도시가스 요금, 아파트관리비, 국민연금/고용보험료/산재보험료/ \n 건강보험료 납부 금액, 스쿨뱅킹, 초·중·고 학교납입금, 대학등록금, 대학원등록금, 상품권 및 기프트 \n 카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액, 부동산 임대료, 국내외 ATM \n 이용금액, ONE PICK STYLE 하나 체크카드로 서비스 적용 받은 매출 제외"", ""cond_basis_cd"": ""PREV_MONTH_SPEND"", ""cond_max_amt_excl"": null, ""target_benefit_nms"": [""ONE MORE 대중교통 캐시백"", ""ONE MORE 놀이공원 현장할인""]}, {""scope"": ""ALL_BENEFITS"", ""cond_key"": ""merchant_classification"", ""evidence"": [{""supports"": ""COND"", ""quote_txt"": ""- 모든 서비스는 하나카드에 등록된 국내 가맹점 및 업종 기준에 따라 제공"", ""link_basis"": ""SAME_TEXT"", ""support_key"": ""merchant_classification""}, {""supports"": ""COND"", ""quote_txt"": ""- 가맹점 정보가 해당 업체가 아닌 결제대행업체(PG) 또는 간편결제 전용 가맹점으로 확인되는 \n 경우 ‘결제대행업체’ 또는 ‘간편결제’ 가맹점으로 분류되어 각 서비스 영역에 따른 혜택이 제공됨"", ""link_basis"": ""SAME_TEXT"", ""support_key"": ""merchant_classification""}], ""negate_yn"": false, ""cond_min_amt"": null, ""cond_raw_txt"": ""- 모든 서비스는 하나카드에 등록된 국내 가맹점 및 업종 기준에 따라 제공"", ""cond_type_cd"": ""MERCHANT_RULE"", ""excl_raw_txt"": null, ""cond_basis_cd"": null, ""cond_max_amt_excl"": null, ""target_benefit_nms"": []}]}",,"6794","6815","79582","2026-10-31 12:37:28.250409+00","2026-10-31 12:37:28.250409+00","SYSTEM","2026-10-31 12:37:28.250409+00","SYSTEM"

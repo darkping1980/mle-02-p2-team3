@@ -1,4 +1,6 @@
-# file_pipeline — 파일 기반 처리 방식 (담당: 이현근, 미구현)
+# file_pipeline — 파일 기반 처리 방식 (담당: 이현근)
+
+현재 이 폴더에는 독립적인 `graphrag-chatbot/` 프로토타입이 있습니다. 기존 아래 계획과 별개로 확인된 구현은 `app.py`의 Streamlit 화면, `rag.py`의 Supabase PostgreSQL `nodes`/`edges` 재귀 탐색, `llm.py`의 LLM 연결, `graph_view.py`의 시각화, `supabase_schema.sql`과 `check_db.py`입니다. 상세 실행 방법은 [하위 README](graphrag-chatbot/README.md)를 확인하세요. 이 프로토타입이 카드 PDF 전체 추출이나 Neo4j 검색을 완료했다는 뜻은 아닙니다. 향후 독립 검색은 [file_pipeline_origin_search](../file_pipeline_origin_search/README.md)에서 팀원과 협의합니다.
 
 카드 상품설명서 원본 파일을 Python으로 직접 처리해 파싱·추출·검증까지 수행하는 방식입니다.
 `db_pipeline/`(김병주)과 **같은 원천 문서를 다른 방식으로 처리하는 독립 구현**이며, 서로의 결과를 입력으로 쓰지 않습니다.
