@@ -1,0 +1,15 @@
+{
+ "purpose": "A10-1 before correcting evidence 20261101_000037 position",
+ "tables": {
+  "card_source_evidence": {
+   "rows": 31,
+   "file_sha256": "a5a535565a282fe50bbab342673e697a62c6844d23fffad3bbeb4e04bd69fd83",
+   "row_digest": "1f403b9691b33c2160b096c8a8c2e8324c2cbfbc40e8fd0a7cd61fc70d2054a0"
+  },
+  "card_policy_evidence": {
+   "rows": 41,
+   "file_sha256": "f203f9e89ac5988480d716747ea96e5795c6f737d500e6fa4bb062e8d3b4a752",
+   "row_digest": "d57d30b3b155c0a9766085a1962a8ea4245f6ec0a085399701b168b3c1c98420"
+  }
+ }
+}

@@ -45,6 +45,35 @@ class PreviewTests(unittest.TestCase):
         data = fixture(); data["links"].append(copy.deepcopy(data["links"][0]))
         with self.assertRaises(ValueError): build(data)
 
+    def test_rule_evidence_uses_existing_label_and_relationship(self):
+        data = fixture()
+        data["links"].append({"ev_subject_cd": "RULE", "card_bnft_id": "benefit", "rule_key": "rule",
+                              "evidence_id": "ev", "ev_link_id": "rule_link"})
+        graph, stats = build(data)
+        self.assertEqual(stats["relationships"]["A8_SUPPORTED_BY"], 2)
+        self.assertEqual(stats["nodes"]["A8Rule"], 1)
+        edge = next(e for e in graph.edges.values() if '"rule_link"' in e["source_json"])
+        self.assertEqual(edge["type"], "A8_SUPPORTED_BY")
+        self.assertEqual(edge["start"], key("Rule", 2, "20261101_000001", "benefit", "rule"))
+        self.assertEqual(edge["end"], key("Evidence", "ev"))
+
+    def test_rule_evidence_for_missing_rule_is_rejected(self):
+        data = fixture()
+        data["links"].append({"ev_subject_cd": "RULE", "card_bnft_id": "benefit", "rule_key": "nope",
+                              "evidence_id": "ev", "ev_link_id": "rule_link"})
+        with self.assertRaises(KeyError): build(data)
+
+    def test_rule_key_is_scoped_by_benefit(self):
+        data = fixture()
+        data["links"].append({"ev_subject_cd": "RULE", "card_bnft_id": "other", "rule_key": "rule",
+                              "evidence_id": "ev", "ev_link_id": "rule_link"})
+        with self.assertRaises(KeyError): build(data)
+
+    def test_unknown_evidence_subject_is_still_rejected(self):
+        data = fixture()
+        data["links"].append({"ev_subject_cd": "REL", "card_bnft_id": "benefit", "evidence_id": "ev", "ev_link_id": "rel"})
+        with self.assertRaises(ValueError): build(data)
+
     def test_dangling_edge_is_rejected(self):
         graph = Preview(); graph.edge("X", "missing", "missing", {})
         with self.assertRaises(ValueError): graph.validate()

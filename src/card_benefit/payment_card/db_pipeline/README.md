@@ -28,6 +28,37 @@ uv run python -m payment_card.db_pipeline.main --pdf "debit/파일명.pdf" --app
 | `extraction_service.py` | LLM 입력 구성, 응답 검증, 원문 대조, 문서 통합, V6 계약 정규화 |
 | `extraction_repository.py` | AI 실행·호출·추출 항목의 DB 접근 |
 | `extraction_repository.sql` | AI 이력과 추출 결과 Named SQL |
+| `neo4j_dry_run.py` | PostgreSQL 스냅샷을 메모리 그래프로 변환. Neo4j 접속 없음 |
+| `neo4j_load_draft.py` | 변환 결과를 Neo4j에 `MERGE`. `--apply` 없으면 PREVIEW |
+| `neo4j_validation.cypher` | 키·건수·고아·조건 구조·근거 연결 읽기 전용 조회 |
+| `neo4j_validation.sql` | 같은 이름으로 대조하는 PostgreSQL 읽기 전용 조회 |
+| `neo4j_validate.py` | PostgreSQL과 Neo4j 대조. 쓰기 없음, 불일치 시 종료 코드 1 |
+
+### Neo4j 변환과 검증
+
+```text
+db_pipeline → PostgreSQL 조회 → 변환기 → Neo4j 적재 쿼리 → Neo4j
+load_snapshot() → build() → prepare() → write_transaction()
+```
+
+| 단계 | 함수 | 위치 |
+|---|---|---|
+| PostgreSQL 스냅샷 | `load_snapshot` | `neo4j_dry_run.py`, 읽기 전용 REPEATABLE READ |
+| 그래프 변환 | `build` | `neo4j_dry_run.py` |
+| 건수와 허용 목록 검사 | `prepare` | `neo4j_load_draft.py`, `EXPECTED_NODES`, `EXPECTED_RELATIONSHIPS` |
+| 적재 | `write_transaction` | `neo4j_load_draft.py`, 단일 트랜잭션 |
+| 사후 키 확인 | `neo4j_validation.node_keys`, `relationship_keys` | `neo4j_validation.cypher` |
+| 전체 대조 | `run` | `neo4j_validate.py` |
+
+```powershell
+.\.venv\Scripts\python.exe -m src.card_benefit.payment_card.db_pipeline.neo4j_dry_run --dry-run   # 변환 건수
+.\.venv\Scripts\python.exe -m src.card_benefit.payment_card.db_pipeline.neo4j_load_draft          # PREVIEW
+.\.venv\Scripts\python.exe -m src.card_benefit.payment_card.db_pipeline.neo4j_validate            # 대조
+```
+
+`MERGE`는 파이썬에 둡니다. 레시피의 `recipe_graph_load.cypher`는 라벨이 고정된 모델이라 `UNWIND $rows`가 맞지만, 카드 로더는 13개 라벨과 12개 관계 유형을 허용 목록에서 동적으로 넣습니다. Cypher 라벨은 파라미터가 될 수 없어 파일로 옮기면 25개 복제나 문자열 치환이 됩니다. 그래서 `neo4j_load.cypher`는 만들지 않습니다.
+
+로더는 노드 키 집합이 같을 때만 실행되고 삭제하지 않습니다. 키가 바뀌면 거부합니다. 재적재 후 원본에서 관계를 빼면 사후 조건이 실패합니다.
 
 청크는 `PAGE_V1` 규칙으로 페이지당 1건입니다. 페이지 원문 전체가 청크 원문이고, 내용이 없는 페이지는 청크를 만들지 않습니다.
 

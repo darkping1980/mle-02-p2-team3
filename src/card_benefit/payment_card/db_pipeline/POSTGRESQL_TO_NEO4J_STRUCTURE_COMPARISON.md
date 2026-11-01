@@ -339,3 +339,42 @@ RETURN p;
 실제 조회에서 ONE PICK 월 30회·5,000원과 STYLE 월 10회·5,000원은 서로 다른 풀이고, 각 혜택의 100/500원 규칙 2개가 해당 풀들을 참조한다. 교통 유예 원문 근거 `20261101_000049`는 1쪽 807~895 위치·PENDING으로 연결됐다. 이는 앞 절의 PostgreSQL SELECT 결과와 같은 값이다. SQL에서는 `rule_list`·`pool_refs` JSONB 전개와 복합키 JOIN이 필요했고, Cypher는 명시된 관계를 따라간다. 단순 혜택 목록은 SQL 단일 테이블 조회도 간결하다. 실제 관계 시각화 UI 및 다른 팀원의 계정 접속은 확인하지 않았다.
 
 현재 정책 시작일과 CARD_MEMBER는 시험 가정, 100원·500원 선택, 교통 제외의 NOT 및 실적 산정 범위, 1인1매 정형 의미와 원문 승인 상태는 미해결이다. 정책·조건 상태의 상세 원본은 `source_json`에서 확인한다. `v_card_bnft_rule_effective`와 마찬가지로 위 진단용 Cypher에는 승인 필터가 없으므로 최종 답변에 그대로 사용하지 않는다. LLM 호출·PostgreSQL 변경·Git push는 하지 않았다.
+
+## A10-3 재동기화 후 구조 (2026-11-01)
+
+이 절이 최신 상태다. 앞 절의 108·168과 근거 41건은 당시 기준이다. 의미 분석은 `A10_V6_NEO4J_STRUCTURE_ANALYSIS.md`, 보정 이력은 `A10_1_DATA_CORRECTION_PLAN.md`를 따른다.
+
+| 항목 | PostgreSQL | Neo4j | 대조 결과 |
+|---|---:|---:|---|
+| 노드 / 대응 행 | 혜택 4, 규칙 6, 풀 9, 근거 31 | 108 | 키·라벨·`source_json` 차이 0 |
+| 관계 | - | 189 | 키·유형·끝점·`source_json` 차이 0 |
+| 조건 atom | 15 | 15 | SQL·Cypher 일치 |
+| 근거 연결 | 62 | 62 (`A8_SUPPORTED_BY`) | SQL·Cypher 일치 |
+
+| 근거 연결 주체 | 건수 |
+|---|---:|
+| 혜택 | 34 |
+| 규칙 | 11 |
+| 한도 풀 | 9 |
+| 정책 | 8 |
+
+조건 atom 15개 모두 조건 단위 근거가 있다.
+
+### SQL과 Cypher 파일
+
+| 구분 | 파일 | 읽는 방법 | 실행 |
+|---|---|---|---|
+| 업무 SQL | `document_repository.sql`, `extraction_repository.sql` | `PostgresDbSession` mapper | `select_list` |
+| 검증 SQL | `neo4j_validation.sql` | `PostgresDbSession` mapper | `select_list` |
+| 스냅샷 SQL | `neo4j_dry_run.py` 안의 문자열 | 직접 | `load_snapshot`, 읽기 전용 스냅샷 |
+| 검색 Cypher | `graph_questions.cypher` | `Neo4jDbSession().mappers` | `Neo4jSearch._query` |
+| 검증 Cypher | `neo4j_validation.cypher` | `Neo4jDbSession().mappers` | `neo4j_validate`, `neo4j_load_draft` |
+| 적재 Cypher | `neo4j_load_draft.py`의 `MERGE` | 직접 | `write_transaction` |
+
+```text
+검색: Streamlit → LangGraph → neo4j_search.py → graph_questions.cypher → Neo4j
+적재: db_pipeline → PostgreSQL 조회 → 변환기 → Neo4j 적재 쿼리 → Neo4j
+대조: neo4j_validate.py → neo4j_validation.sql + neo4j_validation.cypher → 차이 보고
+```
+
+`neo4j_validation.condition_structure`와 `evidence_links`는 SQL과 Cypher에 같은 이름으로 있어 두 DB의 결과를 직접 비교할 수 있다. `.sql`은 DBeaver에서, `.cypher` 조회는 `$ns='ONE_PICK_STYLE_A8'`을 지정해 Neo4j Browser에서 실행할 수 있다.

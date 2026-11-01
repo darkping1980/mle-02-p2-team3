@@ -1,0 +1,109 @@
+{
+ "inserted_links": [
+  {
+   "card_id": 2,
+   "policy_ver_id": "20261101_000001",
+   "ev_link_id": "20261101_000055",
+   "ev_subject_cd": "BNFT",
+   "card_bnft_id": "20261101_000003",
+   "rule_key": null,
+   "relation_key": null,
+   "pool_id": null,
+   "ev_item_cd": "COND",
+   "ev_item_key": "transit_grace",
+   "evidence_id": "20261101_000049"
+  },
+  {
+   "card_id": 2,
+   "policy_ver_id": "20261101_000001",
+   "ev_link_id": "20261101_000056",
+   "ev_subject_cd": "BNFT",
+   "card_bnft_id": "20261101_000004",
+   "rule_key": null,
+   "relation_key": null,
+   "pool_id": null,
+   "ev_item_cd": "COND",
+   "ev_item_key": "amusement_spend",
+   "evidence_id": "20261101_000054"
+  },
+  {
+   "card_id": 2,
+   "policy_ver_id": "20261101_000001",
+   "ev_link_id": "20261101_000057",
+   "ev_subject_cd": "BNFT",
+   "card_bnft_id": "20261101_000004",
+   "rule_key": null,
+   "relation_key": null,
+   "pool_id": null,
+   "ev_item_cd": "COND",
+   "ev_item_key": "amusement_spend",
+   "evidence_id": "20261101_000048"
+  },
+  {
+   "card_id": 2,
+   "policy_ver_id": "20261101_000001",
+   "ev_link_id": "20261101_000058",
+   "ev_subject_cd": "BNFT",
+   "card_bnft_id": "20261101_000004",
+   "rule_key": null,
+   "relation_key": null,
+   "pool_id": null,
+   "ev_item_cd": "COND",
+   "ev_item_key": "amusement_first_month",
+   "evidence_id": "20261101_000055"
+  },
+  {
+   "card_id": 2,
+   "policy_ver_id": "20261101_000001",
+   "ev_link_id": "20261101_000059",
+   "ev_subject_cd": "BNFT",
+   "card_bnft_id": "20261101_000004",
+   "rule_key": null,
+   "relation_key": null,
+   "pool_id": null,
+   "ev_item_cd": "COND",
+   "ev_item_key": "amusement_per_person",
+   "evidence_id": "20261101_000052"
+  },
+  {
+   "card_id": 2,
+   "policy_ver_id": "20261101_000001",
+   "ev_link_id": "20261101_000060",
+   "ev_subject_cd": "POLICY",
+   "card_bnft_id": null,
+   "rule_key": null,
+   "relation_key": null,
+   "pool_id": null,
+   "ev_item_cd": "COND",
+   "ev_item_key": "common_service_exclusion",
+   "evidence_id": "20261101_000056"
+  },
+  {
+   "card_id": 2,
+   "policy_ver_id": "20261101_000001",
+   "ev_link_id": "20261101_000061",
+   "ev_subject_cd": "POLICY",
+   "card_bnft_id": null,
+   "rule_key": null,
+   "relation_key": null,
+   "pool_id": null,
+   "ev_item_cd": "COND",
+   "ev_item_key": "common_channel",
+   "evidence_id": "20261101_000057"
+  },
+  {
+   "card_id": 2,
+   "policy_ver_id": "20261101_000001",
+   "ev_link_id": "20261101_000062",
+   "ev_subject_cd": "POLICY",
+   "card_bnft_id": null,
+   "rule_key": null,
+   "relation_key": null,
+   "pool_id": null,
+   "ev_item_cd": "COND",
+   "ev_item_key": "merchant_classification",
+   "evidence_id": "20261101_000059"
+  }
+ ],
+ "file_sha256": "149152934034139238827bb95f750b1ec77e550dd547d67b599cd8bf2c767630"
+}

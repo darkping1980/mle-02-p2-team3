@@ -1,15 +1,196 @@
 # db_pipeline_origin_search
 
-`db_pipeline`이 PostgreSQL V6에서 변환한 Neo4j 그래프를 **읽기 전용**으로 탐색하는 로컬 Streamlit 화면입니다. ONE PICK STYLE의 `ONE_PICK_STYLE_A8` DRAFT 시험 데이터만 검색하며 확정 상품 정보가 아닙니다. LLM, 챗봇 및 PostgreSQL 접속은 사용하지 않습니다.
+`db_pipeline`이 PostgreSQL V6에서 변환한 Neo4j 그래프를 자연어로 묻고 답하는 로컬 LangGraph GraphRAG 개발 프로그램입니다. ONE PICK STYLE의 `ONE_PICK_STYLE_A8` DRAFT 시험 데이터만 조회하며 확정 상품 정보가 아닙니다. Neo4j는 읽기 전용이고 PostgreSQL에는 접속하지 않습니다.
 
-프로젝트 루트에서 실행합니다.
+## 실행
+
+프로젝트 루트의 VS Code 터미널에서 실행합니다. 단계별 로그는 이 터미널에 출력됩니다.
 
 ```powershell
 .\.venv\Scripts\python.exe -m streamlit run src/card_benefit/payment_card/db_pipeline_origin_search/streamlit_app.py --server.address 127.0.0.1
 ```
 
-기존 프로젝트 `.env`의 `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`를 사용합니다. 검증된 프로젝트 연결 함수가 TLS 인증서 검증을 유지하며 `NEO4J_TRUSTED_CA_FILE` 또는 `certifi` CA를 사용합니다. 인증정보는 화면에 표시하지 않습니다.
+접속 URL은 `http://127.0.0.1:8501` 입니다. **질문 실행** 버튼을 누르면 유료 API가 호출됩니다. 화면을 열거나 예시 질문을 고르는 것만으로는 호출되지 않습니다.
 
-빈 검색은 전체 혜택, 입력 검색은 혜택명에 대한 대소문자 구분 없는 부분 일치입니다. 선택한 혜택의 규칙·대상, 카드 공통/혜택/규칙 조건식, 한도, 정책·혜택·한도 근거를 관계 탐색으로 표시합니다. 원문과 검증 상태는 `source_json`을 함께 확인합니다. 100/500원 선택·대중교통 제외의 NOT·CARD_MEMBER·시작일·1인 1매는 미확정입니다. 텍스트 위치 일치는 근거 승인이나 표 행의 의미 검증을 보장하지 않습니다.
+## 환경 설정
 
-호출 흐름: `streamlit_app.py` 검색어·선택 → `connect()` → `Neo4jSearch.list_benefits()` / `get_detail()` → `_query()`의 읽기 트랜잭션과 Cypher → Python 결과 → 화면. `neo4j_search.py`에 쿼리와 연결이 있고 UI는 이를 호출합니다. 원본 JSON과 Cypher는 화면의 개발자 정보에서 확인합니다. 향후 승인 데이터 분리, 더 정밀한 원문 근거와 GraphRAG 검색은 별도 작업입니다.
+| 이름 | 필수 | 설명 |
+|---|---|---|
+| `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD` | 필수 | 기존 `.env` 사용 |
+| `NEO4J_DATABASE`, `NEO4J_TRUSTED_CA_FILE` | 선택 | 기존 연결 함수가 사용 |
+| `OPENAI_API_KEY` | 필수 | 없으면 질문 실행 시 안내만 표시 |
+| `CARD_SEARCH_MODEL` | 선택 | 기본 `gpt-6-luna`. 다른 모델로 자동 전환하지 않음 |
+| `CARD_SEARCH_LOG_LEVEL` | 선택 | `DEBUG`이면 프롬프트와 Cypher 전문 출력 |
+| `RECIPE_QUERY_LOG` | 선택 | 공통 로그 스위치. `0`이면 끔. 로컬 기본값은 켜짐 |
+
+LLM 호출 값은 `card_graphrag.py` 위쪽 상수에 있습니다. reasoning effort는 interpret와 answer 모두 `low`, 출력 상한은 각각 600, 2000토큰, 제한 시간은 60초, 재시도는 0회입니다.
+
+## LangGraph 구조
+
+```text
+START → interpret ─┬→ retrieve ─┬→ answer → finish → END
+                   └→ finish    └→ finish
+```
+
+| 노드 함수 | 하는 일 | State 갱신 |
+|---|---|---|
+| `CardGraphRAG.interpret` | Neo4j 혜택 목록 조회, LLM 해석, 혜택 ID 검증 | `intent`, `search_parameters`, `llm_calls`, `warnings` |
+| `CardGraphRAG.retrieve` | 질문 유형별 Cypher 템플릿 실행 | `retrieved_data`, `evidence`, `statements`, `unresolved` |
+| `CardGraphRAG.answer` | 검색 결과로 답변 생성, 근거 ID·숫자 검증 | `context`, `answer`, `llm_calls`, `warnings` |
+| `CardGraphRAG.finish` | 답변 없는 경로의 안내, 최종 로그 | `answer`, `warnings` |
+
+`after_interpret`는 오류, `UNKNOWN`, 대상 혜택 없음이면 `finish`로 보냅니다. `after_retrieve`는 조회 결과나 근거가 없으면 `finish`로 보내 Answer 호출을 생략합니다. `finish`는 안내 문구와 최종 로그를 한 곳에서 처리하려고 추가한 노드입니다.
+
+### State
+
+`CardState`의 키는 다음과 같습니다. `warnings`, `llm_calls`, `path`는 reducer로 누적됩니다.
+
+| 키 | 내용 |
+|---|---|
+| `request_id`, `started`, `question` | 요청 식별자, 시작 시각, 질문 |
+| `intent` | 질문 유형 |
+| `search_parameters` | 검증된 `benefit_ids`, `benefit_names`, `benefit_keys`, `sections`, `payment_amount`, `ambiguity` |
+| `retrieved_data` | 혜택별 Neo4j 조회 원본 |
+| `evidence` | `evidence_id`로 합친 근거(페이지, 승인 상태, 원문) |
+| `statements` | 실행한 Cypher 식별자 |
+| `unresolved` | 조회 결과에서 LLM 없이 판별한 미확정 사항 |
+| `context` | LLM에 실제로 전달한 검색 결과 |
+| `answer` | `status`, `conclusion`, `points`(`text`, `evidence_ids`, `benefit_id`, `benefit_name`, `origin`, `verification`), `uncertain`, `message` |
+| `error` | `stage`, `code`, 예외 형식 이름 |
+| `warnings`, `llm_calls`, `path` | 경고, 호출별 토큰·비용, 실행 노드 순서 |
+
+### 질문 유형과 조회 범위
+
+| 유형 | 조회 항목 |
+|---|---|
+| `BENEFIT_DETAIL`, `BENEFIT_COMPARE` | 규칙, 조건, 한도, 근거 |
+| `BENEFIT_CONDITION` | 규칙, 조건, 근거 |
+| `BENEFIT_LIMIT` | 규칙, 조건, 한도, 근거(정책 공통 근거 제외) |
+| `EVIDENCE_SEARCH` | 근거 |
+| `UNKNOWN` | 조회 없음 |
+
+LLM은 Cypher를 만들지 않습니다. 실제 혜택 목록에서 ID를 고르고, Python이 목록에 없는 ID를 버립니다. 실행되는 Cypher는 `neo4j_search.py`의 템플릿뿐이며 값은 파라미터로 전달합니다.
+
+## 함수 호출 관계
+
+```text
+streamlit_app.py  (질문 실행 버튼을 누른 경우만)
+└─ get_pipeline()                       # cache_resource로 재사용
+   ├─ neo4j_search.connect() → create_neo4j_driver()
+   └─ card_graphrag.create_llms() → ChatOpenAI 2개
+└─ CardGraphRAG.run(question) → graph.invoke(...)
+   ├─ interpret
+   │    ├─ Neo4jSearch.list_catalog() → _query(CATALOG_QUERY)
+   │    ├─ _call_llm(Interpretation)
+   │    └─ payment_amount() → filter_by_payment()
+   ├─ retrieve
+   │    ├─ Neo4jSearch.get_detail(key, sections)
+   │    │    └─ _query(CONTEXT/RULE/CONDITION/LIMIT/EVIDENCE_QUERY)
+   │    ├─ collect_evidence()
+   │    └─ find_unresolved()
+   ├─ answer
+   │    ├─ benefit_context() → condition_groups()   # 조건식 → 분기(OR) → 조건(AND), NOT
+   │    ├─ rule_conflicts()                         # 규칙 선택 미확정 구간
+   │    ├─ _call_llm(CardAnswer)
+   │    └─ validate_answer()
+   │         ├─ known_values() → unknown_values()   # 단위·기간·차이 계산
+   │         ├─ picks_single_tier()                 # 일부 구간 단정 차단
+   │         ├─ verification_level()                # 인용 원문 값 일치 판정
+   │         └─ fixed_conclusion()                  # 결론의 미확정 표시 보장
+   └─ finish                            # 전체 시간·토큰·추정 비용 로그
+_query → session(READ_ACCESS) → execute_read → tx.run(query, ns=..., 파라미터) → record.data()
+```
+
+`_call_llm`은 `with_structured_output(schema, method="json_schema", strict=True, include_raw=True)`를 사용합니다. gpt-6-luna의 Chat Completions 함수 호출은 effort `none`에서만 동작하므로 json_schema 방식을 씁니다. `include_raw`로 토큰 사용량을 함께 받습니다.
+
+## 검색 대상과 답변 검증
+
+**대상 선정.** `card.catalog`는 규칙 단위 결제 기준(`payment_min_amounts`)을 함께 읽습니다. LLM은 질문과 직접 관련된 혜택만 고르고, 후보를 좁힐 수 없으면 `benefit_ids`를 비운 채 `ambiguity`에 불명확한 점을 씁니다. 이 경우 Answer를 호출하지 않고 안내만 표시합니다. 결제 금액 질문의 `BENEFIT_DETAIL`, `BENEFIT_CONDITION`은 `filter_by_payment`가 규칙 단위 결제 기준이 없는 혜택을 제외합니다. 비교 질문과 전부 탈락하는 경우는 그대로 둡니다.
+
+**미확정 규칙.** `rule_conflicts`가 규칙이 둘 이상이고 `rule_select_cd`가 없는 혜택의 금액 구간을 계산해 `rule_selection_unresolved`로 LLM에 전달합니다. 결제 금액에 둘 이상의 구간이 해당하면 `validate_answer`가 다음을 보장합니다.
+
+- 일부 구간 금액만 쓴 문장과 결론은 쓰지 않습니다.
+- 결론에 미확정을 표시합니다. 없으면 `fixed_conclusion`이 프로그램 문구로 보완합니다.
+- 혜택별 금액 구간 문장이 없으면 조회 값과 해당 혜택 근거로 프로그램이 작성합니다(`origin=system`).
+- 규칙 선택이 미확정인 혜택에 우선·중복·합산 같은 적용 방식을 말하는 문장은 버립니다.
+
+**값 검증.** `value_tokens`는 금액, 비율, 횟수와 앞에 붙은 기간(일·월·연)을 구분합니다. 1천원과 1,000원은 같은 값입니다. 문장의 값은 해당 혜택의 구조화 값, 조건·근거 원문, 질문 안에 같은 단위로 있어야 합니다. 같은 문장에 있는 두 확인된 값의 차이는 차이를 뜻하는 표현이 있을 때만 허용합니다. 합계와 비율 계산은 허용하지 않습니다. 단위가 없는 숫자는 조회 결과 안의 숫자와 비교합니다.
+
+**근거 검증.** 다음 범위만 프로그램이 판정합니다.
+
+| 검사 | 내용 |
+|---|---|
+| 존재 | 인용 ID가 이번 조회 결과에 있는지 |
+| 혜택 범위 | 인용 근거가 문장의 `benefit_id` 조회에서 나왔는지 |
+| 상태 문장 | DRAFT·PENDING·미확정을 말하는 문장을 `points`에서 `uncertain`으로 이동 |
+| 값 일치 | 문장의 값이 인용 원문에 있는지(`verification`) |
+
+`verification` 값은 `RAW_MATCH`(인용 원문과 일치), `CALCULATED`(인용 원문 값의 차이), `STRUCTURED_ONLY`(구조화 데이터와 일치, 인용 원문에서는 미확인), `NOT_CHECKED`(값 없는 문장)입니다.
+
+문장의 의미가 근거와 맞는지, 규칙별로 맞는 근거인지는 판정하지 못합니다. `benefit_evidence`는 정책·혜택·규칙·한도 경로를 모두 읽고, 규칙 연결은 `evidence[].rule_keys`로 남습니다. 다만 근거 34~41은 병합 셀 전체를 인용하므로 규칙별로 구분되는 것은 연결입니다. `RAW_MATCH`는 값이 같다는 뜻이며 의미 일치를 보장하지 않습니다.
+
+## Cypher 파일
+
+```text
+Streamlit → LangGraph → neo4j_search.py → graph_questions.cypher → Neo4j
+```
+
+| 파일 | 맡는 일 |
+|---|---|
+| `graph_questions.cypher` | 조회 정의. `// name:` 블록 7개, 읽기 전용 |
+| `neo4j_search.py` | 파일 읽기, 실행, 로그, 결과 dict 변환 |
+| `card_graphrag.py` | 어떤 조회를 언제 쓸지 결정, 검증, 답변 |
+| `streamlit_app.py` | 입력과 표시 |
+
+| statement | Python 상수 | 호출 함수 | 로그 식별자 |
+|---|---|---|---|
+| `graph_questions.catalog` | `CATALOG_QUERY` | `list_catalog` | `card.catalog` |
+| `graph_questions.list_benefits` | `LIST_QUERY` | `list_benefits` | `card.list` |
+| `graph_questions.benefit_context` | `CONTEXT_QUERY` | `get_detail` | `card.context` |
+| `graph_questions.benefit_rules` | `RULE_QUERY` | `get_detail` | `card.rules` |
+| `graph_questions.benefit_conditions` | `CONDITION_QUERY` | `get_detail` | `card.conditions` |
+| `graph_questions.benefit_limits` | `LIMIT_QUERY` | `get_detail` | `card.limits` |
+| `graph_questions.benefit_evidence` | `EVIDENCE_QUERY` | `get_detail` | `card.evidence` |
+
+파일은 공통 `Neo4jDbSession(mapper_root=...).mappers`로 읽습니다. 드라이버 없이 동작하며 별도 로더는 없습니다. 파일명이 namespace이고 `// name:`이 statement입니다.
+
+실행은 `Neo4jDbSession.select_list`가 아니라 `Neo4jSearch._query`가 합니다. `select_list`는 자동 커밋 `session.run`이라 `READ_ACCESS`와 재시도가 없고, 요청 식별자와 노드·관계 경로를 남기는 현재 로그도 달라지기 때문입니다.
+
+값은 `tx.run(query, ns=NAMESPACE, **params)`로 바인딩합니다. Cypher 문자열에 값을 잇지 않습니다.
+
+## 로그
+
+`src/common/query_logger.py`의 `QueryLogger`를 재사용합니다. logger 이름은 공통 `car_search_rag.neo4j`의 자식인 `car_search_rag.neo4j.card_graphrag`입니다. handler는 `recipe_recommender.config.configure_query_logging`이 부모에 한 번만 붙이므로 Streamlit이 재실행되어도 중복되지 않습니다.
+
+| 이벤트 | 내용 |
+|---|---|
+| `REQUEST` | 요청 식별자, 질문, 시작 시각, 모델 |
+| `CYPHER` | Cypher 식별자, 파라미터, 건수, 노드·관계 경로, 시간 |
+| `INTERPRET` | 모델, 유형, 대상 혜택, 제외한 혜택, 결제 금액, 모호한 점, 토큰, 비용, 시간 |
+| `RETRIEVE START`, `RETRIEVE DONE` | 식별자, 항목별 건수, 근거 ID, 시간 |
+| `ANSWER` | 모델, 입력 근거 수, 미확정 규칙 혜택, 결론, 답변, 값 일치 판정, 인용 근거, 토큰, 비용, 시간 |
+| `FINAL` | 실행 경로, 호출별 토큰, 합계, 추정 비용, 경고 수, 오류, 전체 시간 |
+
+PDF 원문과 프롬프트, Cypher 전문은 `CARD_SEARCH_LOG_LEVEL=DEBUG`에서만 출력합니다. API 오류는 예외 형식 이름만 기록합니다.
+
+## 비용
+
+추정 비용은 응답의 토큰 사용량과 `MODEL_PRICES`로 계산합니다. `gpt-6-luna`는 100만 토큰당 입력 $0.10, 캐시 입력 $0.01, 출력 $0.50입니다(OpenAI 가격표, 2026-11-01 확인). 추론 토큰은 출력 토큰 수에 포함된 값으로 계산합니다. 단가가 없는 모델이나 사용량을 받지 못한 호출은 합계에서 빠지고 경고가 남습니다. OpenAI 청구 금액을 대신하지 않습니다.
+
+중복 호출은 다음과 같이 막습니다. 결과는 `session_state`에 저장되어 위젯 재실행으로 다시 호출되지 않습니다. 직전 성공 결과와 같은 질문은 **같은 질문도 다시 실행**을 켜지 않으면 호출하지 않습니다.
+
+## 테스트
+
+```powershell
+# Mock LLM·Mock Neo4j, 외부 호출 없음
+.\.venv\Scripts\python.exe -m unittest src.card_benefit.payment_card.tests.test_card_graphrag src.card_benefit.payment_card.tests.test_neo4j_origin_search
+
+# 실제 Neo4j 읽기 테스트 추가. LLM은 Mock이며 A9-3 실제 응답을 재생한다
+$env:RUN_NEO4J_INTEGRATION='1'; .\.venv\Scripts\python.exe -m unittest src.card_benefit.payment_card.tests.test_card_graphrag src.card_benefit.payment_card.tests.test_neo4j_origin_search
+```
+
+`run_offline_tests.py`에는 카드 테스트가 포함되어 있지 않습니다.
+
+## 데이터 주의
+
+100원·500원 규칙의 중첩 선택, 대중교통 제외의 NOT과 범위, CARD_MEMBER 집계, 정책 시작일, 1인 1매는 미확정입니다. `find_unresolved`가 조회 결과에서 이를 판별해 LLM 답변과 별도로 화면에 표시합니다. 텍스트 위치 일치는 근거 승인이나 표 행의 의미 검증을 보장하지 않습니다.

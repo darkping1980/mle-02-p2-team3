@@ -99,7 +99,7 @@ def build(snapshot):
     p = g.node("Policy", [CARD_ID, POLICY_ID], {"source": policy, "valid_from_is_assumption": True, "product_doc": product_doc})
     g.edge("HAS_POLICY", c, p, {})
     doc = g.node("Document", [DOC_ID], document)
-    pages, chunks, evidence, pools, benefits = {}, {}, {}, {}, {}
+    pages, chunks, evidence, pools, benefits, rules = {}, {}, {}, {}, {}, {}
     for row in snapshot["pages"]:
         pg = g.node("Page", [DOC_ID, row["page_no"]], row); pages[row["page_no"]] = pg
         g.edge("IN_DOCUMENT", pg, doc, {})
@@ -137,6 +137,7 @@ def build(snapshot):
         for rule in row["rule_list"]:
             rk = rule["rule_key"]
             r = g.node("Rule", [CARD_ID, POLICY_ID, bid, rk], rule); g.edge("HAS_RULE", b, r, {})
+            rules[(bid, rk)] = r
             expression(r, ["rule", CARD_ID, POLICY_ID, bid, rk], rule.get("cond_expr"))
             for target in rule["target_list"]:
                 t = g.node("Target", [CARD_ID, POLICY_ID, target["target_type_cd"], target["target_nm"]],
@@ -148,6 +149,7 @@ def build(snapshot):
         subject = link["ev_subject_cd"]
         if subject == "POLICY": owner = p
         elif subject == "BNFT": owner = benefits[link["card_bnft_id"]]
+        elif subject == "RULE": owner = rules[(link["card_bnft_id"], link["rule_key"])]
         elif subject == "POOL": owner = pools[link["pool_id"]]
         else: raise ValueError(f"unsupported evidence subject: {subject}")
         g.edge("SUPPORTED_BY", owner, evidence[link["evidence_id"]], link)
