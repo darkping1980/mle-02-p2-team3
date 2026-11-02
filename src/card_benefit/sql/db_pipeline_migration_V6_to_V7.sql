@@ -217,15 +217,71 @@ DROP SEQUENCE db_pipeline.seq_card_common_policy_version;
 DROP SEQUENCE db_pipeline.seq_card_common_bnft;
 
 -- 호출부(extraction_repository.sql)가 있어 2인자 시그니처를 유지한다. COMMON 분기만 없앤다.
+
+-- 원본 규칙 JSON은 V6 복구 및 정확한 값 비교를 위해 백업 스키마에 보존한다.
+CREATE TABLE db_pipeline_v6_backup.v7_rule_list_before_pool_split AS
+SELECT card_id,card_bnft_id,rule_list FROM db_pipeline.card_bnft;
+CREATE TEMP TABLE rule_pool_before ON COMMIT DROP AS
+SELECT b.card_id,b.card_bnft_id,r.value->>'rule_key' AS rule_key,
+       p.value->>'pool_id' AS pool_id,p.value->>'pool_role_cd' AS pool_role_cd
+FROM db_pipeline.card_bnft b
+CROSS JOIN LATERAL jsonb_array_elements(b.rule_list) r(value)
+CROSS JOIN LATERAL jsonb_array_elements(coalesce(r.value->'pool_refs','[]'::jsonb)) p(value);
+DO $$
+BEGIN
+ IF EXISTS (
+   SELECT 1 FROM db_pipeline.card_bnft b CROSS JOIN LATERAL jsonb_array_elements(b.rule_list) r(value)
+   CROSS JOIN LATERAL jsonb_array_elements(coalesce(r.value->'pool_refs','[]'::jsonb)) p(value)
+   WHERE jsonb_typeof(p.value) <> 'object' OR (p.value - 'pool_id' - 'pool_role_cd') <> '{}'::jsonb
+      OR jsonb_typeof(p.value->'pool_id') IS DISTINCT FROM 'string'
+      OR jsonb_typeof(p.value->'pool_role_cd') IS DISTINCT FROM 'string'
+ ) THEN RAISE EXCEPTION '한도 참조에 보존할 수 없는 필드 또는 값이 있습니다'; END IF;
+ IF EXISTS (SELECT 1 FROM rule_pool_before GROUP BY card_id,card_bnft_id,rule_key,pool_id HAVING count(*) > 1)
+ THEN RAISE EXCEPTION '중복된 규칙·한도 관계가 있습니다'; END IF;
+ IF EXISTS (SELECT 1 FROM rule_pool_before x
+     WHERE NOT EXISTS (SELECT 1 FROM db_pipeline.card_product p WHERE p.card_id=x.card_id)
+        OR NOT EXISTS (SELECT 1 FROM db_pipeline.card_bnft b WHERE (b.card_id,b.card_bnft_id)=(x.card_id,x.card_bnft_id))
+        OR NOT EXISTS (SELECT 1 FROM db_pipeline.card_limit_pool p WHERE (p.card_id,p.pool_id)=(x.card_id,x.pool_id))
+        OR NOT EXISTS (SELECT 1 FROM db_pipeline.common_cd c WHERE c.common_code_grp_id='POOL_ROLE' AND c.common_cd=x.pool_role_cd))
+ THEN RAISE EXCEPTION '고아 또는 미등록 역할 관계가 있습니다'; END IF;
+END $$;
+
+CREATE TABLE db_pipeline.card_bnft_rule_pool (
+    card_id bigint NOT NULL,
+    card_bnft_id varchar(20) NOT NULL,
+    rule_key varchar(40) NOT NULL,
+    pool_id varchar(20) NOT NULL,
+    pool_role_cd varchar(30) NOT NULL,
+    PRIMARY KEY (card_id, card_bnft_id, rule_key, pool_id)
+);
+COMMENT ON TABLE db_pipeline.card_bnft_rule_pool IS '카드 혜택 규칙과 한도 풀의 논리적 관계. 물리 FK 없음';
+COMMENT ON COLUMN db_pipeline.card_bnft_rule_pool.card_id IS '카드 아이디';
+COMMENT ON COLUMN db_pipeline.card_bnft_rule_pool.card_bnft_id IS '혜택 아이디';
+COMMENT ON COLUMN db_pipeline.card_bnft_rule_pool.rule_key IS '계산 규칙 키';
+COMMENT ON COLUMN db_pipeline.card_bnft_rule_pool.pool_id IS '한도 풀 아이디';
+COMMENT ON COLUMN db_pipeline.card_bnft_rule_pool.pool_role_cd IS '한도 풀 역할';
+
+INSERT INTO db_pipeline.card_bnft_rule_pool(card_id,card_bnft_id,rule_key,pool_id,pool_role_cd)
+SELECT card_id,card_bnft_id,rule_key,pool_id,pool_role_cd FROM rule_pool_before;
+DO $$ BEGIN
+ IF EXISTS ((SELECT * FROM rule_pool_before EXCEPT ALL SELECT * FROM db_pipeline.card_bnft_rule_pool)
+            UNION ALL (SELECT * FROM db_pipeline.card_bnft_rule_pool EXCEPT ALL SELECT * FROM rule_pool_before))
+ THEN RAISE EXCEPTION '규칙·한도 이관 결과가 원본과 다릅니다'; END IF;
+END $$;
+UPDATE db_pipeline.card_bnft b SET rule_list = x.rules
+FROM (SELECT b2.card_id,b2.card_bnft_id,coalesce(jsonb_agg(r.value-'pool_refs' ORDER BY r.ord)
+     FILTER (WHERE r.value IS NOT NULL),'[]'::jsonb) AS rules
+      FROM db_pipeline.card_bnft b2 LEFT JOIN LATERAL jsonb_array_elements(b2.rule_list)
+      WITH ORDINALITY r(value,ord) ON true GROUP BY b2.card_id,b2.card_bnft_id) x
+WHERE (b.card_id,b.card_bnft_id)=(x.card_id,x.card_bnft_id);
+
 CREATE OR REPLACE FUNCTION db_pipeline.fn_valid_rule_list(p_list jsonb, p_owner text) RETURNS boolean
     LANGUAGE plpgsql IMMUTABLE
     SET search_path TO 'pg_catalog'
     AS $_$
 DECLARE
     v_rule jsonb;
-    v_ref jsonb;
     v_keys text[] := '{}';
-    v_pools text[];
     v_state text;
 BEGIN
     IF jsonb_typeof(p_list) IS DISTINCT FROM 'array' THEN
@@ -277,21 +333,7 @@ BEGIN
             RETURN false;
         END IF;
 
-        IF p_owner = 'LOCAL' THEN
-            IF jsonb_typeof(coalesce(v_rule->'pool_refs', '[]'::jsonb)) <> 'array' THEN
-                RETURN false;
-            END IF;
-            v_pools := '{}';
-            FOR v_ref IN SELECT value FROM jsonb_array_elements(coalesce(v_rule->'pool_refs', '[]'::jsonb)) LOOP
-                IF jsonb_typeof(v_ref) <> 'object'
-                   OR coalesce(v_ref->>'pool_id', '') = ''
-                   OR coalesce(v_ref->>'pool_role_cd', '') = ''
-                   OR v_ref->>'pool_id' = ANY (v_pools) THEN
-                    RETURN false;
-                END IF;
-                v_pools := v_pools || (v_ref->>'pool_id');
-            END LOOP;
-        ELSE
+        IF p_owner IS DISTINCT FROM 'LOCAL' OR v_rule ? 'pool_refs' THEN
             RETURN false;
         END IF;
     END LOOP;
@@ -299,7 +341,7 @@ BEGIN
 END;
 $_$;
 
-COMMENT ON FUNCTION db_pipeline.fn_valid_rule_list(jsonb, text) IS '계산 규칙 목록 JSONB 계약 검증. rule_key 중복, 금액 타입, 조건 상태, 대상, pool_refs 검사. p_owner는 LOCAL만 허용';
+COMMENT ON FUNCTION db_pipeline.fn_valid_rule_list(jsonb, text) IS '계산 규칙 목록 JSONB 계약 검증. 최종 규칙에는 pool_refs를 허용하지 않는다. p_owner는 LOCAL만 허용';
 DROP FUNCTION db_pipeline.fn_valid_limit_list(jsonb);
 
 ALTER TABLE db_pipeline.card_bnft DROP CONSTRAINT card_bnft_ck_5;
@@ -318,6 +360,8 @@ COMMENT ON COLUMN db_pipeline.card_extr_stg.card_id IS '카드 아이디(NULL이
 -- ---------------------------------------------------------------------------
 -- 9. 공통코드: 코드 교체와 삭제, 달라진 설명만 갱신 (보류 2건은 건드리지 않는다)
 -- ---------------------------------------------------------------------------
+UPDATE db_pipeline.common_code_grp SET common_code_grp_desc = '계산 규칙이 연결된 한도 풀을 어떤 역할로 소비하는지 구분하는 공통코드. card_bnft_rule_pool.pool_role_cd에서 사용한다. 한 규칙이 영역 한도와 카드 통합 한도를 동시에 소비하는 구조를 표현하기 위한 값이며, 풀 자체의 범위는 LIMIT_SCOPE가 정한다.' WHERE common_code_grp_id = 'POOL_ROLE';
+
 UPDATE db_pipeline.common_cd
 SET common_cd = 'CARD', common_cd_nm = '카드', common_cd_desc = '근거가 카드 공통 조건이나 상품 전체를 뒷받침하는 경우. 특정 혜택에 속하지 않는 내용에 쓰며 혜택, 규칙, 관계, 풀 컬럼은 모두 비워야 한다.',
     update_date = now(), update_user_id = 'V7_MIGRATION'
@@ -420,21 +464,17 @@ SELECT b.card_id, b.card_bnft_id,
        (r.value->>'basis_amt')::numeric(18,2) AS basis_amt,
        nullif(r.value->'calc_params', 'null'::jsonb) AS calc_params,
        (r.value->>'rule_priority')::integer AS rule_priority,
-       r.value->>'rule_status_cd' AS rule_status_cd,
-       coalesce(r.value->'pool_refs', '[]'::jsonb) AS pool_refs
+       r.value->>'rule_status_cd' AS rule_status_cd
 FROM db_pipeline.card_bnft b
 CROSS JOIN LATERAL jsonb_array_elements(b.rule_list) WITH ORDINALITY AS r(value, ord);
 
 COMMENT ON VIEW db_pipeline.v_card_rule IS '상품 계산 규칙을 행으로 복원. V5 card_bnft_rule 조회 대체';
 
 CREATE VIEW db_pipeline.v_card_rule_pool AS
-SELECT r.card_id, r.card_bnft_id, r.rule_key,
-       p.value->>'pool_id' AS pool_id,
-       p.value->>'pool_role_cd' AS pool_role_cd
-FROM db_pipeline.v_card_rule r
-CROSS JOIN LATERAL jsonb_array_elements(r.pool_refs) AS p(value);
+SELECT card_id, card_bnft_id, rule_key, pool_id, pool_role_cd
+FROM db_pipeline.card_bnft_rule_pool;
 
-COMMENT ON VIEW db_pipeline.v_card_rule_pool IS '규칙↔한도 풀 관계를 행으로 복원. V5 card_bnft_rule_pool 조회 대체';
+COMMENT ON VIEW db_pipeline.v_card_rule_pool IS '규칙↔한도 풀 연결 테이블 조회';
 
 CREATE VIEW db_pipeline.v_card_bnft_rel AS
 SELECT b.card_id, b.card_bnft_id AS from_bnft_id,
@@ -652,7 +692,7 @@ UNION ALL
 SELECT 'card_bnft.rule_list[].rule_status_cd', 'ITEM_STATUS', rule_status_cd::text
 FROM db_pipeline.v_card_rule WHERE rule_status_cd IS NOT NULL
 UNION ALL
-SELECT 'card_bnft.rule_list[].pool_refs[].pool_role_cd', 'POOL_ROLE', pool_role_cd::text
+SELECT 'card_bnft_rule_pool.pool_role_cd', 'POOL_ROLE', pool_role_cd::text
 FROM db_pipeline.v_card_rule_pool WHERE pool_role_cd IS NOT NULL
 UNION ALL
 SELECT 'card_bnft.relation_list[].rel_type_cd', 'REL_TYPE', rel_type_cd::text
@@ -741,6 +781,18 @@ UNION ALL
 SELECT 'pool_ref_orphan', x.card_id || '/' || x.rule_key || '/' || x.pool_id
 FROM db_pipeline.v_card_rule_pool x
 WHERE NOT EXISTS (SELECT 1 FROM db_pipeline.card_limit_pool p WHERE (p.card_id, p.pool_id) = (x.card_id, x.pool_id))
+UNION ALL
+SELECT 'rule_pool_product_orphan', x.card_id || '/' || x.card_bnft_id || '/' || x.rule_key || '/' || x.pool_id
+FROM db_pipeline.card_bnft_rule_pool x
+WHERE NOT EXISTS (SELECT 1 FROM db_pipeline.card_product p WHERE p.card_id=x.card_id)
+UNION ALL
+SELECT 'rule_pool_benefit_orphan', x.card_id || '/' || x.card_bnft_id || '/' || x.rule_key || '/' || x.pool_id
+FROM db_pipeline.card_bnft_rule_pool x
+WHERE NOT EXISTS (SELECT 1 FROM db_pipeline.card_bnft b WHERE (b.card_id,b.card_bnft_id)=(x.card_id,x.card_bnft_id))
+UNION ALL
+SELECT 'rule_pool_rule_orphan', x.card_id || '/' || x.card_bnft_id || '/' || x.rule_key || '/' || x.pool_id
+FROM db_pipeline.card_bnft_rule_pool x
+WHERE NOT EXISTS (SELECT 1 FROM db_pipeline.v_card_rule r WHERE (r.card_id,r.card_bnft_id,r.rule_key)=(x.card_id,x.card_bnft_id,x.rule_key))
 UNION ALL
 SELECT 'rel_to_bnft_orphan', x.card_id || '/' || x.relation_key
 FROM db_pipeline.v_card_bnft_rel x

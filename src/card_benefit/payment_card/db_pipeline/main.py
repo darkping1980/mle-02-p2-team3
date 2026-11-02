@@ -42,7 +42,10 @@ def print_result(result: RegisterResult) -> None:
     print(f"문서: {document.doc_cd} / {document.doc_title} / card_doc_id={result.card_doc_id}")
     print(f"파일: {document.doc_file_nm} ({document.doc_file_size:,} byte) sha256={document.doc_sha256}")
     print(f"심의: {document.doc_review_no} / {document.doc_review_date}")
-    print(f"PDF 추출: {len(document.pages)}쪽, 청크 {len(document.chunks)}개")
+    if result.status == "ALREADY_REGISTERED" and not document.pages:
+        print("기존 문서 재사용: 페이지 재파싱 생략")
+    else:
+        print(f"PDF 추출: {len(document.pages)}쪽, 청크 {len(document.chunks)}개")
     for row in document.quality():
         print(f"  {row}")
     if result.counts:

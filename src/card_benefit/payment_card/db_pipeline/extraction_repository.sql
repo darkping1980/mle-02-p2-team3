@@ -24,7 +24,7 @@ WHERE r.run_target_card_doc_id = :CARD_DOC_ID AND r.run_model_nm = 'gpt-6.1-terr
 
 -- name: select_doc
 -- 추출 대상 문서와 PDF 파일 정보를 조회한다.
-SELECT card_doc_id, doc_cd, doc_file_nm, doc_sha256, doc_page_cnt, doc_status
+SELECT card_doc_id, doc_cd, doc_type_cd, doc_file_nm, doc_sha256, doc_page_cnt, doc_status
 FROM db_pipeline.card_doc
 WHERE card_doc_id = :CARD_DOC_ID
 ;
@@ -32,7 +32,8 @@ WHERE card_doc_id = :CARD_DOC_ID
 -- name: select_ai_input_chunks
 -- AI 입력 청크를 조회한다. 사용 중인 문서의 RAW·CLEANED 청크이고, 페이지가 OCR 검토 대기가 아니어야 한다.
 SELECT c.card_doc_id, c.page_no, c.card_doc_chunk_id, c.chunk_seq, c.chunk_raw_txt, c.chunk_split_rule_ver,
-       p.page_layer_cd, p.page_note
+       p.page_layer_cd, p.page_note, p.page_txt_sha256, p.page_extractor_nm, p.page_extractor_ver,
+       c.chunk_start_pos, c.chunk_end_pos, c.chunk_status
 FROM db_pipeline.card_doc_chunk c
 JOIN db_pipeline.card_doc d ON d.card_doc_id = c.card_doc_id
 JOIN db_pipeline.card_doc_page p ON (p.card_doc_id, p.page_no) = (c.card_doc_id, c.page_no)
@@ -42,6 +43,21 @@ WHERE c.card_doc_id = :CARD_DOC_ID
   AND COALESCE(left(p.page_note, 11), '') <> 'OCR_REVIEW '
 ORDER BY c.chunk_seq
 ;
+
+-- name: select_reusable_runs
+SELECT card_ai_run_id FROM db_pipeline.card_ai_run
+WHERE run_target_card_doc_id = :CARD_DOC_ID AND run_stage_cd = 'EXTRACT'
+  AND run_status = 'SUCCEEDED' AND run_model_nm = :MODEL
+  AND run_prompt_ver = :PROMPT_VER AND run_param->>'reuse_fingerprint' = :FINGERPRINT
+ORDER BY run_start_date DESC;
+
+-- name: select_reuse_items
+SELECT s.card_doc_chunk_id, s.call_seq, s.card_id, s.stg_kind_cd, s.stg_item_seq, s.stg_raw_item,
+       s.stg_sql_check_cd, s.stg_normalized_item, s.stg_parent_card_extr_stg_id,
+       (SELECT COALESCE(jsonb_agg(e.quote_txt ORDER BY e.quote_txt), '[]'::jsonb) FROM db_pipeline.card_source_evidence e
+        WHERE e.card_extr_stg_id = s.card_extr_stg_id AND e.card_doc_id = s.card_doc_id
+          AND e.page_no = s.page_no AND e.card_doc_chunk_id = s.card_doc_chunk_id) AS evidence_quotes
+FROM db_pipeline.card_extr_stg s WHERE s.card_ai_run_id = :CARD_AI_RUN_ID;
 
 -- name: select_blocked_pages
 -- 내용이 있지만 AI 입력에서 제외된 페이지를 조회한다.
@@ -195,7 +211,7 @@ WHERE card_extr_stg_id = :CARD_EXTR_STG_ID
 
 -- name: select_run_calls
 -- 실행의 호출 이력과 토큰을 조회한다.
-SELECT card_ai_run_id, page_no, card_doc_chunk_id, call_seq, call_status, call_error_msg,
+SELECT card_ai_run_id, page_no, card_doc_chunk_id, call_seq, call_status, call_error_msg, call_resp_json,
        call_input_token_cnt, call_output_token_cnt, call_latency_ms
 FROM db_pipeline.card_ai_call
 WHERE card_ai_run_id = :CARD_AI_RUN_ID
@@ -292,7 +308,9 @@ ORDER BY s.page_no, s.stg_item_seq, e.evidence_id
 -- 정제본을 V6 JSONB 계약 함수로 검사한다. 키는 승인 시 실제 ID로 바뀌므로 자리표시 값을 그대로 검사한다.
 SELECT s.card_extr_stg_id, s.stg_kind_cd,
        CASE WHEN s.stg_kind_cd = 'BENEFIT'
-            THEN db_pipeline.fn_valid_rule_list(s.stg_normalized_item->'rule_list', 'LOCAL') END AS rule_ok,
+            THEN db_pipeline.fn_valid_rule_list(
+                (SELECT coalesce(jsonb_agg(r.value - 'pool_refs' ORDER BY r.ord), '[]'::jsonb)
+                 FROM jsonb_array_elements(s.stg_normalized_item->'rule_list') WITH ORDINALITY AS r(value,ord)), 'LOCAL') END AS rule_ok,
        CASE WHEN s.stg_kind_cd = 'BENEFIT'
             THEN db_pipeline.fn_valid_cond_expr(NULLIF(s.stg_normalized_item->'bnft_cond_expr', 'null'::jsonb))
             ELSE db_pipeline.fn_valid_cond_expr(NULLIF(s.stg_normalized_item->'cond_expr', 'null'::jsonb)) END AS cond_ok,

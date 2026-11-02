@@ -23,13 +23,14 @@ def preflight(session, args, estimated):
         row = conn.execute('''SELECT p.card_id, d.card_doc_id, d.doc_file_nm, d.doc_sha256,
             d.doc_status, pd.approval_status_cd, c.card_doc_chunk_id, c.chunk_raw_txt,
             c.chunk_status, c.chunk_split_rule_ver, pg.page_raw_txt, pg.page_note
-            FROM db_pipeline.card_product p
-            JOIN db_pipeline.card_product_doc pd ON pd.card_id=p.card_id
-            JOIN db_pipeline.card_doc d ON d.card_doc_id=pd.card_doc_id
+            FROM db_pipeline.card_doc d
+            LEFT JOIN db_pipeline.card_product_doc pd ON pd.card_doc_id=d.card_doc_id AND pd.card_id=%s
+            LEFT JOIN db_pipeline.card_product p ON p.card_id=pd.card_id
             JOIN db_pipeline.card_doc_chunk c ON c.card_doc_id=d.card_doc_id
             JOIN db_pipeline.card_doc_page pg ON (pg.card_doc_id,pg.page_no)=(c.card_doc_id,c.page_no)
-            WHERE p.card_id=%s AND d.card_doc_id=%s AND c.page_no=%s''',
-            (args.card_id, args.doc_id, args.page)).fetchall()
+            WHERE d.card_doc_id=%s AND c.page_no=%s
+              AND ((CAST(%s AS bigint) IS NOT NULL AND p.card_id=%s) OR (CAST(%s AS bigint) IS NULL AND d.doc_type_cd='BRAND_SERVICE'))''',
+            (args.card_id, args.doc_id, args.page, args.card_id, args.card_id, args.card_id)).fetchall()
         if len(row) != 1:
             raise ValueError('상품·문서 연결 또는 페이지 청크가 없거나 여러 건입니다')
         item = row[0]
@@ -89,7 +90,7 @@ def preflight(session, args, estimated):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description='Terra 단일 페이지 추출: 실제 API 호출 및 DB 저장')
-    p.add_argument('--card-id', type=int, required=True)
+    p.add_argument('--card-id', type=int)
     p.add_argument('--doc-id', required=True)
     p.add_argument('--page', type=int, required=True)
     p.add_argument('--input-token-estimate', type=int, required=True, help='이미지를 포함한 보수적인 입력 토큰 추정')

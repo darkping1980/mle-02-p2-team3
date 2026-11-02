@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 import psycopg
 from pydantic import ValidationError
@@ -211,6 +211,77 @@ class ServiceCase(unittest.TestCase):
     def service(self, responses, **options):
         session = FakeSession(doc=self.doc, chunks=self.chunks, **options)
         return session, ExtractionService(session, FakeLlm(responses), data_root=self.root)
+
+
+class CommonReuseTests(ServiceCase):
+    def setup_common(self):
+        session, service = self.service({1: page_json(1), 2: page_json(2)})
+        session.doc["doc_type_cd"] = "BRAND_SERVICE"
+        service.llm_client.reuse_config = {"adapter": "mock", "setting": 1}
+        return session, service
+
+    def test_cardless_candidates_keep_pending_evidence_and_applicability(self):
+        session, service = self.setup_common()
+        item = benefit(brand_txt="VISA", service_grade_txt="Signature", applicable_cards=["JADE"],
+                       selection_service_txt="선택", excluded_cards=["제외 카드"], validity_period_txt="2026년")
+        service.llm_client.responses[1] = page_json(1, [item])
+        with patch.object(service.repository, "select_reusable_runs", return_value=[]):
+            result = service.run("D1")
+        self.assertEqual(result.status, "SUCCEEDED")
+        saved = session.calls("insert_stg")
+        self.assertTrue(saved)
+        self.assertTrue(all(row["CARD_ID"] is None for row in saved))
+        self.assertTrue(session.calls("insert_evidence"))
+        raw = saved[0]["STG_RAW_ITEM"].obj
+        self.assertEqual(raw["applicable_cards"], ["JADE"])
+        normalized = session.calls("update_stg_merge")[0]["STG_NORMALIZED_ITEM"].obj
+        self.assertIsNone(normalized["bnft_origin_cd"])
+        self.assertIsNone(normalized["limit_list"][0]["aggregation_key_cd"])
+
+    def test_reuse_requires_complete_success_and_matching_fingerprint(self):
+        session, service = self.setup_common()
+        candidate = [{"card_ai_run_id": "OLD"}]
+        calls = [{"card_doc_chunk_id": c["card_doc_chunk_id"], "page_no": c["page_no"],
+                  "call_seq": 1, "call_status": "SUCCEEDED", "call_resp_json": page_json(c["page_no"])}
+                 for c in self.chunks]
+        with patch.object(service.repository, "select_reusable_runs", return_value=candidate) as lookup, \
+             patch.object(service.repository, "select_run_calls", return_value=calls), \
+             patch.object(service.repository, "select_reuse_items", return_value=[]):
+            result = service.run("D1")
+            self.assertTrue(result.reused)
+            self.assertEqual(service.llm_client.inputs, [])
+            old_fingerprint = lookup.call_args.args[-1]
+            service.llm_client.reuse_config = {"adapter": "mock", "setting": 2}
+            service.run("D1")
+            self.assertNotEqual(old_fingerprint, lookup.call_args.args[-1])
+            self.assertFalse(service._complete_reuse("OLD", self.chunks[:1]))
+            changed_config_fingerprint = lookup.call_args.args[-1]
+            session.chunks[0]["chunk_raw_txt"] += " changed"
+            service.run("D1")
+            self.assertNotEqual(changed_config_fingerprint, lookup.call_args.args[-1])
+            with patch("payment_card.db_pipeline.extraction_service.PROMPT_VER", "NEXT"):
+                service.run("D1")
+                self.assertEqual(lookup.call_args.args[-2], "NEXT")
+            service.llm_client.model_nm = "different-model"
+            service.run("D1")
+            self.assertEqual(lookup.call_args.args[-3], "different-model")
+
+    def test_reuse_rejects_missing_item_or_evidence(self):
+        _, service = self.setup_common()
+        page = PageExtraction.model_validate(page_json(1, [benefit()]))
+        calls = [{"card_doc_chunk_id": "C1", "page_no": 1, "call_seq": 1,
+                  "call_status": "SUCCEEDED", "call_resp_json": page.model_dump(mode="json")}]
+        row = {"card_doc_chunk_id": "C1", "call_seq": 1, "stg_item_seq": 1,
+               "card_id": None, "stg_kind_cd": "BENEFIT", "stg_raw_item": page.benefits[0].model_dump(mode="json"),
+               "evidence_quotes": sorted(e.quote_txt for e in page.benefits[0].evidence),
+               "stg_sql_check_cd": "OK", "stg_normalized_item": {}, "stg_parent_card_extr_stg_id": None}
+        with patch.object(service.repository, "select_run_calls", return_value=calls), \
+             patch.object(service.repository, "select_reuse_items", return_value=[row]) as items:
+            self.assertTrue(service._complete_reuse("OLD", self.chunks[:1]))
+            row["evidence_quotes"] = []
+            self.assertFalse(service._complete_reuse("OLD", self.chunks[:1]))
+            items.return_value = []
+            self.assertFalse(service._complete_reuse("OLD", self.chunks[:1]))
 
 
 class HelperTests(unittest.TestCase):
@@ -601,7 +672,7 @@ class MapperTests(unittest.TestCase):
     def test_every_statement_is_loaded_and_names_the_schema(self):
         session = PostgresDbSession(mapper_root=MAPPER_ROOT, camel_case_keys=False, sql_log_mode="none")
         names = [name for name in session.mappers["extraction_repository"].available_queries if not name.endswith("_cursor")]
-        self.assertEqual(len(names), 20)
+        self.assertEqual(len(names), 22)
         for name in names:
             self.assertIn("db_pipeline.", session._query(f"extraction_repository.{name}").sql, name)
         self.assertEqual(session.database_manager._pools, {})

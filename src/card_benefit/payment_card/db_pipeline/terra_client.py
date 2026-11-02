@@ -33,6 +33,11 @@ class TerraClient:
     def cost(cls, input_tokens: int, output_tokens: int) -> Decimal:
         return (input_tokens * cls.input_price + output_tokens * cls.output_price) / Decimal(1000000)
 
+    @property
+    def reuse_config(self):
+        return {"adapter": "terra_v1", "reasoning": "medium", "image_detail": "high",
+                "max_output_tokens": self.max_output_tokens}
+
     def extract(self, page_input: PageInput) -> LlmResponse:
         if self.usage_uncertain or self.spent_usd + self.cost(self.input_token_estimate, self.max_output_tokens) > self.budget_usd:
             raise BudgetExceeded('예산 또는 사용량 미확인으로 호출 차단')

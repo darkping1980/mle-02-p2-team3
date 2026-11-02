@@ -1,7 +1,7 @@
 // V7 draft physical-column mirror of db_pipeline_schemaV7_draft.sql.
 // Ref lines are logical only; SQL has 0 FKs.
 // JSONB references cannot be drawn as Ref lines. They are logical references checked by v_card_integrity_issue:
-//   card_bnft.rule_list[].pool_refs[].pool_id        -> card_limit_pool.pool_id
+//   card_bnft_rule_pool.rule_key -> card_bnft.rule_list[].rule_key
 //   card_bnft.relation_list[].to_bnft_id             -> card_bnft.card_bnft_id
 //   card_bnft.relation_list[].trigger_pool_id        -> card_limit_pool.pool_id
 //   card_evidence_link.rule_key                    -> card_bnft.rule_list[].rule_key
@@ -103,6 +103,20 @@ Table db_pipeline.card_limit_pool [note: '혜택 공유 한도'] {
     (card_id, pool_id) [pk]
   }
 }
+
+Table db_pipeline.card_bnft_rule_pool [note: '혜택 규칙과 한도 풀의 논리 관계. 물리 FK 없음'] {
+  card_id bigint [not null, note: '카드 아이디']
+  card_bnft_id varchar(20) [not null, note: '혜택 아이디']
+  rule_key varchar(40) [not null, note: '규칙 키']
+  pool_id varchar(20) [not null, note: '한도 풀 아이디']
+  pool_role_cd varchar(30) [not null, note: '한도 풀 역할']
+  Indexes {
+    (card_id, card_bnft_id, rule_key, pool_id) [pk]
+  }
+}
+
+Ref: db_pipeline.card_bnft_rule_pool.(card_id, card_bnft_id) > db_pipeline.card_bnft.(card_id, card_bnft_id)
+Ref: db_pipeline.card_bnft_rule_pool.(card_id, pool_id) > db_pipeline.card_limit_pool.(card_id, pool_id)
 
 Table db_pipeline.card_source_evidence [note: '원문 근거'] {
   evidence_id varchar(20) [not null, pk, note: '원문 근거 아이디']

@@ -181,6 +181,42 @@ $_$;
 
 COMMENT ON FUNCTION db_pipeline.fn_valid_rule_list(jsonb, text) IS '계산 규칙 목록 JSONB 계약 검증. rule_key 중복, 금액 타입, 조건 상태, 대상, pool_refs(LOCAL), limit_list(COMMON) 검사';
 
+
+-- 고아 관계는 자동 삭제하지 않고 복구를 중단한다.
+DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM db_pipeline.card_bnft_rule_pool x
+  WHERE NOT EXISTS (SELECT 1 FROM db_pipeline.card_product p WHERE p.card_id=x.card_id)
+     OR NOT EXISTS (SELECT 1 FROM db_pipeline.card_bnft b WHERE (b.card_id,b.card_bnft_id)=(x.card_id,x.card_bnft_id))
+     OR NOT EXISTS (SELECT 1 FROM db_pipeline.card_limit_pool p WHERE (p.card_id,p.pool_id)=(x.card_id,x.pool_id))
+     OR NOT EXISTS (SELECT 1 FROM db_pipeline.card_bnft b CROSS JOIN LATERAL jsonb_array_elements(b.rule_list) r(value)
+                    WHERE (b.card_id,b.card_bnft_id)=(x.card_id,x.card_bnft_id) AND r.value->>'rule_key'=x.rule_key)
+     OR NOT EXISTS (SELECT 1 FROM db_pipeline.common_cd c WHERE c.common_code_grp_id='POOL_ROLE' AND c.common_cd=x.pool_role_cd))
+ THEN RAISE EXCEPTION '고아 또는 미등록 규칙·한도 관계를 확인해야 합니다'; END IF;
+END $$;
+-- V6 표현으로 복원. 동일 규칙 안의 풀은 pool_id 순서로 재구성한다.
+UPDATE db_pipeline.card_bnft b SET rule_list = x.rules
+FROM (SELECT b2.card_id,b2.card_bnft_id,coalesce(jsonb_agg(
+      r.value || jsonb_build_object('pool_refs',coalesce((SELECT jsonb_agg(jsonb_build_object('pool_id',p.pool_id,'pool_role_cd',p.pool_role_cd) ORDER BY p.pool_id)
+      FROM db_pipeline.card_bnft_rule_pool p WHERE (p.card_id,p.card_bnft_id,p.rule_key)=(b2.card_id,b2.card_bnft_id,r.value->>'rule_key')),'[]'::jsonb))
+      ORDER BY r.ord) FILTER (WHERE r.value IS NOT NULL),'[]'::jsonb) AS rules
+      FROM db_pipeline.card_bnft b2 LEFT JOIN LATERAL jsonb_array_elements(b2.rule_list) WITH ORDINALITY r(value,ord) ON true
+      GROUP BY b2.card_id,b2.card_bnft_id) x WHERE (b.card_id,b.card_bnft_id)=(x.card_id,x.card_bnft_id);
+-- 이관 후 해당 규칙과 관계가 그대로인 행은 원래 JSON과 배열 순서까지 복원한다.
+UPDATE db_pipeline.card_bnft b SET rule_list = saved.rule_list
+FROM db_pipeline_v6_backup.v7_rule_list_before_pool_split saved
+WHERE (b.card_id,b.card_bnft_id)=(saved.card_id,saved.card_bnft_id)
+  AND (SELECT coalesce(jsonb_agg(r.value-'pool_refs' ORDER BY r.ord),'[]'::jsonb) FROM jsonb_array_elements(b.rule_list) WITH ORDINALITY r(value,ord))
+   = (SELECT coalesce(jsonb_agg(r.value-'pool_refs' ORDER BY r.ord),'[]'::jsonb) FROM jsonb_array_elements(saved.rule_list) WITH ORDINALITY r(value,ord))
+  AND NOT EXISTS (
+      (SELECT r.value->>'rule_key',p.value->>'pool_id',p.value->>'pool_role_cd' FROM jsonb_array_elements(saved.rule_list) r(value)
+       CROSS JOIN LATERAL jsonb_array_elements(coalesce(r.value->'pool_refs','[]'::jsonb)) p(value)
+       EXCEPT ALL SELECT p.rule_key,p.pool_id,p.pool_role_cd FROM db_pipeline.card_bnft_rule_pool p WHERE (p.card_id,p.card_bnft_id)=(b.card_id,b.card_bnft_id))
+      UNION ALL
+      (SELECT p.rule_key,p.pool_id,p.pool_role_cd FROM db_pipeline.card_bnft_rule_pool p WHERE (p.card_id,p.card_bnft_id)=(b.card_id,b.card_bnft_id)
+       EXCEPT ALL SELECT r.value->>'rule_key',p.value->>'pool_id',p.value->>'pool_role_cd' FROM jsonb_array_elements(saved.rule_list) r(value)
+       CROSS JOIN LATERAL jsonb_array_elements(coalesce(r.value->'pool_refs','[]'::jsonb)) p(value)));
+DROP TABLE db_pipeline.card_bnft_rule_pool;
+
 CREATE TABLE db_pipeline.card_policy_version (
     card_id bigint NOT NULL,
     policy_ver_id varchar(20) DEFAULT db_pipeline.fn_get_biz_id('card_policy_version') NOT NULL,

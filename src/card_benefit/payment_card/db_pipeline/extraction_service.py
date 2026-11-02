@@ -27,6 +27,7 @@ from .document_storage import resolve_local_pdf
 from .extraction_repository import ExtractionRepository
 from .extraction_schema import (
     SCHEMA_VER,
+    MERGE_VER,
     BenefitItem,
     ConditionItem,
     EvidenceCheck,
@@ -41,7 +42,7 @@ from .extraction_schema import (
 
 extraction_logger = logging.getLogger("card_benefit.extraction")
 
-PROMPT_VER = "EXTRACT_V1"
+PROMPT_VER = "EXTRACT_V2"
 IMAGE_DPI = 150
 INPUT_MODE = "TEXT_IMAGE"
 KEY_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,40}$")
@@ -69,6 +70,7 @@ PROMPT_TXT = """당신은 카드 상품설명서에서 혜택 정보를 구조�
 6. 조건이 적용되는 범위를 scope로 구분합니다. 판단할 수 없으면 UNKNOWN입니다.
 7. 값이 같다는 이유로 한도를 공유한다고 판단하지 않습니다. 원문에 공유 표현이 있을 때만 shared_scope_txt를 씁니다.
 8. 해석하지 못한 문구는 버리지 말고 unresolved에 사유와 함께 적습니다.
+9. 공통 브랜드 안내서는 혜택별 브랜드, 등급, 대상 카드, 선택서비스, 제외 카드와 제공 기간을 원문 그대로 기록합니다. 적용 대상과 기간을 뒷받침하는 인용은 APPLICABILITY 근거로 남깁니다. 문서에 없거나 다른 페이지와의 연결이 불명확하면 추정하지 말고 검토 대상으로 남깁니다.
 """
 
 
@@ -137,6 +139,7 @@ class RunResult:
     pages_failed: int
     merged: bool
     note: str | None = None
+    reused: bool = False
 
 
 # =========================================================
@@ -318,10 +321,18 @@ def check_benefit(benefit: BenefitItem, page: PageResult) -> ItemCheck:
         if compact(target.target_nm) not in compact(page.text):
             add(("QUOTE_NOT_FOUND", [f"{target.target_nm}: 대상이 원문에 없음"]))
 
+    applicability = [benefit.brand_txt, benefit.service_grade_txt, benefit.selection_service_txt,
+                     benefit.validity_period_txt, *benefit.applicable_cards, *benefit.excluded_cards]
+    applicability = [value for value in applicability if value]
+    quotes = " ".join(e.quote_txt for e in evidence if e.supports == "APPLICABILITY" and e.located)
+    for value in applicability:
+        if compact(value) not in compact(quotes):
+            add(("VALUE_NOT_IN_QUOTE", [f"적용 정보: 근거에서 확인되지 않음 ({value})"]))
+
     value_evidence = [item for item in evidence if item.supports in ("RULE", "LIMIT")]
     names = [benefit.bnft_nm, *(target.target_nm for target in benefit.targets)]
     link = link_check(value_evidence, names) if value_evidence else "NEEDS_REVIEW"
-    if benefit.certainty == "LOW" or benefit.is_common_candidate:
+    if benefit.certainty == "LOW" or benefit.is_common_candidate or applicability:
         link = "NEEDS_REVIEW"
     return ItemCheck(value_check_cd=worst_value_check(codes), link_check_cd=link, issues=issues, evidence=evidence)
 
@@ -520,9 +531,9 @@ def normalize_benefit(
         "bnft_cd": bnft_cd,
         "bnft_nm": item.bnft_nm,
         "bnft_type_cd": item.bnft_type_cd,
-        "bnft_origin_cd": "LOCAL",
+        "bnft_origin_cd": None,
         "is_common_candidate": item.is_common_candidate,
-        "bnft_scope_cd": "PRODUCT",
+        "bnft_scope_cd": None,
         "bnft_brand_opt_cds": None,
         "bnft_cond_expr": build_cond_expr(conditions),
         "rule_select_cd": None,
@@ -534,7 +545,7 @@ def normalize_benefit(
                 "pool_scope_cd": "BENEFIT_GROUP" if limit.shared_scope_txt else "BENEFIT",
                 "period_cd": limit.period_cd,
                 "cap_unit_cd": limit.cap_unit_cd,
-                "aggregation_key_cd": "CARD_MEMBER",
+                "aggregation_key_cd": None,
                 "limit_num": json_number(limit.limit_num),
                 "shared_scope_txt": limit.shared_scope_txt,
             }
@@ -665,17 +676,19 @@ class ExtractionService:
         self.data_root = Path(data_root)
         self.max_attempts = max_attempts
 
-    def run(self, card_doc_id: str, card_id: int, page_numbers: set[int] | None = None) -> RunResult:
+    def run(self, card_doc_id: str, card_id: int | None = None, page_numbers: set[int] | None = None) -> RunResult:
         """문서를 추출한다. 실행할 때마다 새 ``card_ai_run_id`` 를 만들고 이전 결과는 바꾸지 않는다.
 
         Raises:
             ExtractionError: 상품·문서·입력 페이지·로컬 PDF가 준비되지 않은 경우.
         """
-        if self.repository.select_card_product(card_id) is None:
+        if card_id is not None and self.repository.select_card_product(card_id) is None:
             raise ExtractionError(f"card_product가 없습니다: {card_id}")
         document = self.repository.select_doc(card_doc_id)
         if document is None:
             raise ExtractionError(f"card_doc이 없습니다: {card_doc_id}")
+        if card_id is None and document.get("doc_type_cd") != "BRAND_SERVICE":
+            raise ExtractionError("카드 없는 추출은 BRAND_SERVICE 문서만 지원합니다")
         chunks = self.repository.select_ai_input_chunks(card_doc_id)
         if not chunks:
             raise ExtractionError(f"AI 입력 페이지가 없습니다: {card_doc_id}")
@@ -687,15 +700,67 @@ class ExtractionService:
             chunks = [c for c in chunks if c['page_no'] in page_numbers]
         pdf_path = self._local_pdf(document)
         blocked = sorted(set(self.repository.select_blocked_pages(card_doc_id)) | set(omitted))
-        run_id = self.repository.insert_run(
-            self.llm_client.model_nm, PROMPT_VER, PROMPT_TXT, self._run_param(), card_doc_id,
-        )
+        params = self._run_param()
+        # 부분 실행, 제외 페이지 또는 알려지지 않은 모델 설정은 재사용하지 않는다.
+        config = getattr(self.llm_client, "reuse_config", None)
+        if card_id is None and page_numbers is None and not blocked and isinstance(config, dict):
+            payload = {"doc_sha256": document["doc_sha256"], "card_id": card_id,
+                       "chunks": chunks, "params": params, "model_config": config,
+                       "prompt_sha256": hashlib.sha256(PROMPT_TXT.encode()).hexdigest(),
+                       "renderer": pymupdf.VersionBind}
+            fingerprint = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False,
+                                                    default=str).encode()).hexdigest()
+            params["reuse_fingerprint"] = fingerprint
+            for candidate in self.repository.select_reusable_runs(card_doc_id, self.llm_client.model_nm,
+                                                                  PROMPT_VER, fingerprint):
+                run_id = candidate["card_ai_run_id"]
+                if self._complete_reuse(run_id, chunks):
+                    return RunResult(run_id, "SUCCEEDED", len(chunks), 0, True, reused=True)
+        run_id = self.repository.insert_run(self.llm_client.model_nm, PROMPT_VER, PROMPT_TXT, params, card_doc_id)
 
         try:
             return self._run_pages(run_id, card_id, chunks, pdf_path, blocked)
         except Exception:
             self.repository.finish_run(run_id, "FAILED", "처리 중 오류")     # RUNNING으로 남지 않게 한다
             raise
+
+    def _complete_reuse(self, run_id: str, chunks: list[dict]) -> bool:
+        """호출 응답과 후보·근거가 모두 남아 있는 성공 실행만 재사용한다."""
+        calls = self.repository.select_run_calls(run_id)
+        rows = self.repository.select_reuse_items(run_id)
+        expected_ids = {c["card_doc_chunk_id"] for c in chunks}
+        selected = {}
+        for call in calls:
+            if call["call_status"] == "SUCCEEDED":
+                selected[call["card_doc_chunk_id"]] = call
+        if set(selected) != expected_ids:
+            return False
+        expected = []
+        try:
+            for chunk_id, call in selected.items():
+                page = PageExtraction.model_validate(call["call_resp_json"])
+                if page.page_no != call["page_no"]:
+                    return False
+                for seq, item in enumerate([*page.benefits, *page.card_conditions], 1):
+                    quotes = [e.quote_txt for e in item.evidence]
+                    if isinstance(item, BenefitItem):
+                        quotes += [e.quote_txt for c in item.conditions for e in c.evidence]
+                        quotes += [e.quote_txt for r in item.rules for c in r.conditions for e in c.evidence]
+                    kind = "BENEFIT" if isinstance(item, BenefitItem) else "CONDITION"
+                    expected.append((chunk_id, call["call_seq"], seq, kind, item.model_dump(mode="json"), sorted(quotes)))
+            if len(rows) != len(expected):
+                return False
+            indexed = {(r["card_doc_chunk_id"], r["call_seq"], r["stg_item_seq"]): r for r in rows}
+            for chunk_id, call_seq, seq, kind, raw, quotes in expected:
+                row = indexed.get((chunk_id, call_seq, seq))
+                if (not row or row["card_id"] is not None or row["stg_kind_cd"] != kind or
+                        row["stg_raw_item"] != raw or sorted(row["evidence_quotes"]) != quotes
+                        or not row["stg_sql_check_cd"] or
+                        (row["stg_normalized_item"] is None and row["stg_parent_card_extr_stg_id"] is None)):
+                    return False
+        except (ValidationError, KeyError, TypeError):
+            return False
+        return True
 
     def _run_pages(self, run_id: str, card_id: int, chunks: list[dict], pdf_path: Path, blocked: list[int]) -> RunResult:
         """페이지를 차례로 처리하고 모두 성공했을 때만 문서 통합을 저장한다."""
@@ -727,6 +792,7 @@ class ExtractionService:
         schema = json.dumps(PageExtraction.model_json_schema(), sort_keys=True, ensure_ascii=False)
         return {
             "schema_ver": SCHEMA_VER,
+            "merge_ver": MERGE_VER,
             "schema_sha256": hashlib.sha256(schema.encode("utf-8")).hexdigest(),
             "input_mode": INPUT_MODE,
             "image_dpi": IMAGE_DPI,

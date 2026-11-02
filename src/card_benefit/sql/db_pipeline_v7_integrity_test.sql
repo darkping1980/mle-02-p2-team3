@@ -40,7 +40,7 @@ VALUES (999101, 'S-DOC', 'BRAND_SERVICE', ARRAY['VISA_P01'], '대상카드 표�
 INSERT INTO db_pipeline.card_bnft (card_id, card_bnft_id, bnft_cd, bnft_nm, bnft_type_cd, bnft_origin_cd, bnft_scope_cd, bnft_brand_opt_cds, bnft_cond_expr, rule_list, verification_status_cd, bnft_valid_from, bnft_valid_to_excl)
 SELECT c.card_id, c.bnft_id, 'S_VISA_HOTEL', '시험 호텔 할인', 'DISCOUNT', 'BRAND_SERVICE', 'BRAND', ARRAY['VISA_P01'], c.cond::jsonb,
        '[{"rule_key":"R1","calc_method_cd":"PERCENT_OF_TXN","value_num":8,"value_unit_cd":"PERCENT","payout_unit_cd":"KRW","rule_status_cd":"DRAFT","method_ver":1,
-          "predicate_state_cd":"PENDING_REVIEW","target_list":[],"pool_refs":[]}]'::jsonb,
+          "predicate_state_cd":"PENDING_REVIEW","target_list":[]}]'::jsonb,
        'CONFIRMED', NULL::date, DATE '2027-07-01'
 FROM (VALUES (999101, 'S-B-A', NULL),
              (999102, 'S-B-B', '{"expr_status_cd":"DRAFT","branches":[{"branch_no":1,"atoms":[{"atom_seq":1,"atom_key":"s_excl","negate_yn":true,
@@ -87,7 +87,7 @@ VALUES (999103, 'S-L-C', 'BNFT', 'S-B-C', 'S-EV');
 -- 근거가 없는 확정 브랜드 혜택
 INSERT INTO db_pipeline.card_bnft (card_id, card_bnft_id, bnft_cd, bnft_nm, bnft_type_cd, bnft_origin_cd, bnft_scope_cd, bnft_brand_opt_cds, rule_list, verification_status_cd)
 VALUES (999101, 'S-B-NOEV', 'S_NOEV', '시험', 'DISCOUNT', 'BRAND_SERVICE', 'BRAND', ARRAY['VISA_P01'],
-        '[{"rule_key":"R1","calc_method_cd":"FIXED_PER_TXN","payout_unit_cd":"KRW","rule_status_cd":"DRAFT","method_ver":1,"predicate_state_cd":"PENDING_REVIEW","target_list":[],"pool_refs":[]}]',
+        '[{"rule_key":"R1","calc_method_cd":"FIXED_PER_TXN","payout_unit_cd":"KRW","rule_status_cd":"DRAFT","method_ver":1,"predicate_state_cd":"PENDING_REVIEW","target_list":[]}]',
         'CONFIRMED');
 -- 브랜드 역할로 상품설명서를 연결하고, 공통 문서를 특정 카드에 고정하고, 문서에 연결되지 않은 카드로 추출 항목을 저장한다.
 INSERT INTO db_pipeline.card_doc (card_doc_id, doc_cd, doc_type_cd, doc_title, doc_file_nm, doc_sha256, doc_collect_date, create_user_id, update_user_id)
@@ -148,8 +148,11 @@ VALUES (999002, 'T-D-NONE', 'PRODUCT_GUIDE', '시험', 'V7_TEST', 'V7_TEST');
 INSERT INTO db_pipeline.card_bnft (card_id, card_bnft_id, bnft_cd, bnft_nm, bnft_type_cd, bnft_origin_cd, bnft_scope_cd, rule_list, verification_status_cd)
 VALUES (999001, 'T-B-RULE', 'T-B-RULE', '시험', 'DISCOUNT', 'LOCAL', 'PRODUCT',
         '[{"rule_key":"R1","calc_method_cd":"FIXED_PER_TXN","payout_unit_cd":"KRW","rule_status_cd":"DRAFT","method_ver":1,
-           "predicate_state_cd":"PENDING_REVIEW","target_list":[],"pool_refs":[{"pool_id":"T-P-NONE","pool_role_cd":"CONSUME"}]}]',
+           "predicate_state_cd":"PENDING_REVIEW","target_list":[]}]',
         'PENDING_REVIEW');
+INSERT INTO db_pipeline.card_bnft_rule_pool (card_id,card_bnft_id,rule_key,pool_id,pool_role_cd)
+VALUES (999001,'T-B-RULE','R1','T-P-NONE','CONSUME'),
+       (999002,'T-B-NONE','R-NONE','T-P-NOCARD','BAD_ROLE');
 
 -- 청크와 상품 연결이 없는 문서의 근거, 승인되지 않은 근거, 대상이 없는 근거 연결
 INSERT INTO db_pipeline.card_source_evidence (evidence_id, card_doc_id, page_no, card_doc_chunk_id, quote_txt, approval_status_cd)
@@ -172,7 +175,7 @@ BEGIN
     -- 대체된 게이트와 유지된 게이트가 시험 행을 실제로 잡아야 한다.
     FOREACH v_gate IN ARRAY ARRAY[
         'bnft_without_product', 'pool_without_product', 'product_doc_without_product', 'product_doc_orphan',
-        'pool_ref_orphan', 'evidence_source_orphan', 'evidence_doc_not_linked', 'evidence_not_approved',
+        'pool_ref_orphan', 'rule_pool_product_orphan', 'rule_pool_benefit_orphan', 'rule_pool_rule_orphan', 'evidence_source_orphan', 'evidence_doc_not_linked', 'evidence_not_approved',
         'evidence_subject_orphan', 'evidence_item_key_missing', 'common_cd_invalid'] LOOP
         SELECT EXISTS (SELECT 1 FROM db_pipeline.v_card_integrity_issue i
                        WHERE i.gate_cd = v_gate
@@ -295,18 +298,18 @@ $$;
 -- 방식별 필수값 게이트. 확정 데이터 위반(*_missing)과 확정 전 값 누락(*_pending)을 구분한다
 -- ---------------------------------------------------------------------------
 INSERT INTO db_pipeline.card_bnft (card_id, card_bnft_id, bnft_cd, bnft_nm, bnft_type_cd, bnft_origin_cd, bnft_scope_cd, rule_list, verification_status_cd)
-VALUES (999001, 'M-OK-PCT', 'M-OK-PCT', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"PERCENT_OF_TXN","payout_unit_cd":"HANAMONEY","rule_status_cd":"CONFIRMED","method_ver":1,"value_num":1.5,"value_unit_cd":"PERCENT","predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}],"pool_refs":[]}]', 'CONFIRMED'),
-       (999001, 'M-OK-FIX-P', 'M-OK-FIX-P', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"FIXED_PER_TXN","payout_unit_cd":"HANAMONEY","rule_status_cd":"CONFIRMED","method_ver":1,"value_num":100,"predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}],"pool_refs":[]}]', 'CONFIRMED'),
-       (999001, 'M-OK-FIX-M', 'M-OK-FIX-M', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"FIXED_PER_TXN","payout_unit_cd":"UNIMILE","rule_status_cd":"CONFIRMED","method_ver":1,"value_num":50,"value_unit_cd":"UNIMILE","predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}],"pool_refs":[]}]', 'CONFIRMED'),
-       (999001, 'M-OK-UNIT', 'M-OK-UNIT', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"UNITS_PER_AMOUNT","payout_unit_cd":"UNIMILE","rule_status_cd":"CONFIRMED","method_ver":1,"value_num":45,"value_unit_cd":"UNIMILE","basis_amt":1500,"predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}],"pool_refs":[]}]', 'CONFIRMED'),
-       (999001, 'M-OK-MUL', 'M-OK-MUL', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"MULTIPLY_EXTERNAL_POINTS","payout_unit_cd":"KRW","rule_status_cd":"CONFIRMED","method_ver":1,"value_num":2,"value_unit_cd":"MULTIPLIER","predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}],"pool_refs":[]}]', 'CONFIRMED'),
-       (999001, 'M-OK-FREE', 'M-OK-FREE', '시험', 'SERVICE', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"FREE_SERVICE","payout_unit_cd":"SERVICE","rule_status_cd":"CONFIRMED","method_ver":1,"predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}],"pool_refs":[]}]', 'CONFIRMED'),
-       (999001, 'M-DRAFT', 'M-DRAFT', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"FIXED_PER_TXN","payout_unit_cd":"KRW","rule_status_cd":"DRAFT","method_ver":1,"predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}],"pool_refs":[]}]', 'PENDING_REVIEW'),
-       (999001, 'M-RETIRED', 'M-RETIRED', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"UNITS_PER_AMOUNT","payout_unit_cd":"UNIMILE","rule_status_cd":"RETIRED","method_ver":1,"value_num":45,"predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}],"pool_refs":[]}]', 'PENDING_REVIEW'),
-       (999001, 'M-BAD-CONF', 'M-BAD-CONF', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"UNITS_PER_AMOUNT","payout_unit_cd":"UNIMILE","rule_status_cd":"CONFIRMED","method_ver":1,"value_num":45,"value_unit_cd":"UNIMILE","predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}],"pool_refs":[]}]', 'CONFIRMED'),
-       (999001, 'M-BAD-BNFT', 'M-BAD-BNFT', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"PERCENT_OF_TXN","payout_unit_cd":"KRW","rule_status_cd":"DRAFT","method_ver":1,"predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}],"pool_refs":[]}]', 'CONFIRMED'),
-       (999001, 'M-BAD-UNIT', 'M-BAD-UNIT', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"FIXED_PER_TXN","payout_unit_cd":"KRW","rule_status_cd":"CONFIRMED","method_ver":1,"value_num":5,"value_unit_cd":"PERCENT","predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}],"pool_refs":[]}]', 'PENDING_REVIEW'),
-       (999001, 'M-BAD-MUL', 'M-BAD-MUL', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"MULTIPLY_EXTERNAL_POINTS","payout_unit_cd":"KRW","rule_status_cd":"CONFIRMED","method_ver":1,"value_num":2,"value_unit_cd":"KRW","predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}],"pool_refs":[]}]', 'PENDING_REVIEW');
+VALUES (999001, 'M-OK-PCT', 'M-OK-PCT', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"PERCENT_OF_TXN","payout_unit_cd":"HANAMONEY","rule_status_cd":"CONFIRMED","method_ver":1,"value_num":1.5,"value_unit_cd":"PERCENT","predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}]}]', 'CONFIRMED'),
+       (999001, 'M-OK-FIX-P', 'M-OK-FIX-P', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"FIXED_PER_TXN","payout_unit_cd":"HANAMONEY","rule_status_cd":"CONFIRMED","method_ver":1,"value_num":100,"predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}]}]', 'CONFIRMED'),
+       (999001, 'M-OK-FIX-M', 'M-OK-FIX-M', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"FIXED_PER_TXN","payout_unit_cd":"UNIMILE","rule_status_cd":"CONFIRMED","method_ver":1,"value_num":50,"value_unit_cd":"UNIMILE","predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}]}]', 'CONFIRMED'),
+       (999001, 'M-OK-UNIT', 'M-OK-UNIT', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"UNITS_PER_AMOUNT","payout_unit_cd":"UNIMILE","rule_status_cd":"CONFIRMED","method_ver":1,"value_num":45,"value_unit_cd":"UNIMILE","basis_amt":1500,"predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}]}]', 'CONFIRMED'),
+       (999001, 'M-OK-MUL', 'M-OK-MUL', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"MULTIPLY_EXTERNAL_POINTS","payout_unit_cd":"KRW","rule_status_cd":"CONFIRMED","method_ver":1,"value_num":2,"value_unit_cd":"MULTIPLIER","predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}]}]', 'CONFIRMED'),
+       (999001, 'M-OK-FREE', 'M-OK-FREE', '시험', 'SERVICE', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"FREE_SERVICE","payout_unit_cd":"SERVICE","rule_status_cd":"CONFIRMED","method_ver":1,"predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}]}]', 'CONFIRMED'),
+       (999001, 'M-DRAFT', 'M-DRAFT', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"FIXED_PER_TXN","payout_unit_cd":"KRW","rule_status_cd":"DRAFT","method_ver":1,"predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}]}]', 'PENDING_REVIEW'),
+       (999001, 'M-RETIRED', 'M-RETIRED', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"UNITS_PER_AMOUNT","payout_unit_cd":"UNIMILE","rule_status_cd":"RETIRED","method_ver":1,"value_num":45,"predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}]}]', 'PENDING_REVIEW'),
+       (999001, 'M-BAD-CONF', 'M-BAD-CONF', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"UNITS_PER_AMOUNT","payout_unit_cd":"UNIMILE","rule_status_cd":"CONFIRMED","method_ver":1,"value_num":45,"value_unit_cd":"UNIMILE","predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}]}]', 'CONFIRMED'),
+       (999001, 'M-BAD-BNFT', 'M-BAD-BNFT', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"PERCENT_OF_TXN","payout_unit_cd":"KRW","rule_status_cd":"DRAFT","method_ver":1,"predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}]}]', 'CONFIRMED'),
+       (999001, 'M-BAD-UNIT', 'M-BAD-UNIT', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"FIXED_PER_TXN","payout_unit_cd":"KRW","rule_status_cd":"CONFIRMED","method_ver":1,"value_num":5,"value_unit_cd":"PERCENT","predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}]}]', 'PENDING_REVIEW'),
+       (999001, 'M-BAD-MUL', 'M-BAD-MUL', '시험', 'POINT', 'LOCAL', 'PRODUCT', '[{"rule_key":"R1","calc_method_cd":"MULTIPLY_EXTERNAL_POINTS","payout_unit_cd":"KRW","rule_status_cd":"CONFIRMED","method_ver":1,"value_num":2,"value_unit_cd":"KRW","predicate_state_cd":"PENDING_REVIEW","target_list":[{"target_type_cd":"MERCHANT","target_key":"T","target_nm":"T"}]}]', 'PENDING_REVIEW');
 
 INSERT INTO db_pipeline.card_bnft (card_id, card_bnft_id, bnft_cd, bnft_nm, bnft_type_cd, bnft_origin_cd, bnft_scope_cd, bnft_cond_expr, verification_status_cd)
 VALUES (999001, 'P-OK-NONE', 'P-OK-NONE', '시험', 'POINT', 'LOCAL', 'PRODUCT', '{"expr_status_cd":"CONFIRMED","branches":[{"branch_no":1,"atoms":[{"atom_seq":1,"atom_key":"p_none","negate_yn":false,"cond_type_cd":"ETC","cond_status_cd":"CONFIRMED","cond_min_amt":null,"cond_max_amt_excl":null,"predicate_method_cd":null,"predicate_method_ver":null,"cond_params":null}]}]}', 'PENDING_REVIEW'),

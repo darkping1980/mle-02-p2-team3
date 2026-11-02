@@ -108,6 +108,14 @@ class ExtractionRepository:
             "extraction_repository.select_run_calls", {"CARD_AI_RUN_ID": card_ai_run_id},
         )
 
+    def select_reusable_runs(self, doc_id, model, prompt_ver, fingerprint):
+        return self.sql_session.select_list("extraction_repository.select_reusable_runs", {
+            "CARD_DOC_ID": doc_id, "MODEL": model, "PROMPT_VER": prompt_ver, "FINGERPRINT": fingerprint,
+        })
+
+    def select_reuse_items(self, run_id):
+        return self.sql_session.select_list("extraction_repository.select_reuse_items", {"CARD_AI_RUN_ID": run_id})
+
     def select_review_queue(self, card_ai_run_id: str) -> list[dict]:
         """실행의 항목을 검증 결과별로 집계한다."""
         return self.sql_session.select_list(

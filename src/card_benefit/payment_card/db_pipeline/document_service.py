@@ -23,7 +23,7 @@ BLOCKING_PAGE_STATUS = ("SUSPECT", "GARBLED", "OCR_REQUIRED")   # 원문을 믿�
 SPLIT_RULE_VER = "PAGE_V1"                                    # 분리 규칙을 바꾸면 V 번호도 올린다
 
 KST = timezone(timedelta(hours=9))                            # manifest 수집일시의 기준 시간대
-FILE_CODE_PATTERN = re.compile(r"_(\d+)_(\d{8})\.pdf$", re.IGNORECASE)
+FILE_CODE_PATTERN = re.compile(r"_([A-Za-z]*\d+)_(\d{8})\.pdf$", re.IGNORECASE)
 REVIEW_PATTERN = re.compile(r"^.*준법심의\s*\S+?\((\d{4})\.(\d{1,2})\.(\d{1,2})\).*$", re.MULTILINE)
 QUALITY_PATTERNS = {
     "amount": re.compile(r"\d[\d,]*(?:천|만)?원"),
@@ -130,7 +130,8 @@ class DocumentService:
         self.data_root = Path(data_root)
         self.ocr_engine = ocr_engine
 
-    def read(self, pdf: str | Path) -> ParsedDocument:
+    def inspect(self, pdf: str | Path) -> ParsedDocument:
+        """파일과 manifest를 확인하되 페이지를 파싱하지 않는다."""
         """PDF를 검증해 읽는다. ``pdf`` 가 상대 경로이면 ``data_root`` 기준이다.
 
         Raises:
@@ -146,35 +147,46 @@ class DocumentService:
         if file_sha256 != row["SHA256"] or len(content) != int(row["파일크기(byte)"]):
             raise ValueError(f"manifest의 해시·크기와 다른 파일입니다: {relative_path}")
 
-        pages = self._read_pages(path)
-        if len(pages) != int(row["페이지수"]):
-            raise ValueError(f"manifest의 페이지 수({row['페이지수']})와 다릅니다: {len(pages)}쪽")
-
         match = FILE_CODE_PATTERN.search(path.name)
         if match is None:
             raise ValueError(f"파일명에서 디자인코드와 날짜를 찾지 못했습니다: {path.name}")
         design_cd, file_date = match.groups()
-        review_no, review_date = self._find_review(pages)
         names = list(dict.fromkeys(item["카드상품명"] for item in rows))
+        common = "브랜드서비스안내" in row["문서종류"]
         note = self._source_note(row["문서구분"])
         if len(names) > 1:
             note += f" / 공유 상품: {', '.join(names)}"
         return ParsedDocument(
             doc_cd=f"HANA_{design_cd}_{file_date}",
             doc_family_cd=f"HANA_{design_cd}",
-            doc_type_cd="PRODUCT_GUIDE",
-            doc_title=f"{names[0]} 상품설명서",
+            doc_type_cd="BRAND_SERVICE" if common else "PRODUCT_GUIDE",
+            doc_title=path.stem if common else f"{names[0]} 상품설명서",
             doc_source_url=row["PDF원본URL"],
             doc_file_nm=(Path(self.data_root.name) / relative_path).as_posix(),
             doc_file_size=len(content),
             doc_sha256=file_sha256,
-            doc_review_no=review_no,
-            doc_review_date=review_date,
+            doc_review_no=None,
+            doc_review_date=None,
             doc_collect_date=datetime.fromisoformat(row["수집일시"]).replace(tzinfo=KST),
             doc_note=note,
-            pages=pages,
-            chunks=self._split_pages(pages),
+            pages=(),
+            chunks=(),
         )
+
+    def read(self, pdf: str | Path) -> ParsedDocument:
+        from dataclasses import replace
+        identity = self.inspect(pdf)
+        path, relative_path = self._resolve(pdf)
+        pages = self._read_pages(path)
+        expected = int(self._manifest_rows(relative_path)[0]["페이지수"])
+        if len(pages) != expected:
+            raise ValueError(f"manifest의 페이지 수({expected})와 다릅니다: {len(pages)}쪽")
+        # 파싱 중 파일이 바뀌었다면 결과를 저장하지 않는다.
+        if sha256_hex(path.read_bytes()) != identity.doc_sha256:
+            raise ValueError("파싱 중 PDF 내용이 변경되었습니다")
+        review_no, review_date = self._find_review(pages)
+        return replace(identity, doc_review_no=review_no, doc_review_date=review_date,
+                       pages=pages, chunks=self._split_pages(pages))
 
     @staticmethod
     def _source_note(source_kind: str) -> str:
@@ -197,7 +209,8 @@ class DocumentService:
             rows = [row for row in csv.DictReader(file) if row["파일경로"] == relative_path.as_posix()]
         if not rows:
             raise ValueError(f"manifest에 없는 파일입니다: {relative_path}")
-        guides = [row for row in rows if row["문서구분"].startswith("공식 원본") and "상품설명서" in row["문서종류"]]
+        guides = [row for row in rows if row["문서구분"].startswith("공식 원본") and
+                  ("상품설명서" in row["문서종류"] or "브랜드서비스안내" in row["문서종류"])]
         if not guides:
             raise ValueError(f"공식 상품설명서가 아닙니다: {relative_path}")
         return guides

@@ -67,6 +67,7 @@ def load_snapshot(conn):
             "product_doc": ("SELECT * FROM db_pipeline.card_product_doc WHERE card_id=%s AND card_doc_id=%s", (CARD_ID, DOC_ID)),
             "benefits": ("SELECT * FROM db_pipeline.card_bnft WHERE card_id=%s ORDER BY card_bnft_id", (CARD_ID,)),
             "pools": ("SELECT * FROM db_pipeline.card_limit_pool WHERE card_id=%s ORDER BY pool_id", (CARD_ID,)),
+            "rule_pools": ("SELECT * FROM db_pipeline.card_bnft_rule_pool WHERE card_id=%s ORDER BY card_bnft_id,rule_key,pool_id", (CARD_ID,)),
             "links": ("SELECT * FROM db_pipeline.card_evidence_link WHERE card_id=%s ORDER BY ev_link_id", (CARD_ID,)),
             "evidence": ("SELECT * FROM db_pipeline.card_source_evidence WHERE card_doc_id=%s ORDER BY evidence_id", (DOC_ID,)),
             "chunks": ("SELECT * FROM db_pipeline.card_doc_chunk WHERE card_doc_id=%s ORDER BY page_no,card_doc_chunk_id", (DOC_ID,)),
@@ -140,8 +141,9 @@ def build(snapshot):
                 t = g.node("rule_target", [CARD_ID, target["target_type_cd"], target["target_nm"]],
                            {"target_type_cd": target["target_type_cd"], "target_nm": target["target_nm"]})
                 g.edge("targets", r, t, target)
-            for ref in rule["pool_refs"]:
-                g.edge("consumes", r, pools[ref["pool_id"]], ref)
+    for ref in snapshot["rule_pools"]:
+        source = {"pool_id": ref["pool_id"], "pool_role_cd": ref["pool_role_cd"]}
+        g.edge("consumes", rules[(ref["card_bnft_id"], ref["rule_key"])], pools[ref["pool_id"]], source)
     for link in snapshot["links"]:
         subject = link["ev_subject_cd"]
         if subject == "CARD": owner = c

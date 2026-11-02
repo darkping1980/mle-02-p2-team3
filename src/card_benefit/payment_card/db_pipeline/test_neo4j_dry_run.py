@@ -17,7 +17,8 @@ def fixture():
         "pools": [{"pool_id": "pool", "aggregation_key_cd": "CARD_MEMBER"}],
         "benefits": [{"card_bnft_id": "benefit", "bnft_cond_expr": expr,
                       "rule_list": [{"rule_key": "rule", "target_list": [],
-                                     "pool_refs": [{"pool_id": "pool"}], "cond_expr": None}]}],
+                                     "cond_expr": None}]}],
+        "rule_pools": [{"card_bnft_id":"benefit", "rule_key":"rule", "pool_id":"pool", "pool_role_cd":"CONSUME"}],
         "links": [{"ev_subject_cd": "BNFT", "card_bnft_id": "benefit", "evidence_id": "ev", "ev_link_id": "link"}],
     }
 

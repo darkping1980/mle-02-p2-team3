@@ -25,6 +25,7 @@ from payment_card.db_pipeline.register_service import RegisterError, RegisterSer
 from payment_card.db_pipeline.document_repository import MAPPER_ROOT
 
 ONE_PICK_STYLE = next((DATA_ROOT / "debit").glob("*ONEPICKSTYLE*15650_20260429.pdf"), None)
+VISA_SIGNATURE = DATA_ROOT / "common" / "공통_VISA브랜드서비스_VS002_20260317.pdf"
 MANIFEST_HEADER = "파일경로,카드상품명,문서구분,문서종류,PDF원본URL,파일크기(byte),페이지수,SHA256,수집일시\n"
 
 
@@ -53,6 +54,13 @@ class FixtureMixin:
 
 
 class DocumentServiceTests(FixtureMixin, unittest.TestCase):
+    @unittest.skipUnless(VISA_SIGNATURE.exists(), "실제 공통 PDF 없음")
+    def test_real_visa_signature_text_is_available_without_llm(self):
+        document = DocumentService().read(VISA_SIGNATURE)
+        text = "".join(page.text for page in document.pages).replace(" ", "").replace("\n", "")
+        self.assertEqual(document.doc_type_cd, "BRAND_SERVICE")
+        for value in ("JADEClassic카드", "JADEPrime카드", "선택서비스", "2026년1월1일~12월31일"):
+            self.assertIn(value, text)
     def test_builds_metadata_and_one_based_inclusive_positions(self):
         root = self.make_root(["first line\nsecond line", "third line"])
         document = DocumentService(root).read("신용_테스트_상품설명서_15650_20260429.pdf")
@@ -204,6 +212,23 @@ class FakeSession:
 class RegisterServiceTests(FixtureMixin, unittest.TestCase):
     PDF = "신용_테스트_상품설명서_15650_20260429.pdf"
 
+    def test_common_pdf_register_and_reuse_without_parsing(self):
+        name = "공통_VISA브랜드서비스_VS002_20260317.pdf"
+        root = self.make_root(["common service"], file_name=name)
+        content = (root / name).read_bytes()
+        (root / "manifest.csv").write_text(MANIFEST_HEADER + manifest_line(
+            name, content, 1, "브랜드서비스안내(공식PDF)"), encoding="utf-8-sig")
+        service = DocumentService(root)
+        document = service.read(name)
+        self.assertEqual(document.doc_type_cd, "BRAND_SERVICE")
+        session = FakeSession(stored_hashes={p.page_no: p.sha256 for p in document.pages})
+        result = RegisterService(session, service).register(name, apply=True)
+        self.assertEqual(result.status, "REGISTERED")
+        session.found = [{"card_doc_id": result.card_doc_id, "doc_sha256": document.doc_sha256, "doc_cd": document.doc_cd}]
+        with patch.object(service, "_read_pages", side_effect=AssertionError("must not parse")):
+            again = RegisterService(session, service).register(name, apply=True)
+        self.assertEqual(again.status, "ALREADY_REGISTERED")
+
     def run_register(self, session, apply=True):
         return RegisterService(session, DocumentService(self.make_root(["text"]))).register(self.PDF, apply=apply)
 
@@ -272,7 +297,7 @@ class MapperTests(unittest.TestCase):
         self.session = PostgresDbSession(mapper_root=MAPPER_ROOT, camel_case_keys=False, sql_log_mode="none")
 
     def test_mapper_registers_without_connecting(self):
-        self.assertEqual(sorted(self.session.mappers), ["document_repository", "extraction_repository", "neo4j_validation"])
+        self.assertEqual(sorted(self.session.mappers), ["common_benefit_repository", "document_repository", "extraction_repository", "neo4j_validation"])
         self.assertEqual(self.session.database_manager._pools, {})
 
     def test_every_statement_names_the_schema(self):

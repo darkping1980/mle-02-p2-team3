@@ -50,7 +50,7 @@ INSERT INTO tmp_common_code_grp_desc (common_code_grp_id, common_code_grp_desc) 
     ('LIMIT_PERIOD', '한도가 누적되는 시간 단위를 구분하는 공통코드. card_limit_pool.period_cd에서 사용한다. 한도를 묶는 혜택 범위인 LIMIT_SCOPE, 한도의 단위인 LIMIT_UNIT과 함께 한도 하나를 정의한다.'),
     ('LIMIT_UNIT', '한도 수치 limit_num이 어떤 단위인지 구분하는 공통코드. card_limit_pool.cap_unit_cd에서 사용한다. 보상 지급 단위인 PAYOUT_UNIT과 달리 금액뿐 아니라 이용 횟수도 포함한다.'),
     ('LIMIT_AGG', '한도 사용액을 어떤 주체 단위로 합산할지 구분하는 공통코드. card_limit_pool.aggregation_key_cd에서 사용한다. 어떤 혜택을 묶는지를 나타내는 LIMIT_SCOPE와 달리 누구의 사용분을 합칠지를 나타낸다.'),
-    ('POOL_ROLE', '계산 규칙이 연결된 한도 풀을 어떤 역할로 소비하는지 구분하는 공통코드. card_bnft.rule_list[].pool_refs[].pool_role_cd에서 사용한다. 한 규칙이 영역 한도와 카드 통합 한도를 동시에 소비하는 구조를 표현하기 위한 값이며, 풀 자체의 범위는 LIMIT_SCOPE가 정한다.'),
+    ('POOL_ROLE', '계산 규칙이 연결된 한도 풀을 어떤 역할로 소비하는지 구분하는 공통코드. card_bnft_rule_pool.pool_role_cd에서 사용한다. 한 규칙이 영역 한도와 카드 통합 한도를 동시에 소비하는 구조를 표현하기 위한 값이며, 풀 자체의 범위는 LIMIT_SCOPE가 정한다.'),
     ('REL_TYPE', '서로 다른 혜택 사이의 적용 관계를 구분하는 공통코드. card_bnft.relation_list[].rel_type_cd에서 사용하며 v_card_bnft_rel로 조회한다. 한 혜택 내부의 규칙 선택을 다루는 RULE_SELECT와 달리 혜택 간 배타, 우선, 대체를 다룬다.'),
     ('COND_TYPE', '조건식 atom의 업무 유형을 분류하는 공통코드. 조건식 atom의 cond_type_cd에서 사용하고 카드 공통, 혜택, 규칙, 한도 구간의 조건에 모두 적용된다. 금액을 어떤 기준으로 비교하는지는 COND_BASIS가, 금액 구간으로 표현되지 않는 판정법은 PREDICATE_METHOD가 맡는다.'),
     ('COND_BASIS', '조건의 금액 구간이 어떤 금액을 기준으로 비교되는지 구분하는 공통코드. 조건식 atom의 cond_basis_cd에서 사용하며, 실적 요건 SPEND_REQ에서는 필수다. 조건의 유형을 나타내는 COND_TYPE과 달리 비교 대상 금액의 정의만 나타낸다.'),

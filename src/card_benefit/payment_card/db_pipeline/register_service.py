@@ -53,7 +53,11 @@ class RegisterService:
             RegisterError: 문서 코드가 충돌하거나 등록 내용 검증에 실패한 경우.
         """
         started = perf_counter()
-        document = self.document_service.read(pdf)
+        # 기존 파일은 페이지 재파싱 없이 해시와 저장 구조를 검증한다.
+        if isinstance(self.document_service, DocumentService):
+            document = self.document_service.inspect(pdf)
+        else:
+            document = self.document_service.read(pdf)
         register_logger.info(
             "PDF READ doc_cd=%s pages=%d chunks=%d", document.doc_cd, len(document.pages), len(document.chunks),
         )
@@ -62,15 +66,25 @@ class RegisterService:
         if same_file is not None:
             card_doc_id = same_file["card_doc_id"]
             result = RegisterResult("ALREADY_REGISTERED", document, card_doc_id)
-            result.checks = self._verify(card_doc_id, document)
+            result.checks = (self.repository.verify_doc(card_doc_id) if not document.pages
+                             else self._verify(card_doc_id, document))
             result.counts = self.repository.select_table_counts(card_doc_id)
+            if error_checks(result.checks):
+                raise RegisterError("기존 문서의 저장 구조 검증 실패")
         elif found:
             raise RegisterError(
                 f"문서 코드가 같지만 내용이 다른 문서가 있습니다: {document.doc_cd} ({found[0]['card_doc_id']})"
             )
         elif not apply:
+            if not document.pages:
+                document = self.document_service.read(pdf)
             result = RegisterResult("DRY_RUN", document)
         else:
+            if not document.pages:
+                parsed = self.document_service.read(pdf)
+                if parsed.doc_sha256 != document.doc_sha256:
+                    raise RegisterError("등록 중 PDF 내용이 변경되었습니다")
+                document = parsed
             result = self._insert(document)
         result.elapsed_ms = (perf_counter() - started) * 1000
         register_logger.info(

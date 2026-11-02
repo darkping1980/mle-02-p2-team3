@@ -1,0 +1,50 @@
+import { PGlite } from '@electric-sql/pglite';
+import { fileURLToPath } from 'node:url';
+process.chdir(fileURLToPath(new URL('../../../../../', import.meta.url)));
+import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+const root='src/card_benefit/sql/';
+const old=spawnSync('git',['show','0b17489:src/card_benefit/sql/db_pipeline_schemaV7_draft.sql'],{encoding:'utf8'});
+if(old.status!==0) throw Error(old.stderr);
+const db=new PGlite();
+await db.exec(old.stdout);
+await db.exec(readFileSync(root+'db_pipeline_common_code_seedV7.sql','utf8'));
+await db.exec('CREATE SCHEMA db_pipeline_v6_backup');
+await db.exec(`INSERT INTO db_pipeline.card_product(card_id,product_cd,product_nm,issuer,card_kind_cd,create_user_id,update_user_id) VALUES (91,'T','test','issuer','CREDIT','T','T');
+INSERT INTO db_pipeline.card_limit_pool(card_id,pool_id,pool_scope_cd,period_cd,cap_unit_cd,aggregation_key_cd,tier_list)
+VALUES (91,'P1','BENEFIT','MONTH','COUNT','CARD_MEMBER','[{"tier_key":"T","predicate_state_cd":"PENDING_REVIEW","limit_num":1}]');`);
+const rule=(key,role)=>({rule_key:key,calc_method_cd:'FREE_SERVICE',payout_unit_cd:'SERVICE',rule_status_cd:'DRAFT',method_ver:1,predicate_state_cd:'PENDING_REVIEW',target_list:[],pool_refs:[{pool_id:'P1',pool_role_cd:role}]});
+const rules=[rule('R1','CONSUME'),rule('R2','SHARED')];
+await db.query(`INSERT INTO db_pipeline.card_bnft(card_id,card_bnft_id,bnft_cd,bnft_nm,bnft_type_cd,bnft_origin_cd,bnft_scope_cd,rule_list,verification_status_cd) VALUES(91,'B1','B1','benefit','SERVICE','LOCAL','PRODUCT',$1,'PENDING_REVIEW')`,[JSON.stringify(rules)]);
+const before=(await db.query('SELECT * FROM db_pipeline.v_card_rule_pool ORDER BY rule_key,pool_id')).rows;
+await db.exec(readFileSync(root+'db_pipeline_migration_v7_rule_pool.sql','utf8'));
+const after=(await db.query('SELECT * FROM db_pipeline.card_bnft_rule_pool ORDER BY rule_key,pool_id')).rows;
+if(JSON.stringify(before)!==JSON.stringify(after)) throw Error('relation mismatch');
+const j=await db.query(`SELECT count(*)::int n FROM db_pipeline.card_bnft b CROSS JOIN LATERAL jsonb_array_elements(b.rule_list) r WHERE r ? 'pool_refs'`);
+if(j.rows[0].n) throw Error('JSON refs remain');
+const f=await db.query(`SELECT count(*)::int n FROM pg_constraint WHERE contype='f' AND connamespace='db_pipeline'::regnamespace`);
+if(f.rows[0].n) throw Error('physical FK');
+const counts=await db.query(`SELECT (SELECT count(*) FROM pg_class WHERE relnamespace='db_pipeline'::regnamespace AND relkind='r') t,
+ (SELECT count(*) FROM pg_class WHERE relnamespace='db_pipeline'::regnamespace AND relkind='S') s`);
+if(counts.rows[0].t!==16 || counts.rows[0].s!==10) throw Error('unexpected catalog');
+const joined=await db.query(`SELECT count(*)::int n FROM db_pipeline.card_bnft b JOIN db_pipeline.card_bnft_rule_pool x USING(card_id,card_bnft_id)
+ JOIN db_pipeline.card_limit_pool p USING(card_id,pool_id)`);
+if(joined.rows[0].n!==2) throw Error('join mismatch');
+await db.exec('BEGIN');
+let duplicate=false;
+try {await db.exec("INSERT INTO db_pipeline.card_bnft_rule_pool VALUES (91,'B1','R1','P1','CONSUME')");} catch(e) {duplicate=e.code==='23505';}
+await db.exec('ROLLBACK');
+if(!duplicate) throw Error('duplicate accepted');
+await db.exec('BEGIN');
+await db.exec("INSERT INTO db_pipeline.card_bnft_rule_pool VALUES (91,'B1','MISSING','P1','CONSUME'),(91,'B1','R1','MISSING','CONSUME'),(92,'MISSING','R','P','INVALID')");
+const gates=(await db.query("SELECT DISTINCT gate_cd FROM db_pipeline.v_card_integrity_issue ORDER BY gate_cd")).rows.map(x=>x.gate_cd);
+for(const gate of ['rule_pool_product_orphan','rule_pool_benefit_orphan','rule_pool_rule_orphan','pool_ref_orphan','common_cd_invalid']) if(!gates.includes(gate)) throw Error('missing gate '+gate);
+await db.exec('ROLLBACK');
+const invalid=(await db.query('SELECT db_pipeline.fn_valid_rule_list($1::jsonb,$2) ok',[JSON.stringify(rules),'LOCAL'])).rows[0].ok;
+if(invalid) throw Error('legacy JSON accepted');
+console.log('isolated V7 split: link equality',before.length,'direct join',joined.rows[0].n,'FK 0, sequences 10, duplicate and five orphan/code gates PASS');
+await db.exec(readFileSync(root+'db_pipeline_migration_v7_rule_pool_rollback.sql','utf8'));
+const back=(await db.query("SELECT rule_list=$1::jsonb AS ok FROM db_pipeline.card_bnft WHERE card_id=91 AND card_bnft_id='B1'",[JSON.stringify(rules)])).rows[0].ok;
+if(!back) throw Error('V7 rollback failed to restore original JSON');
+console.log('isolated revised V7 -> original V7 exact JSON restoration: PASS');
+await db.close();

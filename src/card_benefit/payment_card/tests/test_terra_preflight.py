@@ -30,7 +30,7 @@ class Connection:
 
     def execute(self, sql, params=None):
         self.queries.append(sql.strip())
-        if 'FROM db_pipeline.card_product p' in sql:
+        if 'FROM db_pipeline.card_doc d' in sql:
             return SimpleNamespace(fetchall=lambda: self.rows)
         if 'FROM db_pipeline.card_ai_run r' in sql:
             return SimpleNamespace(fetchone=lambda: dict(input_tokens=0, output_tokens=0, unknown_calls=self.unknown))

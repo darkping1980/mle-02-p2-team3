@@ -12,7 +12,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema
 
-SCHEMA_VER = "EXTRACT_SCHEMA_V1"
+SCHEMA_VER = "EXTRACT_SCHEMA_V2"
 MERGE_VER = "MERGE_V1"
 
 BnftType = Literal["DISCOUNT", "CASHBACK", "POINT", "FEE_WAIVER", "SERVICE", "INSTALLMENT", "ETC", "UNKNOWN"]
@@ -33,7 +33,7 @@ PageRole = Literal["SUMMARY", "DETAIL", "NOTICE", "MIXED"]
 Certainty = Literal["HIGH", "LOW"]
 CondScope = Literal["ALL_BENEFITS", "NAMED_BENEFITS", "THIS_BENEFIT", "UNKNOWN"]
 LinkBasis = Literal["SAME_TEXT", "TABLE_IMAGE", "NOT_SURE"]
-EvidenceSubject = Literal["BNFT", "RULE", "LIMIT", "COND", "TARGET", "REL"]
+EvidenceSubject = Literal["BNFT", "RULE", "LIMIT", "COND", "TARGET", "REL", "APPLICABILITY"]
 
 # LLM 스키마에는 숫자로만 보이게 한다. Pydantic 기본 표현은 문자열도 허용해 제공자 호환 범위가 좁아진다.
 NumberValue = Annotated[Decimal, WithJsonSchema({"type": "number"})]
@@ -122,6 +122,12 @@ class BenefitItem(ExtractionModel):
     is_common_candidate: bool = False
     no_condition_stated: bool = False
     certainty: Certainty
+    brand_txt: str | None = None
+    service_grade_txt: str | None = None
+    applicable_cards: list[str] = Field(default_factory=list)
+    selection_service_txt: str | None = None
+    excluded_cards: list[str] = Field(default_factory=list)
+    validity_period_txt: str | None = None
     targets: list[TargetItem] = Field(default_factory=list)
     rules: list[RuleItem] = Field(default_factory=list)
     limits: list[LimitItem] = Field(default_factory=list)

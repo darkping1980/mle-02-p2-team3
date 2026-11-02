@@ -1,0 +1,10 @@
+{
+  "name": "v7-verification-tools",
+  "private": true,
+  "version": "1.0.0",
+  "description": "V7 격리 검증 도구. 메모리 PostgreSQL과 DBML 파서만 사용한다",
+  "dependencies": {
+    "@dbml/core": "3.9.5",
+    "@electric-sql/pglite": "0.2.17"
+  }
+}
