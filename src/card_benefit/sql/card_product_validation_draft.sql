@@ -252,17 +252,6 @@ WHERE next_doc_id IS NOT NULL
   AND (effective_to_excl IS NULL OR effective_to_excl <> next_from
        OR next_version <= doc_version_no);
 
--- 9. Migration preflight for legacy card_doc.card_id (can run now).
--- Repeated card IDs are expected; identify the products to backfill. Existing
--- card_doc.card_id is not evidence that common documents apply only there.
-SELECT d.card_id, count(*) AS legacy_document_rows,
-       count(*) FILTER (WHERE d.doc_type_cd='TERMS') AS terms_rows,
-       min(d.doc_release_date) AS oldest_release,
-       max(d.doc_release_date) AS newest_release
-FROM db_pipeline.card_doc d
-GROUP BY d.card_id
-ORDER BY d.card_id;
-
 -- 10. Approval gate before service/Neo4j export: approved link must have a
 -- real endpoint, non-excluded doc, evidence, valid date, and appropriate role.
 -- Relationship approval is separate from document collection or PDF existence.
@@ -300,17 +289,3 @@ WHERE p.card_id IS NULL OR d.card_doc_id IS NULL OR d.doc_status='EXCLUDED'
 -- safely imply one product scope. Define product/variant-specific policy links
 -- or separately approved common policy identity before shared extraction.
 
--- 11. Post-backfill review: legacy card_doc.card_id with no approved or pending
--- product/variant relationship. Run only after phase-1 DDL and link backfill.
--- Do not auto-approve the missing relationship from legacy card_id alone.
-SELECT d.card_doc_id, d.card_id AS legacy_card_id, d.doc_title
-FROM db_pipeline.card_doc d
-WHERE d.card_id IS NOT NULL
-  AND NOT EXISTS (
-      SELECT 1 FROM db_pipeline.card_product_doc l
-      WHERE l.card_doc_id=d.card_doc_id AND l.card_id=d.card_id
-  )
-  AND NOT EXISTS (
-      SELECT 1 FROM db_pipeline.card_product_variant_doc l
-      WHERE l.card_doc_id=d.card_doc_id AND l.card_id=d.card_id
-  );

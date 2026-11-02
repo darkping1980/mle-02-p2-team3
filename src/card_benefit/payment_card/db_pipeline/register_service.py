@@ -35,7 +35,6 @@ class RegisterService:
     """PDF 한 건을 ``card_doc`` → ``card_doc_page`` → ``card_doc_chunk`` 순서로 등록한다.
 
     상품(``card_product``)과 정책 버전은 만들지 않는다. 문서와 상품의 연결은 원문 검증 뒤의 단계이므로
-    ``card_doc.card_id`` 는 NULL로 등록한다.
     """
 
     def __init__(self, sql_session: PostgresDbSession, document_service: DocumentService | None = None):

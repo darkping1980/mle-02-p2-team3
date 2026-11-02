@@ -55,7 +55,7 @@ PDF + manifest → 문서·페이지·PAGE_V1 청크 → 텍스트 + 페이지 �
 | 상품명 | ONE PICK STYLE 하나 체크카드 |
 | `card_doc_id` | `20261031_000001` |
 | 상품·문서 관계 | `PRODUCT_GUIDE` / `PENDING` |
-| 기존 `card_doc.card_id` | `NULL` |
+| 상품·문서 연결 | `card_product_doc` |
 
 출시일은 분석 PDF 2쪽에 기재된 2026-03-30이다. 상품 `ACTIVE`는 2026-10-30 수집 당시 발급 가능 기록을 근거로 한 개발 데이터이며 실시간 발급 상태를 보증하지 않는다. PDF는 공식 서버에서 확인됐으나 상품 페이지의 해당 PDF 직접 링크와 최신판 여부는 미확인이다.
 

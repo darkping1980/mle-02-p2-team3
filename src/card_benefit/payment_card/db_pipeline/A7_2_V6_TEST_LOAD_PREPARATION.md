@@ -79,7 +79,6 @@
 ```sql
 -- 읽기 전용 사전 확인: 실제 승인 전에도 SELECT만 허용
 SELECT p.card_id, p.product_cd, pd.card_doc_id, pd.approval_status_cd,
-       d.card_id AS doc_card_id, d.doc_status
 FROM db_pipeline.card_product p
 JOIN db_pipeline.card_product_doc pd ON pd.card_id=p.card_id
 JOIN db_pipeline.card_doc d ON d.card_doc_id=pd.card_doc_id

@@ -31,6 +31,19 @@ class SchemaV7Tests(unittest.TestCase):
                       "fn_valid_limit_list", "v_card_common_", "limit_list"):
             self.assertNotIn(token, self.ddl, token)
 
+    def test_card_doc_has_no_product_key_and_dbml_uses_product_doc_relation(self):
+        table = self.ddl.split("CREATE TABLE db_pipeline.card_doc (", 1)[1].split("\n);", 1)[0]
+        self.assertNotRegex(table, r"(?m)^\s*card_id\s+")
+        dbml = read("db_pipeline_schemaV7_draft.dbml")
+        self.assertNotIn("Ref: db_pipeline.card_product.card_id < db_pipeline.card_doc.card_id", dbml)
+        self.assertIn("Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_product_doc.card_doc_id", dbml)
+
+    def test_drop_migration_replaces_obsolete_view_gate_without_cascade(self):
+        migration = read("db_pipeline_migration_v7_drop_card_doc_card_id.sql")
+        self.assertIn("CREATE OR REPLACE VIEW db_pipeline.v_card_integrity_issue", migration)
+        self.assertIn("DROP COLUMN IF EXISTS card_id", migration)
+        self.assertNotRegex(migration, r"(?i)DROP\s+COLUMN\s+card_id\s+CASCADE")
+
     def test_method_catalog_is_gone_and_versions_stay_as_representation_contract(self):
         for token in ("card_method_catalog", "method_not_in_catalog", "catalog_method_not_in_code", "handler_key", "param_schema"):
             self.assertNotIn(token, self.ddl, token)
@@ -106,7 +119,8 @@ class SchemaV7Tests(unittest.TestCase):
                               "evidence_subject_orphan", "evidence_item_key_missing", "common_cd_invalid",
                               "brand_bnft_doc_not_linked", "brand_bnft_confirmed_without_evidence",
                               "evidence_brand_opt_mismatch", "brand_doc_option_conflict",
-                              "product_doc_role_type_mismatch", "shared_doc_bound_to_card", "stg_card_not_linked"}, gates)
+                              "product_doc_role_type_mismatch", "stg_card_not_linked"}, gates)
+        self.assertNotIn("shared_doc_bound_to_card", gates)
         self.assertFalse(gates & {"policy_without_product", "bnft_without_policy", "pool_without_policy",
                                   "policy_period_overlap", "policy_doc_orphan", "pool_without_product", "pool_ref_orphan",
                                   "rule_pool_product_orphan", "rule_pool_benefit_orphan", "rule_pool_rule_orphan",
@@ -205,9 +219,11 @@ class BnftTextMigrationTests(unittest.TestCase):
 
     def test_views_are_the_ddl_definitions(self):
         ddl = read("db_pipeline_schemaV7_draft.sql")
-        for name in ("v_card_bnft_rel", "v_card_cond_atom", "v_common_cd_usage", "v_card_integrity_issue"):
+        for name in ("v_card_bnft_rel", "v_card_cond_atom", "v_common_cd_usage"):
             pattern = rf"CREATE VIEW db_pipeline\.{name} AS\n.*?;\n\nCOMMENT ON VIEW"
             self.assertEqual(re.search(pattern, ddl, re.S).group(0), re.search(pattern, self.forward, re.S).group(0))
+        self.assertIn("shared_doc_bound_to_card", self.forward)
+        self.assertNotIn("shared_doc_bound_to_card", ddl)
 
     def test_no_cascade_and_single_transaction(self):
         for text in (self.forward, self.rollback):

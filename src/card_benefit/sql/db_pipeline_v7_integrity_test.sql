@@ -9,7 +9,7 @@ BEGIN;
 -- ---------------------------------------------------------------------------
 -- 양성: 공통 PDF 1건을 카드 등록 전에 추출하고, 카드 2장이 문서와 근거를 공유한다
 -- ---------------------------------------------------------------------------
-INSERT INTO db_pipeline.card_doc (card_doc_id, card_id, doc_cd, doc_type_cd, doc_title, doc_file_nm, doc_sha256, doc_collect_date, create_user_id, update_user_id)
+INSERT INTO db_pipeline.card_doc (card_doc_id, doc_cd, doc_type_cd, doc_title, doc_file_nm, doc_sha256, doc_collect_date, create_user_id, update_user_id)
 VALUES ('S-DOC', NULL, 'S_VISA_PLATINUM_01', 'BRAND_SERVICE', '시험 Visa Platinum 01', 's.pdf', repeat('a', 64), now(), 'V7_TEST', 'V7_TEST');
 INSERT INTO db_pipeline.card_doc_page (card_doc_id, page_no, page_raw_txt, page_char_cnt, page_txt_sha256, page_extractor_nm, create_user_id, update_user_id)
 VALUES ('S-DOC', 1, '시험 원문', 5, repeat('b', 64), 'test', 'V7_TEST', 'V7_TEST');
@@ -92,8 +92,7 @@ VALUES (999101, 'S-B-NOEV', 'S_NOEV', '시험', 'DISCOUNT', 'BRAND_SERVICE', 'BR
 -- 브랜드 역할로 상품설명서를 연결하고, 공통 문서를 특정 카드에 고정하고, 문서에 연결되지 않은 카드로 추출 항목을 저장한다.
 INSERT INTO db_pipeline.card_doc (card_doc_id, doc_cd, doc_type_cd, doc_title, doc_file_nm, doc_sha256, doc_collect_date, create_user_id, update_user_id)
 VALUES ('S-DOC-G', 'S_GUIDE', 'PRODUCT_GUIDE', '시험', 'g.pdf', repeat('d', 64), now(), 'V7_TEST', 'V7_TEST');
-INSERT INTO db_pipeline.card_doc (card_doc_id, card_id, doc_cd, doc_type_cd, doc_title, doc_file_nm, doc_sha256, doc_collect_date, create_user_id, update_user_id)
-VALUES ('S-DOC-T', 999101, 'S_TERMS', 'TERMS', '시험', 't.pdf', repeat('e', 64), now(), 'V7_TEST', 'V7_TEST');
+INSERT INTO db_pipeline.card_doc (card_doc_id, doc_cd, doc_type_cd, doc_title, doc_file_nm, doc_sha256, doc_collect_date, create_user_id, update_user_id)
 INSERT INTO db_pipeline.card_product_doc (card_id, card_doc_id, doc_role_cd, brand_opt_cds, applicability_basis_txt, create_user_id, update_user_id)
 VALUES (999101, 'S-DOC-G', 'BRAND_SERVICE', ARRAY['VISA_P01'], '시험', 'V7_TEST', 'V7_TEST');
 INSERT INTO db_pipeline.card_extr_stg (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, card_extr_stg_id, stg_item_seq, card_id, stg_kind_cd, stg_raw_item, stg_evidence_txt, create_user_id, update_user_id)
@@ -114,7 +113,6 @@ BEGIN
         ['brand_bnft_confirmed_without_evidence', '999101/S-B-NOEV'],
         ['brand_doc_option_conflict', 'S-DOC'],
         ['product_doc_role_type_mismatch', '999101/S-DOC-G'],
-        ['shared_doc_bound_to_card', 'S-DOC-T'],
         ['stg_card_not_linked', 'S-STG-X'],
         ['local_confirmed_without_rule', '999103/S-B-C'],
         ['common_cd_invalid', 'card_bnft.bnft_origin_cd=COMMON_LINK']] LOOP

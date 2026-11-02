@@ -3,7 +3,6 @@
 -- Baseline: src/data/backup/dump-postgres-202610311136.sql, schema db_pipeline.
 -- No physical foreign keys. Logical joins and gates are in card_product_validation_draft.sql.
 -- Existing: card_doc PK(card_doc_id), card_bnft PK(card_doc_id,card_bnft_id),
--- card_cond PK(card_doc_id,card_cond_id). Existing card_doc.card_id is bigint NOT NULL;
 -- UNIQUE(card_id,doc_type_cd,doc_version_no) and unique partial index
 -- uq_card_doc_active(card_id,doc_type_cd) assume one document belongs to one card.
 -- Source evidence for the *need* for brand-specific links: Hana Card public card page
@@ -98,7 +97,6 @@ ALTER TABLE db_pipeline.card_doc
     ADD CONSTRAINT card_doc_doc_type_cd_check
         CHECK (doc_type_cd IN ('PRODUCT_GUIDE','TERMS','BRAND_SERVICE','ETC'));
 COMMENT ON TABLE db_pipeline.card_doc IS '원천 문서의 실제 파일·문서판; 공유 가능하며 상품 적용은 연결 테이블에서 관리';
-COMMENT ON COLUMN db_pipeline.card_doc.card_id IS '이행 기간의 기존 단일 상품 힌트; 신규 적용 관계의 권위 있는 키가 아님. 신규 공유 문서는 NULL';
 COMMENT ON COLUMN db_pipeline.card_doc.doc_family_cd IS '개정판을 묶는 문서 계열 코드; 같은 계열의 서로 다른 파일/판본은 각각 card_doc_id를 가짐';
 COMMENT ON COLUMN db_pipeline.card_doc.doc_version_no IS '문서판 번호; 단독으로 상품/서비스 적용 기간을 뜻하지 않음';
 COMMENT ON COLUMN db_pipeline.card_doc.doc_release_date IS '기존 상품 출시일 기록; 공통 문서는 확인된 문서 발행일만 기재, 관계 적용 시작일과 혼동 금지';

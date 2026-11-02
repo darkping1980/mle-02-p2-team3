@@ -291,7 +291,6 @@ Ref: db_pipeline.card_doc_chunk.(card_doc_id, page_no, card_doc_chunk_id) < db_p
 Ref: db_pipeline.card_extr_stg.card_extr_stg_id < db_pipeline.card_source_evidence.card_extr_stg_id
 Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_doc_page.card_doc_id
 Ref: db_pipeline.card_doc_page.(card_doc_id, page_no) < db_pipeline.card_doc_chunk.(card_doc_id, page_no)
-Ref: db_pipeline.card_product.card_id < db_pipeline.card_doc.card_id
 Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_ai_run.run_target_card_doc_id
 Ref: db_pipeline.card_ai_run.card_ai_run_id < db_pipeline.card_ai_call.card_ai_run_id
 Ref: db_pipeline.card_doc_chunk.(card_doc_id, page_no, card_doc_chunk_id) < db_pipeline.card_ai_call.(card_doc_id, page_no, card_doc_chunk_id)

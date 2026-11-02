@@ -34,7 +34,7 @@ FROM product;
 
 -- 승인된 실행자가 결과를 확인한 뒤 COMMIT 또는 ROLLBACK을 직접 선택한다.
 SELECT p.card_id, p.product_cd, p.product_nm, p.card_kind_cd, p.launched_on, p.product_status_cd,
-       p.brand_opt_list, pd.card_doc_id, pd.doc_role_cd, pd.approval_status_cd, d.card_id AS doc_card_id
+       p.brand_opt_list, pd.card_doc_id, pd.doc_role_cd, pd.approval_status_cd
 FROM db_pipeline.card_product p
 JOIN db_pipeline.card_product_doc pd ON pd.card_id = p.card_id
 JOIN db_pipeline.card_doc d ON d.card_doc_id = pd.card_doc_id
