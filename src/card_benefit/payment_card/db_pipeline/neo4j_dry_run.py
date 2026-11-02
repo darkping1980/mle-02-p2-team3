@@ -1,4 +1,4 @@
-"""Read-only V6 -> isolated in-memory graph preview; never connects to Neo4j."""
+"""Read-only V7 -> isolated in-memory graph preview; never connects to Neo4j."""
 from __future__ import annotations
 
 import argparse
@@ -14,7 +14,6 @@ from psycopg.rows import dict_row
 NS = "df_one_pick_style"
 PREFIX = "df_"
 CARD_ID = 2
-POLICY_ID = "20261101_000001"
 DOC_ID = "20261101_000002"
 
 
@@ -65,11 +64,10 @@ def load_snapshot(conn):
         out = {}
         queries = {
             "product": ("SELECT * FROM db_pipeline.card_product WHERE card_id=%s", (CARD_ID,)),
-            "policy": ("SELECT * FROM db_pipeline.card_policy_version WHERE card_id=%s AND policy_ver_id=%s", (CARD_ID, POLICY_ID)),
             "product_doc": ("SELECT * FROM db_pipeline.card_product_doc WHERE card_id=%s AND card_doc_id=%s", (CARD_ID, DOC_ID)),
-            "benefits": ("SELECT * FROM db_pipeline.card_bnft WHERE card_id=%s AND policy_ver_id=%s ORDER BY card_bnft_id", (CARD_ID, POLICY_ID)),
-            "pools": ("SELECT * FROM db_pipeline.card_limit_pool WHERE card_id=%s AND policy_ver_id=%s ORDER BY pool_id", (CARD_ID, POLICY_ID)),
-            "links": ("SELECT * FROM db_pipeline.card_policy_evidence WHERE card_id=%s AND policy_ver_id=%s ORDER BY ev_link_id", (CARD_ID, POLICY_ID)),
+            "benefits": ("SELECT * FROM db_pipeline.card_bnft WHERE card_id=%s ORDER BY card_bnft_id", (CARD_ID,)),
+            "pools": ("SELECT * FROM db_pipeline.card_limit_pool WHERE card_id=%s ORDER BY pool_id", (CARD_ID,)),
+            "links": ("SELECT * FROM db_pipeline.card_evidence_link WHERE card_id=%s ORDER BY ev_link_id", (CARD_ID,)),
             "evidence": ("SELECT * FROM db_pipeline.card_source_evidence WHERE card_doc_id=%s ORDER BY evidence_id", (DOC_ID,)),
             "chunks": ("SELECT * FROM db_pipeline.card_doc_chunk WHERE card_doc_id=%s ORDER BY page_no,card_doc_chunk_id", (DOC_ID,)),
             "pages": ("SELECT * FROM db_pipeline.card_doc_page WHERE card_doc_id=%s ORDER BY page_no", (DOC_ID,)),
@@ -90,15 +88,13 @@ def one(rows, name):
 def build(snapshot):
     g = Preview()
     product = one(snapshot["product"], "product")
-    policy = one(snapshot["policy"], "policy")
     product_doc = one(snapshot["product_doc"], "product_doc")
     document = one(snapshot["document"], "document")
-    if policy["policy_status_cd"] != "DRAFT":
-        raise ValueError("expected DRAFT policy")
+    if product["card_cond_status_cd"] != "DRAFT":
+        raise ValueError("expected DRAFT card condition")
     c = g.node("card_product", [CARD_ID], product)
-    p = g.node("card_policy_version", [CARD_ID, POLICY_ID], {"source": policy, "valid_from_is_assumption": True, "product_doc": product_doc})
-    g.edge("has_policy", c, p, {})
     doc = g.node("card_doc", [DOC_ID], document)
+    g.edge("has_document", c, doc, product_doc)
     pages, chunks, evidence, pools, benefits, rules = {}, {}, {}, {}, {}, {}
     for row in snapshot["pages"]:
         pg = g.node("card_doc_page", [DOC_ID, row["page_no"]], row); pages[row["page_no"]] = pg
@@ -115,7 +111,8 @@ def build(snapshot):
         ev = g.node("card_source_evidence", [row["evidence_id"]], row); evidence[row["evidence_id"]] = ev
         g.edge("in_chunk", ev, chunks[row["card_doc_chunk_id"]], {})
     for row in snapshot["pools"]:
-        pools[row["pool_id"]] = g.node("card_limit_pool", [CARD_ID, POLICY_ID, row["pool_id"]], {"source": row, "aggregation_is_assumption": True})
+        pools[row["pool_id"]] = g.node("card_limit_pool", [CARD_ID, row["pool_id"]], {"source": row, "aggregation_is_assumption": True})
+        g.edge("has_pool", c, pools[row["pool_id"]], {})
 
     def expression(owner, owner_key, expr):
         if expr is None:
@@ -128,26 +125,26 @@ def build(snapshot):
                 a = g.node("cond_atom", [*bk, atom["atom_key"]], atom)
                 g.edge("has_atom", b, a, {"atom_seq": atom["atom_seq"]})
 
-    expression(p, ["policy", CARD_ID, POLICY_ID], policy["policy_cond_expr"])
+    expression(c, ["card", CARD_ID], product["card_cond_expr"])
     for row in snapshot["benefits"]:
         bid = row["card_bnft_id"]
-        b = g.node("card_bnft", [CARD_ID, POLICY_ID, bid], row); benefits[bid] = b
-        g.edge("has_benefit", p, b, {})
-        expression(b, ["benefit", CARD_ID, POLICY_ID, bid], row["bnft_cond_expr"])
+        b = g.node("card_bnft", [CARD_ID, bid], row); benefits[bid] = b
+        g.edge("has_benefit", c, b, {})
+        expression(b, ["benefit", CARD_ID, bid], row["bnft_cond_expr"])
         for rule in row["rule_list"]:
             rk = rule["rule_key"]
-            r = g.node("bnft_rule", [CARD_ID, POLICY_ID, bid, rk], rule); g.edge("has_rule", b, r, {})
+            r = g.node("bnft_rule", [CARD_ID, bid, rk], rule); g.edge("has_rule", b, r, {})
             rules[(bid, rk)] = r
-            expression(r, ["rule", CARD_ID, POLICY_ID, bid, rk], rule.get("cond_expr"))
+            expression(r, ["rule", CARD_ID, bid, rk], rule.get("cond_expr"))
             for target in rule["target_list"]:
-                t = g.node("rule_target", [CARD_ID, POLICY_ID, target["target_type_cd"], target["target_nm"]],
+                t = g.node("rule_target", [CARD_ID, target["target_type_cd"], target["target_nm"]],
                            {"target_type_cd": target["target_type_cd"], "target_nm": target["target_nm"]})
                 g.edge("targets", r, t, target)
             for ref in rule["pool_refs"]:
                 g.edge("consumes", r, pools[ref["pool_id"]], ref)
     for link in snapshot["links"]:
         subject = link["ev_subject_cd"]
-        if subject == "POLICY": owner = p
+        if subject == "CARD": owner = c
         elif subject == "BNFT": owner = benefits[link["card_bnft_id"]]
         elif subject == "RULE": owner = rules[(link["card_bnft_id"], link["rule_key"])]
         elif subject == "POOL": owner = pools[link["pool_id"]]
@@ -163,13 +160,14 @@ def build(snapshot):
         raise ValueError("source count mismatch: evidence links")
     for row in snapshot["benefits"]:
         for rule in row["rule_list"]:
-            rk = key("bnft_rule", CARD_ID, POLICY_ID, row["card_bnft_id"], rule["rule_key"])
+            rk = key("bnft_rule", CARD_ID, row["card_bnft_id"], rule["rule_key"])
             if json.loads(g.nodes[rk]["source_json"]) != rule:
                 raise ValueError("rule JSON mismatch")
-    for row in snapshot["benefits"]:
-        for owner_key, expr in [(["benefit", CARD_ID, POLICY_ID, row["card_bnft_id"]], row["bnft_cond_expr"])]:
-            if expr is not None and json.loads(g.nodes[key("cond_expr", *owner_key)]["source_json"]) != expr:
-                raise ValueError("benefit condition JSON mismatch")
+    expressions = [(["card", CARD_ID], product["card_cond_expr"])]
+    expressions += [(["benefit", CARD_ID, row["card_bnft_id"]], row["bnft_cond_expr"]) for row in snapshot["benefits"]]
+    for owner_key, expr in expressions:
+        if expr is not None and json.loads(g.nodes[key("cond_expr", *owner_key)]["source_json"]) != expr:
+            raise ValueError("condition JSON mismatch")
     return g, stats
 
 
@@ -182,7 +180,7 @@ def main():
         snapshot = load_snapshot(conn)
         graph, stats = build(snapshot)
     stats["snapshot_sha256"] = hashlib.sha256(canonical(snapshot).encode()).hexdigest()
-    stats["source"] = {"card_id": CARD_ID, "policy_ver_id": POLICY_ID, "card_doc_id": DOC_ID}
+    stats["source"] = {"card_id": CARD_ID, "card_doc_id": DOC_ID}
     stats["neo4j_writes"] = 0
     print(json.dumps(stats, ensure_ascii=False, indent=2))
 

@@ -1,0 +1,351 @@
+// V7 draft physical-column mirror of db_pipeline_schemaV7_draft.sql.
+// Ref lines are logical only; SQL has 0 FKs.
+// JSONB references cannot be drawn as Ref lines. They are logical references checked by v_card_integrity_issue:
+//   card_bnft.rule_list[].pool_refs[].pool_id        -> card_limit_pool.pool_id
+//   card_bnft.relation_list[].to_bnft_id             -> card_bnft.card_bnft_id
+//   card_bnft.relation_list[].trigger_pool_id        -> card_limit_pool.pool_id
+//   card_evidence_link.rule_key                    -> card_bnft.rule_list[].rule_key
+//   card_evidence_link.relation_key                -> card_bnft.relation_list[].relation_key
+//   rule_list[].calc_method_cd                       -> common_cd (CALC_METHOD)
+// method_ver and predicate_method_ver are representation contract versions, currently 1. Nothing checks them against an engine.
+// Code columns reference common_cd. The group of each column is defined by the view v_common_cd_usage.
+
+Table db_pipeline.common_code_grp [note: '공통코드 그룹'] {
+  common_code_grp_id varchar(20) [not null, pk, note: '공통코드 그룹 아이디']
+  common_code_grp_nm text [not null, note: '공통코드 그룹명']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 아이디']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 아이디']
+  common_code_grp_desc text [note: '공통코드 그룹 상세 설명(목적, 사용 범위, 업무 의미)']
+}
+
+Table db_pipeline.common_cd [note: '공통코드'] {
+  common_code_grp_id varchar(20) [not null, note: '공통코드 그룹 아이디']
+  common_cd varchar(40) [not null, note: '공통코드']
+  common_cd_nm text [not null, note: '공통코드명']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 아이디']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 아이디']
+  common_cd_desc text [note: '공통코드 상세 설명(업무 의미, 적용 기준)']
+  Indexes {
+    (common_code_grp_id, common_cd) [pk]
+  }
+}
+
+Table db_pipeline.card_product [note: '카드 상품'] {
+  card_id bigint [not null, pk, note: '카드 아이디']
+  product_cd varchar(80) [not null, unique, note: '상품 코드']
+  product_nm text [not null, note: '상품명']
+  issuer varchar(50) [not null, note: '카드사']
+  card_kind_cd varchar(10) [not null, note: '카드 구분']
+  product_status_cd varchar(20) [not null, note: '상품 상태']
+  launched_on date [note: '출시일']
+  discontinued_on date [note: '판매 중단일']
+  brand_opt_list jsonb [not null, note: '브랜드 선택지 목록']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 아이디']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 아이디']
+  card_cond_expr jsonb [note: '카드 공통 조건']
+  card_cond_status_cd varchar(20) [not null, default: 'DRAFT', note: '카드 공통 조건 상태']
+}
+
+Table db_pipeline.card_product_doc [note: '상품별 문서 관계'] {
+  card_id bigint [not null, note: '카드 아이디']
+  card_doc_id varchar(20) [not null, note: '문서 아이디']
+  doc_role_cd varchar(20) [not null, note: '문서 역할']
+  brand_opt_cds "text[]" [note: '적용 브랜드 선택지']
+  approval_status_cd varchar(20) [not null, note: '승인 상태']
+  applicability_basis_txt text [not null, note: '적용 근거']
+  approval_note text [note: '승인 메모']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 아이디']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 아이디']
+  Indexes {
+    (card_id, card_doc_id) [pk]
+  }
+}
+
+Table db_pipeline.card_bnft [note: '카드 혜택'] {
+  card_id bigint [not null, note: '카드 아이디']
+  card_bnft_id varchar(20) [not null, note: '혜택 아이디']
+  bnft_cd varchar(80) [not null, note: '혜택 코드']
+  bnft_nm text [not null, note: '혜택명']
+  bnft_type_cd varchar(20) [not null, note: '혜택 유형']
+  bnft_origin_cd varchar(20) [not null, note: '혜택 출처']
+  bnft_scope_cd varchar(20) [not null, note: '혜택 적용 범위']
+  bnft_brand_opt_cds "text[]" [note: '적용 브랜드 선택지']
+  bnft_cond_expr jsonb [note: '혜택 적용 조건']
+  rule_select_cd varchar(30) [note: '규칙 선택 방식']
+  rule_list jsonb [not null, note: '계산 규칙 목록']
+  relation_list jsonb [not null, note: '혜택 관계 목록']
+  verification_status_cd varchar(25) [not null, note: '혜택 검증 상태']
+  bnft_valid_from date [note: '혜택 제공 시작일']
+  bnft_valid_to_excl date [note: '혜택 제공 종료일(미포함)']
+  Indexes {
+    (card_id, card_bnft_id) [pk]
+    (card_id, bnft_cd) [unique]
+  }
+}
+
+Table db_pipeline.card_limit_pool [note: '혜택 공유 한도'] {
+  card_id bigint [not null, note: '카드 아이디']
+  pool_id varchar(20) [not null, note: '한도 풀 아이디']
+  pool_scope_cd varchar(30) [not null, note: '한도 적용 범위']
+  period_cd varchar(20) [not null, note: '한도 기간']
+  cap_unit_cd varchar(30) [not null, note: '한도 단위']
+  aggregation_key_cd varchar(30) [not null, note: '한도 집계 기준']
+  tier_list jsonb [not null, note: '한도 구간 목록']
+  Indexes {
+    (card_id, pool_id) [pk]
+  }
+}
+
+Table db_pipeline.card_source_evidence [note: '원문 근거'] {
+  evidence_id varchar(20) [not null, pk, note: '원문 근거 아이디']
+  card_doc_id varchar(20) [not null, note: '문서 아이디']
+  page_no smallint [not null, note: '페이지 번호']
+  card_doc_chunk_id varchar(20) [not null, note: '청크 아이디']
+  card_extr_stg_id varchar(20) [note: '추출 항목 아이디']
+  quote_txt text [not null, note: '원문 인용 문장']
+  start_pos integer [note: '인용 시작 위치']
+  end_pos integer [note: '인용 종료 위치']
+  approval_status_cd varchar(20) [not null, note: '승인 상태']
+}
+
+Table db_pipeline.card_evidence_link [note: '카드 근거 관계'] {
+  card_id bigint [not null, note: '카드 아이디']
+  ev_link_id varchar(20) [not null, note: '근거 연결 아이디']
+  ev_subject_cd varchar(10) [not null, note: '근거 대상 유형']
+  card_bnft_id varchar(20) [note: '혜택 아이디']
+  rule_key varchar(40) [note: '규칙 키']
+  relation_key varchar(40) [note: '혜택 관계 키']
+  pool_id varchar(20) [note: '한도 풀 아이디']
+  ev_item_cd varchar(10) [not null, note: '근거 항목 유형']
+  ev_item_key varchar(100) [not null, note: '근거 항목 키']
+  evidence_id varchar(20) [not null, note: '원문 근거 아이디']
+  Indexes {
+    (card_id, ev_link_id) [pk]
+    (card_id, ev_subject_cd, card_bnft_id, rule_key, relation_key, pool_id, ev_item_cd, ev_item_key, evidence_id) [unique]
+  }
+}
+
+Table db_pipeline.card_doc [note: '원천 문서'] {
+  card_doc_id varchar(20) [not null, pk, note: '문서 아이디']
+  card_id bigint [note: '카드 아이디']
+  doc_cd varchar(50) [not null, unique, note: '문서 코드']
+  doc_family_cd varchar(100) [note: '문서 계열 코드']
+  doc_type_cd varchar(20) [not null, note: '문서 유형']
+  doc_title text [not null, note: '문서 제목']
+  doc_source_url text [note: '문서 출처 URL']
+  doc_file_nm text [not null, note: '파일명']
+  doc_file_size bigint [note: '파일 크기']
+  doc_sha256 varchar(64) [not null, unique, note: '파일 해시']
+  doc_page_cnt smallint [note: '페이지 수']
+  doc_review_no text [note: '심의 번호']
+  doc_review_date date [note: '심의일']
+  doc_release_date date [note: '문서 발행일']
+  doc_collect_date timestamptz [not null, note: '수집 일시']
+  doc_version_no smallint [not null, note: '문서 버전 번호']
+  doc_status varchar(20) [not null, note: '문서 상태']
+  doc_note text [note: '문서 메모']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 아이디']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 아이디']
+}
+
+Table db_pipeline.card_doc_page [note: '문서 페이지'] {
+  card_doc_id varchar(20) [not null, note: '문서 아이디']
+  page_no smallint [not null, note: '페이지 번호']
+  page_raw_txt text [not null, note: '페이지 원문']
+  page_char_cnt integer [not null, note: '페이지 문자 수']
+  page_txt_sha256 varchar(64) [not null, note: '페이지 원문 해시']
+  page_layer_cd varchar(20) [not null, note: '텍스트 레이어 유형']
+  page_extractor_nm varchar(50) [not null, note: '추출기명']
+  page_extractor_ver varchar(50) [note: '추출기 버전']
+  page_note text [note: '페이지 메모']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 아이디']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 아이디']
+  Indexes {
+    (card_doc_id, page_no) [pk]
+  }
+}
+
+Table db_pipeline.card_doc_chunk [note: '문서 청크'] {
+  card_doc_id varchar(20) [not null, note: '문서 아이디']
+  page_no smallint [not null, note: '페이지 번호']
+  card_doc_chunk_id varchar(20) [not null, unique, note: '청크 아이디']
+  chunk_seq integer [not null, note: '청크 순번']
+  chunk_section_nm text [note: '절 제목']
+  chunk_type_cd varchar(20) [not null, note: '청크 유형']
+  chunk_start_pos integer [not null, note: '청크 시작 위치']
+  chunk_end_pos integer [not null, note: '청크 종료 위치']
+  chunk_raw_txt text [not null, note: '청크 원문']
+  chunk_clean_txt text [note: '청크 정제문']
+  chunk_status varchar(20) [not null, note: '청크 상태']
+  chunk_split_rule_ver varchar(50) [not null, note: '청크 분리 규칙 버전']
+  chunk_clean_rule_ver varchar(50) [note: '청크 정제 규칙 버전']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 아이디']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 아이디']
+  Indexes {
+    (card_doc_id, page_no, card_doc_chunk_id) [pk]
+    (card_doc_id, chunk_seq) [unique]
+  }
+}
+
+Table db_pipeline.card_ai_run [note: 'AI 실행 이력'] {
+  card_ai_run_id varchar(20) [not null, pk, note: 'AI 실행 아이디']
+  run_stage_cd varchar(20) [not null, note: '실행 단계']
+  run_call_mthd_cd varchar(20) [not null, note: 'AI 호출 방식']
+  run_model_nm varchar(100) [not null, note: '모델명']
+  run_prompt_ver varchar(50) [not null, note: '프롬프트 버전']
+  run_prompt_txt text [not null, note: '프롬프트 원문']
+  run_param jsonb [note: '모델 파라미터']
+  run_target_card_doc_id varchar(20) [note: '대상 문서 아이디']
+  run_status varchar(20) [not null, note: '실행 상태']
+  run_start_date timestamptz [not null, note: '실행 시작 일시']
+  run_end_date timestamptz [note: '실행 종료 일시']
+  run_note text [note: '실행 메모']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 아이디']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 아이디']
+}
+
+Table db_pipeline.card_ai_call [note: 'AI 호출 이력'] {
+  card_ai_run_id varchar(20) [not null, note: 'AI 실행 아이디']
+  card_doc_id varchar(20) [not null, note: '문서 아이디']
+  page_no smallint [not null, note: '페이지 번호']
+  card_doc_chunk_id varchar(20) [not null, note: '청크 아이디']
+  call_seq smallint [not null, note: '호출 순번']
+  call_input_sha256 varchar(64) [not null, note: '호출 입력 해시']
+  call_status varchar(20) [not null, note: '호출 상태']
+  call_resp_raw text [note: '응답 원문']
+  call_resp_json jsonb [note: '응답 JSON']
+  call_error_msg text [note: '오류 메시지']
+  call_input_token_cnt integer [note: '입력 토큰 수']
+  call_output_token_cnt integer [note: '출력 토큰 수']
+  call_latency_ms integer [note: '응답 시간']
+  call_req_date timestamptz [not null, note: '요청 일시']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 아이디']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 아이디']
+  Indexes {
+    (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq) [pk]
+  }
+}
+
+Table db_pipeline.card_extr_stg [note: 'AI 추출 항목'] {
+  card_ai_run_id varchar(20) [not null, note: 'AI 실행 아이디']
+  card_doc_id varchar(20) [not null, note: '문서 아이디']
+  page_no smallint [not null, note: '페이지 번호']
+  card_doc_chunk_id varchar(20) [not null, note: '청크 아이디']
+  call_seq smallint [not null, note: '호출 순번']
+  card_extr_stg_id varchar(20) [not null, unique, note: '추출 항목 아이디']
+  stg_item_seq smallint [not null, note: '추출 항목 순번']
+  card_id bigint [note: '카드 아이디(NULL이면 특정 카드에 연결되지 않은 후보)']
+  stg_kind_cd varchar(20) [not null, note: '추출 항목 종류']
+  stg_parent_card_extr_stg_id varchar(20) [note: '상위 추출 항목 아이디']
+  stg_raw_item jsonb [not null, note: '추출 원본']
+  stg_normalized_item jsonb [note: '정제 항목']
+  stg_evidence_txt text [not null, note: '추출 근거 문장']
+  stg_evidence_start_pos integer [note: '근거 시작 위치']
+  stg_evidence_end_pos integer [note: '근거 종료 위치']
+  card_excl_item_id varchar(20) [note: '제외 항목 아이디']
+  stg_sql_check_cd varchar(30) [note: 'SQL 검증 결과']
+  stg_ai_vrfy_cd varchar(20) [note: 'AI 검증 결과']
+  stg_ai_vrfy_card_ai_run_id varchar(20) [note: 'AI 검증 실행 아이디']
+  stg_status varchar(20) [not null, note: '검토 상태']
+  stg_review_note text [note: '검토 메모']
+  stg_approved_date timestamptz [note: '승인 일시']
+  stg_approved_user_id varchar(50) [note: '승인 사용자 아이디']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 아이디']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 아이디']
+  Indexes {
+    (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, card_extr_stg_id) [pk]
+    (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, stg_item_seq) [unique]
+  }
+}
+
+Table db_pipeline.card_excl_item [note: '제외 항목 사전'] {
+  card_excl_item_id varchar(20) [not null, pk, note: '제외 항목 아이디']
+  issuer text [not null, note: '카드사']
+  excl_item_nm text [not null, note: '제외 항목명']
+  excl_concept_cd varchar(50) [note: '제외 분류 개념']
+  excl_item_desc text [note: '제외 항목 설명']
+  excl_alias_nms "text[]" [not null, note: '제외 항목 별칭']
+  create_date timestamptz [not null, note: '생성 일시']
+  create_user_id varchar(50) [not null, note: '생성 사용자 아이디']
+  update_date timestamptz [not null, note: '수정 일시']
+  update_user_id varchar(50) [not null, note: '수정 사용자 아이디']
+  Indexes {
+    (issuer, excl_item_nm) [unique]
+  }
+}
+
+Ref: db_pipeline.common_code_grp.common_code_grp_id < db_pipeline.common_cd.common_code_grp_id
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_bnft.card_id
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_limit_pool.card_id
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_evidence_link.card_id
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_product_doc.card_id
+Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_product_doc.card_doc_id
+Ref: db_pipeline.card_bnft.(card_id, card_bnft_id) < db_pipeline.card_evidence_link.(card_id, card_bnft_id)
+Ref: db_pipeline.card_limit_pool.(card_id, pool_id) < db_pipeline.card_evidence_link.(card_id, pool_id)
+Ref: db_pipeline.card_source_evidence.evidence_id < db_pipeline.card_evidence_link.evidence_id
+Ref: db_pipeline.card_doc_chunk.(card_doc_id, page_no, card_doc_chunk_id) < db_pipeline.card_source_evidence.(card_doc_id, page_no, card_doc_chunk_id)
+Ref: db_pipeline.card_extr_stg.card_extr_stg_id < db_pipeline.card_source_evidence.card_extr_stg_id
+Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_doc_page.card_doc_id
+Ref: db_pipeline.card_doc_page.(card_doc_id, page_no) < db_pipeline.card_doc_chunk.(card_doc_id, page_no)
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_doc.card_id
+Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_ai_run.run_target_card_doc_id
+Ref: db_pipeline.card_ai_run.card_ai_run_id < db_pipeline.card_ai_call.card_ai_run_id
+Ref: db_pipeline.card_doc_chunk.(card_doc_id, page_no, card_doc_chunk_id) < db_pipeline.card_ai_call.(card_doc_id, page_no, card_doc_chunk_id)
+Ref: db_pipeline.card_ai_call.(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq) < db_pipeline.card_extr_stg.(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq)
+Ref: db_pipeline.card_product.card_id < db_pipeline.card_extr_stg.card_id
+Ref: db_pipeline.card_excl_item.card_excl_item_id < db_pipeline.card_extr_stg.card_excl_item_id
+Ref: db_pipeline.card_ai_run.card_ai_run_id < db_pipeline.card_extr_stg.stg_ai_vrfy_card_ai_run_id
+Ref: db_pipeline.card_extr_stg.card_extr_stg_id < db_pipeline.card_extr_stg.stg_parent_card_extr_stg_id
+
+TableGroup common_code {
+  db_pipeline.common_code_grp
+  db_pipeline.common_cd
+}
+
+TableGroup product {
+  db_pipeline.card_product
+  db_pipeline.card_product_doc
+}
+
+TableGroup product_benefit {
+  db_pipeline.card_bnft
+  db_pipeline.card_limit_pool
+}
+
+TableGroup source_evidence {
+  db_pipeline.card_source_evidence
+  db_pipeline.card_evidence_link
+}
+
+TableGroup source_document {
+  db_pipeline.card_doc
+  db_pipeline.card_doc_page
+  db_pipeline.card_doc_chunk
+}
+
+TableGroup ai_parsing {
+  db_pipeline.card_ai_run
+  db_pipeline.card_ai_call
+  db_pipeline.card_extr_stg
+  db_pipeline.card_excl_item
+}

@@ -1,8 +1,9 @@
 -- V6 draft integrated creation for an EMPTY db_pipeline schema.
 -- No DROP and no physical foreign keys. Apply only after target/row/dependency checks.
 -- This file does not replace V5 until the design review is finished.
--- Load db_pipeline_common_code_seedV6.sql after this file. Code columns are validated by
--- v_card_integrity_issue against common_cd, so enumerations are not repeated in CHECK constraints.
+-- Load db_pipeline_common_code_seedV6.sql after this file, then db_pipeline_common_code_descV6.sql.
+-- Code columns are validated by v_card_integrity_issue against common_cd, so enumerations are
+-- not repeated in CHECK constraints.
 -- CHECK constraints keep structure rules only: types, ranges, required pairs, key uniqueness.
 --
 -- JSONB contracts (validated by fn_valid_*):
@@ -526,6 +527,7 @@ CREATE TABLE db_pipeline.common_code_grp (
     create_user_id varchar(50) NOT NULL,
     update_date timestamptz DEFAULT now() NOT NULL,
     update_user_id varchar(50) NOT NULL,
+    common_code_grp_desc text,
     CONSTRAINT pk_common_code_grp
         PRIMARY KEY (common_code_grp_id)
 );
@@ -537,6 +539,7 @@ COMMENT ON COLUMN db_pipeline.common_code_grp.create_date IS '생성 일시';
 COMMENT ON COLUMN db_pipeline.common_code_grp.create_user_id IS '생성 사용자 아이디';
 COMMENT ON COLUMN db_pipeline.common_code_grp.update_date IS '수정 일시';
 COMMENT ON COLUMN db_pipeline.common_code_grp.update_user_id IS '수정 사용자 아이디';
+COMMENT ON COLUMN db_pipeline.common_code_grp.common_code_grp_desc IS '공통코드 그룹 상세 설명(목적, 사용 범위, 업무 의미)';
 
 CREATE TABLE db_pipeline.common_cd (
     common_code_grp_id varchar(20) NOT NULL,
@@ -546,6 +549,7 @@ CREATE TABLE db_pipeline.common_cd (
     create_user_id varchar(50) NOT NULL,
     update_date timestamptz DEFAULT now() NOT NULL,
     update_user_id varchar(50) NOT NULL,
+    common_cd_desc text,
     CONSTRAINT pk_common_cd
         PRIMARY KEY (common_code_grp_id, common_cd)
 );
@@ -558,6 +562,7 @@ COMMENT ON COLUMN db_pipeline.common_cd.create_date IS '생성 일시';
 COMMENT ON COLUMN db_pipeline.common_cd.create_user_id IS '생성 사용자 아이디';
 COMMENT ON COLUMN db_pipeline.common_cd.update_date IS '수정 일시';
 COMMENT ON COLUMN db_pipeline.common_cd.update_user_id IS '수정 사용자 아이디';
+COMMENT ON COLUMN db_pipeline.common_cd.common_cd_desc IS '공통코드 상세 설명(업무 의미, 적용 기준)';
 
 -- ---------------------------------------------------------------------------
 -- 상품·정책 영역

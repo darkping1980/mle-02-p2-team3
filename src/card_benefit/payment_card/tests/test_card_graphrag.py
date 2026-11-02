@@ -36,7 +36,6 @@ def detail(evidence=None):
     atom = {"atom_key": "transit_exclusions", "negate_yn": True, "cond_raw_txt": "시외버스 제외", "cond_type_cd": "BNFT_EXCL"}
     return {
         "context": {"card": {"source_json": js({"product_nm": "테스트 카드"})},
-                    "policy": {"valid_from_is_assumption": True, "source_json": "{}"},
                     "benefit": {"name": "ONE MORE 대중교통 캐시백",
                                 "source_json": js({"card_bnft_id": BENEFIT_ID, "bnft_nm": "ONE MORE 대중교통 캐시백",
                                                    "rule_select_cd": None})}},
@@ -257,7 +256,7 @@ class GraphTests(unittest.TestCase):
     def test_unresolved_found_without_llm(self):
         state, _, _ = run()
         text = " ".join(state["unresolved"])
-        for word in ("DRAFT", "valid_from", "CARD_MEMBER", "NOT"):
+        for word in ("DRAFT", "CARD_MEMBER", "NOT"):
             self.assertIn(word, text)
 
     def test_two_rules_mark_nested_selection_unresolved(self):
@@ -279,8 +278,8 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(evidence[0]["subjects"], ["BNFT", "RULE"])
         self.assertEqual(evidence[0]["rule_keys"], ["transit_rate"])
 
-    def test_limit_intent_drops_policy_evidence_and_merges_duplicates(self):
-        rows = [evidence_row("E1", "POLICY"), evidence_row("E2", "BNFT"), evidence_row("E2", "POOL")]
+    def test_limit_intent_drops_card_evidence_and_merges_duplicates(self):
+        rows = [evidence_row("E1", "CARD"), evidence_row("E2", "BNFT"), evidence_row("E2", "POOL")]
         evidence = card_graphrag.collect_evidence([detail(evidence=rows)], "BENEFIT_LIMIT")
         self.assertEqual([item["evidence_id"] for item in evidence], ["E2"])
         self.assertEqual(evidence[0]["subjects"], ["BNFT", "POOL"])
@@ -711,7 +710,7 @@ class ConditionGroupTests(unittest.TestCase):
                  "atom": {"source_json": js({"atom_key": "a", "negate_yn": False})}}]
 
     def test_scope_comes_from_owner_code(self):
-        rows = self.rows("BNFT") + self.rows("POLICY") + self.rows("RULE", "rule_1")
+        rows = self.rows("BNFT") + self.rows("CARD") + self.rows("RULE", "rule_1")
         self.assertEqual([group["scope"] for group in card_graphrag.condition_groups(rows)], ["혜택", "카드 공통", "rule_1"])
 
 

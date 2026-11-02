@@ -19,15 +19,16 @@ EXPECTED_DB = "6ac1f0f8"
 # 정적 조회는 neo4j_validation.cypher에 있다. 아래 MERGE는 라벨·관계 유형이 동적이라 파일로 옮기지 않는다.
 CYPHER = Neo4jDbSession(mapper_root=Path(__file__).resolve().parent).mappers
 CONFIRM = "APPROVED_DF_ONE_PICK_STYLE"
-NODE_LABELS = frozenset("df_card_product df_card_policy_version df_card_bnft df_bnft_rule df_cond_expr df_cond_branch df_cond_atom df_rule_target "
+NODE_LABELS = frozenset("df_card_product df_card_bnft df_bnft_rule df_cond_expr df_cond_branch df_cond_atom df_rule_target "
                         "df_card_limit_pool df_card_source_evidence df_card_doc_chunk df_card_doc_page df_card_doc".split())
-REL_TYPES = frozenset("df_has_policy df_has_benefit df_has_rule df_has_expr df_has_branch df_has_atom df_targets df_consumes df_supported_by "
+REL_TYPES = frozenset("df_has_document df_has_pool df_has_benefit df_has_rule df_has_expr df_has_branch df_has_atom df_targets df_consumes df_supported_by "
                       "df_in_chunk df_on_page df_in_document".split())
 # 쓰기 구문이므로 읽기 전용 neo4j_validation.cypher에 두지 않는다. --apply에서만 실행한다.
 CREATE_CONSTRAINT = "CREATE CONSTRAINT df_node_key IF NOT EXISTS FOR (n:df_node) REQUIRE (n.namespace, n.key) IS UNIQUE"
-# A10-3 기준 원본 건수. 원본이 바뀌면 검토 후 함께 수정한다(168 + 규칙 근거 11 + 조건 근거 10).
-EXPECTED_NODES = 108
-EXPECTED_RELATIONSHIPS = 189
+# V7 기준 원본 건수. 원본이 바뀌면 검토 후 함께 수정한다.
+# A10-3의 108/189에서 정책 노드와 df_has_policy가 빠지고 df_has_document 1건, df_has_pool 9건이 늘었다.
+EXPECTED_NODES = 107
+EXPECTED_RELATIONSHIPS = 198
 
 
 def node_properties(node):
@@ -38,8 +39,9 @@ def node_properties(node):
     aliases = {"bnft_nm": "name", "verification_status_cd": "verification_status",
                "period_cd": "period", "cap_unit_cd": "unit", "atom_key": "key_name",
                "cond_type_cd": "kind", "cond_raw_txt": "raw_text", "negate_yn": "negate",
-               "cond_min_amt": "min_amt", "approval_status_cd": "approval_status"}
-    for name in ("card_id", "policy_ver_id", "card_bnft_id", "rule_key", "value_num", "pool_id",
+               "cond_min_amt": "min_amt", "approval_status_cd": "approval_status",
+               "card_cond_status_cd": "card_cond_status"}
+    for name in ("card_id", "card_bnft_id", "rule_key", "value_num", "pool_id",
                  "branch_no", "atom_seq", "evidence_id", "page_no", "start_pos", "end_pos", "target_nm"):
         value = row.get(name)
         if isinstance(value, (str, int, float, bool)):
@@ -48,8 +50,6 @@ def node_properties(node):
         value = row.get(src)
         if isinstance(value, (str, int, float, bool)):
             props[dest] = value
-    if raw.get("valid_from_is_assumption"):
-        props["valid_from_is_assumption"] = True
     if raw.get("aggregation_is_assumption"):
         props["aggregation_is_assumption"] = True
     if node["label"] == "df_card_limit_pool" and row.get("tier_list"):
@@ -87,7 +87,8 @@ def write_transaction(tx, nodes, relationships):
         kind = e["type"]  # verified against constant allowlist in prepare
         original = json.loads(e["source_json"])
         extra = {k: v for k, v in original.items()
-                 if k in ("ev_link_id", "ev_subject_cd", "ev_item_cd", "ev_item_key", "atom_seq")
+                 if k in ("ev_link_id", "ev_subject_cd", "ev_item_cd", "ev_item_key", "atom_seq",
+                          "doc_role_cd", "approval_status_cd")
                  and isinstance(v, (str, int, float, bool))}
         result = tx.run(f"MATCH (a:df_node {{namespace:$namespace,key:$start}}), (b:df_node {{namespace:$namespace,key:$end}}) "
                         f"MERGE (a)-[r:{kind} {{namespace:$namespace,key:$key}}]->(b) "

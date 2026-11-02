@@ -18,6 +18,7 @@ Table db_pipeline.common_code_grp [note: '공통코드 그룹'] {
   create_user_id varchar(50) [not null, note: '생성 사용자 아이디']
   update_date timestamptz [not null, note: '수정 일시']
   update_user_id varchar(50) [not null, note: '수정 사용자 아이디']
+  common_code_grp_desc text [note: '공통코드 그룹 상세 설명(목적, 사용 범위, 업무 의미)']
 }
 
 Table db_pipeline.common_cd [note: '공통코드'] {
@@ -28,6 +29,7 @@ Table db_pipeline.common_cd [note: '공통코드'] {
   create_user_id varchar(50) [not null, note: '생성 사용자 아이디']
   update_date timestamptz [not null, note: '수정 일시']
   update_user_id varchar(50) [not null, note: '수정 사용자 아이디']
+  common_cd_desc text [note: '공통코드 상세 설명(업무 의미, 적용 기준)']
   Indexes {
     (common_code_grp_id, common_cd) [pk]
   }

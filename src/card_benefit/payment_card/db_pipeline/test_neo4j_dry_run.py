@@ -9,8 +9,7 @@ def fixture():
     expr = {"branches": [{"branch_no": 1, "atoms": [atom("spend", False)]},
                          {"branch_no": 2, "atoms": [atom("grace", True)]}]}
     return {
-        "product": [{"card_id": 2}],
-        "policy": [{"policy_status_cd": "DRAFT", "policy_cond_expr": None}],
+        "product": [{"card_id": 2, "card_cond_status_cd": "DRAFT", "card_cond_expr": None}],
         "product_doc": [{}], "document": [{}],
         "pages": [{"page_no": 1}],
         "chunks": [{"card_doc_id": "20261101_000002", "page_no": 1, "card_doc_chunk_id": "chunk"}],
@@ -29,7 +28,7 @@ class PreviewTests(unittest.TestCase):
         graph, stats = build(snapshot)
         self.assertEqual(stats["nodes"]["df_cond_branch"], 2)
         self.assertEqual(stats["nodes"]["df_cond_atom"], 2)
-        self.assertIn('"negate_yn":true', graph.nodes[key("cond_atom", "benefit", 2, "20261101_000001", "benefit", 2, "grace")]["source_json"])
+        self.assertIn('"negate_yn":true', graph.nodes[key("cond_atom", "benefit", 2, "benefit", 2, "grace")]["source_json"])
         self.assertEqual(stats["relationships"]["df_supported_by"], 1)
         self.assertEqual(stats["relationships"]["df_consumes"], 1)
 
@@ -54,7 +53,7 @@ class PreviewTests(unittest.TestCase):
         self.assertEqual(stats["nodes"]["df_bnft_rule"], 1)
         edge = next(e for e in graph.edges.values() if '"rule_link"' in e["source_json"])
         self.assertEqual(edge["type"], "df_supported_by")
-        self.assertEqual(edge["start"], key("bnft_rule", 2, "20261101_000001", "benefit", "rule"))
+        self.assertEqual(edge["start"], key("bnft_rule", 2, "benefit", "rule"))
         self.assertEqual(edge["end"], key("card_source_evidence", "ev"))
 
     def test_rule_evidence_for_missing_rule_is_rejected(self):
@@ -72,6 +71,36 @@ class PreviewTests(unittest.TestCase):
     def test_unknown_evidence_subject_is_still_rejected(self):
         data = fixture()
         data["links"].append({"ev_subject_cd": "REL", "card_bnft_id": "benefit", "evidence_id": "ev", "ev_link_id": "rel"})
+        with self.assertRaises(ValueError): build(data)
+
+    def test_removed_policy_subject_is_rejected(self):
+        data = fixture()
+        data["links"].append({"ev_subject_cd": "POLICY", "evidence_id": "ev", "ev_link_id": "old"})
+        with self.assertRaises(ValueError): build(data)
+
+    def test_benefit_pool_and_document_connect_directly_to_card(self):
+        graph, stats = build(fixture())
+        card = key("card_product", 2)
+        for kind, end in (("df_has_benefit", key("card_bnft", 2, "benefit")),
+                          ("df_has_pool", key("card_limit_pool", 2, "pool")),
+                          ("df_has_document", key("card_doc", "20261101_000002"))):
+            self.assertTrue(any(e["type"] == kind and e["start"] == card and e["end"] == end for e in graph.edges.values()), kind)
+        self.assertNotIn("df_card_policy_version", stats["nodes"])
+        self.assertNotIn("df_has_policy", stats["relationships"])
+
+    def test_card_condition_and_evidence_hang_on_card(self):
+        data = fixture()
+        data["product"][0]["card_cond_expr"] = {"branches": [{"branch_no": 1, "atoms": [
+            {"atom_key": "common", "atom_seq": 1, "negate_yn": True}]}]}
+        data["links"].append({"ev_subject_cd": "CARD", "evidence_id": "ev", "ev_link_id": "card_link"})
+        graph, stats = build(data)
+        card, expr = key("card_product", 2), key("cond_expr", "card", 2)
+        self.assertTrue(any(e["type"] == "df_has_expr" and e["start"] == card and e["end"] == expr for e in graph.edges.values()))
+        self.assertTrue(any(e["type"] == "df_supported_by" and e["start"] == card for e in graph.edges.values()))
+        self.assertIn('"negate_yn":true', graph.nodes[key("cond_atom", "card", 2, 1, "common")]["source_json"])
+
+    def test_confirmed_card_condition_needs_review_of_guard(self):
+        data = fixture(); data["product"][0]["card_cond_status_cd"] = "CONFIRMED"
         with self.assertRaises(ValueError): build(data)
 
     def test_dangling_edge_is_rejected(self):

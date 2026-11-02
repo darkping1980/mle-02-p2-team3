@@ -26,7 +26,7 @@ class LoaderTests(unittest.TestCase):
     def test_transaction_uses_only_dedicated_scope(self):
         tx = FakeTx()
         nodes = [{"label": "df_card_product", "props": {"key": "one", "namespace": NS}}]
-        rels = [{"type": "df_has_policy", "start": "one", "end": "two", "key": "r", "source_json": "{}"}]
+        rels = [{"type": "df_has_benefit", "start": "one", "end": "two", "key": "r", "source_json": "{}"}]
         self.assertEqual(write_transaction(tx, nodes, rels), (1, 1))
         self.assertTrue(all("df_node" in query for query, _ in tx.calls))
         self.assertTrue(all(params.get("namespace", params.get("ns")) == NS for _, params in tx.calls))
@@ -41,12 +41,14 @@ class LoaderTests(unittest.TestCase):
     def test_namespace_is_passed_as_parameter(self):
         tx = FakeTx()
         write_transaction(tx, [{"label": "df_card_product", "props": {"key": "one", "namespace": NS}}],
-                          [{"type": "df_has_policy", "start": "one", "end": "two", "key": "r", "source_json": "{}"}])
+                          [{"type": "df_has_benefit", "start": "one", "end": "two", "key": "r", "source_json": "{}"}])
         self.assertTrue(all(NS not in query for query, _ in tx.calls))
 
-    def test_allowlists_have_13_labels_and_12_types_of_df_only(self):
-        self.assertEqual(len(neo4j_load_draft.NODE_LABELS), 13)
-        self.assertEqual(len(neo4j_load_draft.REL_TYPES), 12)
+    def test_allowlists_have_12_labels_and_13_types_of_df_only(self):
+        self.assertEqual(len(neo4j_load_draft.NODE_LABELS), 12)
+        self.assertEqual(len(neo4j_load_draft.REL_TYPES), 13)
+        self.assertNotIn("df_card_policy_version", neo4j_load_draft.NODE_LABELS)
+        self.assertNotIn("df_has_policy", neo4j_load_draft.REL_TYPES)
         self.assertTrue(all(name.startswith("df_") for name in neo4j_load_draft.NODE_LABELS | neo4j_load_draft.REL_TYPES))
 
     def test_pf_label_is_refused(self):

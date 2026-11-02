@@ -85,7 +85,7 @@ UNRESOLVED_WORDS = re.compile(r"미확정|확정할 수 없|확정되지")
 # 규칙 선택이 미확정인 혜택에서 데이터에 없는 적용 방식을 말하는 표현.
 INVENTED_RULE = re.compile(r"우선|중복|합산|더 높은|높은 금액|둘 중|하나만|동시에|함께 적용")
 # 시스템 미확정 안내가 이미 다루는 주제. LLM의 같은 주제 문장은 화면에서 생략한다.
-UNRESOLVED_TOPICS = (r"DRAFT|PENDING", r"valid_from|시작일", r"CARD_MEMBER|집계", r"중첩|함께 적용|선택 방식",
+UNRESOLVED_TOPICS = (r"DRAFT|PENDING", r"CARD_MEMBER|집계", r"중첩|함께 적용|선택 방식",
                      r"NOT|제외 조건", r"1인 1매")
 
 
@@ -257,7 +257,7 @@ def condition_groups(rows: list[dict]) -> list[dict]:
     """조건 행을 조건식 → 분기 → 조건으로 묶어 OR/AND/NOT 구조를 유지한다."""
     groups: dict[str, dict] = {}
     for row in rows:
-        scope = row["rule_key"] or ("카드 공통" if row["owner_cd"] == "POLICY" else "혜택")
+        scope = row["rule_key"] or ("카드 공통" if row["owner_cd"] == "CARD" else "혜택")
         group = groups.setdefault(row["expression"]["key"], {"scope": scope, "branches": {}})
         atom = source(row["atom"])
         group["branches"].setdefault(row["branch_no"], []).append({
@@ -292,8 +292,6 @@ def find_unresolved(details: list[dict]) -> list[str]:
     """조회 결과에 나타난 미확정 사항을 LLM 없이 판별한다."""
     found = ["개발용 DRAFT 데이터이며 혜택은 PENDING_REVIEW, 원문 근거는 PENDING입니다."]
     for detail in details:
-        if detail["context"]["policy"].get("valid_from_is_assumption"):
-            found.append("정책 시작일(valid_from)은 시험 가정입니다.")
         benefit = source(detail["context"]["benefit"])
         keys = [item["rule"].get("rule_key") for item in detail["rules"]]
         if len(keys) > 1 and not benefit.get("rule_select_cd"):
