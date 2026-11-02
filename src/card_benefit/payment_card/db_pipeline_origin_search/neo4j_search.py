@@ -24,7 +24,7 @@ DETAIL_LOG: ContextVar[bool] = ContextVar("card_detail_log", default=False)  # �
 # 레코드 표시에서 뺄 내부 속성과, source_json에서 꺼내 보여 줄 값.
 HIDDEN_PROPERTIES = frozenset({"source_json", "namespace", "key", "card_source"})
 SOURCE_FIELDS = ("cond_basis_cd", "excl_raw_txt", "cond_status_cd", "value_unit_cd", "calc_method_cd", "rule_select_cd",
-                 "rule_status_cd", "aggregation_key_cd", "pool_scope_cd", "quote_txt", "card_cond_status_cd")
+                 "rule_status_cd", "quote_txt", "card_cond_status_cd")
 
 # 공통 세션의 ``// name:`` mapper만 재사용한다. 실행은 READ_ACCESS를 보장하는 Neo4jSearch._query가 맡는다.
 MAPPERS = Neo4jDbSession(mapper_root=Path(__file__).resolve().parent).mappers
@@ -47,8 +47,8 @@ STATEMENTS = {
     "card.rules": (RULE_QUERY, "(df_card_bnft)-[df_has_rule]->(df_bnft_rule)-[df_targets]->(df_rule_target)"),
     "card.conditions": (CONDITION_QUERY, "(df_card_product|df_card_bnft|df_bnft_rule)-[df_has_expr]->(df_cond_expr)"
                                          "-[df_has_branch]->(df_cond_branch)-[df_has_atom]->(df_cond_atom)"),
-    "card.limits": (LIMIT_QUERY, "(df_card_bnft)-[df_has_rule]->(df_bnft_rule)-[df_consumes]->(df_card_limit_pool)"),
-    "card.evidence": (EVIDENCE_QUERY, "(df_card_product|df_card_bnft|df_bnft_rule|df_card_limit_pool)-[df_supported_by]->(df_card_source_evidence)"
+    "card.limits": (LIMIT_QUERY, "(df_card_bnft).limit_text"),
+    "card.evidence": (EVIDENCE_QUERY, "(df_card_product|df_card_bnft|df_bnft_rule)-[df_supported_by]->(df_card_source_evidence)"
                                       "-[df_in_chunk]->(df_card_doc_chunk)-[df_on_page]->(df_card_doc_page)-[df_in_document]->(df_card_doc)"),
 }
 STATEMENT_IDS = {query: statement_id for statement_id, (query, _) in STATEMENTS.items()}

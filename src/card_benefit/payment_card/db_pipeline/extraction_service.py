@@ -522,7 +522,7 @@ def normalize_benefit(
             "relation_key": relation.relation_key,
             "to_bnft_id": to_key,
             "rel_type_cd": relation.rel_type_cd,
-            "trigger_pool_id": relation.trigger_limit_key,
+            "trigger_limit_key": relation.trigger_limit_key,  # 후보 검토용. 최종 relation_list에는 넣지 않는다.
             "rel_priority": None,
         })
     conditions = [*item.conditions, *extra_conditions]

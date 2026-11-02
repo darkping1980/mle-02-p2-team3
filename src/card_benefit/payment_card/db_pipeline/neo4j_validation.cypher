@@ -64,7 +64,6 @@ WHERE (n:df_card_bnft AND NOT (:df_card_product)-[:df_has_benefit]->(n))
    OR (n:df_cond_branch AND NOT (:df_cond_expr)-[:df_has_branch]->(n))
    OR (n:df_cond_atom AND NOT (:df_cond_branch)-[:df_has_atom]->(n))
    OR (n:df_rule_target AND NOT (:df_bnft_rule)-[:df_targets]->(n))
-   OR (n:df_card_limit_pool AND (NOT (:df_card_product)-[:df_has_pool]->(n) OR NOT (:df_bnft_rule)-[:df_consumes]->(n)))
    OR (n:df_card_source_evidence AND (NOT (n)-[:df_in_chunk]->(:df_card_doc_chunk) OR NOT ()-[:df_supported_by]->(n)))
    OR (n:df_card_doc_chunk AND NOT (n)-[:df_on_page]->(:df_card_doc_page))
    OR (n:df_card_doc_page AND NOT (n)-[:df_in_document]->(:df_card_doc))
@@ -81,5 +80,5 @@ RETURN CASE WHEN owner:df_card_product THEN 'CARD' WHEN owner:df_bnft_rule THEN 
 // name: evidence_links
 // 근거 연결을 PostgreSQL card_evidence_link와 비교한다. 연결 행 하나가 관계 하나다.
 MATCH (owner:df_node {namespace:$ns})-[l:df_supported_by]->(e:df_card_source_evidence {namespace:$ns})
-RETURN l.ev_link_id AS ev_link_id, l.ev_subject_cd AS ev_subject_cd, owner.rule_key AS rule_key, owner.pool_id AS pool_id,
+RETURN l.ev_link_id AS ev_link_id, l.ev_subject_cd AS ev_subject_cd, owner.rule_key AS rule_key,
        l.ev_item_cd AS ev_item_cd, l.ev_item_key AS ev_item_key, e.evidence_id AS evidence_id, e.start_pos AS start_pos, e.end_pos AS end_pos

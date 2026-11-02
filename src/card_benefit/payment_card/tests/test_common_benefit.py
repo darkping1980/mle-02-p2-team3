@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 from datetime import date
 
-from payment_card.db_pipeline.common_benefit_service import CommonBenefitService, benefit_code, period
+from payment_card.db_pipeline.common_benefit_service import CommonBenefitService, benefit_code, period, quote_text
 
 
 class Session:
@@ -17,8 +17,6 @@ class Repo:
         self.cards = {c['card_id']: c for c in cards}
         self.candidate, self.evidence = candidate, evidence
         self.benefits, self.docs, self.links = {}, {}, set()
-        self.pools = {}
-        self.rule_pools = []
         self.prior = []
         self.product_evidence = []
 
@@ -30,15 +28,12 @@ class Repo:
         if name == 'candidate_evidence': return self.evidence
         if name == 'prior_sources': return self.prior
         if name == 'product_brand_evidence': return self.product_evidence
-        if name == 'get_rule_pools': return [r for r in self.rule_pools if r['card_id']==p['CARD_ID'] and r['card_bnft_id']==p['BNFT_ID']]
         raise AssertionError(name)
 
     def one(self, name, **p):
         if name == 'lock_card': return self.cards.get(p['CARD_ID'])
         if name == 'find_benefit': return self.benefits.get((p['CARD_ID'], p['BNFT_CD']))
         if name == 'get_product_doc': return self.docs.get((p['CARD_ID'], p['DOC_ID']))
-        if name == 'valid_aggregation': return {'common_cd':p['CODE']} if p['CODE'] == 'CARD_MEMBER' else None
-        if name == 'get_pool': return self.pools.get((p['CARD_ID'],p['POOL_ID']))
         raise AssertionError(name)
 
     def write(self, name, **p):
@@ -49,7 +44,8 @@ class Repo:
             row = {'card_bnft_id': f"B{p['CARD_ID']}", 'bnft_nm': p['BNFT_NM'], 'bnft_type_cd': p['BNFT_TYPE'],
                    'bnft_origin_cd': 'BRAND_SERVICE', 'bnft_scope_cd': 'BRAND', 'bnft_brand_opt_cds': p['BRAND_OPTS'],
                    'bnft_cond_expr': p['COND'], 'bnft_valid_from': p['VALID_FROM'], 'bnft_valid_to_excl': p['VALID_TO'],
-                   'rule_list': p['RULES'].obj, 'rule_select_cd': None, 'relation_list': [], 'verification_status_cd': 'PENDING_REVIEW'}
+                   'rule_list': p['RULES'].obj, 'rule_select_cd': None, 'relation_list': [], 'verification_status_cd': 'PENDING_REVIEW',
+                   'bnft_rule_txt': p['RULE_TXT'], 'bnft_limit_txt': p['LIMIT_TXT']}
             self.benefits[(p['CARD_ID'], p['BNFT_CD'])] = row
             return [{'card_bnft_id': row['card_bnft_id']}]
         if name == 'insert_evidence_link':
@@ -58,22 +54,11 @@ class Repo:
         if name == 'insert_rule_evidence_link':
             self.links.add((p['CARD_ID'],p['RULE_KEY'],p['EVIDENCE_ID']))
             return []
-        if name == 'insert_pool_evidence_link':
-            self.links.add((p['CARD_ID'],p['POOL_ID'],p['EVIDENCE_ID']))
-            return []
-        if name == 'insert_pool':
-            pool_id = f"P{p['CARD_ID']}"
-            self.pools[(p['CARD_ID'],pool_id)] = {'pool_scope_cd':p['POOL_SCOPE'],'period_cd':p['PERIOD'],
-                'cap_unit_cd':p['CAP_UNIT'],'aggregation_key_cd':p['AGGREGATION'],'tier_list':p['TIERS'].obj}
-            return [{'pool_id':pool_id}]
-        if name == 'insert_rule_pool':
-            self.rule_pools.append({'card_id':p['CARD_ID'],'card_bnft_id':p['BNFT_ID'],'rule_key':p['RULE_KEY'],
-                                    'pool_id':p['POOL_ID'],'pool_role_cd':p['POOL_ROLE']})
-            return [{'pool_id':p['POOL_ID']}]
         if name == 'update_benefit':
             row = next(r for (card, _), r in self.benefits.items() if card == p['CARD_ID'] and r['card_bnft_id'] == p['BNFT_ID'])
             row.update(bnft_nm=p['BNFT_NM'],bnft_type_cd=p['BNFT_TYPE'],bnft_cond_expr=p['COND'],
-                       rule_list=p['RULES'].obj,bnft_valid_from=p['VALID_FROM'],bnft_valid_to_excl=p['VALID_TO'])
+                       rule_list=p['RULES'].obj,bnft_valid_from=p['VALID_FROM'],bnft_valid_to_excl=p['VALID_TO'],
+                       bnft_rule_txt=p['RULE_TXT'],bnft_limit_txt=p['LIMIT_TXT'])
             return [{'card_bnft_id': row['card_bnft_id']}]
         raise AssertionError(name)
 
@@ -154,24 +139,67 @@ def test_revision_updates_only_unmodified_pending_source():
     assert service.path_a(1, {'S1':'valet-identity'})[0].status == 'CHANGE_REVIEW'
 
 
-def test_limit_requires_reviewed_basis_and_is_idempotent():
-    service = fixture()
+def with_limit(service):
     raw = service.repo.candidate['stg_raw_item']
     norm = service.repo.candidate['stg_normalized_item']
-    raw['evidence'].append({'supports':'LIMIT','support_key':'L1','quote_txt':'회원 카드 월 2회'})
+    raw['evidence'].append({'supports':'LIMIT','support_key':'L1','quote_txt':'월\n2회'})
     raw['evidence'].append({'supports':'RULE','support_key':'R','quote_txt':'발레 무료 제공'})
-    service.repo.evidence.append({'evidence_id':'E2','quote_txt':'회원 카드 월 2회','source_txt':'회원 카드 월 2회',
-        'start_pos':1,'end_pos':10,'approval_status_cd':'PENDING'})
+    service.repo.evidence.append({'evidence_id':'E2','quote_txt':'월\n2회','source_txt':'월\n2회',
+        'start_pos':1,'end_pos':4,'approval_status_cd':'PENDING'})
     service.repo.evidence.append({'evidence_id':'E3','quote_txt':'발레 무료 제공','source_txt':'발레 무료 제공',
         'start_pos':1,'end_pos':8,'approval_status_cd':'PENDING'})
     norm['limit_list'] = [{'pool_key':'L1','pool_scope_cd':'BENEFIT','period_cd':'MONTH','cap_unit_cd':'COUNT','limit_num':2}]
     norm['rule_list'] = [{'rule_key':'R','rule_status_cd':'DRAFT','pool_refs':[{'pool_id':'L1','pool_role_cd':'CONSUME'}]}]
-    assert service.path_a(1, {'S1':'id'})[0].status == 'REVIEW'
-    bases = {('S1','L1'):{'aggregation_key_cd':'CARD_MEMBER','basis_txt':'회원 카드'}}
-    assert service.path_a(1, {'S1':'id'}, bases)[0].status == 'INSERTED'
-    assert service.path_a(1, {'S1':'id'}, bases)[0].status == 'UNCHANGED'
-    assert len(service.repo.pools) == 1 and (1,'P1','E2') in service.repo.links
+    return raw, norm
+
+
+def test_limit_is_stored_as_quoted_text_on_benefit_and_is_idempotent():
+    service = fixture()
+    with_limit(service)
+    assert service.path_a(1, {'S1':'id'})[0].status == 'INSERTED'
+    assert service.path_a(1, {'S1':'id'})[0].status == 'UNCHANGED'
+    row = next(iter(service.repo.benefits.values()))
+    assert (row['bnft_rule_txt'], row['bnft_limit_txt']) == ('발레 무료 제공', '월 2회')
+    assert 'pool_refs' not in row['rule_list'][0]
+    # 한도 근거는 혜택에, 규칙 근거는 규칙에 연결된다. 풀 대상 연결은 없다.
+    assert (1,'B1','E2') in service.repo.links
     assert (1,'R','E3') in service.repo.links and (1,'B1','E3') not in service.repo.links
+
+
+def test_limit_without_located_quote_is_reviewed():
+    service = fixture()
+    raw, _ = with_limit(service)
+    service.repo.evidence = [e for e in service.repo.evidence if e['evidence_id'] != 'E2']
+    assert service.path_a(1, {'S1':'id'})[0].status == 'REVIEW'
+    assert not service.repo.benefits
+    service = fixture()
+    raw, _ = with_limit(service)
+    raw['evidence'][1]['support_key'] = 'OTHER'
+    assert service.path_a(1, {'S1':'id'})[0].status == 'REVIEW'
+
+
+def test_limit_text_change_goes_through_revision_rule():
+    service = fixture()
+    raw, _ = with_limit(service)
+    service.path_a(1, {'S1':'id'})
+    old = deepcopy(service.repo.candidate)
+    service.repo.prior = [{'doc_family_cd':old['doc_family_cd'], 'doc_version_no':1, 'stg_raw_item':old['stg_raw_item'],
+                           'stg_normalized_item':old['stg_normalized_item']}]
+    # 같은 판의 인용만 달라지면 자동 갱신하지 않는다.
+    raw['evidence'][1]['quote_txt'] = '월 3회'
+    service.repo.evidence[1].update(quote_txt='월 3회', source_txt='월 3회')
+    assert service.path_a(1, {'S1':'id'})[0].status == 'CHANGE_REVIEW'
+    assert next(iter(service.repo.benefits.values()))['bnft_limit_txt'] == '월 2회'
+    service.repo.candidate['doc_version_no'] = 2
+    assert service.path_a(1, {'S1':'id'})[0].status == 'UPDATED'
+    assert next(iter(service.repo.benefits.values()))['bnft_limit_txt'] == '월 3회'
+
+
+def test_quote_text_only_joins_source_quotes_without_duplicates():
+    items = [{'supports':'LIMIT','quote_txt':'일 1회\n/ 월 30회'}, {'supports':'LIMIT','quote_txt':'월 5천원'},
+             {'supports':'LIMIT','quote_txt':'월  5천원'}, {'supports':'RULE','quote_txt':'100원'}]
+    assert quote_text(items, 'LIMIT') == '일 1회 / 월 30회 / 월 5천원'
+    assert quote_text(items, 'BNFT') is None
 
 
 def test_same_quote_for_different_targets_is_reviewed():

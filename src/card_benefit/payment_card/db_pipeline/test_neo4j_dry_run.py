@@ -14,11 +14,10 @@ def fixture():
         "pages": [{"page_no": 1}],
         "chunks": [{"card_doc_id": "20261101_000002", "page_no": 1, "card_doc_chunk_id": "chunk"}],
         "evidence": [{"card_doc_id": "20261101_000002", "page_no": 1, "card_doc_chunk_id": "chunk", "evidence_id": "ev", "approval_status_cd": "PENDING"}],
-        "pools": [{"pool_id": "pool", "aggregation_key_cd": "CARD_MEMBER"}],
         "benefits": [{"card_bnft_id": "benefit", "bnft_cond_expr": expr,
+                      "bnft_rule_txt": "결제 건당 100원", "bnft_limit_txt": "월 5천원 / 일 1회",
                       "rule_list": [{"rule_key": "rule", "target_list": [],
                                      "cond_expr": None}]}],
-        "rule_pools": [{"card_bnft_id":"benefit", "rule_key":"rule", "pool_id":"pool", "pool_role_cd":"CONSUME"}],
         "links": [{"ev_subject_cd": "BNFT", "card_bnft_id": "benefit", "evidence_id": "ev", "ev_link_id": "link"}],
     }
 
@@ -31,11 +30,17 @@ class PreviewTests(unittest.TestCase):
         self.assertEqual(stats["nodes"]["df_cond_atom"], 2)
         self.assertIn('"negate_yn":true', graph.nodes[key("cond_atom", "benefit", 2, "benefit", 2, "grace")]["source_json"])
         self.assertEqual(stats["relationships"]["df_supported_by"], 1)
-        self.assertEqual(stats["relationships"]["df_consumes"], 1)
 
-    def test_missing_pool_is_rejected(self):
-        data = fixture(); data["pools"] = []
-        with self.assertRaises(KeyError): build(data)
+    def test_limit_is_benefit_text_and_pool_graph_is_gone(self):
+        graph, stats = build(fixture())
+        self.assertNotIn("df_card_limit_pool", stats["nodes"])
+        self.assertFalse({"df_has_pool", "df_consumes"} & set(stats["relationships"]))
+        self.assertIn('"bnft_limit_txt":"월 5천원 / 일 1회"', graph.nodes[key("card_bnft", 2, "benefit")]["source_json"])
+
+    def test_removed_pool_subject_is_rejected(self):
+        data = fixture()
+        data["links"].append({"ev_subject_cd": "POOL", "pool_id": "pool", "evidence_id": "ev", "ev_link_id": "old"})
+        with self.assertRaises(ValueError): build(data)
 
     def test_wrong_evidence_page_is_rejected(self):
         data = fixture(); data["evidence"][0]["page_no"] = 2
@@ -79,11 +84,10 @@ class PreviewTests(unittest.TestCase):
         data["links"].append({"ev_subject_cd": "POLICY", "evidence_id": "ev", "ev_link_id": "old"})
         with self.assertRaises(ValueError): build(data)
 
-    def test_benefit_pool_and_document_connect_directly_to_card(self):
+    def test_benefit_and_document_connect_directly_to_card(self):
         graph, stats = build(fixture())
         card = key("card_product", 2)
         for kind, end in (("df_has_benefit", key("card_bnft", 2, "benefit")),
-                          ("df_has_pool", key("card_limit_pool", 2, "pool")),
                           ("df_has_document", key("card_doc", "20261101_000002"))):
             self.assertTrue(any(e["type"] == kind and e["start"] == card and e["end"] == end for e in graph.edges.values()), kind)
         self.assertNotIn("df_card_policy_version", stats["nodes"])

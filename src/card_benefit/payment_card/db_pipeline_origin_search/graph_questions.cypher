@@ -55,23 +55,21 @@ RETURN CASE WHEN owner:df_card_product THEN 'CARD' WHEN owner:df_bnft_rule THEN 
 ORDER BY owner_cd, rule_key, branch_no, a.atom_seq
 
 // name: benefit_limits
-MATCH (b:df_card_bnft {namespace:$ns,key:$key})-[:df_has_rule]->(r:df_bnft_rule {namespace:$ns})
-      -[:df_consumes]->(pool:df_card_limit_pool {namespace:$ns})
-RETURN properties(pool) AS pool, labels(pool) AS labels,
-       collect(DISTINCT r.rule_key) AS rule_keys ORDER BY pool.pool_id
+// 한도는 혜택의 원문 TEXT다. 값이 없으면 행이 없고, 한도 없음이 아니라 미확인을 뜻한다.
+MATCH (b:df_card_bnft {namespace:$ns,key:$key})
+WHERE b.limit_text IS NOT NULL
+RETURN b.limit_text AS limit_text
 
 // name: benefit_evidence
 MATCH (card:df_card_product {namespace:$ns})-[:df_has_benefit]->(b:df_card_bnft {namespace:$ns,key:$key})
 OPTIONAL MATCH (b)-[:df_has_rule]->(rule:df_bnft_rule {namespace:$ns})
 WITH card,b,collect(DISTINCT rule) AS rules
-OPTIONAL MATCH (b)-[:df_has_rule]->(:df_bnft_rule {namespace:$ns})-[:df_consumes]->(pool:df_card_limit_pool {namespace:$ns})
-WITH card,b,rules,collect(DISTINCT pool) AS pools
-UNWIND [card,b] + pools + rules AS owner
+UNWIND [card,b] + rules AS owner
 MATCH (owner)-[link:df_supported_by]->(e:df_card_source_evidence {namespace:$ns})
       -[:df_in_chunk]->(chunk:df_card_doc_chunk {namespace:$ns})
       -[:df_on_page]->(page:df_card_doc_page {namespace:$ns})
       -[:df_in_document]->(doc:df_card_doc {namespace:$ns})
-RETURN labels(owner) AS owner_labels, owner.pool_id AS pool_id, owner.rule_key AS rule_key,
+RETURN labels(owner) AS owner_labels, owner.rule_key AS rule_key,
        properties(link) AS link, properties(e) AS evidence,
        properties(chunk) AS chunk, properties(page) AS page, properties(doc) AS document
 ORDER BY page.page_no, e.start_pos, e.evidence_id

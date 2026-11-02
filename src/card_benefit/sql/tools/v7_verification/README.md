@@ -1,6 +1,20 @@
 # V7 검증 도구
 
-## 규칙·한도 연결 테이블 변경 검증
+## 혜택·한도 TEXT 단순화 검증
+
+`card_limit_pool`, `card_bnft_rule_pool` 제거 이관을 메모리 PostgreSQL에서 시험한다. 실제 DB에 쓰지 않는다.
+
+```bash
+../../../../../.venv/Scripts/python export_simplify_rows.py   # 읽기 전용. 결과는 Git 제외 폴더 .work/
+node verify_bnft_text.mjs real                                # 내려받은 행
+node verify_bnft_text.mjs                                     # 합성 행
+```
+
+기준 구조는 커밋 `bdb94bc`의 V7이다. 사전 검증, 가드 음성 시험 9종, 새 V7과 카탈로그 비교, 재실행, 복구, 복구 재실행, 재이관을 확인한다. `real`을 **이관 전 DB에서** 내려받아야 한다. 이관 후에는 다시 받을 수 없고 사후 검증 SQL을 쓴다.
+
+`verify_v6_path.mjs`는 V6 → V7 → TEXT 단순화까지 이어서 최종 DDL과 비교하고, `migrate_test.mjs`와 함께 V7 비교 기준을 `bdb94bc`로 고정했다. `verify_rule_pool.mjs`, `live_rollback_dryrun.py`, `neo4j_isolated_test.py`는 단순화 이전 구조용 기록이며 현재 구조에 실행하지 않는다.
+
+## 규칙·한도 연결 테이블 변경 검증 (단순화 이전 기록)
 
 기존 `pool_refs`를 `card_bnft_rule_pool`로 이관하는 변경은 다음 메모리 PostgreSQL 시험으로 확인한다. 실제 DB에 접속하지 않는다. 먼저 이 폴더의 PGlite 의존성을 설치한다.
 
@@ -87,7 +101,7 @@ node catalog_dump.mjs .work/v6_catalog.json ../../db_pipeline_schemaV6_draft.sql
 node -e "const {Parser}=require('@dbml/core');const t=new Parser().parse(require('fs').readFileSync('../../db_pipeline_schemaV7_draft.dbml','utf8'),'dbml').schemas.flatMap(x=>x.tables);console.log(t.length,t.reduce((a,x)=>a+x.fields.length,0))"
 ```
 
-연결 테이블 변경 후 기대값은 테이블 16, 컬럼 210이다.
+TEXT 단순화 후 기대값은 테이블 14, 컬럼 199다.
 
 ## 실제 DB 트랜잭션 시험
 

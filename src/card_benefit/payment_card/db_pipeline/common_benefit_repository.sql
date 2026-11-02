@@ -78,38 +78,17 @@ ON CONFLICT (card_id,card_doc_id) DO NOTHING RETURNING card_id;
 -- name: get_product_doc
 SELECT * FROM db_pipeline.card_product_doc WHERE card_id=:CARD_ID AND card_doc_id=:DOC_ID;
 
--- name: insert_pool
-INSERT INTO db_pipeline.card_limit_pool (card_id,pool_scope_cd,period_cd,cap_unit_cd,aggregation_key_cd,tier_list)
-VALUES (:CARD_ID,:POOL_SCOPE,:PERIOD,:CAP_UNIT,:AGGREGATION,:TIERS) RETURNING pool_id;
-
--- name: get_pool
-SELECT * FROM db_pipeline.card_limit_pool WHERE card_id=:CARD_ID AND pool_id=:POOL_ID;
-
--- name: get_rule_pools
-SELECT rule_key,pool_id,pool_role_cd FROM db_pipeline.card_bnft_rule_pool
-WHERE card_id=:CARD_ID AND card_bnft_id=:BNFT_ID ORDER BY rule_key,pool_id;
-
--- name: insert_rule_pool
-INSERT INTO db_pipeline.card_bnft_rule_pool (card_id,card_bnft_id,rule_key,pool_id,pool_role_cd)
-VALUES (:CARD_ID,:BNFT_ID,:RULE_KEY,:POOL_ID,:POOL_ROLE) RETURNING pool_id;
-
--- name: valid_aggregation
-SELECT common_cd FROM db_pipeline.common_cd WHERE common_code_grp_id='LIMIT_AGG' AND common_cd=:CODE;
-
 -- name: insert_benefit
 INSERT INTO db_pipeline.card_bnft (card_id,bnft_cd,bnft_nm,bnft_type_cd,bnft_origin_cd,bnft_scope_cd,
-  bnft_brand_opt_cds,bnft_cond_expr,rule_select_cd,rule_list,relation_list,verification_status_cd,bnft_valid_from,bnft_valid_to_excl)
+  bnft_brand_opt_cds,bnft_cond_expr,rule_select_cd,rule_list,relation_list,verification_status_cd,bnft_valid_from,bnft_valid_to_excl,
+  bnft_rule_txt,bnft_limit_txt)
 VALUES (:CARD_ID,:BNFT_CD,:BNFT_NM,:BNFT_TYPE,'BRAND_SERVICE','BRAND',:BRAND_OPTS,:COND,NULL,:RULES,
-  '[]'::jsonb,'PENDING_REVIEW',:VALID_FROM,:VALID_TO) ON CONFLICT (card_id,bnft_cd) DO NOTHING RETURNING card_bnft_id;
+  '[]'::jsonb,'PENDING_REVIEW',:VALID_FROM,:VALID_TO,:RULE_TXT,:LIMIT_TXT)
+ON CONFLICT (card_id,bnft_cd) DO NOTHING RETURNING card_bnft_id;
 
 -- name: insert_evidence_link
 INSERT INTO db_pipeline.card_evidence_link (card_id,ev_subject_cd,card_bnft_id,ev_item_cd,ev_item_key,evidence_id)
 VALUES (:CARD_ID,'BNFT',:BNFT_ID,'SELF','-',:EVIDENCE_ID)
-ON CONFLICT ON CONSTRAINT card_evidence_link_natural_key DO NOTHING RETURNING ev_link_id;
-
--- name: insert_pool_evidence_link
-INSERT INTO db_pipeline.card_evidence_link (card_id,ev_subject_cd,pool_id,ev_item_cd,ev_item_key,evidence_id)
-VALUES (:CARD_ID,'POOL',:POOL_ID,'SELF','-',:EVIDENCE_ID)
 ON CONFLICT ON CONSTRAINT card_evidence_link_natural_key DO NOTHING RETURNING ev_link_id;
 
 -- name: insert_rule_evidence_link
@@ -119,6 +98,7 @@ ON CONFLICT ON CONSTRAINT card_evidence_link_natural_key DO NOTHING RETURNING ev
 
 -- name: update_benefit
 UPDATE db_pipeline.card_bnft SET bnft_nm=:BNFT_NM,bnft_type_cd=:BNFT_TYPE,
-    bnft_cond_expr=:COND,rule_list=:RULES,bnft_valid_from=:VALID_FROM,bnft_valid_to_excl=:VALID_TO
+    bnft_cond_expr=:COND,rule_list=:RULES,bnft_valid_from=:VALID_FROM,bnft_valid_to_excl=:VALID_TO,
+    bnft_rule_txt=:RULE_TXT,bnft_limit_txt=:LIMIT_TXT
 WHERE card_id=:CARD_ID AND card_bnft_id=:BNFT_ID AND verification_status_cd='PENDING_REVIEW'
 RETURNING card_bnft_id;

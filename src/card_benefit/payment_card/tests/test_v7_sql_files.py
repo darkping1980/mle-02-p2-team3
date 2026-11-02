@@ -68,7 +68,7 @@ class SchemaV7Tests(unittest.TestCase):
 
     def test_keys_attach_directly_to_card(self):
         for key in ("PRIMARY KEY (card_id, card_bnft_id)", "UNIQUE (card_id, bnft_cd)",
-                    "PRIMARY KEY (card_id, pool_id)", "PRIMARY KEY (card_id, ev_link_id)"):
+                    "PRIMARY KEY (card_id, ev_link_id)"):
             self.assertIn(key, self.ddl)
 
     def test_card_condition_reuses_condition_contract(self):
@@ -85,19 +85,32 @@ class SchemaV7Tests(unittest.TestCase):
         self.assertIn("card_product_doc_brand_check", table)
 
     def test_evidence_subject_uses_card(self):
-        self.assertIn("WHEN 'CARD' THEN num_nonnulls(card_bnft_id, rule_key, relation_key, pool_id) = 0", self.ddl)
+        self.assertIn("WHEN 'CARD' THEN num_nonnulls(card_bnft_id, rule_key, relation_key) = 0", self.ddl)
         self.assertNotIn("'POLICY'", self.ddl)
+
+    def test_limit_pool_structure_is_gone_and_text_stays_on_benefit(self):
+        for token in ("card_limit_pool", "card_bnft_rule_pool", "v_card_limit_tier", "v_card_rule_pool", "fn_valid_tier_list",
+                      "tier_list", "POOL_TIER", "'POOL'", "'TIER'", "s.pool_id", "item_key,\n"):
+            self.assertNotIn(token, self.ddl.replace("ev_item_key,\n", ""), token)
+        self.assertIn("bnft_rule_txt text,", self.ddl)
+        self.assertIn("bnft_limit_txt text,", self.ddl)
+
+    def test_relation_contract_rejects_pool_reference(self):
+        self.assertIn("OR v_rel ? 'trigger_pool_id' THEN", self.ddl)
+        self.assertNotIn("x.value->>'trigger_pool_id'", self.ddl)
 
     def test_replaced_gates_exist_and_removed_gates_are_only_the_policy_ones(self):
         gates = set(re.findall(r"^SELECT '(\w+)'(?: AS gate_cd)?,", self.ddl.split("CREATE VIEW db_pipeline.v_card_integrity_issue", 1)[1], flags=re.M))
-        self.assertLessEqual({"bnft_without_product", "pool_without_product", "product_doc_without_product",
+        self.assertLessEqual({"bnft_without_product", "bnft_txt_without_evidence", "product_doc_without_product",
                               "product_doc_orphan", "evidence_doc_not_linked", "evidence_not_approved",
                               "evidence_subject_orphan", "evidence_item_key_missing", "common_cd_invalid",
                               "brand_bnft_doc_not_linked", "brand_bnft_confirmed_without_evidence",
                               "evidence_brand_opt_mismatch", "brand_doc_option_conflict",
                               "product_doc_role_type_mismatch", "shared_doc_bound_to_card", "stg_card_not_linked"}, gates)
         self.assertFalse(gates & {"policy_without_product", "bnft_without_policy", "pool_without_policy",
-                                  "policy_period_overlap", "policy_doc_orphan"})
+                                  "policy_period_overlap", "policy_doc_orphan", "pool_without_product", "pool_ref_orphan",
+                                  "rule_pool_product_orphan", "rule_pool_benefit_orphan", "rule_pool_rule_orphan",
+                                  "rel_trigger_pool_orphan"})
 
     def test_common_code_description_columns_are_kept(self):
         self.assertIn("common_code_grp_desc text,", self.ddl)
@@ -170,11 +183,6 @@ class MigrationTests(unittest.TestCase):
         self.assertLess(backup, moved)
         self.assertLess(moved, dropped)
 
-    def test_views_are_the_ddl_definitions(self):
-        ddl = read("db_pipeline_schemaV7_draft.sql")
-        for name in ("v_card_cond_atom", "v_common_cd_usage", "v_card_integrity_issue"):
-            pattern = rf"CREATE VIEW db_pipeline\.{name} AS\n.*?;\n\nCOMMENT ON VIEW"
-            self.assertEqual(re.search(pattern, ddl, re.S).group(0), re.search(pattern, self.migration, re.S).group(0))
 
     def test_rollback_restores_policy_table_from_backup(self):
         rollback = read("db_pipeline_migration_V7_to_V6_rollback.sql")
@@ -184,6 +192,49 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("INSERT INTO db_pipeline.common_cd SELECT * FROM db_pipeline_v6_backup.common_cd;", rollback)
         self.assertIn("V6에 담을 수 없는 카드 미연결 추출 항목이 있습니다", rollback)
         self.assertIn("INSERT INTO db_pipeline.card_method_catalog SELECT * FROM db_pipeline_v6_backup.card_method_catalog;", rollback)
+
+
+class BnftTextMigrationTests(unittest.TestCase):
+    """V6 -> V7 이관 파일은 TEXT 단순화 직전 구조에서 멈춘다. 최종 구조는 이 이관까지 적용한 결과다."""
+    @classmethod
+    def setUpClass(cls):
+        cls.forward = read("db_pipeline_migration_v7_bnft_text.sql")
+        cls.rollback = read("db_pipeline_migration_v7_bnft_text_rollback.sql")
+        cls.precheck = read("db_pipeline_v7_bnft_text_precheck.sql")
+        cls.postcheck = read("db_pipeline_v7_bnft_text_postcheck.sql")
+
+    def test_views_are_the_ddl_definitions(self):
+        ddl = read("db_pipeline_schemaV7_draft.sql")
+        for name in ("v_card_bnft_rel", "v_card_cond_atom", "v_common_cd_usage", "v_card_integrity_issue"):
+            pattern = rf"CREATE VIEW db_pipeline\.{name} AS\n.*?;\n\nCOMMENT ON VIEW"
+            self.assertEqual(re.search(pattern, ddl, re.S).group(0), re.search(pattern, self.forward, re.S).group(0))
+
+    def test_no_cascade_and_single_transaction(self):
+        for text in (self.forward, self.rollback):
+            self.assertNotRegex(text, r"(?i)\bCASCADE\b(?! ?를)")
+            self.assertEqual(text.count("\nBEGIN;\n"), 1)
+            self.assertTrue(text.rstrip().endswith("COMMIT;"))
+            self.assertNotRegex(text, r"(?i)FOREIGN\s+KEY")
+
+    def test_guard_runs_before_anything_is_removed(self):
+        guard = self.forward.index("사전 조건 실패로 중단합니다")
+        for statement in ("DROP VIEW IF EXISTS", "DELETE FROM db_pipeline.card_evidence_link", "DROP TABLE IF EXISTS db_pipeline.card_limit_pool"):
+            self.assertLess(guard, self.forward.index(statement), statement)
+
+    def test_natural_key_keeps_its_name_for_on_conflict(self):
+        self.assertIn("ADD CONSTRAINT card_evidence_link_natural_key UNIQUE NULLS NOT DISTINCT", self.forward)
+
+    def test_precheck_and_migration_share_every_check(self):
+        codes = set(re.findall(r"^SELECT '([BTEJSOG]\d\d)'", self.precheck, flags=re.M))
+        self.assertEqual(len(codes), 21)
+        self.assertEqual(codes, set(re.findall(r"^SELECT '([BTEJSOG]\d\d)'", self.forward, flags=re.M)))
+
+    def test_checks_are_read_only_and_safe_for_dbeaver(self):
+        for text in (self.precheck, self.postcheck):
+            self.assertNotRegex(re.sub(r"--.*", "", text), r"(?i)\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE)\b")
+        for text in (self.precheck, self.postcheck, self.forward, self.rollback):
+            outside = re.sub(r"\$_?\$.*?\$_?\$", "", re.sub(r"--.*", "", text), flags=re.S)
+            self.assertNotIn(" ? ", outside)  # JDBC가 파라미터로 오인한다.
 
 
 class V6IsPreservedTests(unittest.TestCase):

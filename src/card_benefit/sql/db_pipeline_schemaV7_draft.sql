@@ -18,15 +18,15 @@
 --   rule_list        [{"rule_key","cond_expr","predicate_state_cd","target_list","calc_method_cd",
 --                      "method_ver","value_num","value_unit_cd","payout_unit_cd","basis_amt",
 --                      "calc_params","rule_priority","rule_status_cd"}]        card_bnft
---   rule-to-pool links are stored only in card_bnft_rule_pool.
---   relation_list    [{"relation_key","to_bnft_id","rel_type_cd","trigger_pool_id","rel_priority"}]
+--   relation_list    [{"relation_key","to_bnft_id","rel_type_cd","rel_priority"}]
 --   target_list      [{"target_type_cd","target_key","target_nm"}]
---   tier_list        [{"tier_key","tier_priority","predicate_state_cd","limit_num","cond_expr"}]
 --   brand_opt_list   [{"brand_opt_cd","brand_opt_nm","brand_cd","service_grade_cd","service_type_cd",
 --                      "brand_opt_status_cd"}]
 -- method_ver and predicate_method_ver are representation contract versions, currently 1. V7 has no calculation
 -- engine or method catalog, so nothing checks them against an executable handler.
 -- Effective condition: card_cond_expr AND bnft_cond_expr AND rule cond_expr.
+-- 혜택 설명과 한도는 card_bnft.bnft_rule_txt, bnft_limit_txt의 원문 기반 TEXT로 둔다. 고객별 지급액을 계산하지 않으므로
+-- 한도 풀과 규칙-한도 연결은 만들지 않는다. TEXT NULL은 한도 없음이 아니라 미확인이다.
 
 
 CREATE SCHEMA db_pipeline;
@@ -200,34 +200,6 @@ $_$;
 
 COMMENT ON FUNCTION db_pipeline.fn_valid_target_list(jsonb) IS '대상 목록 JSONB 계약 검증. 비율·금액 키는 두지 않으며 대상별 비율이 다르면 규칙 행을 나눔';
 
-CREATE FUNCTION db_pipeline.fn_valid_tier_list(p_list jsonb) RETURNS boolean
-    LANGUAGE sql IMMUTABLE
-    SET search_path TO 'pg_catalog'
-    AS $_$
-    SELECT CASE
-        WHEN jsonb_typeof(p_list) IS DISTINCT FROM 'array' OR jsonb_array_length(p_list) = 0 THEN false
-        ELSE (
-            SELECT bool_and(
-                       jsonb_typeof(t.value) = 'object'
-                       AND coalesce(t.value->>'tier_key', '') ~ '^[A-Za-z0-9_.:-]{1,40}$'
-                       AND jsonb_typeof(t.value->'limit_num') IS NOT DISTINCT FROM 'number'
-                       AND (t.value->>'limit_num')::numeric >= 0
-                       AND jsonb_typeof(t.value->'tier_priority') IS DISTINCT FROM 'string'
-                       AND coalesce((t.value->>'tier_priority')::integer, 1) > 0
-                       AND CASE t.value->>'predicate_state_cd'
-                               WHEN 'CONDITIONAL' THEN t.value->'cond_expr' IS NOT NULL
-                                                       AND db_pipeline.fn_valid_cond_expr(t.value->'cond_expr')
-                               WHEN 'VERIFIED_UNCONDITIONAL' THEN t.value->'cond_expr' IS NULL
-                               WHEN 'PENDING_REVIEW' THEN db_pipeline.fn_valid_cond_expr(t.value->'cond_expr')
-                               ELSE false
-                           END)
-                   AND count(*) = count(DISTINCT t.value->>'tier_key')
-            FROM jsonb_array_elements(p_list) AS t(value))
-    END
-$_$;
-
-COMMENT ON FUNCTION db_pipeline.fn_valid_tier_list(jsonb) IS '한도 풀 tier 목록 검증. limit_num은 0 이상의 숫자, 상태별 cond_expr 필수 여부 검사';
-
 CREATE FUNCTION db_pipeline.fn_valid_brand_opt_list(p_list jsonb) RETURNS boolean
     LANGUAGE sql IMMUTABLE
     SET search_path TO 'pg_catalog'
@@ -339,10 +311,7 @@ BEGIN
            OR v_rel->>'to_bnft_id' = p_self_bnft_id
            OR coalesce(v_rel->>'rel_type_cd', '') = ''
            OR coalesce(jsonb_typeof(v_rel->'rel_priority'), 'null') NOT IN ('number','null')
-           OR coalesce(jsonb_typeof(v_rel->'trigger_pool_id'), 'null') NOT IN ('string','null') THEN
-            RETURN false;
-        END IF;
-        IF v_rel->>'rel_type_cd' = 'FALLBACK_AFTER_CAP' AND coalesce(v_rel->>'trigger_pool_id', '') = '' THEN
+           OR v_rel ? 'trigger_pool_id' THEN
             RETURN false;
         END IF;
         v_pair := (v_rel->>'to_bnft_id') || '|' || (v_rel->>'rel_type_cd');
@@ -356,7 +325,7 @@ BEGIN
 END;
 $_$;
 
-COMMENT ON FUNCTION db_pipeline.fn_valid_relation_list(jsonb, text) IS '혜택 관계 목록 JSONB 계약 검증. 자기 참조, relation_key 중복, 같은 대상·유형 중복, 소진 대체의 trigger_pool_id 누락 거부';
+COMMENT ON FUNCTION db_pipeline.fn_valid_relation_list(jsonb, text) IS '혜택 관계 목록 JSONB 계약 검증. 자기 참조, relation_key 중복, 같은 대상·유형 중복, 제거된 trigger_pool_id 거부';
 
 -- ---------------------------------------------------------------------------
 -- 시퀀스
@@ -420,10 +389,6 @@ CREATE SEQUENCE db_pipeline.seq_card_extr_stg
     CYCLE;
 
 COMMENT ON SEQUENCE db_pipeline.seq_card_extr_stg IS 'AI 추출 staging ID 발급';
-
-CREATE SEQUENCE db_pipeline.seq_card_limit_pool INCREMENT BY 1 START WITH 1 NO MINVALUE MAXVALUE 999999 CACHE 1 CYCLE;
-
-COMMENT ON SEQUENCE db_pipeline.seq_card_limit_pool IS 'card_limit_pool.pool_id 로컬 업무 ID 발급';
 
 CREATE SEQUENCE db_pipeline.seq_card_source_evidence INCREMENT BY 1 START WITH 1 NO MINVALUE MAXVALUE 999999 CACHE 1 CYCLE;
 
@@ -562,7 +527,7 @@ COMMENT ON COLUMN db_pipeline.card_product_doc.update_date IS '수정 일시';
 COMMENT ON COLUMN db_pipeline.card_product_doc.update_user_id IS '수정 사용자 아이디';
 
 -- ---------------------------------------------------------------------------
--- 상품 혜택 영역. 규칙과 혜택 관계는 JSONB, 규칙↔한도 관계는 연결 테이블에 저장
+-- 상품 혜택 영역. 규칙과 혜택 관계는 JSONB, 혜택 설명과 한도는 원문 기반 TEXT로 저장
 -- ---------------------------------------------------------------------------
 CREATE TABLE db_pipeline.card_bnft (
     card_id bigint NOT NULL,
@@ -580,6 +545,8 @@ CREATE TABLE db_pipeline.card_bnft (
     verification_status_cd varchar(25) NOT NULL,
     bnft_valid_from date,
     bnft_valid_to_excl date,
+    bnft_rule_txt text,
+    bnft_limit_txt text,
     PRIMARY KEY (card_id, card_bnft_id),
     UNIQUE (card_id, bnft_cd),
     CONSTRAINT card_bnft_ck_1 CHECK
@@ -609,42 +576,8 @@ COMMENT ON COLUMN db_pipeline.card_bnft.relation_list IS '혜택 관계 목록';
 COMMENT ON COLUMN db_pipeline.card_bnft.verification_status_cd IS '혜택 검증 상태';
 COMMENT ON COLUMN db_pipeline.card_bnft.bnft_valid_from IS '혜택 제공 시작일';
 COMMENT ON COLUMN db_pipeline.card_bnft.bnft_valid_to_excl IS '혜택 제공 종료일(미포함)';
-
-CREATE TABLE db_pipeline.card_limit_pool (
-    card_id bigint NOT NULL,
-    pool_id varchar(20) DEFAULT db_pipeline.fn_get_biz_id('card_limit_pool') NOT NULL,
-    pool_scope_cd varchar(30) NOT NULL,
-    period_cd varchar(20) NOT NULL,
-    cap_unit_cd varchar(30) NOT NULL,
-    aggregation_key_cd varchar(30) NOT NULL,
-    tier_list jsonb NOT NULL,
-    PRIMARY KEY (card_id, pool_id),
-    CONSTRAINT card_limit_pool_ck_1 CHECK (db_pipeline.fn_valid_tier_list(tier_list))
-);
-
-COMMENT ON TABLE db_pipeline.card_limit_pool IS '혜택 공유 한도';
-COMMENT ON COLUMN db_pipeline.card_limit_pool.card_id IS '카드 아이디';
-COMMENT ON COLUMN db_pipeline.card_limit_pool.pool_id IS '한도 풀 아이디';
-COMMENT ON COLUMN db_pipeline.card_limit_pool.pool_scope_cd IS '한도 적용 범위';
-COMMENT ON COLUMN db_pipeline.card_limit_pool.period_cd IS '한도 기간';
-COMMENT ON COLUMN db_pipeline.card_limit_pool.cap_unit_cd IS '한도 단위';
-COMMENT ON COLUMN db_pipeline.card_limit_pool.aggregation_key_cd IS '한도 집계 기준';
-COMMENT ON COLUMN db_pipeline.card_limit_pool.tier_list IS '한도 구간 목록';
-
-CREATE TABLE db_pipeline.card_bnft_rule_pool (
-    card_id bigint NOT NULL,
-    card_bnft_id varchar(20) NOT NULL,
-    rule_key varchar(40) NOT NULL,
-    pool_id varchar(20) NOT NULL,
-    pool_role_cd varchar(30) NOT NULL,
-    PRIMARY KEY (card_id, card_bnft_id, rule_key, pool_id)
-);
-COMMENT ON TABLE db_pipeline.card_bnft_rule_pool IS '카드 혜택 규칙과 한도 풀의 논리적 관계. 물리 FK 없음';
-COMMENT ON COLUMN db_pipeline.card_bnft_rule_pool.card_id IS '카드 아이디';
-COMMENT ON COLUMN db_pipeline.card_bnft_rule_pool.card_bnft_id IS '혜택 아이디';
-COMMENT ON COLUMN db_pipeline.card_bnft_rule_pool.rule_key IS '계산 규칙 키';
-COMMENT ON COLUMN db_pipeline.card_bnft_rule_pool.pool_id IS '한도 풀 아이디';
-COMMENT ON COLUMN db_pipeline.card_bnft_rule_pool.pool_role_cd IS '한도 풀 역할';
+COMMENT ON COLUMN db_pipeline.card_bnft.bnft_rule_txt IS '공식 원문 근거에서 모은 혜택 계산 규칙 안내. 계산 확정값이 아니라 검토 대상 텍스트';
+COMMENT ON COLUMN db_pipeline.card_bnft.bnft_limit_txt IS '원문 근거에서 모은 혜택별 이용/금액 한도. 여러 풀의 근거를 혜택별로 중복 제거한 텍스트';
 
 -- ---------------------------------------------------------------------------
 -- 근거 연결 영역
@@ -656,24 +589,20 @@ CREATE TABLE db_pipeline.card_evidence_link (
     card_bnft_id varchar(20),
     rule_key varchar(40),
     relation_key varchar(40),
-    pool_id varchar(20),
     ev_item_cd varchar(10) NOT NULL DEFAULT 'SELF',
     ev_item_key varchar(100) NOT NULL DEFAULT '-',
     evidence_id varchar(20) NOT NULL,
     PRIMARY KEY (card_id, ev_link_id),
     CONSTRAINT card_evidence_link_natural_key UNIQUE NULLS NOT DISTINCT
-        (card_id, ev_subject_cd, card_bnft_id, rule_key, relation_key, pool_id,
+        (card_id, ev_subject_cd, card_bnft_id, rule_key, relation_key,
          ev_item_cd, ev_item_key, evidence_id),
     CONSTRAINT card_evidence_link_ck_1 CHECK ((ev_item_cd = 'SELF') = (ev_item_key = '-')),
     CONSTRAINT card_evidence_link_ck_2 CHECK (
         CASE ev_subject_cd
-            WHEN 'CARD' THEN num_nonnulls(card_bnft_id, rule_key, relation_key, pool_id) = 0
-            WHEN 'BNFT' THEN card_bnft_id IS NOT NULL AND num_nonnulls(rule_key, relation_key, pool_id) = 0
-            WHEN 'RULE' THEN card_bnft_id IS NOT NULL AND rule_key IS NOT NULL
-                             AND num_nonnulls(relation_key, pool_id) = 0
-            WHEN 'POOL' THEN pool_id IS NOT NULL AND num_nonnulls(card_bnft_id, rule_key, relation_key) = 0
-            WHEN 'REL' THEN card_bnft_id IS NOT NULL AND relation_key IS NOT NULL
-                            AND num_nonnulls(rule_key, pool_id) = 0
+            WHEN 'CARD' THEN num_nonnulls(card_bnft_id, rule_key, relation_key) = 0
+            WHEN 'BNFT' THEN card_bnft_id IS NOT NULL AND num_nonnulls(rule_key, relation_key) = 0
+            WHEN 'RULE' THEN card_bnft_id IS NOT NULL AND rule_key IS NOT NULL AND relation_key IS NULL
+            WHEN 'REL' THEN card_bnft_id IS NOT NULL AND relation_key IS NOT NULL AND rule_key IS NULL
             ELSE false
         END)
 );
@@ -685,7 +614,6 @@ COMMENT ON COLUMN db_pipeline.card_evidence_link.ev_subject_cd IS '근거 대상
 COMMENT ON COLUMN db_pipeline.card_evidence_link.card_bnft_id IS '혜택 아이디';
 COMMENT ON COLUMN db_pipeline.card_evidence_link.rule_key IS '규칙 키';
 COMMENT ON COLUMN db_pipeline.card_evidence_link.relation_key IS '혜택 관계 키';
-COMMENT ON COLUMN db_pipeline.card_evidence_link.pool_id IS '한도 풀 아이디';
 COMMENT ON COLUMN db_pipeline.card_evidence_link.ev_item_cd IS '근거 항목 유형';
 COMMENT ON COLUMN db_pipeline.card_evidence_link.ev_item_key IS '근거 항목 키';
 COMMENT ON COLUMN db_pipeline.card_evidence_link.evidence_id IS '원문 근거 아이디';
@@ -1132,18 +1060,11 @@ CROSS JOIN LATERAL jsonb_array_elements(b.rule_list) WITH ORDINALITY AS r(value,
 
 COMMENT ON VIEW db_pipeline.v_card_rule IS '상품 계산 규칙을 행으로 복원. V5 card_bnft_rule 조회 대체';
 
-CREATE VIEW db_pipeline.v_card_rule_pool AS
-SELECT card_id, card_bnft_id, rule_key, pool_id, pool_role_cd
-FROM db_pipeline.card_bnft_rule_pool;
-
-COMMENT ON VIEW db_pipeline.v_card_rule_pool IS '규칙↔한도 풀 연결 테이블 조회';
-
 CREATE VIEW db_pipeline.v_card_bnft_rel AS
 SELECT b.card_id, b.card_bnft_id AS from_bnft_id,
        x.value->>'to_bnft_id' AS to_bnft_id,
        x.value->>'relation_key' AS relation_key,
        x.value->>'rel_type_cd' AS rel_type_cd,
-       x.value->>'trigger_pool_id' AS trigger_pool_id,
        (x.value->>'rel_priority')::integer AS rel_priority,
        false AS reverse_yn
 FROM db_pipeline.card_bnft b
@@ -1153,7 +1074,6 @@ SELECT b.card_id, x.value->>'to_bnft_id',
        b.card_bnft_id,
        x.value->>'relation_key',
        x.value->>'rel_type_cd',
-       x.value->>'trigger_pool_id',
        (x.value->>'rel_priority')::integer,
        true
 FROM db_pipeline.card_bnft b
@@ -1172,38 +1092,20 @@ CROSS JOIN LATERAL jsonb_array_elements(r.target_list) AS t(value);
 
 COMMENT ON VIEW db_pipeline.v_card_rule_target IS '규칙 대상을 행으로 복원';
 
-CREATE VIEW db_pipeline.v_card_limit_tier AS
-SELECT p.card_id, p.pool_id, p.pool_scope_cd, p.period_cd, p.cap_unit_cd,
-       p.aggregation_key_cd,
-       t.value->>'tier_key' AS tier_key,
-       (t.value->>'tier_priority')::integer AS tier_priority,
-       t.value->>'predicate_state_cd' AS predicate_state_cd,
-       (t.value->>'limit_num')::numeric(18,2) AS limit_num,
-       db_pipeline.fn_cond_spend_bound(t.value->'cond_expr', 'cond_min_amt') AS spend_min_amt,
-       db_pipeline.fn_cond_spend_bound(t.value->'cond_expr', 'cond_max_amt_excl') AS spend_max_amt_excl,
-       t.value->'cond_expr' AS cond_expr
-FROM db_pipeline.card_limit_pool p
-CROSS JOIN LATERAL jsonb_array_elements(p.tier_list) AS t(value);
-
-COMMENT ON VIEW db_pipeline.v_card_limit_tier IS '한도 풀 구간을 행으로 복원';
-
 CREATE VIEW db_pipeline.v_card_cond_atom AS
 WITH src AS (
     SELECT 'CARD'::text AS owner_cd, p.card_id, NULL::varchar AS card_bnft_id,
-           NULL::text AS rule_key, NULL::varchar AS pool_id, NULL::text AS item_key,
+           NULL::text AS rule_key,
            p.card_cond_expr AS expr
     FROM db_pipeline.card_product p WHERE p.card_cond_expr IS NOT NULL
     UNION ALL
-    SELECT 'BNFT', b.card_id, b.card_bnft_id, NULL, NULL, NULL, b.bnft_cond_expr
+    SELECT 'BNFT', b.card_id, b.card_bnft_id, NULL, b.bnft_cond_expr
     FROM db_pipeline.card_bnft b WHERE b.bnft_cond_expr IS NOT NULL
     UNION ALL
-    SELECT 'RULE', r.card_id, r.card_bnft_id, r.rule_key, NULL, NULL, r.cond_expr
+    SELECT 'RULE', r.card_id, r.card_bnft_id, r.rule_key, r.cond_expr
     FROM db_pipeline.v_card_rule r WHERE r.cond_expr IS NOT NULL
-    UNION ALL
-    SELECT 'POOL_TIER', t.card_id, NULL, NULL, t.pool_id, t.tier_key, t.cond_expr
-    FROM db_pipeline.v_card_limit_tier t WHERE t.cond_expr IS NOT NULL
 )
-SELECT s.owner_cd, s.card_id, s.card_bnft_id, s.rule_key, s.pool_id, s.item_key,
+SELECT s.owner_cd, s.card_id, s.card_bnft_id, s.rule_key,
        s.expr->>'expr_status_cd' AS expr_status_cd,
        (b.value->>'branch_no')::integer AS branch_no,
        (a.value->>'atom_seq')::integer AS atom_seq,
@@ -1269,18 +1171,6 @@ FROM db_pipeline.card_bnft WHERE rule_select_cd IS NOT NULL
 UNION ALL
 SELECT 'card_bnft.verification_status_cd'::text AS source_nm, 'VERIFY_STATUS'::varchar(20) AS common_code_grp_id, verification_status_cd::text AS cd_value
 FROM db_pipeline.card_bnft WHERE verification_status_cd IS NOT NULL
-UNION ALL
-SELECT 'card_limit_pool.pool_scope_cd'::text AS source_nm, 'LIMIT_SCOPE'::varchar(20) AS common_code_grp_id, pool_scope_cd::text AS cd_value
-FROM db_pipeline.card_limit_pool WHERE pool_scope_cd IS NOT NULL
-UNION ALL
-SELECT 'card_limit_pool.period_cd'::text AS source_nm, 'LIMIT_PERIOD'::varchar(20) AS common_code_grp_id, period_cd::text AS cd_value
-FROM db_pipeline.card_limit_pool WHERE period_cd IS NOT NULL
-UNION ALL
-SELECT 'card_limit_pool.cap_unit_cd'::text AS source_nm, 'LIMIT_UNIT'::varchar(20) AS common_code_grp_id, cap_unit_cd::text AS cd_value
-FROM db_pipeline.card_limit_pool WHERE cap_unit_cd IS NOT NULL
-UNION ALL
-SELECT 'card_limit_pool.aggregation_key_cd'::text AS source_nm, 'LIMIT_AGG'::varchar(20) AS common_code_grp_id, aggregation_key_cd::text AS cd_value
-FROM db_pipeline.card_limit_pool WHERE aggregation_key_cd IS NOT NULL
 UNION ALL
 SELECT 'card_source_evidence.approval_status_cd'::text AS source_nm, 'APPROVAL_STATUS'::varchar(20) AS common_code_grp_id, approval_status_cd::text AS cd_value
 FROM db_pipeline.card_source_evidence WHERE approval_status_cd IS NOT NULL
@@ -1354,17 +1244,11 @@ UNION ALL
 SELECT 'card_bnft.rule_list[].rule_status_cd', 'ITEM_STATUS', rule_status_cd::text
 FROM db_pipeline.v_card_rule WHERE rule_status_cd IS NOT NULL
 UNION ALL
-SELECT 'card_bnft_rule_pool.pool_role_cd', 'POOL_ROLE', pool_role_cd::text
-FROM db_pipeline.v_card_rule_pool WHERE pool_role_cd IS NOT NULL
-UNION ALL
 SELECT 'card_bnft.relation_list[].rel_type_cd', 'REL_TYPE', rel_type_cd::text
 FROM db_pipeline.v_card_bnft_rel WHERE rel_type_cd IS NOT NULL AND NOT reverse_yn
 UNION ALL
 SELECT 'rule_list[].target_list[].target_type_cd', 'TARGET_TYPE', target_type_cd::text
 FROM db_pipeline.v_card_rule_target WHERE target_type_cd IS NOT NULL
-UNION ALL
-SELECT 'card_limit_pool.tier_list[].predicate_state_cd', 'PREDICATE_STATE', predicate_state_cd::text
-FROM db_pipeline.v_card_limit_tier WHERE predicate_state_cd IS NOT NULL
 UNION ALL
 SELECT 'cond_expr atom cond_type_cd', 'COND_TYPE', cond_type_cd::text
 FROM db_pipeline.v_card_cond_atom WHERE cond_type_cd IS NOT NULL
@@ -1436,35 +1320,17 @@ SELECT 'local_confirmed_without_rule', x.card_id || '/' || x.card_bnft_id
 FROM db_pipeline.card_bnft x
 WHERE x.verification_status_cd = 'CONFIRMED' AND jsonb_array_length(x.rule_list) = 0
 UNION ALL
-SELECT 'pool_without_product', x.card_id || '/' || x.pool_id
-FROM db_pipeline.card_limit_pool x
-WHERE NOT EXISTS (SELECT 1 FROM db_pipeline.card_product p WHERE p.card_id = x.card_id)
-UNION ALL
-SELECT 'pool_ref_orphan', x.card_id || '/' || x.rule_key || '/' || x.pool_id
-FROM db_pipeline.v_card_rule_pool x
-WHERE NOT EXISTS (SELECT 1 FROM db_pipeline.card_limit_pool p WHERE (p.card_id, p.pool_id) = (x.card_id, x.pool_id))
-UNION ALL
-SELECT 'rule_pool_product_orphan', x.card_id || '/' || x.card_bnft_id || '/' || x.rule_key || '/' || x.pool_id
-FROM db_pipeline.card_bnft_rule_pool x
-WHERE NOT EXISTS (SELECT 1 FROM db_pipeline.card_product p WHERE p.card_id=x.card_id)
-UNION ALL
-SELECT 'rule_pool_benefit_orphan', x.card_id || '/' || x.card_bnft_id || '/' || x.rule_key || '/' || x.pool_id
-FROM db_pipeline.card_bnft_rule_pool x
-WHERE NOT EXISTS (SELECT 1 FROM db_pipeline.card_bnft b WHERE (b.card_id,b.card_bnft_id)=(x.card_id,x.card_bnft_id))
-UNION ALL
-SELECT 'rule_pool_rule_orphan', x.card_id || '/' || x.card_bnft_id || '/' || x.rule_key || '/' || x.pool_id
-FROM db_pipeline.card_bnft_rule_pool x
-WHERE NOT EXISTS (SELECT 1 FROM db_pipeline.v_card_rule r WHERE (r.card_id,r.card_bnft_id,r.rule_key)=(x.card_id,x.card_bnft_id,x.rule_key))
+SELECT 'bnft_txt_without_evidence', x.card_id || '/' || x.card_bnft_id
+FROM db_pipeline.card_bnft x
+WHERE (x.bnft_rule_txt IS NOT NULL OR x.bnft_limit_txt IS NOT NULL)
+  AND NOT EXISTS (SELECT 1 FROM db_pipeline.card_evidence_link l
+                  WHERE (l.card_id, l.card_bnft_id) = (x.card_id, x.card_bnft_id)
+                    AND l.ev_subject_cd = 'BNFT' AND l.ev_item_cd = 'SELF')
 UNION ALL
 SELECT 'rel_to_bnft_orphan', x.card_id || '/' || x.relation_key
 FROM db_pipeline.v_card_bnft_rel x
 WHERE NOT x.reverse_yn
   AND NOT EXISTS (SELECT 1 FROM db_pipeline.card_bnft b WHERE (b.card_id, b.card_bnft_id) = (x.card_id, x.to_bnft_id))
-UNION ALL
-SELECT 'rel_trigger_pool_orphan', x.card_id || '/' || x.relation_key
-FROM db_pipeline.v_card_bnft_rel x
-WHERE NOT x.reverse_yn AND x.trigger_pool_id IS NOT NULL
-  AND NOT EXISTS (SELECT 1 FROM db_pipeline.card_limit_pool p WHERE (p.card_id, p.pool_id) = (x.card_id, x.trigger_pool_id))
 UNION ALL
 SELECT 'rel_mutual_stored_twice', a.card_id || '/' || a.from_bnft_id || '/' || a.to_bnft_id
 FROM db_pipeline.v_card_bnft_rel a
@@ -1525,7 +1391,6 @@ WHERE NOT CASE l.ev_subject_cd
     WHEN 'CARD' THEN EXISTS (SELECT 1 FROM db_pipeline.card_product p WHERE p.card_id = l.card_id)
     WHEN 'BNFT' THEN EXISTS (SELECT 1 FROM db_pipeline.card_bnft b WHERE (b.card_id, b.card_bnft_id) = (l.card_id, l.card_bnft_id))
     WHEN 'RULE' THEN EXISTS (SELECT 1 FROM db_pipeline.v_card_rule r WHERE (r.card_id, r.card_bnft_id, r.rule_key) = (l.card_id, l.card_bnft_id, l.rule_key))
-    WHEN 'POOL' THEN EXISTS (SELECT 1 FROM db_pipeline.card_limit_pool p WHERE (p.card_id, p.pool_id) = (l.card_id, l.pool_id))
     WHEN 'REL' THEN EXISTS (SELECT 1 FROM db_pipeline.v_card_bnft_rel r WHERE NOT r.reverse_yn AND (r.card_id, r.from_bnft_id, r.relation_key) = (l.card_id, l.card_bnft_id, l.relation_key))
     ELSE false
 END
@@ -1534,9 +1399,8 @@ SELECT 'evidence_item_key_missing', l.card_id || '/' || l.ev_link_id
 FROM db_pipeline.card_evidence_link l
 WHERE l.ev_item_cd <> 'SELF' AND NOT CASE l.ev_item_cd
     WHEN 'COND' THEN EXISTS (SELECT 1 FROM atoms a WHERE a.card_id = l.card_id AND a.atom_key = l.ev_item_key
-                             AND a.card_bnft_id IS NOT DISTINCT FROM l.card_bnft_id AND a.rule_key IS NOT DISTINCT FROM l.rule_key AND a.pool_id IS NOT DISTINCT FROM l.pool_id)
+                             AND a.card_bnft_id IS NOT DISTINCT FROM l.card_bnft_id AND a.rule_key IS NOT DISTINCT FROM l.rule_key)
     WHEN 'TARGET' THEN EXISTS (SELECT 1 FROM db_pipeline.v_card_rule_target t WHERE (t.card_id, t.card_bnft_id, t.rule_key) = (l.card_id, l.card_bnft_id, l.rule_key) AND t.target_key = l.ev_item_key)
-    WHEN 'TIER' THEN EXISTS (SELECT 1 FROM db_pipeline.v_card_limit_tier t WHERE (t.card_id, t.pool_id) = (l.card_id, l.pool_id) AND t.tier_key = l.ev_item_key)
     ELSE false
 END
 UNION ALL

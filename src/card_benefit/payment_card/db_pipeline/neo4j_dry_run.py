@@ -66,8 +66,6 @@ def load_snapshot(conn):
             "product": ("SELECT * FROM db_pipeline.card_product WHERE card_id=%s", (CARD_ID,)),
             "product_doc": ("SELECT * FROM db_pipeline.card_product_doc WHERE card_id=%s AND card_doc_id=%s", (CARD_ID, DOC_ID)),
             "benefits": ("SELECT * FROM db_pipeline.card_bnft WHERE card_id=%s ORDER BY card_bnft_id", (CARD_ID,)),
-            "pools": ("SELECT * FROM db_pipeline.card_limit_pool WHERE card_id=%s ORDER BY pool_id", (CARD_ID,)),
-            "rule_pools": ("SELECT * FROM db_pipeline.card_bnft_rule_pool WHERE card_id=%s ORDER BY card_bnft_id,rule_key,pool_id", (CARD_ID,)),
             "links": ("SELECT * FROM db_pipeline.card_evidence_link WHERE card_id=%s ORDER BY ev_link_id", (CARD_ID,)),
             "evidence": ("SELECT * FROM db_pipeline.card_source_evidence WHERE card_doc_id=%s ORDER BY evidence_id", (DOC_ID,)),
             "chunks": ("SELECT * FROM db_pipeline.card_doc_chunk WHERE card_doc_id=%s ORDER BY page_no,card_doc_chunk_id", (DOC_ID,)),
@@ -96,7 +94,7 @@ def build(snapshot):
     c = g.node("card_product", [CARD_ID], product)
     doc = g.node("card_doc", [DOC_ID], document)
     g.edge("has_document", c, doc, product_doc)
-    pages, chunks, evidence, pools, benefits, rules = {}, {}, {}, {}, {}, {}
+    pages, chunks, evidence, benefits, rules = {}, {}, {}, {}, {}
     for row in snapshot["pages"]:
         pg = g.node("card_doc_page", [DOC_ID, row["page_no"]], row); pages[row["page_no"]] = pg
         g.edge("in_document", pg, doc, {})
@@ -111,9 +109,6 @@ def build(snapshot):
             raise ValueError("evidence references missing or mismatched chunk")
         ev = g.node("card_source_evidence", [row["evidence_id"]], row); evidence[row["evidence_id"]] = ev
         g.edge("in_chunk", ev, chunks[row["card_doc_chunk_id"]], {})
-    for row in snapshot["pools"]:
-        pools[row["pool_id"]] = g.node("card_limit_pool", [CARD_ID, row["pool_id"]], {"source": row, "aggregation_is_assumption": True})
-        g.edge("has_pool", c, pools[row["pool_id"]], {})
 
     def expression(owner, owner_key, expr):
         if expr is None:
@@ -141,21 +136,16 @@ def build(snapshot):
                 t = g.node("rule_target", [CARD_ID, target["target_type_cd"], target["target_nm"]],
                            {"target_type_cd": target["target_type_cd"], "target_nm": target["target_nm"]})
                 g.edge("targets", r, t, target)
-    for ref in snapshot["rule_pools"]:
-        source = {"pool_id": ref["pool_id"], "pool_role_cd": ref["pool_role_cd"]}
-        g.edge("consumes", rules[(ref["card_bnft_id"], ref["rule_key"])], pools[ref["pool_id"]], source)
     for link in snapshot["links"]:
         subject = link["ev_subject_cd"]
         if subject == "CARD": owner = c
         elif subject == "BNFT": owner = benefits[link["card_bnft_id"]]
         elif subject == "RULE": owner = rules[(link["card_bnft_id"], link["rule_key"])]
-        elif subject == "POOL": owner = pools[link["pool_id"]]
         else: raise ValueError(f"unsupported evidence subject: {subject}")
         g.edge("supported_by", owner, evidence[link["evidence_id"]], link)
     stats = g.validate()
     # Check source/preview coverage independently of expected historic counts.
-    for label, rows in (("card_source_evidence", snapshot["evidence"]), ("card_limit_pool", snapshot["pools"]),
-                        ("card_bnft", snapshot["benefits"])):
+    for label, rows in (("card_source_evidence", snapshot["evidence"]), ("card_bnft", snapshot["benefits"])):
         if stats["nodes"].get(PREFIX + label, 0) != len(rows):
             raise ValueError(f"source count mismatch: {label}")
     if stats["relationships"].get(PREFIX + "supported_by", 0) != len(snapshot["links"]):

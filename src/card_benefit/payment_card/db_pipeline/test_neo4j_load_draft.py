@@ -44,9 +44,11 @@ class LoaderTests(unittest.TestCase):
                           [{"type": "df_has_benefit", "start": "one", "end": "two", "key": "r", "source_json": "{}"}])
         self.assertTrue(all(NS not in query for query, _ in tx.calls))
 
-    def test_allowlists_have_12_labels_and_13_types_of_df_only(self):
-        self.assertEqual(len(neo4j_load_draft.NODE_LABELS), 12)
-        self.assertEqual(len(neo4j_load_draft.REL_TYPES), 13)
+    def test_allowlists_have_11_labels_and_11_types_of_df_only(self):
+        self.assertEqual(len(neo4j_load_draft.NODE_LABELS), 11)
+        self.assertEqual(len(neo4j_load_draft.REL_TYPES), 11)
+        self.assertNotIn("df_card_limit_pool", neo4j_load_draft.NODE_LABELS)
+        self.assertFalse({"df_has_pool", "df_consumes"} & neo4j_load_draft.REL_TYPES)
         self.assertNotIn("df_card_policy_version", neo4j_load_draft.NODE_LABELS)
         self.assertNotIn("df_has_policy", neo4j_load_draft.REL_TYPES)
         self.assertTrue(all(name.startswith("df_") for name in neo4j_load_draft.NODE_LABELS | neo4j_load_draft.REL_TYPES))
@@ -66,6 +68,11 @@ class LoaderTests(unittest.TestCase):
     def test_node_properties_have_no_test_marker(self):
         props = neo4j_load_draft.node_properties({"label": "df_card_product", "key": "k", "source_json": '{"card_id": 2}'})
         self.assertEqual(props, {"namespace": NS, "key": "k", "source_json": '{"card_id": 2}', "card_id": 2})
+
+    def test_benefit_text_becomes_queryable_properties(self):
+        source = '{"bnft_nm": "n", "bnft_rule_txt": "100원", "bnft_limit_txt": "월 5천원"}'
+        props = neo4j_load_draft.node_properties({"label": "df_card_bnft", "key": "k", "source_json": source})
+        self.assertEqual((props["rule_text"], props["limit_text"]), ("100원", "월 5천원"))
 
     def test_preview_count_guard(self):
         graph = Preview(); graph.node("card_product", [2], {})

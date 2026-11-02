@@ -1,9 +1,7 @@
 // V7 draft physical-column mirror of db_pipeline_schemaV7_draft.sql.
 // Ref lines are logical only; SQL has 0 FKs.
 // JSONB references cannot be drawn as Ref lines. They are logical references checked by v_card_integrity_issue:
-//   card_bnft_rule_pool.rule_key -> card_bnft.rule_list[].rule_key
 //   card_bnft.relation_list[].to_bnft_id             -> card_bnft.card_bnft_id
-//   card_bnft.relation_list[].trigger_pool_id        -> card_limit_pool.pool_id
 //   card_evidence_link.rule_key                    -> card_bnft.rule_list[].rule_key
 //   card_evidence_link.relation_key                -> card_bnft.relation_list[].relation_key
 //   rule_list[].calc_method_cd                       -> common_cd (CALC_METHOD)
@@ -85,38 +83,13 @@ Table db_pipeline.card_bnft [note: '카드 혜택'] {
   verification_status_cd varchar(25) [not null, note: '혜택 검증 상태']
   bnft_valid_from date [note: '혜택 제공 시작일']
   bnft_valid_to_excl date [note: '혜택 제공 종료일(미포함)']
+  bnft_rule_txt text [note: '공식 원문 근거에서 모은 혜택 계산 규칙 안내. 계산 확정값이 아니라 검토 대상 텍스트']
+  bnft_limit_txt text [note: '원문 근거에서 모은 혜택별 이용/금액 한도. 여러 풀의 근거를 혜택별로 중복 제거한 텍스트']
   Indexes {
     (card_id, card_bnft_id) [pk]
     (card_id, bnft_cd) [unique]
   }
 }
-
-Table db_pipeline.card_limit_pool [note: '혜택 공유 한도'] {
-  card_id bigint [not null, note: '카드 아이디']
-  pool_id varchar(20) [not null, note: '한도 풀 아이디']
-  pool_scope_cd varchar(30) [not null, note: '한도 적용 범위']
-  period_cd varchar(20) [not null, note: '한도 기간']
-  cap_unit_cd varchar(30) [not null, note: '한도 단위']
-  aggregation_key_cd varchar(30) [not null, note: '한도 집계 기준']
-  tier_list jsonb [not null, note: '한도 구간 목록']
-  Indexes {
-    (card_id, pool_id) [pk]
-  }
-}
-
-Table db_pipeline.card_bnft_rule_pool [note: '혜택 규칙과 한도 풀의 논리 관계. 물리 FK 없음'] {
-  card_id bigint [not null, note: '카드 아이디']
-  card_bnft_id varchar(20) [not null, note: '혜택 아이디']
-  rule_key varchar(40) [not null, note: '규칙 키']
-  pool_id varchar(20) [not null, note: '한도 풀 아이디']
-  pool_role_cd varchar(30) [not null, note: '한도 풀 역할']
-  Indexes {
-    (card_id, card_bnft_id, rule_key, pool_id) [pk]
-  }
-}
-
-Ref: db_pipeline.card_bnft_rule_pool.(card_id, card_bnft_id) > db_pipeline.card_bnft.(card_id, card_bnft_id)
-Ref: db_pipeline.card_bnft_rule_pool.(card_id, pool_id) > db_pipeline.card_limit_pool.(card_id, pool_id)
 
 Table db_pipeline.card_source_evidence [note: '원문 근거'] {
   evidence_id varchar(20) [not null, pk, note: '원문 근거 아이디']
@@ -137,13 +110,12 @@ Table db_pipeline.card_evidence_link [note: '카드 근거 관계'] {
   card_bnft_id varchar(20) [note: '혜택 아이디']
   rule_key varchar(40) [note: '규칙 키']
   relation_key varchar(40) [note: '혜택 관계 키']
-  pool_id varchar(20) [note: '한도 풀 아이디']
   ev_item_cd varchar(10) [not null, note: '근거 항목 유형']
   ev_item_key varchar(100) [not null, note: '근거 항목 키']
   evidence_id varchar(20) [not null, note: '원문 근거 아이디']
   Indexes {
     (card_id, ev_link_id) [pk]
-    (card_id, ev_subject_cd, card_bnft_id, rule_key, relation_key, pool_id, ev_item_cd, ev_item_key, evidence_id) [unique]
+    (card_id, ev_subject_cd, card_bnft_id, rule_key, relation_key, ev_item_cd, ev_item_key, evidence_id) [unique]
   }
 }
 
@@ -310,12 +282,10 @@ Table db_pipeline.card_excl_item [note: '제외 항목 사전'] {
 
 Ref: db_pipeline.common_code_grp.common_code_grp_id < db_pipeline.common_cd.common_code_grp_id
 Ref: db_pipeline.card_product.card_id < db_pipeline.card_bnft.card_id
-Ref: db_pipeline.card_product.card_id < db_pipeline.card_limit_pool.card_id
 Ref: db_pipeline.card_product.card_id < db_pipeline.card_evidence_link.card_id
 Ref: db_pipeline.card_product.card_id < db_pipeline.card_product_doc.card_id
 Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_product_doc.card_doc_id
 Ref: db_pipeline.card_bnft.(card_id, card_bnft_id) < db_pipeline.card_evidence_link.(card_id, card_bnft_id)
-Ref: db_pipeline.card_limit_pool.(card_id, pool_id) < db_pipeline.card_evidence_link.(card_id, pool_id)
 Ref: db_pipeline.card_source_evidence.evidence_id < db_pipeline.card_evidence_link.evidence_id
 Ref: db_pipeline.card_doc_chunk.(card_doc_id, page_no, card_doc_chunk_id) < db_pipeline.card_source_evidence.(card_doc_id, page_no, card_doc_chunk_id)
 Ref: db_pipeline.card_extr_stg.card_extr_stg_id < db_pipeline.card_source_evidence.card_extr_stg_id
@@ -343,7 +313,6 @@ TableGroup product {
 
 TableGroup product_benefit {
   db_pipeline.card_bnft
-  db_pipeline.card_limit_pool
 }
 
 TableGroup source_evidence {

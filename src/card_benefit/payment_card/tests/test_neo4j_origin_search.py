@@ -90,7 +90,7 @@ class SearchTests(unittest.TestCase):
         self.assertIn("MATCH (c:df_card_product", " ".join(logs.output))
 
     def test_detail_log_shows_cypher_and_records_without_debug_level(self):
-        driver = FakeDriver([{"pool": {"period": "MONTH", "value": 1000, "source_json": '{"secret_like": 1}'}, "labels": ["df_card_limit_pool"]}])
+        driver = FakeDriver([{"benefit": {"limit_text": "MONTH", "source_json": '{"secret_like": 1}'}, "labels": ["df_card_bnft"]}])
         token = neo4j_search.DETAIL_LOG.set(True)
         try:
             with self.assertLogs(neo4j_search.CARD_LOGGER_NAME, "INFO") as logs:
@@ -98,7 +98,7 @@ class SearchTests(unittest.TestCase):
         finally:
             neo4j_search.DETAIL_LOG.reset(token)
         text = "\n".join(logs.output)
-        for word in ("QUERY [", "MATCH (c:df_card_product", "PARAMS", "RESULT DATA [", "pool.period", "MONTH"):
+        for word in ("QUERY [", "MATCH (c:df_card_product", "PARAMS", "RESULT DATA [", "benefit.limit_text", "MONTH"):
             self.assertIn(word, text)
         self.assertNotIn("source_json", text)
 

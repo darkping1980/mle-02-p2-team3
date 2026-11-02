@@ -78,7 +78,7 @@ def run() -> dict:
         labels = read(session, "label_counts")
         relationships = read(session, "relationship_counts")
     condition_fields = ("owner_cd", "rule_key", "branch_no", "atom_seq", "atom_key", "cond_type_cd", "negate_yn", "cond_min_amt", "cond_raw_txt")
-    link_fields = ("ev_link_id", "ev_subject_cd", "rule_key", "pool_id", "ev_item_cd", "ev_item_key", "evidence_id", "start_pos", "end_pos")
+    link_fields = ("ev_link_id", "ev_subject_cd", "rule_key", "ev_item_cd", "ev_item_key", "evidence_id", "start_pos", "end_pos")
     mismatch = sum(len(v) for v in result.values())
     conditions_equal = _normalize(sql_conditions, condition_fields) == _normalize(cypher_conditions, condition_fields)
     links_equal = _normalize(sql_links, link_fields) == _normalize(cypher_links, link_fields)

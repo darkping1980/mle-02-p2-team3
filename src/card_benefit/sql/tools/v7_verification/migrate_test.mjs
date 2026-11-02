@@ -2,12 +2,20 @@
 // 입력: .work/live_rows.json (export_live_rows.py). 사용법: node migrate_test.mjs live | file
 // live는 실제 DB처럼 card_product_doc의 effective_*를 지운 V6, file은 V6 파일 그대로다.
 import { readFileSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
 
 const dir = fileURLToPath(new URL('../../', import.meta.url));
 const work = fileURLToPath(new URL('.work/', import.meta.url));
-const read = (n) => readFileSync(dir + n, 'utf8');
+// V6 -> V7 이관 파일은 TEXT 단순화 직전 V7에서 멈춘다. DDL과 무결성 시험은 그 시점 파일로 비교한다.
+const pinned = new Set(['db_pipeline_schemaV7_draft.sql', 'db_pipeline_v7_integrity_test.sql']);
+const show = (n) => {
+  const r = spawnSync('git', ['-C', dir, 'show', `bdb94bc:src/card_benefit/sql/${n}`], { encoding: 'utf8', maxBuffer: 1 << 26 });
+  if (r.status !== 0) throw Error(r.stderr);
+  return r.stdout;
+};
+const read = (n) => (pinned.has(n) ? show(n) : readFileSync(dir + n, 'utf8'));
 const live = JSON.parse(readFileSync(work + 'live_rows.json', 'utf8'));
 const shape = process.argv[2] || 'live'; // live: effective_* 없음, file: V6 파일 그대로
 

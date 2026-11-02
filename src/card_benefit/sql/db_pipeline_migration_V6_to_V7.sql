@@ -4,6 +4,7 @@
 -- 삭제 대상과 복구용 값은 db_pipeline_v6_backup 스키마에 남긴다. 복구는 db_pipeline_migration_V7_to_V6_rollback.sql을 쓴다.
 -- 대상은 V6 스키마다. card_product_doc의 effective_* 컬럼이 이미 없는 실제 DB와 파일 그대로의 V6 모두 처리한다.
 -- 카드별 정책판이 2건 이상이거나 공통 혜택 4개 테이블에 행이 있으면 자동 변환하지 않고 중단한다.
+-- 이 파일은 TEXT 단순화 직전 V7(커밋 bdb94bc)까지만 만든다. 최종 구조는 db_pipeline_migration_v7_bnft_text.sql까지 적용한 결과다.
 
 BEGIN;
 

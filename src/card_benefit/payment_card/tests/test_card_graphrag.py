@@ -24,7 +24,7 @@ def js(value):
 
 
 def evidence_row(evidence_id, subject="BNFT", quote="월 1천원 5% 캐시백"):
-    return {"owner_labels": ["df_card_bnft"], "pool_id": None,
+    return {"owner_labels": ["df_card_bnft"],
             "link": {"ev_subject_cd": subject, "ev_item_key": "-"},
             "evidence": {"source_json": js({"evidence_id": evidence_id, "page_no": 1, "approval_status_cd": "PENDING",
                                             "quote_txt": quote})}}
@@ -38,12 +38,11 @@ def detail(evidence=None):
         "context": {"card": {"source_json": js({"product_nm": "테스트 카드"})},
                     "benefit": {"name": "ONE MORE 대중교통 캐시백",
                                 "source_json": js({"card_bnft_id": BENEFIT_ID, "bnft_nm": "ONE MORE 대중교통 캐시백",
-                                                   "rule_select_cd": None})}},
+                                                   "rule_select_cd": None, "bnft_rule_txt": "5% 캐시백"})}},
         "rules": [{"rule": {"rule_key": "transit_rate", "source_json": js(rule)}, "targets": ["버스", "지하철"]}],
         "conditions": [{"owner_cd": "RULE", "rule_key": "transit_rate", "expression": {"key": "e1"}, "branch_no": 1,
                         "atom": {"key_name": "transit_exclusions", "source_json": js(atom)}}],
-        "limits": [{"pool": {"period": "MONTH", "value": 1000, "unit": "KRW", "aggregation_is_assumption": True},
-                    "rule_keys": ["transit_rate"]}],
+        "limits": [{"limit_text": "월 1천원"}],
         "evidence": [evidence_row("E1")] if evidence is None else evidence}
 
 
@@ -119,9 +118,7 @@ def tier_benefit(benefit_id, name, month_count, targets):
     high, high_condition = rule(f"{benefit_id}_500", 500, 10000)
     return {"benefit_id": benefit_id, "name": name, "card": "카드", "type": "CASHBACK", "verification_status": "PENDING_REVIEW",
             "rule_select": None, "rules": [low, high], "conditions": [low_condition, high_condition],
-            "limits": [{"period": "MONTH", "value": month_count, "unit": "COUNT", "rule_keys": [], "aggregation_is_assumption": True},
-                       {"period": "DAY", "value": 1, "unit": "COUNT", "rule_keys": [], "aggregation_is_assumption": True},
-                       {"period": "MONTH", "value": 5000, "unit": "KRW", "rule_keys": [], "aggregation_is_assumption": True}]}
+            "limits": [{"text": f"월 5천원 / 일 1회 / 월 {month_count}회"}]}
 
 
 def tier_context(amount=None):
@@ -249,14 +246,15 @@ class GraphTests(unittest.TestCase):
         state, _, second = run()
         benefit = state["context"]["benefits"][0]
         self.assertEqual(benefit["rules"][0]["value"], 5)
-        self.assertEqual(benefit["limits"][0]["value"], 1000)
+        self.assertEqual(benefit["limits"], [{"text": "월 1천원"}])
+        self.assertEqual(benefit["rule_text"], "5% 캐시백")
         self.assertTrue(benefit["conditions"][0]["branches"][0]["atoms"][0]["negate"])
         self.assertIn("evidence_id", second.prompts[0])
 
     def test_unresolved_found_without_llm(self):
         state, _, _ = run()
         text = " ".join(state["unresolved"])
-        for word in ("DRAFT", "CARD_MEMBER", "NOT"):
+        for word in ("DRAFT", "NOT"):
             self.assertIn(word, text)
 
     def test_two_rules_mark_nested_selection_unresolved(self):
@@ -279,10 +277,10 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(evidence[0]["rule_keys"], ["transit_rate"])
 
     def test_limit_intent_drops_card_evidence_and_merges_duplicates(self):
-        rows = [evidence_row("E1", "CARD"), evidence_row("E2", "BNFT"), evidence_row("E2", "POOL")]
+        rows = [evidence_row("E1", "CARD"), evidence_row("E2", "BNFT"), evidence_row("E2", "BNFT"), evidence_row("E3", "RULE")]
         evidence = card_graphrag.collect_evidence([detail(evidence=rows)], "BENEFIT_LIMIT")
         self.assertEqual([item["evidence_id"] for item in evidence], ["E2"])
-        self.assertEqual(evidence[0]["subjects"], ["BNFT", "POOL"])
+        self.assertEqual(evidence[0]["subjects"], ["BNFT"])
 
     def test_cost_estimate(self):
         self.assertAlmostEqual(card_graphrag.estimate_cost("gpt-6-luna", 1000, 200, 100), 0.000191)

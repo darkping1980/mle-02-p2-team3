@@ -134,22 +134,20 @@ try:
                                           'card_kind_cd':'CREDIT','brand_opt_list':options})
             first=fixture(conn,token,'TEST_MAIN_'+token,1,card_names,with_limit=True,benefit_name='합성 발레')
             ids={first['stg']:'test-main'}
-            bases={(first['stg'],'L1'):{'aggregation_key_cd':'CARD_MEMBER','basis_txt':'회원 카드 단위 가족카드 합산'}}
-            a=[r for r in service.path_a(card_a,ids,bases) if r.stg_id==first['stg']]
-            b=[r for r in service.path_b(first['run'],ids,bases) if r.card_id in (card_a,card_b)]
-            repeated=[r for r in service.path_b(first['run'],ids,bases) if r.card_id in (card_a,card_b)]
+            a=[r for r in service.path_a(card_a,ids) if r.stg_id==first['stg']]
+            b=[r for r in service.path_b(first['run'],ids) if r.card_id in (card_a,card_b)]
+            repeated=[r for r in service.path_b(first['run'],ids) if r.card_id in (card_a,card_b)]
             assert [x.status for x in a]==['INSERTED'], a
             assert {x.card_id:x.status for x in b}=={card_a:'UNCHANGED',card_b:'INSERTED'}, b
             assert {x.card_id:x.status for x in repeated}=={card_a:'UNCHANGED',card_b:'UNCHANGED'}, repeated
-            join=conn.execute("""SELECT b.card_id,b.card_bnft_id,b.verification_status_cd,r.rule_key,p.pool_id,p.aggregation_key_cd
-              FROM db_pipeline.card_bnft b JOIN db_pipeline.card_bnft_rule_pool r USING(card_id,card_bnft_id)
-              JOIN db_pipeline.card_limit_pool p USING(card_id,pool_id) WHERE b.card_id=ANY(%s) ORDER BY b.card_id""",([card_a,card_b],)).fetchall()
-            assert len(join)==2 and all(r['rule_key']=='R1' and r['verification_status_cd']=='PENDING_REVIEW' for r in join),join
+            join=conn.execute("""SELECT card_id,card_bnft_id,verification_status_cd,bnft_rule_txt,bnft_limit_txt
+              FROM db_pipeline.card_bnft WHERE card_id=ANY(%s) ORDER BY card_id""",([card_a,card_b],)).fetchall()
+            assert len(join)==2 and all(r['bnft_limit_txt'] and r['verification_status_cd']=='PENDING_REVIEW' for r in join),join
             links=conn.execute("""SELECT l.card_id,l.ev_subject_cd,l.rule_key,l.evidence_id,e.card_extr_stg_id,e.approval_status_cd
               FROM db_pipeline.card_evidence_link l JOIN db_pipeline.card_source_evidence e USING(evidence_id)
               WHERE l.card_id=ANY(%s) AND e.card_doc_id=%s ORDER BY l.card_id,l.ev_subject_cd,l.evidence_id""",([card_a,card_b],first['doc'])).fetchall()
             expected={('BNFT',first['evidence']['APPLICABILITY']),('BNFT',first['evidence']['BNFT']),
-                      ('RULE',first['evidence']['RULE']),('POOL',first['evidence']['LIMIT'])}
+                      ('RULE',first['evidence']['RULE']),('BNFT',first['evidence']['LIMIT'])}
             for card in (card_a,card_b):
                 rows=[r for r in links if r['card_id']==card]
                 assert {(r['ev_subject_cd'],r['evidence_id']) for r in rows}==expected,rows
@@ -157,7 +155,7 @@ try:
                 assert all(r['rule_key']=='R1' for r in rows if r['ev_subject_cd']=='RULE')
             assert not any(r['evidence_id']==first['decoy'] for r in links)
             assert conn.execute('select stg_status from db_pipeline.card_extr_stg where card_extr_stg_id=%s',(first['stg'],)).fetchone()['stg_status']=='PENDING_REVIEW'
-            # 한도 없는 동일 업무 혜택의 개정판만 기존 수동 변경을 보존하며 UPDATE한다.
+            # 동일 업무 혜택의 개정판만 기존 수동 변경을 보존하며 UPDATE한다.
             family='TEST_REV_'+token
             old=fixture(conn,token,family,1,card_names,with_limit=False,benefit_name='합성 이전')
             assert service.apply_run(card_a,old['run'],{old['stg']:'test-revision'})[0].status=='INSERTED'
@@ -167,8 +165,8 @@ try:
             saved=conn.execute('select bnft_nm,verification_status_cd from db_pipeline.card_bnft where card_id=%s and card_bnft_id=%s',(card_a,revised.card_bnft_id)).fetchone()
             assert saved=={'bnft_nm':'합성 변경','verification_status_cd':'PENDING_REVIEW'},saved
             print('경로 A/B:',[x.status for x in a],{x.card_id:x.status for x in b},'반복:',[x.status for x in repeated],flush=True)
-            print('직접 JOIN:',len(join),'행; 카드별 규칙 1건·한도 1건·관계 1건, 동일 evidence ID 공유',flush=True)
-            print('원문 연결: 카드별 BNFT 2, RULE 1, POOL 1; 다른 후보의 동일 문구 제외; 모두 PENDING',flush=True)
+            print('혜택 TEXT:',len(join),'행; 동일 evidence ID 공유',flush=True)
+            print('원문 연결: 카드별 BNFT 3, RULE 1; 다른 후보의 동일 문구 제외; 모두 PENDING',flush=True)
             print('개정 UPDATE:',revised.status,'상태:',saved['verification_status_cd'],flush=True)
         finally:
             session._active_connection=None
@@ -181,6 +179,6 @@ try:
             remaining=conn.execute("select count(*) AS n from db_pipeline.card_product where product_cd=ANY(%s)",(card_names,)).fetchone()['n']
             if before != after or remaining:
                 raise RuntimeError('롤백 전후 건수 또는 시험 카드 잔존 확인 실패')
-            print('새 연결 확인: 전체 16개 테이블 행 수 동일, 시험 카드 0건',flush=True)
+            print('새 연결 확인: 전체 테이블 행 수 동일, 시험 카드 0건',flush=True)
 finally:
     session.database_manager.close()

@@ -1,5 +1,7 @@
 # 하나카드 GraphRAG V7 Codex 인계 문서
 
+> **후속 변경(2026-11-02, TEXT 단순화):** `card_limit_pool`, `card_bnft_rule_pool`을 제거하고 혜택 설명과 한도를 `card_bnft.bnft_rule_txt`, `bnft_limit_txt`로 통합한다. 현재 DDL과 프로그램은 제거 후 구조 기준이다. 실제 DB 적용 여부와 절차는 `V7_BNFT_TEXT_SIMPLIFY_STATUS.md`를 먼저 본다. 아래의 한도 풀 설명은 이전 구조 기록이다.
+>
 > **후속 변경(2026-11-02):** 아래 내용은 작성 당시 기록이다. 이후 사용자 승인으로 개발 PostgreSQL은 V7으로 이관되었고, `card_bnft_rule_pool` 연결 테이블이 적용되어 현재 `db_pipeline`은 16개 테이블·210개 컬럼이다. 최종 규칙의 `pool_refs`는 제거되었다. 운영 Neo4j는 변경하지 않았다. 현재 기준 SQL은 `db_pipeline_schemaV7_draft.sql`, `db_pipeline_migration_v7_rule_pool.sql` 및 해당 롤백 SQL이다.
 
 **작성일:** 2026-11-02. 아래 상태값은 작성 시점에 실제 파일, Git, 실제 DB, Neo4j를 읽기 전용으로 조회해 확인했다.

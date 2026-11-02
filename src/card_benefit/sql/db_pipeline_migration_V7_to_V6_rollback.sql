@@ -1,4 +1,5 @@
 -- V7 -> V6 복구. db_pipeline_migration_V6_to_V7.sql 실행 직후의 상태를 이관 전 상태로 되돌린다.
+-- TEXT 단순화를 적용한 DB는 db_pipeline_migration_v7_bnft_text_rollback.sql을 먼저 실행한다.
 -- db_pipeline_v6_backup 스키마가 필요하다. 이관 이후 새로 등록한 혜택·한도·근거가 있으면 실행하지 말고 먼저 검토한다.
 -- 브랜드 혜택, 혜택 제공 기간, 카드 미연결 추출 항목은 V6에 담을 수 없으므로 있으면 중단한다.
 -- 되돌린 뒤 policy_ver_id 컬럼의 물리 위치는 테이블 끝이 된다. 값과 키, 제약조건은 이관 전과 같다.

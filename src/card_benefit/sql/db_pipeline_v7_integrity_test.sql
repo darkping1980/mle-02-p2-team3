@@ -135,24 +135,21 @@ INSERT INTO db_pipeline.card_product
     (card_id, product_cd, product_nm, issuer, card_kind_cd, card_cond_status_cd, create_user_id, update_user_id)
 VALUES (999001, 'T-PRODUCT', '시험 상품', '시험', 'DEBIT', 'BAD_STATUS', 'V7_TEST', 'V7_TEST');
 
--- 카드가 없는 혜택·한도·문서 연결
+-- 카드가 없는 혜택·문서 연결
 INSERT INTO db_pipeline.card_bnft (card_id, card_bnft_id, bnft_cd, bnft_nm, bnft_type_cd, bnft_origin_cd, bnft_scope_cd, verification_status_cd)
 VALUES (999002, 'T-B-NOCARD', 'T-B-NOCARD', '시험', 'DISCOUNT', 'LOCAL', 'PRODUCT', 'PENDING_REVIEW');
-INSERT INTO db_pipeline.card_limit_pool (card_id, pool_id, pool_scope_cd, period_cd, cap_unit_cd, aggregation_key_cd, tier_list)
-VALUES (999002, 'T-P-NOCARD', 'BENEFIT', 'MONTH', 'KRW', 'CARD_MEMBER',
-        '[{"tier_key":"T1","predicate_state_cd":"PENDING_REVIEW","limit_num":1}]');
 INSERT INTO db_pipeline.card_product_doc (card_id, card_doc_id, doc_role_cd, applicability_basis_txt, create_user_id, update_user_id)
 VALUES (999002, 'T-D-NONE', 'PRODUCT_GUIDE', '시험', 'V7_TEST', 'V7_TEST');
 
--- 없는 한도를 참조하는 규칙
+-- 규칙이 있는 혜택
 INSERT INTO db_pipeline.card_bnft (card_id, card_bnft_id, bnft_cd, bnft_nm, bnft_type_cd, bnft_origin_cd, bnft_scope_cd, rule_list, verification_status_cd)
 VALUES (999001, 'T-B-RULE', 'T-B-RULE', '시험', 'DISCOUNT', 'LOCAL', 'PRODUCT',
         '[{"rule_key":"R1","calc_method_cd":"FIXED_PER_TXN","payout_unit_cd":"KRW","rule_status_cd":"DRAFT","method_ver":1,
            "predicate_state_cd":"PENDING_REVIEW","target_list":[]}]',
         'PENDING_REVIEW');
-INSERT INTO db_pipeline.card_bnft_rule_pool (card_id,card_bnft_id,rule_key,pool_id,pool_role_cd)
-VALUES (999001,'T-B-RULE','R1','T-P-NONE','CONSUME'),
-       (999002,'T-B-NONE','R-NONE','T-P-NOCARD','BAD_ROLE');
+-- 원문 근거 연결 없이 채운 혜택 TEXT
+INSERT INTO db_pipeline.card_bnft (card_id, card_bnft_id, bnft_cd, bnft_nm, bnft_type_cd, bnft_origin_cd, bnft_scope_cd, verification_status_cd, bnft_limit_txt)
+VALUES (999001, 'T-B-TXT', 'T-B-TXT', '시험', 'DISCOUNT', 'LOCAL', 'PRODUCT', 'PENDING_REVIEW', '월 1회');
 
 -- 청크와 상품 연결이 없는 문서의 근거, 승인되지 않은 근거, 대상이 없는 근거 연결
 INSERT INTO db_pipeline.card_source_evidence (evidence_id, card_doc_id, page_no, card_doc_chunk_id, quote_txt, approval_status_cd)
@@ -174,8 +171,8 @@ DECLARE
 BEGIN
     -- 대체된 게이트와 유지된 게이트가 시험 행을 실제로 잡아야 한다.
     FOREACH v_gate IN ARRAY ARRAY[
-        'bnft_without_product', 'pool_without_product', 'product_doc_without_product', 'product_doc_orphan',
-        'pool_ref_orphan', 'rule_pool_product_orphan', 'rule_pool_benefit_orphan', 'rule_pool_rule_orphan', 'evidence_source_orphan', 'evidence_doc_not_linked', 'evidence_not_approved',
+        'bnft_without_product', 'bnft_txt_without_evidence', 'product_doc_without_product', 'product_doc_orphan',
+        'evidence_source_orphan', 'evidence_doc_not_linked', 'evidence_not_approved',
         'evidence_subject_orphan', 'evidence_item_key_missing', 'common_cd_invalid'] LOOP
         SELECT EXISTS (SELECT 1 FROM db_pipeline.v_card_integrity_issue i
                        WHERE i.gate_cd = v_gate
@@ -194,6 +191,22 @@ BEGIN
     EXCEPTION WHEN check_violation THEN v_rejected := true;
     END;
     IF NOT v_rejected THEN RAISE EXCEPTION 'POLICY 대상이 거부되지 않았습니다'; END IF;
+
+    v_rejected := false;
+    BEGIN
+        INSERT INTO db_pipeline.card_evidence_link (card_id, ev_link_id, ev_subject_cd, evidence_id)
+        VALUES (999001, 'T-L-P', 'POOL', 'T-E-1');
+    EXCEPTION WHEN check_violation THEN v_rejected := true;
+    END;
+    IF NOT v_rejected THEN RAISE EXCEPTION 'POOL 대상이 거부되지 않았습니다'; END IF;
+
+    v_rejected := false;
+    BEGIN
+        UPDATE db_pipeline.card_bnft SET relation_list = '[{"relation_key":"r","to_bnft_id":"x","rel_type_cd":"FALLBACK_AFTER_CAP","trigger_pool_id":"P"}]'
+        WHERE card_id = 999001 AND card_bnft_id = 'T-B-RULE';
+    EXCEPTION WHEN check_violation THEN v_rejected := true;
+    END;
+    IF NOT v_rejected THEN RAISE EXCEPTION 'trigger_pool_id가 거부되지 않았습니다'; END IF;
 
     v_rejected := false;
     BEGIN
@@ -289,6 +302,10 @@ BEGIN
     EXCEPTION WHEN undefined_table THEN v_rejected := true;
     END;
     IF NOT v_rejected THEN RAISE EXCEPTION '공통 혜택 테이블이 남아 있습니다'; END IF;
+
+    IF to_regclass('db_pipeline.card_limit_pool') IS NOT NULL OR to_regclass('db_pipeline.card_bnft_rule_pool') IS NOT NULL THEN
+        RAISE EXCEPTION '한도 풀 테이블이 남아 있습니다';
+    END IF;
 
     RAISE NOTICE 'V7 integrity test passed';
 END;
