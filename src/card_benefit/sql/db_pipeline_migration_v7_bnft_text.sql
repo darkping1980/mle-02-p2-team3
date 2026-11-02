@@ -147,8 +147,9 @@ SELECT 'O01', '두 테이블에 의존하는 예상 밖 뷰', 0,
             WHERE d.classid = 'pg_rewrite'::regclass AND r.ev_class <> t.oid)
         SELECT count(*) FROM t JOIN pg_class c ON c.oid = t.oid
         WHERE c.relkind <> 'r'
-          AND c.oid::regclass::text NOT IN ('db_pipeline.v_card_rule_pool', 'db_pipeline.v_card_limit_tier', 'db_pipeline.v_card_cond_atom',
-                                            'db_pipeline.v_common_cd_usage', 'db_pipeline.v_card_integrity_issue'))
+          AND c.oid NOT IN ('db_pipeline.v_card_rule_pool'::regclass, 'db_pipeline.v_card_limit_tier'::regclass,
+                             'db_pipeline.v_card_cond_atom'::regclass, 'db_pipeline.v_common_cd_usage'::regclass,
+                             'db_pipeline.v_card_integrity_issue'::regclass))
 UNION ALL
 SELECT 'O02', '두 테이블에 걸린 물리 FK', 0,
        (SELECT count(*) FROM pg_constraint
