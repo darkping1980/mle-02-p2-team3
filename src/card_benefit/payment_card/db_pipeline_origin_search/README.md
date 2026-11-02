@@ -1,6 +1,18 @@
 # db_pipeline_origin_search
 
-`db_pipeline`이 PostgreSQL V6에서 변환한 Neo4j 그래프를 자연어로 묻고 답하는 로컬 LangGraph GraphRAG 개발 프로그램입니다. ONE PICK STYLE의 `df_one_pick_style` namespace에 있는 DF DRAFT 데이터만 조회하며 확정 상품 정보가 아닙니다. Neo4j는 읽기 전용이고 PostgreSQL에는 접속하지 않습니다.
+PostgreSQL 혜택을 검색하고 Neo4j `dp_` 그래프의 관계를 탐색해 답하는 로컬 LangGraph GraphRAG 개발 프로그램입니다. 개발용 DRAFT 데이터이며 확정 상품 정보가 아닙니다. Neo4j는 읽기 전용입니다. A 모드는 PostgreSQL에 접속하지 않습니다.
+
+## 검색 모드
+
+화면의 **검색 모드** 또는 `CardGraphRAG(search_mode=...)`로 고릅니다. 기본은 A이고 동작이 기존과 같습니다.
+
+| 모드 | 후보 선정 | 비고 |
+|---|---|---|
+| A 기존 검색 | Neo4j 전체 카탈로그를 LLM이 선택 | PostgreSQL 미접속. 평가의 SQL 계층은 LLM 없는 문자열 검색 |
+| B 임베딩 검색 | `card_bnft`, `card_common_bnft` 코사인 유사도 | 질문과 저장 벡터의 모델이 다르면 거부 |
+| C 하이브리드 | 문자열과 임베딩 순위를 RRF로 결합 | |
+
+상세는 Neo4j 관계로 읽고, 제외 대상은 PostgreSQL 원본 규칙으로 다시 판정해 적용 가능한 답변을 막습니다(`find_exclusions`, `enforce_exclusions`). 유사도는 후보 선정에만 씁니다. 공통 혜택의 카드 적용은 `card_common_bnft_apply`로만 판단하며, 관계가 없으면 "적용 카드 미확인"으로 표시합니다. 그래프에 없는 혜택의 상세는 PostgreSQL에서 읽습니다(`pg:` 키). 비교 평가는 `python -m payment_card.db_pipeline_origin_search.search_eval --out 결과.json`입니다.
 
 ## 실행
 

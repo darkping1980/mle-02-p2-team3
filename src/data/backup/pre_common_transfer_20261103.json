@@ -1,0 +1,119 @@
+{
+ "purpose": "BRAND_SERVICE 카드별 혜택의 공통 혜택 이관 전 원본과 대응 관계",
+ "original_identity": {
+  "doc_family_cd": "HANA_VS002",
+  "identity": "VISA_SIGNATURE_CONCIERGE",
+  "verified_by": "sha256(family+NUL+identity)이 bnft_cd 전체와 일치"
+ },
+ "card_bnft": [
+  {
+   "bnft_cd": "BRAND_7F12FC9CF2DC6811E91AE8A18EB1B6CE1379238A4FA2599FB407442C5F046BB9",
+   "bnft_nm": "Visa 컨시어지",
+   "card_id": 5,
+   "rule_list": [],
+   "bnft_type_cd": "SERVICE",
+   "card_bnft_id": "20261102_000008",
+   "bnft_rule_txt": null,
+   "bnft_scope_cd": "BRAND",
+   "relation_list": [],
+   "bnft_cond_expr": null,
+   "bnft_limit_txt": null,
+   "bnft_origin_cd": "BRAND_SERVICE",
+   "rule_select_cd": null,
+   "bnft_search_txt": "혜택명: Visa 컨시어지\n혜택 유형: 서비스 제공",
+   "bnft_valid_from": "2026-01-01",
+   "bnft_brand_opt_cds": [
+    "VISA_SIGNATURE_02"
+   ],
+   "bnft_valid_to_excl": "2027-01-01",
+   "verification_status_cd": "PENDING_REVIEW"
+  }
+ ],
+ "card_evidence_link": [
+  {
+   "card_id": 5,
+   "rule_key": null,
+   "ev_item_cd": "SELF",
+   "ev_link_id": "20261102_000090",
+   "ev_item_key": "-",
+   "evidence_id": "20261102_000063",
+   "card_bnft_id": "20261102_000008",
+   "relation_key": null,
+   "ev_subject_cd": "BNFT"
+  },
+  {
+   "card_id": 5,
+   "rule_key": null,
+   "ev_item_cd": "SELF",
+   "ev_link_id": "20261102_000091",
+   "ev_item_key": "-",
+   "evidence_id": "20261102_000064",
+   "card_bnft_id": "20261102_000008",
+   "relation_key": null,
+   "ev_subject_cd": "BNFT"
+  },
+  {
+   "card_id": 5,
+   "rule_key": null,
+   "ev_item_cd": "SELF",
+   "ev_link_id": "20261102_000092",
+   "ev_item_key": "-",
+   "evidence_id": "20261102_000065",
+   "card_bnft_id": "20261102_000008",
+   "relation_key": null,
+   "ev_subject_cd": "BNFT"
+  }
+ ],
+ "card_product_doc": [
+  {
+   "card_id": 5,
+   "card_doc_id": "20261102_000004",
+   "create_date": "2026-11-02T08:44:16.538489+00:00",
+   "doc_role_cd": "BRAND_SERVICE",
+   "update_date": "2026-11-02T08:44:16.538489+00:00",
+   "approval_note": null,
+   "brand_opt_cds": [
+    "VISA_SIGNATURE_02"
+   ],
+   "create_user_id": "MANUAL_SOURCE_REVIEW",
+   "update_user_id": "MANUAL_SOURCE_REVIEW",
+   "approval_status_cd": "PENDING",
+   "applicability_basis_txt": "아래의Visa Signature서비스는Visa Signature 등급카드\n소지자에게공통으로제공됩니다. / 상품설명서: Visa : Visa Signature 02 유형"
+  }
+ ],
+ "card_source_evidence": [
+  {
+   "end_pos": 788,
+   "page_no": 1,
+   "quote_txt": "아래의Visa Signature서비스는Visa Signature 등급카드\n소지자에게공통으로제공됩니다.",
+   "start_pos": 733,
+   "card_doc_id": "20261102_000004",
+   "evidence_id": "20261102_000064",
+   "card_extr_stg_id": "20261102_000017",
+   "card_doc_chunk_id": "20261102_000020",
+   "approval_status_cd": "PENDING"
+  },
+  {
+   "end_pos": 1275,
+   "page_no": 1,
+   "quote_txt": "Visa 컨시어지제공",
+   "start_pos": 1265,
+   "card_doc_id": "20261102_000004",
+   "evidence_id": "20261102_000063",
+   "card_extr_stg_id": "20261102_000017",
+   "card_doc_chunk_id": "20261102_000020",
+   "approval_status_cd": "PENDING"
+  },
+  {
+   "end_pos": 2343,
+   "page_no": 1,
+   "quote_txt": "본Visa Signature 서비스는기간이따로명시되지않은한\n2026년1월1일~ 12월31일까지제공됩니다.",
+   "start_pos": 2286,
+   "card_doc_id": "20261102_000004",
+   "evidence_id": "20261102_000065",
+   "card_extr_stg_id": "20261102_000017",
+   "card_doc_chunk_id": "20261102_000020",
+   "approval_status_cd": "PENDING"
+  }
+ ]
+}

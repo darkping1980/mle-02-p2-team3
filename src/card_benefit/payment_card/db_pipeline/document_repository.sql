@@ -2,7 +2,7 @@
 -- document_repository SQL mapper
 --   파일 이름(document_repository)이 namespace이며, Python에서는 "document_repository.쿼리이름"으로 호출한다.
 --   테이블 앞의 db_pipeline은 namespace가 아니라 DB 스키마다.
---   테이블은 db_pipeline_schemaV6_draft.sql로 만들어 둔다(이 mapper는 DDL을 실행하지 않는다).
+--   테이블 구조의 기준은 최신 DB 백업 DDL이다(이 mapper는 DDL을 실행하지 않는다).
 --   청크는 PAGE_V1 규칙으로 페이지당 1건이고, 위치는 페이지 원문 기준 1부터이며 종료 위치의 문자를 포함한다.
 --   조회문은 DBeaver에서 그대로 실행할 수 있고, 콜론으로 시작하는 파라미터는 실행할 때 입력한다.
 --=========================================================
@@ -16,7 +16,7 @@ WHERE doc_sha256 = :DOC_SHA256
 ;
 
 -- name: insert_doc
--- 문서를 등록한다. card_doc_id는 기본값 fn_get_biz_id가 발급하고, 상품 연결은 이후 단계이므로 card_id는 비워 둔다.
+-- 문서를 등록한다. card_doc_id는 기본값 fn_get_biz_id가 발급하고, 상품·공통서비스 연결은 별도 관계 테이블에 저장한다.
 -- 같은 계열의 문서가 이미 있으면 다음 버전 번호를 사용한다.
 INSERT INTO db_pipeline.card_doc (
     doc_cd,
@@ -302,3 +302,14 @@ UNION ALL
 SELECT 'INTEGRITY_GATE', 'WARN',
        (SELECT COUNT(*) FROM db_pipeline.v_card_integrity_issue)
 ;
+
+-- name: select_card_product_exists
+SELECT card_id FROM db_pipeline.card_product WHERE card_id = :CARD_ID;
+
+-- name: insert_product_doc_link
+-- 상품설명서와 상품을 승인 대기로 연결한다. 이미 있으면 그대로 둔다.
+INSERT INTO db_pipeline.card_product_doc (card_id, card_doc_id, doc_role_cd, approval_status_cd, applicability_basis_txt,
+                                          create_user_id, update_user_id)
+VALUES (:CARD_ID, :CARD_DOC_ID, 'PRODUCT_GUIDE', 'PENDING', :BASIS_TXT, :USER_ID, :USER_ID)
+ON CONFLICT (card_id, card_doc_id) DO NOTHING
+RETURNING card_id;

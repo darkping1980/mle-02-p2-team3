@@ -3,6 +3,9 @@
 실행 예(src/card_benefit 폴더에서, PDF 경로는 data/raw/hana_all 기준):
     uv run python -m payment_card.db_pipeline.main --pdf "debit/파일명.pdf"
     uv run python -m payment_card.db_pipeline.main --pdf "debit/파일명.pdf" --apply
+    uv run python -m payment_card.db_pipeline.main --pdf "credit/파일명.pdf" --card-id 5 --basis "상품명 일치" --apply
+    uv run python -m payment_card.db_pipeline.main --pdf "common/파일명.pdf" --common-cd VISA_SIGNATURE
+        --common-nm "Visa Signature" --brand-cd VISA --service-grade-cd SIGNATURE --apply
 
 종료 코드: 0 성공, 1 입력 오류·등록 불가·검증 실패, 2 인자 오류(argparse), 3 DB 오류.
 """
@@ -21,7 +24,8 @@ from common.query_logger import QueryLogger
 import psycopg
 
 from .document_service import DocumentService
-from .register_service import RegisterError, RegisterResult, RegisterService, error_checks
+from .register_service import (CommonDocLink, ProductDocLink, RegisterError, RegisterResult, RegisterService,
+                               error_checks)
 from .document_repository import MAPPER_ROOT, RAW_TEXT_LOG_KEYS
 
 
@@ -31,8 +35,30 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--pdf", required=True, help="data/raw/hana_all 기준 PDF 경로")
     parser.add_argument("--apply", action="store_true", help="실제로 등록한다. 없으면 dry-run")
     parser.add_argument("--ocr", choices=OCR_ENGINE_KINDS, help="문제 페이지에 쓸 OCR 엔진. 없으면 해당 PDF를 등록하지 않음")
+    parser.add_argument("--card-id", type=int, help="상품설명서를 연결할 card_product.card_id")
+    parser.add_argument("--basis", help="상품 적용 근거 설명(applicability_basis_txt). --card-id와 함께 필수")
+    parser.add_argument("--common-cd", help="브랜드 공통서비스 문서를 연결할 card_common.common_cd. 없으면 만든다")
+    parser.add_argument("--common-nm", help="공통서비스명. --common-cd와 함께 필수")
+    parser.add_argument("--brand-cd", help="BRAND 공통코드")
+    parser.add_argument("--service-grade-cd", help="SERVICE_GRADE 공통코드")
     parser.add_argument("--sql-log", default="combined", choices=QueryLogger.LOG_MODES, help="SQL 상세 로그 형식")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.card_id is not None and not args.basis:
+        parser.error("--card-id에는 --basis가 필요합니다")
+    if args.common_cd and not args.common_nm:
+        parser.error("--common-cd에는 --common-nm이 필요합니다")
+    if args.card_id is not None and args.common_cd:
+        parser.error("--card-id와 --common-cd는 함께 쓸 수 없습니다")
+    return args
+
+
+def links(args: argparse.Namespace) -> dict:
+    """인자를 문서 연결로 바꾼다."""
+    if args.card_id is not None:
+        return {"product_link": ProductDocLink(args.card_id, args.basis)}
+    if args.common_cd:
+        return {"common_link": CommonDocLink(args.common_cd, args.common_nm, args.brand_cd, args.service_grade_cd)}
+    return {}
 
 
 def print_result(result: RegisterResult) -> None:
@@ -52,6 +78,8 @@ def print_result(result: RegisterResult) -> None:
         print(f"DB 등록 건수: {result.counts}")
     for row in result.checks:
         print(f"  {row['severity']:<5} {row['check_cd']:<18} {row['issue_cnt']}")
+    if result.linked:
+        print(f"문서 연결: {result.linked}")
     print(f"소요 시간: {result.elapsed_ms:.1f} ms")
 
 
@@ -68,7 +96,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"접속 대상: {urlparse(os.getenv('DB_URL', '')).hostname} / {'등록' if args.apply else 'dry-run'}")
     try:
         ocr_engine = create_ocr_engine(args.ocr) if args.ocr else None
-        result = RegisterService(sql_session, DocumentService(ocr_engine=ocr_engine)).register(args.pdf, apply=args.apply)
+        result = RegisterService(sql_session, DocumentService(ocr_engine=ocr_engine)).register(args.pdf, apply=args.apply, **links(args))
         print_result(result)
         return 1 if error_checks(result.checks) else 0
     except (ValueError, RegisterError) as error:

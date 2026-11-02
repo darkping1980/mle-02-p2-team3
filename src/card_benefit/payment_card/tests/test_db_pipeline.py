@@ -297,7 +297,7 @@ class MapperTests(unittest.TestCase):
         self.session = PostgresDbSession(mapper_root=MAPPER_ROOT, camel_case_keys=False, sql_log_mode="none")
 
     def test_mapper_registers_without_connecting(self):
-        self.assertEqual(sorted(self.session.mappers), ["common_benefit_repository", "document_repository", "extraction_repository", "neo4j_validation"])
+        self.assertEqual(sorted(self.session.mappers), ["common_benefit_repository", "document_repository", "embedding_repository", "extraction_repository", "neo4j_validation"])
         self.assertEqual(self.session.database_manager._pools, {})
 
     def test_every_statement_names_the_schema(self):
@@ -305,7 +305,7 @@ class MapperTests(unittest.TestCase):
             if statement.endswith("_cursor"):
                 continue
             sql = self.session._query(f"document_repository.{statement}").sql
-            self.assertIn("db_pipeline.card_doc", sql, statement)
+            self.assertIn("db_pipeline.card_", sql, statement)
 
 
 @unittest.skipIf(ONE_PICK_STYLE is None, "카드 PDF 원본이 없는 환경")

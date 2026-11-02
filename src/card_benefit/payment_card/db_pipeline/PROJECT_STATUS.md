@@ -125,3 +125,20 @@ README의 ‘실제 모델 연결 전’이라는 기존 문구는 이번 상태
 > 2026-11-01 DF 전환 완료. A8 그래프는 제거됐고 Neo4j는 DF 108/189 단독이다. [NEO4J_DF_PF_DESIGN.md](NEO4J_DF_PF_DESIGN.md) 참고. 아래는 A8 당시 기록이다.
 
 사용자 승인으로 Aura `6ac1f0f8`의 레시피 노드 8,154·관계 18,301 및 레시피 전용 제약 5·독립 인덱스 2를 백업 대조 후 삭제했다. 레시피 백업의 실제 복원 시험은 미실시다. ONE PICK STYLE DRAFT를 카드 전용 고유성 제약과 함께 노드 108·관계 168개 적재했고 같은 데이터를 순차 재실행해 중복 없이 동일 건수임을 확인했다. PostgreSQL 스냅샷과 노드·관계의 키·원본 JSON 및 관계 끝점 비교는 불일치 0건이다. 실제 조회 예시와 시험 데이터 한계는 [구조 비교](POSTGRESQL_TO_NEO4J_STRUCTURE_COMPARISON.md) 참조. 사용자용 승인 데이터는 아니며 GraphRAG·벡터 RAG 비교와 팀원 계정 접속은 미검증이다.
+
+## 11. 혜택 임베딩과 공통서비스 등록 (2026-11-03)
+
+기준 DDL은 `src/data/backup/db_pipeline-postgres-202611030524.sql`이다. 이 문서 앞부분의 V6·정책 버전·한도 풀 설명은 이력이며, `card_doc.card_id`, `card_limit_pool` 등은 현재 없다. `sql/db_pipeline_schemaV7_draft.*`에는 공통서비스 4개 테이블이 없다.
+
+| 항목 | 내용 |
+|---|---|
+| 컬럼 추가 | `card_bnft`, `card_common_bnft`에 `bnft_search_txt`, `bnft_embedding vector(1536)`. 코드 `RUN_STAGE=EMBED` 1건. SQL은 `db_pipeline_migration_v7_bnft_embedding*.sql` |
+| 문서 경로 | 상품: `CARD_DOC → CARD_PRODUCT_DOC`(`main.py --card-id --basis`). 공통: `CARD_DOC → CARD_COMMON_DOC → CARD_COMMON`(`main.py --common-cd ...`) |
+| 혜택 등록 | `benefit_main.py product`는 `card_bnft`, `common`은 `card_common_bnft`와 근거가 확인된 카드의 `card_common_bnft_apply`. 공통 혜택을 `card_bnft`로 복제하지 않음 |
+| 검색 텍스트 | `benefit_search_text.py`. 제외 대상은 구조화 값으로 구분하고 구분할 수 없으면 생략 후 검토로 보고 |
+| 임베딩 | `embedding_main.py`. 기본 dry-run, 누락·변경분만 호출. 실행 이력과 모델은 `card_ai_run`(`run_stage_cd=EMBED`) |
+| 동일성 판정 | `benefit_main.py brand-compare`. 코드·이름·문서·브랜드·등급·적용 카드·기간·내용·근거가 모두 맞아야 SAME. 그 외는 병합·삭제 금지 |
+
+Neo4j는 `dp_` 라벨로 전체 재구축했다. 라벨은 테이블명 + `dp_`, 식별자는 PostgreSQL PK(`dp_*_pk` NODE KEY)이고 연결 테이블은 관계다. 이 문서의 `df_` 설명은 이전 그래프 이력이다. 공통 혜택의 근거는 `dp_same_as`로 동일성이 확인된 기존 행을 통해서만 읽는다.
+
+미적용 제안: `sql/db_pipeline_proposal_common_evidence_link.sql`(공통 혜택 근거 연결), `sql/db_pipeline_proposal_brand_service_bnft_transfer.sql`(기존 BRAND_SERVICE 행 정리). 이관 전 원본은 `src/data/backup/pre_common_transfer_20261103.json`에 있다.

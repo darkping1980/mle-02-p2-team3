@@ -120,3 +120,14 @@ class DocRepository:
     def select_table_counts(self, card_doc_id: str) -> dict:
         """문서·페이지·청크 등록 건수를 반환한다."""
         return self.sql_session.select_one("document_repository.select_table_counts", {"CARD_DOC_ID": card_doc_id})
+
+    def card_exists(self, card_id: int) -> bool:
+        """카드 상품이 있는지 확인한다."""
+        return self.sql_session.select_one("document_repository.select_card_product_exists", {"CARD_ID": card_id}) is not None
+
+    def link_product_doc(self, card_id: int, card_doc_id: str, basis_txt: str) -> None:
+        """상품설명서를 상품에 승인 대기로 연결한다."""
+        self.sql_session.execute(
+            "document_repository.insert_product_doc_link",
+            {"CARD_ID": card_id, "CARD_DOC_ID": card_doc_id, "BASIS_TXT": basis_txt, "USER_ID": SYSTEM_USER_ID},
+        )

@@ -1,8 +1,8 @@
+import re
 import unittest
-from unittest.mock import patch
 
 from card_benefit.payment_card.db_pipeline import neo4j_load_draft
-from card_benefit.payment_card.db_pipeline.neo4j_dry_run import NS, Preview
+from card_benefit.payment_card.db_pipeline.neo4j_dry_run import Preview
 from card_benefit.payment_card.db_pipeline.neo4j_load_draft import prepare, write_transaction
 
 
@@ -22,61 +22,64 @@ class FakeTx:
         return Result()
 
 
+NODE = {"label": "dp_card_product", "pk": {"card_id": 2}, "props": {"key": "one", "card_id": 2}}
+EDGE = {"type": "dp_has_benefit", "start": "one", "end": "two", "key": "r", "source_json": "{}"}
+
+
 class LoaderTests(unittest.TestCase):
-    def test_transaction_uses_only_dedicated_scope(self):
+    def test_transaction_uses_only_dp_scope_and_primary_key(self):
         tx = FakeTx()
-        nodes = [{"label": "df_card_product", "props": {"key": "one", "namespace": NS}}]
-        rels = [{"type": "df_has_benefit", "start": "one", "end": "two", "key": "r", "source_json": "{}"}]
-        self.assertEqual(write_transaction(tx, nodes, rels), (1, 1))
-        self.assertTrue(all("df_node" in query for query, _ in tx.calls))
-        self.assertTrue(all(params.get("namespace", params.get("ns")) == NS for _, params in tx.calls))
+        self.assertEqual(write_transaction(tx, [NODE], [EDGE]), (1, 1))
+        self.assertTrue(all("dp_node" in query for query, _ in tx.calls))
+        self.assertIn("MERGE (n:dp_card_product {card_id: $pk.card_id})", tx.calls[0][0])
+        self.assertEqual(tx.calls[0][1]["pk"], {"card_id": 2})
+
+    def test_no_delete_statement_exists_in_loader(self):
+        source = open(neo4j_load_draft.__file__, encoding="utf-8").read()
+        self.assertNotRegex(source, r"(?i)\b(DETACH\s+DELETE|DELETE\s+[a-z])")
+        self.assertNotRegex(source, r"\bfp_")
 
     def test_validation_file_has_named_read_only_statements(self):
         self.assertTrue({"neo4j_validation.node_keys", "neo4j_validation.relationship_keys", "neo4j_validation.card_constraints",
                          "neo4j_validation.existing_node_keys", "neo4j_validation.condition_structure",
-                         "neo4j_validation.evidence_links", "neo4j_validation.orphan_nodes"} <= set(neo4j_load_draft.CYPHER))
+                         "neo4j_validation.evidence_links", "neo4j_validation.orphan_nodes",
+                         "neo4j_validation.common_applies", "neo4j_validation.rule_targets"} <= set(neo4j_load_draft.CYPHER))
         for query in neo4j_load_draft.CYPHER.values():
             self.assertNotRegex(query.upper(), r"\b(CREATE|MERGE|DELETE|DETACH|SET|REMOVE|DROP)\b")
 
-    def test_namespace_is_passed_as_parameter(self):
-        tx = FakeTx()
-        write_transaction(tx, [{"label": "df_card_product", "props": {"key": "one", "namespace": NS}}],
-                          [{"type": "df_has_benefit", "start": "one", "end": "two", "key": "r", "source_json": "{}"}])
-        self.assertTrue(all(NS not in query for query, _ in tx.calls))
+    def test_allowlists_are_dp_only_and_have_no_link_table_label(self):
+        self.assertEqual(len(neo4j_load_draft.NODE_LABELS), 13)
+        self.assertEqual(len(neo4j_load_draft.REL_TYPES), 14)
+        self.assertNotIn("dp_card_common_bnft_apply", neo4j_load_draft.NODE_LABELS)
+        self.assertNotIn("dp_card_limit_pool", neo4j_load_draft.NODE_LABELS)
+        self.assertTrue(all(name.startswith("dp_") for name in neo4j_load_draft.NODE_LABELS | neo4j_load_draft.REL_TYPES))
 
-    def test_allowlists_have_11_labels_and_11_types_of_df_only(self):
-        self.assertEqual(len(neo4j_load_draft.NODE_LABELS), 11)
-        self.assertEqual(len(neo4j_load_draft.REL_TYPES), 11)
-        self.assertNotIn("df_card_limit_pool", neo4j_load_draft.NODE_LABELS)
-        self.assertFalse({"df_has_pool", "df_consumes"} & neo4j_load_draft.REL_TYPES)
-        self.assertNotIn("df_card_policy_version", neo4j_load_draft.NODE_LABELS)
-        self.assertNotIn("df_has_policy", neo4j_load_draft.REL_TYPES)
-        self.assertTrue(all(name.startswith("df_") for name in neo4j_load_draft.NODE_LABELS | neo4j_load_draft.REL_TYPES))
-
-    def test_pf_label_is_refused(self):
+    def test_other_project_label_is_refused(self):
         graph = Preview()
-        graph.nodes["k"] = {"label": "pf_card_product", "key": "k", "namespace": NS, "source_json": "{}"}
+        graph.nodes["k"] = {"label": "fp_card_product", "key": "k", "pk": {}, "source_json": "{}"}
         with self.assertRaisesRegex(ValueError, "unexpected node scope"):
             prepare(graph)
 
-    def test_constraint_is_df_only_and_idempotent(self):
-        query = neo4j_load_draft.CREATE_CONSTRAINT
-        self.assertIn("df_node_key IF NOT EXISTS", query)
-        self.assertIn("(n:df_node)", query)
-        self.assertNotIn("pf_", query)
+    def test_constraints_follow_postgres_keys(self):
+        joined = "\n".join(neo4j_load_draft.CREATE_CONSTRAINTS)
+        self.assertIn("dp_node_key IF NOT EXISTS", joined)
+        self.assertRegex(joined, r"dp_card_bnft_pk IF NOT EXISTS FOR \(n:dp_card_bnft\) REQUIRE \(n\.card_id, n\.card_bnft_id\) IS NODE KEY")
+        self.assertRegex(joined, r"dp_card_common_bnft_pk .*\(n\.card_common_id, n\.card_common_bnft_id\) IS NODE KEY")
+        self.assertFalse(re.search(r"fp_", joined))
 
-    def test_node_properties_have_no_test_marker(self):
-        props = neo4j_load_draft.node_properties({"label": "df_card_product", "key": "k", "source_json": '{"card_id": 2}'})
-        self.assertEqual(props, {"namespace": NS, "key": "k", "source_json": '{"card_id": 2}', "card_id": 2})
+    def test_node_properties_keep_primary_key(self):
+        props = neo4j_load_draft.node_properties({"key": "k", "pk": {"card_id": 2}, "source_json": '{"card_id": 2}'})
+        self.assertEqual(props, {"key": "k", "source_json": '{"card_id": 2}', "card_id": 2})
+
+    def test_embedding_columns_never_become_properties(self):
+        props = neo4j_load_draft.node_properties({"key": "k", "source_json": '{"bnft_embedding": "[1]", "bnft_search_txt": "x"}'})
+        self.assertNotIn("bnft_embedding", props)
+        self.assertNotIn("bnft_search_txt", props)
 
     def test_benefit_text_becomes_queryable_properties(self):
         source = '{"bnft_nm": "n", "bnft_rule_txt": "100원", "bnft_limit_txt": "월 5천원"}'
-        props = neo4j_load_draft.node_properties({"label": "df_card_bnft", "key": "k", "source_json": source})
+        props = neo4j_load_draft.node_properties({"key": "k", "source_json": source})
         self.assertEqual((props["rule_text"], props["limit_text"]), ("100원", "월 5천원"))
-
-    def test_preview_count_guard(self):
-        graph = Preview(); graph.node("card_product", [2], {})
-        with self.assertRaises(ValueError): prepare(graph)
 
     def test_rule_evidence_edge_passes_allowlist_and_keeps_item_key(self):
         graph = Preview()
@@ -84,10 +87,9 @@ class LoaderTests(unittest.TestCase):
         evidence = graph.node("card_source_evidence", ["ev"], {"evidence_id": "ev"})
         graph.edge("supported_by", rule, evidence, {"ev_link_id": "l", "ev_subject_cd": "RULE", "rule_key": "rule",
                                                     "ev_item_cd": "COND", "ev_item_key": "MIN_rule"})
-        with patch.object(neo4j_load_draft, "EXPECTED_NODES", 2), patch.object(neo4j_load_draft, "EXPECTED_RELATIONSHIPS", 1):
-            nodes, edges = prepare(graph)
-        self.assertEqual({node["label"] for node in nodes}, {"df_bnft_rule", "df_card_source_evidence"})
-        self.assertEqual(edges[0]["type"], "df_supported_by")
+        nodes, edges = prepare(graph)
+        self.assertEqual({node["label"] for node in nodes}, {"dp_bnft_rule", "dp_card_source_evidence"})
+        self.assertEqual(edges[0]["type"], "dp_supported_by")
         self.assertIn('"ev_item_key":"MIN_rule"', edges[0]["source_json"])
 
 

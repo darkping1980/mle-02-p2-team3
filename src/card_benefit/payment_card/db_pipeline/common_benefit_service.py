@@ -1,5 +1,7 @@
-"""V7 공통 문서 후보를 카드별 DRAFT 혜택으로 적용한다.
+"""브랜드 공통 문서 후보를 공통 혜택으로 등록하고 카드 적용 관계를 기록한다.
 
+공통 혜택은 ``card_common_bnft`` 에 한 번만 저장하고 ``card_bnft`` 로 복제하지 않는다. 카드 적용은
+브랜드·등급·선택서비스와 원문 근거를 확인한 카드만 ``card_common_bnft_apply`` 에 기록한다.
 식별자는 호출자가 근거를 검토해 제공한다. 자동 승인은 하지 않는다.
 혜택 설명과 한도는 원문 인용만 모아 TEXT로 저장한다. 금액을 계산하거나 원문에 없는 표현을 만들지 않는다.
 """
@@ -47,14 +49,69 @@ def period(raw: str | None):
     return start, end
 
 
+def service_type_of(selection: str | None) -> str | None:
+    """선택서비스 번호 또는 등급 공통. 번호가 하나로 확인되지 않으면 ``None`` 이다."""
+    if not selection:
+        return "COMMON"
+    codes = set(re.findall(r"(?<!\d)(0[1-4])(?!\d)", selection))
+    return codes.pop() if len(codes) == 1 else None
+
+
+def condition_quotes(norm: dict) -> list[str]:
+    """공통 혜택에는 조건식 컬럼이 없어 조건 원문을 이용 조건 TEXT로 보존한다."""
+    expression = norm.get("bnft_cond_expr") or {}
+    return [" ".join(atom["cond_raw_txt"].split()) for branch in expression.get("branches", [])
+            for atom in branch.get("atoms", []) if atom.get("cond_raw_txt")]
+
+
+def common_texts(raw: dict, norm: dict) -> tuple[str | None, str | None]:
+    """원문 인용으로 혜택 내용과 이용 조건 TEXT를 만든다."""
+    evidence = raw.get("evidence", [])
+    rule_txt = quote_text(evidence, "RULE") or quote_text(evidence, "BNFT")
+    limits = [quote_text(evidence, "LIMIT"), *condition_quotes(norm)]
+    return rule_txt, " / ".join(dict.fromkeys(item for item in limits if item)) or None
+
+
 @dataclass(frozen=True)
 class Decision:
-    card_id: int
+    """후보 1건의 판정. 공통 혜택 등록이면 ``card_id`` 는 ``None`` 이다."""
+    card_id: int | None
     stg_id: str
     status: str
     reason: str
     bnft_cd: str | None = None
-    card_bnft_id: str | None = None
+    card_bnft_id: str | None = None         # 같은 코드의 기존 BRAND_SERVICE 행. 수정하지 않는다.
+    card_common_id: int | None = None
+    card_common_bnft_id: str | None = None
+    evidence_ids: tuple[str, ...] = ()
+
+
+def compare_brand_bnft(row: dict) -> tuple[str, list[str]]:
+    """카드별 BRAND_SERVICE 행과 공통 혜택의 동일성을 판정한다. ``(상태, 불일치 항목)`` 을 반환한다.
+
+    SAME은 코드, 혜택명·유형, 출처 문서, 브랜드·등급, 적용 카드, 유효기간, 혜택 내용, 근거가 모두 확인된 경우뿐이다.
+    하나라도 다르거나 확인할 수 없으면 REVIEW이고, 같은 코드의 공통 혜택이 없으면 NO_COMMON이다.
+    """
+    if row.get('card_common_bnft_id') is None:
+        return 'NO_COMMON', ['bnft_cd']
+    issues = []
+    if row['bnft_nm'] != row['common_bnft_nm'] or row['bnft_type_cd'] != row['common_bnft_type_cd']:
+        issues.append('혜택명·유형')
+    if not row.get('doc_ids') or not set(row['doc_ids']) <= set(row.get('common_doc_ids') or []):
+        issues.append('출처 문서')
+    if row.get('brand_grades') != [row.get('common_brand_grade')]:
+        issues.append('브랜드·등급')
+    if not row.get('applied'):
+        issues.append('적용 카드')
+    if (row['bnft_valid_from'], row['bnft_valid_to_excl']) != (row['common_valid_from'], row['common_valid_to_excl']):
+        issues.append('유효기간')
+    for own, common, label in ((row['bnft_rule_txt'], row['common_rule_txt'], '혜택 내용'),
+                               (row['bnft_limit_txt'], row['common_limit_txt'], '이용 조건')):
+        if own is not None and own != common:
+            issues.append(label)
+    if not row.get('evidence_ids') or not set(row['evidence_ids']) <= set(row.get('common_evidence_ids') or []):
+        issues.append('원문 근거')
+    return ('REVIEW', issues) if issues else ('SAME', [])
 
 
 class CommonBenefitRepository:
@@ -73,11 +130,12 @@ class CommonBenefitRepository:
 
 
 class CommonBenefitService:
-    """A/B가 공유하는 후보 판정과 등록. 상태 승격 및 기존 혜택 삭제는 하지 않는다."""
-    def __init__(self, session, user_id='SYSTEM'):
+    """공통 혜택 등록과 카드 적용을 나눠 처리한다. 상태 승격과 기존 혜택 삭제는 하지 않는다."""
+    def __init__(self, session, user_id='SYSTEM', embedding_service=None):
         self.session = session
         self.repo = CommonBenefitRepository(session)
         self.user_id = user_id
+        self.embedding_service = embedding_service
 
     def register_card(self, product: dict) -> int:
         """상품 코드가 같으면 입력 정보도 일치해야 한다."""
@@ -92,6 +150,37 @@ class CommonBenefitService:
                 raise ValueError('기존 상품 코드의 정보가 입력과 다릅니다')
             self._assert_no_new_errors(before)
             return row['card_id']
+
+    def ensure_common(self, common: dict) -> int:
+        """공통서비스를 등록한다. 코드가 같으면 입력 정보도 일치해야 한다."""
+        self.repo.write('insert_common', COMMON_CD=common['common_cd'], COMMON_NM=common['common_nm'],
+                        BRAND_CD=common.get('brand_cd'), SERVICE_GRADE_CD=common.get('service_grade_cd'),
+                        COMMON_NOTE=common.get('common_note'), USER_ID=self.user_id)
+        row = self.repo.one('find_common', COMMON_CD=common['common_cd'])
+        if not row or any(row[k] != common.get(k) for k in ('common_nm', 'brand_cd', 'service_grade_cd')):
+            raise ValueError('기존 공통서비스 코드의 정보가 입력과 다릅니다')
+        return row['card_common_id']
+
+    def link_doc(self, common_id: int, card_doc_id: str) -> None:
+        """브랜드 공통서비스 문서만 공통서비스에 연결한다. 이미 있으면 그대로 둔다."""
+        document = self.repo.one('find_doc_type', DOC_ID=card_doc_id)
+        if not document or document['doc_type_cd'] != 'BRAND_SERVICE':
+            raise ValueError('BRAND_SERVICE 문서만 공통서비스에 연결할 수 있습니다')
+        self.repo.write('insert_common_doc', COMMON_ID=common_id, DOC_ID=card_doc_id)
+
+    def register_run(self, run_id: str, identities: dict) -> list[Decision]:
+        """추출 실행의 후보를 공통 혜택으로 등록한다. 카드 적용은 ``apply_run`` 이 따로 판단한다."""
+        results = []
+        with self.session.transaction():
+            before = self._integrity_errors()
+            for candidate in self.repo.rows('list_candidates', RUN_ID=run_id):
+                evidence = self.repo.rows('candidate_evidence', STG_ID=candidate['card_extr_stg_id'])
+                results.append(self._register_candidate(candidate, evidence, identities))
+            self._assert_no_new_errors(before)
+        changed = [item.card_common_bnft_id for item in results if item.status in ('INSERTED', 'UPDATED')]
+        if changed and self.embedding_service is not None:
+            self.embedding_service.embed_new('card_common_bnft', changed)
+        return results
 
     def path_a(self, card_id: int, identities: dict):
         """기존 공통 문서 실행을 검색한다. AI 추출을 호출하지 않는다."""
@@ -111,19 +200,20 @@ class CommonBenefitService:
             results.extend(self.apply_run(card['card_id'], run_id, identities))
         return results
 
-    def register_document_and_apply(self, pdf, register_service, extraction_service, identities: dict):
+    def register_document_and_apply(self, pdf, register_service, extraction_service, identities: dict, common_link):
         """문서 등록·추출은 기존 서비스를 재사용한다. 호출자가 LLM 실행을 명시적으로 선택해야 한다."""
-        registration = register_service.register(pdf, apply=True)
+        registration = register_service.register(pdf, apply=True, common_link=common_link)
         if not registration.card_doc_id:
             raise ValueError('문서 ID가 없습니다')
         extraction = extraction_service.run(registration.card_doc_id, card_id=None)
         if extraction.status != 'SUCCEEDED':
             raise ValueError('문서 추출이 완료되지 않아 혜택을 적용하지 않습니다')
-        return registration, extraction, self.path_b(extraction.card_ai_run_id, identities)
+        registered = self.register_run(extraction.card_ai_run_id, identities)
+        return registration, extraction, registered, self.path_b(extraction.card_ai_run_id, identities)
 
     def apply_run(self, card_id: int, run_id: str, identities: dict):
         results = []
-        # 카드 행 잠금으로 카드별 중복 검사, 혜택 및 근거 연결을 직렬화한다.
+        # 카드 행 잠금으로 카드별 적용 판단을 직렬화한다.
         with self.session.transaction():
             before = self._integrity_errors()
             card = self.repo.one('lock_card', CARD_ID=card_id)
@@ -135,15 +225,157 @@ class CommonBenefitService:
             self._assert_no_new_errors(before)
         return results
 
+    def compare_brand_benefits(self) -> list[dict]:
+        """기존 BRAND_SERVICE 행의 동일성 판정. 데이터를 바꾸지 않는다."""
+        results = []
+        for row in self.repo.rows('brand_bnft_compare'):
+            status, issues = compare_brand_bnft(row)
+            results.append({'card_id': row['card_id'], 'card_bnft_id': row['card_bnft_id'], 'bnft_cd': row['bnft_cd'],
+                            'card_common_bnft_id': row.get('card_common_bnft_id'), 'status': status, 'issues': issues})
+        return results
+
     def _integrity_errors(self):
-        return Counter((r['gate_cd'], r['issue_key']) for r in self.repo.rows('integrity_errors'))
+        rows = [*self.repo.rows('integrity_errors'), *self.repo.rows('common_integrity_errors')]
+        return Counter((r['gate_cd'], r['issue_key']) for r in rows)
 
     def _assert_no_new_errors(self, before):
         new = self._integrity_errors() - before
         if new:
             raise ValueError('신규 정합성 위반으로 트랜잭션을 롤백합니다: ' + ', '.join(sorted({g for g, _ in new})))
 
+    @staticmethod
+    def _candidate_problem(candidate) -> str | None:
+        """후보 자체를 쓸 수 없는 사유. 등록과 적용이 같은 기준을 쓴다."""
+        norm = candidate['stg_normalized_item']
+        if candidate['stg_sql_check_cd'] not in ('OK', 'LINK_REVIEW') or norm.get('checks', {}).get('value_check_cd') != 'OK':
+            return '후보 값 또는 구조 검증이 필요합니다'
+        if len(norm.get('merge', {}).get('source_refs', [])) != 1:
+            return '이름 기준 다중 항목 병합을 별도 검토해야 합니다'
+        if norm.get('relation_list'):
+            return '혜택 간 관계의 카드별 ID 연결을 확인해야 합니다'
+        return None
+
+    @staticmethod
+    def _located(evidence) -> list[dict]:
+        return [e for e in evidence if e['start_pos'] is not None and e['end_pos'] is not None
+                and e.get('approval_status_cd') in ('PENDING', 'APPROVED')
+                and e.get('source_txt') is not None and compact(e['source_txt']) == compact(e['quote_txt'])]
+
+    @staticmethod
+    def _evidence_ids(raw, norm, located) -> tuple[list[str], str | None]:
+        """인용이 어떤 혜택·규칙·한도를 뒷받침하는지 확인한다. ``(근거 ID, 검토 사유)`` 를 반환한다."""
+        rules = norm.get('rule_list', [])
+        limits = norm.get('limit_list', [])
+        quotes = [compact(e['quote_txt']) for e in located]
+        # 원천 테이블에는 supports/support_key가 없으므로 원문 인용이 유일하게
+        # 하나의 대상에 대응할 때만 인정한다. 중복 인용은 임의로 배정하지 않는다.
+        kinds = {'BNFT': 'BNFT', 'APPLICABILITY': 'BNFT', 'RULE': 'RULE', 'LIMIT': 'BNFT'}
+        source_targets = {}
+        rule_keys = {r['rule_key'] for r in rules}
+        limit_keys = {p['pool_key'] for p in limits}
+        for item in raw.get('evidence', []):
+            supports = item.get('supports')
+            kind = kinds.get(supports)
+            key = item.get('support_key') if supports == 'RULE' else None
+            if kind is None or (supports == 'RULE' and key not in rule_keys) or (supports == 'LIMIT' and item.get('support_key') not in limit_keys):
+                return [], '근거가 어떤 혜택·규칙·한도에 속하는지 확인해야 합니다'
+            quote = compact(item.get('quote_txt') or '')
+            matches = [e for e in located if compact(e['quote_txt']) == quote]
+            if not quote or len(matches) != 1:
+                return [], '원문 근거가 없거나 동일한 인용이 중복되어 대상이 모호합니다'
+            target = (kind, key)
+            if quote in source_targets and source_targets[quote][0] != target:
+                return [], '동일 인용이 여러 대상에 사용되어 근거 연결을 검토해야 합니다'
+            source_targets[quote] = (target, matches[0]['evidence_id'])
+        targets = {target for target, _ in source_targets.values()}
+        if ('BNFT', None) not in targets or any(('RULE', k) not in targets for k in rule_keys):
+            return [], '혜택 또는 계산 규칙을 뒷받침하는 근거가 없습니다'
+        for limit in limits:
+            source_quotes = [compact(e['quote_txt']) for e in raw.get('evidence', [])
+                             if e.get('supports') == 'LIMIT' and e.get('support_key') == limit['pool_key']]
+            if not any(q in quotes for q in source_quotes):
+                return [], '한도의 원문 근거를 확인해야 합니다'
+        return sorted({evidence_id for _, evidence_id in source_targets.values()}), None
+
+    def _register_candidate(self, candidate, evidence, identities) -> Decision:
+        stg_id = candidate['card_extr_stg_id']
+        def review(reason, status='REVIEW', common_id=None):
+            return Decision(None, stg_id, status, reason, card_common_id=common_id)
+        raw, norm = candidate['stg_raw_item'], candidate['stg_normalized_item']
+        if candidate['stg_status'] in ('REJECTED', 'RETIRED'):
+            return review('제외된 후보입니다', 'EXCLUDED')
+        problem = self._candidate_problem(candidate)
+        if problem:
+            return review(problem)
+        commons = self.repo.rows('common_of_doc', DOC_ID=candidate['card_doc_id'])
+        if len(commons) != 1:
+            return review('문서의 공통서비스가 하나로 확인되지 않습니다')
+        common = commons[0]
+        common_id = common['card_common_id']
+        brand, grade = raw.get('brand_txt'), raw.get('service_grade_txt')
+        if ((brand and compact(brand) != compact(common.get('brand_cd') or ''))
+                or (grade and compact(grade) != compact(common.get('service_grade_cd') or ''))):
+            return review('후보의 브랜드·등급이 공통서비스와 다릅니다', common_id=common_id)
+        service_type = service_type_of(raw.get('selection_service_txt'))
+        if service_type is None:
+            return review('선택서비스 번호가 하나로 확인되지 않습니다', common_id=common_id)
+        try:
+            start, end = period(raw.get('validity_period_txt'))
+            code = benefit_code(candidate.get('doc_family_cd'), identities.get(stg_id))
+        except (ValueError, OverflowError) as error:
+            return review(str(error), common_id=common_id)
+        evidence_ids, problem = self._evidence_ids(raw, norm, self._located(evidence))
+        if problem:
+            return review(problem, common_id=common_id)
+        rule_txt, limit_txt = common_texts(raw, norm)
+        values = dict(BNFT_NM=norm['bnft_nm'], BNFT_TYPE=norm['bnft_type_cd'], SERVICE_TYPE=service_type,
+                      RULE_TXT=rule_txt, LIMIT_TXT=limit_txt, VALID_FROM=start, VALID_TO=end, USER_ID=self.user_id)
+        self.repo.one('lock_common', COMMON_ID=common_id)
+        existing = self.repo.one('find_common_bnft', COMMON_ID=common_id, BNFT_CD=code)
+        done = dict(bnft_cd=code, card_common_id=common_id, evidence_ids=tuple(evidence_ids))
+        if existing:
+            benefit_id = existing['card_common_bnft_id']
+            if self._same_common(existing, values):
+                return Decision(None, stg_id, 'UNCHANGED', '등록된 공통 혜택과 같습니다', card_common_bnft_id=benefit_id, **done)
+            if not self._can_update(common_id, candidate['doc_family_cd'], candidate['doc_version_no'], existing):
+                return Decision(None, stg_id, 'CHANGE_REVIEW', '변경 또는 출처를 안전하게 비교할 수 없어 자동 갱신하지 않습니다',
+                                card_common_bnft_id=benefit_id, **done)
+            if not self.repo.write('update_common_bnft', COMMON_ID=common_id, BNFT_ID=benefit_id, **values):
+                raise ValueError('기존 공통 혜택이 변경되어 갱신을 중단합니다')
+            return Decision(None, stg_id, 'UPDATED', '검토 대기', card_common_bnft_id=benefit_id, **done)
+        inserted = self.repo.write('insert_common_bnft', COMMON_ID=common_id, BNFT_CD=code, **values)
+        if not inserted:
+            raise ValueError('동시 등록 충돌: 전체 트랜잭션을 롤백합니다')
+        return Decision(None, stg_id, 'INSERTED', '검토 대기', card_common_bnft_id=inserted[0]['card_common_bnft_id'], **done)
+
+    @staticmethod
+    def _same_common(existing, values) -> bool:
+        return (existing['bnft_nm'] == values['BNFT_NM'] and existing['bnft_type_cd'] == values['BNFT_TYPE']
+                and existing['service_type_cd'] == values['SERVICE_TYPE'] and existing['bnft_rule_txt'] == values['RULE_TXT']
+                and existing['bnft_limit_txt'] == values['LIMIT_TXT'] and existing['bnft_valid_from'] == values['VALID_FROM']
+                and existing['bnft_valid_to_excl'] == values['VALID_TO'])
+
+    def _can_update(self, common_id, family, version, existing) -> bool:
+        """같은 계열의 이전 판 후보와 현재 행이 같을 때만 갱신한다. 수동 수정을 덮어쓰지 않는다."""
+        if version is None:
+            return False
+        for source in self.repo.rows('prior_common_sources', COMMON_ID=common_id):
+            if source['doc_family_cd'] != family or source['doc_version_no'] >= version:
+                continue
+            old = source['stg_normalized_item']
+            try:
+                start, end = period(source['stg_raw_item'].get('validity_period_txt'))
+            except (ValueError, OverflowError):
+                continue
+            rule_txt, limit_txt = common_texts(source['stg_raw_item'], old)
+            if (existing['bnft_nm'] == old.get('bnft_nm') and existing['bnft_type_cd'] == old.get('bnft_type_cd')
+                    and existing['bnft_valid_from'] == start and existing['bnft_valid_to_excl'] == end
+                    and existing['bnft_rule_txt'] == rule_txt and existing['bnft_limit_txt'] == limit_txt):
+                return True
+        return False
+
     def _apply_candidate(self, card, candidate, evidence, identities):
+        """문서·상품 근거로 카드 적용을 판단하고 ``card_common_bnft_apply`` 만 기록한다."""
         card_id, stg_id = card['card_id'], candidate['card_extr_stg_id']
         def review(reason, status='REVIEW'):
             return Decision(card_id, stg_id, status, reason)
@@ -152,15 +384,10 @@ class CommonBenefitService:
             return review('활성 카드가 아닙니다', 'EXCLUDED')
         if candidate['stg_status'] in ('REJECTED', 'RETIRED'):
             return review('제외된 후보입니다', 'EXCLUDED')
-        if candidate['stg_sql_check_cd'] not in ('OK', 'LINK_REVIEW') or norm.get('checks', {}).get('value_check_cd') != 'OK':
-            return review('후보 값 또는 구조 검증이 필요합니다')
-        if len(norm.get('merge', {}).get('source_refs', [])) != 1:
-            return review('이름 기준 다중 항목 병합을 별도 검토해야 합니다')
-        if norm.get('relation_list'):
-            return review('혜택 간 관계의 카드별 ID 연결을 확인해야 합니다')
-        located = [e for e in evidence if e['start_pos'] is not None and e['end_pos'] is not None
-                   and e.get('approval_status_cd') in ('PENDING','APPROVED')
-                   and e.get('source_txt') is not None and compact(e['source_txt']) == compact(e['quote_txt'])]
+        problem = self._candidate_problem(candidate)
+        if problem:
+            return review(problem)
+        located = self._located(evidence)
         quotes = [compact(e['quote_txt']) for e in located]
         applicability_quotes = [compact(e['quote_txt']) for e in raw.get('evidence', [])
                                 if e.get('supports') == 'APPLICABILITY']
@@ -190,7 +417,6 @@ class CommonBenefitService:
                    and (not selection or o.get('service_type_cd') in selection_codes)]
         if len(options) != 1:
             return review('브랜드·등급·선택서비스 선택지가 하나로 확인되지 않습니다')
-        product_basis = None
         if not names:
             # 등급 전체 공통서비스는 안내서의 명시적 공통 범위와 상품설명서의
             # 해당 카드 브랜드·등급 근거를 둘 다 확인한다. 선택서비스에는 쓰지 않는다.
@@ -198,17 +424,7 @@ class CommonBenefitService:
                           and all(compact(t) in compact(e['quote_txt']) for t in (brand, grade, '등급카드', '소지자에게공통으로제공됩니다'))), None)
             if selection or not broad:
                 return review('명시적 전체 등급 공통서비스 또는 대상 카드 근거가 없습니다')
-            for proof in self.repo.rows('product_brand_evidence', CARD_ID=card_id):
-                quote = proof.get('quote_txt') or ''
-                source = proof.get('source_txt') or ''
-                service_type = options[0].get('service_type_cd')
-                if (compact(card['product_nm'] + ' 상품설명서') == compact(proof.get('doc_title') or '')
-                        and compact(quote) == compact(source)
-                        and compact(brand) in compact(quote) and compact(grade) in compact(quote)
-                        and (service_type in ('NONE', 'COMMON') or service_type in re.findall(r'(?<!\d)(0[1-4])(?!\d)',quote))):
-                    product_basis = quote
-                    break
-            if not product_basis:
+            if not self._product_basis(card, options[0], brand, grade):
                 return review('상품설명서에서 카드의 브랜드·등급을 확인해야 합니다')
         elif not selection and options[0].get('service_type_cd') != 'NONE':
             return review('선택서비스 여부가 확인되지 않았습니다')
@@ -216,130 +432,35 @@ class CommonBenefitService:
         if validity and not applies_supported(validity):
             return review('제공 기간의 원문 근거가 없습니다')
         try:
-            start, end = period(validity)
             code = benefit_code(candidate.get('doc_family_cd'), identities.get(stg_id))
-        except (ValueError, OverflowError) as error:
+        except ValueError as error:
             return review(str(error))
-        if product_basis:
-            basis = broad + ' / 상품설명서: ' + product_basis
-        else:
-            basis = next(e['quote_txt'] for e in located if compact(card['product_nm']) in compact(e['quote_txt'])
-                         or compact(card['product_cd']) in compact(e['quote_txt']))
-        opts = [options[0]['brand_opt_cd']]
-        existing = self.repo.one('find_benefit', CARD_ID=card_id, BNFT_CD=code)
-        limits = norm.get('limit_list', [])
-        # staging의 pool_refs는 후보 내부 표시다. 최종 규칙에는 저장하지 않는다.
-        rules = [{k: v for k, v in rule.items() if k != 'pool_refs'} for rule in norm.get('rule_list', [])]
-        if existing and (existing['verification_status_cd'] != 'PENDING_REVIEW' or existing['rule_select_cd'] is not None):
-            return Decision(card_id, stg_id, 'CHANGE_REVIEW', '확정 상태 또는 별도 규칙 선택이 있는 기존 혜택은 수정하지 않습니다', code, existing['card_bnft_id'])
-        if any(rule.get('rule_status_cd') != 'DRAFT' for rule in rules):
-            return review('확정되었거나 상태가 불명확한 규칙은 자동 복사하지 않습니다')
-        # 원천 테이블에는 supports/support_key가 없으므로 원문 인용이 유일하게
-        # 하나의 대상에 대응할 때만 연결한다. 중복 인용은 임의로 배정하지 않는다.
-        # 한도는 혜택 TEXT로 저장하므로 한도 근거는 혜택 근거로 연결한다.
-        kinds = {'BNFT': 'BNFT', 'APPLICABILITY': 'BNFT', 'RULE': 'RULE', 'LIMIT': 'BNFT'}
-        source_targets = {}
-        rule_keys = {r['rule_key'] for r in rules}
-        limit_keys = {p['pool_key'] for p in limits}
-        for item in raw.get('evidence', []):
-            supports = item.get('supports')
-            kind = kinds.get(supports)
-            key = item.get('support_key') if supports == 'RULE' else None
-            if kind is None or (supports == 'RULE' and key not in rule_keys) or (supports == 'LIMIT' and item.get('support_key') not in limit_keys):
-                return review('근거가 어떤 혜택·규칙·한도에 속하는지 확인해야 합니다')
-            quote = compact(item.get('quote_txt') or '')
-            matches = [e for e in located if compact(e['quote_txt']) == quote]
-            if not quote or len(matches) != 1:
-                return review('원문 근거가 없거나 동일한 인용이 중복되어 대상이 모호합니다')
-            target = (kind, key)
-            if quote in source_targets and source_targets[quote][0] != target:
-                return review('동일 인용이 여러 대상에 사용되어 근거 연결을 검토해야 합니다')
-            source_targets[quote] = (target, matches[0]['evidence_id'])
-        targets = {target for target, _ in source_targets.values()}
-        if ('BNFT', None) not in targets or any(('RULE', k) not in targets for k in rule_keys):
-            return review('혜택 또는 계산 규칙을 뒷받침하는 근거가 없습니다')
-        for limit in limits:
-            source_quotes = [compact(e['quote_txt']) for e in raw.get('evidence', [])
-                             if e.get('supports') == 'LIMIT' and e.get('support_key') == limit['pool_key']]
-            if not any(q in quotes for q in source_quotes):
-                return review('한도의 원문 근거를 확인해야 합니다')
-        rule_txt, limit_txt = quote_text(raw.get('evidence', []), 'RULE'), quote_text(raw.get('evidence', []), 'LIMIT')
-        needs_update = False
-        if existing:
-            # 기존 카드별 조건이나 수동 수정 여부를 추정하지 않는다.
-            comparable = (existing['bnft_nm'] == norm['bnft_nm'] and existing['bnft_type_cd'] == norm['bnft_type_cd']
-                          and existing['bnft_origin_cd'] == 'BRAND_SERVICE' and existing['bnft_scope_cd'] == 'BRAND'
-                          and existing['bnft_brand_opt_cds'] == opts and existing['bnft_cond_expr'] == norm.get('bnft_cond_expr')
-                          and existing['bnft_valid_from'] == start and existing['bnft_valid_to_excl'] == end
-                          and self._same_rules(rules, existing['rule_list'])
-                          and existing['bnft_rule_txt'] == rule_txt and existing['bnft_limit_txt'] == limit_txt
-                          and not existing['relation_list'])
-            if not comparable:
-                needs_update = self._can_update(card_id, candidate['doc_family_cd'], candidate['doc_version_no'], existing, opts)
-                if not needs_update:
-                    return Decision(card_id, stg_id, 'CHANGE_REVIEW', '카드별 변경 또는 출처를 안전하게 비교할 수 없어 자동 갱신하지 않습니다', code, existing['card_bnft_id'])
-        # 기존 연결의 선택지와 충돌하면 변경하지 않는다.
-        link = self.repo.one('get_product_doc', CARD_ID=card_id, DOC_ID=candidate['card_doc_id'])
-        if link and (link['doc_role_cd'] != 'BRAND_SERVICE' or link['approval_status_cd'] == 'REJECTED'
-                     or not set(opts).issubset(link['brand_opt_cds'] or [])):
-            return review('기존 문서 연결의 브랜드 선택지와 충돌합니다')
-        if not link:
-            self.repo.write('insert_product_doc', CARD_ID=card_id, DOC_ID=candidate['card_doc_id'],
-                            BRAND_OPTS=opts, BASIS=basis, USER_ID=self.user_id)
-        if existing:
-            benefit_id = existing['card_bnft_id']
-            if needs_update:
-                changed = self.repo.write('update_benefit', CARD_ID=card_id, BNFT_ID=benefit_id,
-                    BNFT_NM=norm['bnft_nm'], BNFT_TYPE=norm['bnft_type_cd'],
-                    COND=Jsonb(norm['bnft_cond_expr']) if norm.get('bnft_cond_expr') is not None else None,
-                    RULES=Jsonb(rules), VALID_FROM=start, VALID_TO=end, RULE_TXT=rule_txt, LIMIT_TXT=limit_txt)
-                if not changed:
-                    raise ValueError('기존 혜택 상태가 변경되어 갱신을 중단합니다')
-        else:
-            inserted = self.repo.write('insert_benefit', CARD_ID=card_id, BNFT_CD=code, BNFT_NM=norm['bnft_nm'],
-                BNFT_TYPE=norm['bnft_type_cd'], BRAND_OPTS=opts,
-                COND=Jsonb(norm['bnft_cond_expr']) if norm.get('bnft_cond_expr') is not None else None,
-                RULES=Jsonb(rules), VALID_FROM=start, VALID_TO=end, RULE_TXT=rule_txt, LIMIT_TXT=limit_txt)
-            if not inserted:
-                raise ValueError('동시 등록 충돌: 전체 트랜잭션을 롤백합니다')
-            benefit_id = inserted[0]['card_bnft_id']
-        for (kind, key), evidence_id in source_targets.values():
-            if kind == 'BNFT':
-                self.repo.write('insert_evidence_link', CARD_ID=card_id, BNFT_ID=benefit_id, EVIDENCE_ID=evidence_id)
-            else:
-                self.repo.write('insert_rule_evidence_link', CARD_ID=card_id, BNFT_ID=benefit_id,
-                                RULE_KEY=key, EVIDENCE_ID=evidence_id)
-        return Decision(card_id, stg_id, 'UPDATED' if needs_update else ('UNCHANGED' if existing else 'INSERTED'), '검토 대기', code, benefit_id)
+        evidence_ids, problem = self._evidence_ids(raw, norm, located)
+        if problem:
+            return review(problem)
+        commons = self.repo.rows('common_of_doc', DOC_ID=candidate['card_doc_id'])
+        if len(commons) != 1:
+            return review('문서의 공통서비스가 하나로 확인되지 않습니다')
+        common_id = commons[0]['card_common_id']
+        benefit = self.repo.one('find_common_bnft', COMMON_ID=common_id, BNFT_CD=code)
+        if not benefit:
+            return review('공통 혜택이 먼저 등록되어야 합니다')
+        benefit_id = benefit['card_common_bnft_id']
+        inserted = self.repo.write('insert_common_apply', COMMON_ID=common_id, BNFT_ID=benefit_id, CARD_ID=card_id)
+        legacy = self.repo.one('find_benefit', CARD_ID=card_id, BNFT_CD=code)
+        reason = '카드별 혜택에 같은 코드의 기존 행이 있습니다. brand_bnft_compare로 동일성을 확인하세요' if legacy else '검토 대기'
+        return Decision(card_id, stg_id, 'INSERTED' if inserted else 'UNCHANGED', reason, code,
+                        legacy['card_bnft_id'] if legacy else None, common_id, benefit_id, tuple(evidence_ids))
 
-    def _can_update(self, card_id, family, version, existing, options):
-        """이전 원문 후보와 현재 행이 같을 때만 검토 대기 혜택을 갱신한다."""
-        if (existing['verification_status_cd'] != 'PENDING_REVIEW'
-                or existing['bnft_origin_cd'] != 'BRAND_SERVICE' or existing['bnft_scope_cd'] != 'BRAND'
-                or existing['bnft_brand_opt_cds'] != options or existing['relation_list']):
-            return False
-        sources = self.repo.rows('prior_sources', CARD_ID=card_id, BNFT_ID=existing['card_bnft_id'])
-        same_family = [s for s in sources if s['doc_family_cd'] == family]
-        if not same_family or version is None or any(s['doc_version_no'] >= version for s in same_family):
-            return False
-        for source in same_family:
-            old = source['stg_normalized_item']
-            if source['doc_family_cd'] != family or old.get('relation_list'):
-                continue
-            try:
-                start, end = period(source['stg_raw_item'].get('validity_period_txt'))
-            except (ValueError, OverflowError):
-                continue
-            if (existing['bnft_nm'] == old.get('bnft_nm') and existing['bnft_type_cd'] == old.get('bnft_type_cd')
-                    and existing['bnft_cond_expr'] == old.get('bnft_cond_expr') and
-                    existing['rule_list'] == [{k:v for k,v in r.items() if k != 'pool_refs'} for r in old.get('rule_list', [])]
-                    and existing['bnft_valid_from'] == start and existing['bnft_valid_to_excl'] == end
-                    and existing['bnft_rule_txt'] == quote_text(source['stg_raw_item'].get('evidence', []), 'RULE')
-                    and existing['bnft_limit_txt'] == quote_text(source['stg_raw_item'].get('evidence', []), 'LIMIT')):
-                return True
-        return False
-
-    @staticmethod
-    def _same_rules(rules, existing_rules):
-        """규칙 순서와 무관하게 내용이 같은지 본다."""
-        existing_by_key = {r['rule_key']: r for r in existing_rules}
-        return len(rules) == len(existing_rules) and all(existing_by_key.get(r['rule_key']) == r for r in rules)
+    def _product_basis(self, card, option, brand, grade) -> str | None:
+        """상품설명서 근거에서 카드의 브랜드·등급을 찾는다."""
+        for proof in self.repo.rows('product_brand_evidence', CARD_ID=card['card_id']):
+            quote = proof.get('quote_txt') or ''
+            source = proof.get('source_txt') or ''
+            service_type = option.get('service_type_cd')
+            if (compact(card['product_nm'] + ' 상품설명서') == compact(proof.get('doc_title') or '')
+                    and compact(quote) == compact(source)
+                    and compact(brand) in compact(quote) and compact(grade) in compact(quote)
+                    and (service_type in ('NONE', 'COMMON') or service_type in re.findall(r'(?<!\d)(0[1-4])(?!\d)', quote))):
+                return quote
+        return None

@@ -24,7 +24,7 @@ def js(value):
 
 
 def evidence_row(evidence_id, subject="BNFT", quote="월 1천원 5% 캐시백"):
-    return {"owner_labels": ["df_card_bnft"],
+    return {"owner_labels": ["dp_card_bnft"],
             "link": {"ev_subject_cd": subject, "ev_item_key": "-"},
             "evidence": {"source_json": js({"evidence_id": evidence_id, "page_no": 1, "approval_status_cd": "PENDING",
                                             "quote_txt": quote})}}
@@ -858,8 +858,7 @@ class StreamlitTests(unittest.TestCase):
         self.assertFalse(app.exception)
         self.assertEqual(search.calls, ["catalog"])
         codes = " ".join(block.value for block in app.code)
-        self.assertIn("MATCH (b:df_card_bnft", codes)
-        self.assertIn(neo4j_search.NAMESPACE, codes)
+        self.assertIn("MATCH (b:dp_card_bnft", codes)
         self.assertNotIn("$key", codes)
         self.assertEqual(self.second.prompts, [])
 

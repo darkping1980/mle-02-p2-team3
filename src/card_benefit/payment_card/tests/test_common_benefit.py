@@ -1,9 +1,10 @@
-"""공통 적용 판단과 두 경로의 동작. 저장소는 메모리 Mock이다."""
+"""공통 혜택 등록과 카드 적용 판단. 저장소는 메모리 Mock이다."""
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import date
 
-from payment_card.db_pipeline.common_benefit_service import CommonBenefitService, benefit_code, period, quote_text
+from payment_card.db_pipeline.common_benefit_service import CommonBenefitService, benefit_code, common_texts, period, quote_text
+import pytest
 
 
 class Session:
@@ -16,50 +17,46 @@ class Repo:
     def __init__(self, cards, candidate, evidence):
         self.cards = {c['card_id']: c for c in cards}
         self.candidate, self.evidence = candidate, evidence
-        self.benefits, self.docs, self.links = {}, {}, set()
-        self.prior = []
-        self.product_evidence = []
+        self.common_bnft, self.applies, self.docs = {}, set(), {'D1': 'BRAND_SERVICE'}
+        self.commons = [{'card_common_id': 7, 'brand_cd': 'VISA', 'service_grade_cd': 'SIGNATURE'}]
+        self.prior, self.product_evidence, self.legacy = [], [], None
+        self.card_bnft_writes = 0
 
     def rows(self, name, **p):
-        if name == 'integrity_errors': return []
+        if name in ('integrity_errors', 'common_integrity_errors'): return []
         if name == 'list_runs': return [{'card_ai_run_id': 'R1'}]
         if name == 'list_cards': return [{'card_id': x} for x in self.cards]
         if name == 'list_candidates': return [self.candidate]
         if name == 'candidate_evidence': return self.evidence
-        if name == 'prior_sources': return self.prior
+        if name == 'common_of_doc': return self.commons
+        if name == 'prior_common_sources': return self.prior
         if name == 'product_brand_evidence': return self.product_evidence
         raise AssertionError(name)
 
     def one(self, name, **p):
         if name == 'lock_card': return self.cards.get(p['CARD_ID'])
-        if name == 'find_benefit': return self.benefits.get((p['CARD_ID'], p['BNFT_CD']))
-        if name == 'get_product_doc': return self.docs.get((p['CARD_ID'], p['DOC_ID']))
+        if name == 'lock_common': return {'card_common_id': p['COMMON_ID']}
+        if name == 'find_common_bnft': return self.common_bnft.get((p['COMMON_ID'], p['BNFT_CD']))
+        if name == 'find_benefit': return self.legacy
         raise AssertionError(name)
 
     def write(self, name, **p):
-        if name == 'insert_product_doc':
-            self.docs[(p['CARD_ID'], p['DOC_ID'])] = {'doc_role_cd': 'BRAND_SERVICE', 'brand_opt_cds': p['BRAND_OPTS'], 'approval_status_cd': 'PENDING'}
+        if name == 'insert_common_bnft':
+            row = dict(card_common_id=p['COMMON_ID'], card_common_bnft_id='C1', bnft_nm=p['BNFT_NM'], bnft_type_cd=p['BNFT_TYPE'],
+                       service_type_cd=p['SERVICE_TYPE'], bnft_rule_txt=p['RULE_TXT'], bnft_limit_txt=p['LIMIT_TXT'],
+                       bnft_valid_from=p['VALID_FROM'], bnft_valid_to_excl=p['VALID_TO'])
+            self.common_bnft[(p['COMMON_ID'], p['BNFT_CD'])] = row
+            return [{'card_common_bnft_id': 'C1'}]
+        if name == 'update_common_bnft':
+            row = next(iter(self.common_bnft.values()))
+            row.update(bnft_nm=p['BNFT_NM'], bnft_rule_txt=p['RULE_TXT'], bnft_limit_txt=p['LIMIT_TXT'])
+            return [{}]
+        if name == 'insert_common_apply':
+            key = (p['COMMON_ID'], p['BNFT_ID'], p['CARD_ID'])
+            if key in self.applies: return []
+            self.applies.add(key)
             return [{'card_id': p['CARD_ID']}]
-        if name == 'insert_benefit':
-            row = {'card_bnft_id': f"B{p['CARD_ID']}", 'bnft_nm': p['BNFT_NM'], 'bnft_type_cd': p['BNFT_TYPE'],
-                   'bnft_origin_cd': 'BRAND_SERVICE', 'bnft_scope_cd': 'BRAND', 'bnft_brand_opt_cds': p['BRAND_OPTS'],
-                   'bnft_cond_expr': p['COND'], 'bnft_valid_from': p['VALID_FROM'], 'bnft_valid_to_excl': p['VALID_TO'],
-                   'rule_list': p['RULES'].obj, 'rule_select_cd': None, 'relation_list': [], 'verification_status_cd': 'PENDING_REVIEW',
-                   'bnft_rule_txt': p['RULE_TXT'], 'bnft_limit_txt': p['LIMIT_TXT']}
-            self.benefits[(p['CARD_ID'], p['BNFT_CD'])] = row
-            return [{'card_bnft_id': row['card_bnft_id']}]
-        if name == 'insert_evidence_link':
-            self.links.add((p['CARD_ID'], p['BNFT_ID'], p['EVIDENCE_ID']))
-            return []
-        if name == 'insert_rule_evidence_link':
-            self.links.add((p['CARD_ID'],p['RULE_KEY'],p['EVIDENCE_ID']))
-            return []
-        if name == 'update_benefit':
-            row = next(r for (card, _), r in self.benefits.items() if card == p['CARD_ID'] and r['card_bnft_id'] == p['BNFT_ID'])
-            row.update(bnft_nm=p['BNFT_NM'],bnft_type_cd=p['BNFT_TYPE'],bnft_cond_expr=p['COND'],
-                       rule_list=p['RULES'].obj,bnft_valid_from=p['VALID_FROM'],bnft_valid_to_excl=p['VALID_TO'],
-                       bnft_rule_txt=p['RULE_TXT'],bnft_limit_txt=p['LIMIT_TXT'])
-            return [{'card_bnft_id': row['card_bnft_id']}]
+        self.card_bnft_writes += 1
         raise AssertionError(name)
 
 
@@ -84,32 +81,46 @@ def fixture():
     return service
 
 
-def test_paths_share_evidence_and_are_idempotent():
+IDS = {'S1': 'valet-identity'}
+
+
+def test_common_benefit_is_stored_once_and_applied_only_to_listed_cards():
     a = fixture()
-    assert a.path_a(1, {'S1':'valet-identity'})[0].status == 'INSERTED'
-    statuses = [r.status for r in a.path_b('R1', {'S1':'valet-identity'})]
-    assert statuses == ['UNCHANGED','INSERTED','REVIEW']
-    assert a.path_a(1, {'S1':'valet-identity'})[0].status == 'UNCHANGED'
-    assert {e[2] for e in a.repo.links} == {'E1'} and len(a.repo.links) == 2
-    assert all(x['verification_status_cd'] == 'PENDING_REVIEW' for x in a.repo.benefits.values())
-    assert all(x['approval_status_cd'] == 'PENDING' for x in a.repo.docs.values())
-    b = fixture()
-    b.path_b('R1', {'S1':'valet-identity'})
-    b.path_a(1, {'S1':'valet-identity'})
-    assert a.repo.benefits == b.repo.benefits and a.repo.links == b.repo.links
+    assert a.register_run('R1', IDS)[0].status == 'INSERTED'
+    assert a.register_run('R1', IDS)[0].status == 'UNCHANGED'
+    assert a.path_a(1, IDS)[0].status == 'INSERTED'
+    assert [r.status for r in a.path_b('R1', IDS)] == ['UNCHANGED', 'INSERTED', 'REVIEW']
+    assert a.path_a(1, IDS)[0].status == 'UNCHANGED'
+    assert a.repo.applies == {(7, 'C1', 1), (7, 'C1', 2)} and len(a.repo.common_bnft) == 1
+    assert a.repo.card_bnft_writes == 0
 
 
-def test_ambiguous_identity_target_and_changed_candidate_are_not_written():
+def test_apply_requires_registered_common_benefit():
     service = fixture()
-    assert service.path_a(1, {})[0].status == 'REVIEW'
-    service.path_a(1, {'S1':'valet-identity'})
+    assert service.path_a(1, IDS)[0].reason == '공통 혜택이 먼저 등록되어야 합니다'
+    assert not service.repo.applies
+
+
+def test_register_needs_identity_single_common_and_matching_grade():
+    service = fixture()
+    assert service.register_run('R1', {})[0].status == 'REVIEW'
+    service.repo.commons = []
+    assert service.register_run('R1', IDS)[0].reason == '문서의 공통서비스가 하나로 확인되지 않습니다'
+    service = fixture()
+    service.repo.commons[0]['service_grade_cd'] = 'WORLD'
+    assert service.register_run('R1', IDS)[0].reason == '후보의 브랜드·등급이 공통서비스와 다릅니다'
+    assert not service.repo.common_bnft
+
+
+def test_changed_candidate_is_not_overwritten_and_unsupported_selection_is_reviewed():
+    service = fixture()
+    service.register_run('R1', IDS)
     service.repo.candidate['stg_normalized_item']['bnft_nm'] = 'changed'
-    assert service.path_a(1, {'S1':'valet-identity'})[0].status == 'CHANGE_REVIEW'
-    assert len(service.repo.benefits) == 1
+    assert service.register_run('R1', IDS)[0].status == 'CHANGE_REVIEW'
+    assert next(iter(service.repo.common_bnft.values()))['bnft_nm'] == '발레'
     ambiguous = fixture()
     ambiguous.repo.candidate['stg_raw_item']['selection_service_txt'] = 'UNSUPPORTED'
-    assert ambiguous.path_a(1, {'S1':'x'})[0].status == 'REVIEW'
-    assert not ambiguous.repo.benefits
+    assert ambiguous.register_run('R1', {'S1': 'x'})[0].reason == '선택서비스 번호가 하나로 확인되지 않습니다'
 
 
 def test_identity_is_family_scoped_and_period_is_end_exclusive():
@@ -118,25 +129,27 @@ def test_identity_is_family_scoped_and_period_is_end_exclusive():
     assert period('2026년 1월 1일 ~ 12월 31일') == (date(2026,1,1), date(2027,1,1))
 
 
-def test_revision_updates_only_unmodified_pending_source():
+def test_original_visa_code_is_reproduced():
+    assert benefit_code('HANA_VS002', 'VISA_SIGNATURE_CONCIERGE') == (
+        'BRAND_7F12FC9CF2DC6811E91AE8A18EB1B6CE1379238A4FA2599FB407442C5F046BB9')
+
+
+def test_revision_updates_only_unmodified_prior_version():
     service = fixture()
-    service.path_a(1, {'S1':'valet-identity'})
+    service.register_run('R1', IDS)
     old = deepcopy(service.repo.candidate)
     service.repo.prior = [{'doc_family_cd':old['doc_family_cd'], 'doc_version_no':1, 'stg_raw_item':old['stg_raw_item'],
                            'stg_normalized_item':old['stg_normalized_item']}]
     service.repo.candidate['card_doc_id'] = 'D2'
     service.repo.candidate['doc_version_no'] = 2
-    service.repo.evidence[0]['evidence_id'] = 'E2'
     service.repo.candidate['stg_normalized_item']['bnft_nm'] = '발레 변경'
-    assert service.path_a(1, {'S1':'valet-identity'})[0].status == 'UPDATED'
-    assert next(iter(service.repo.benefits.values()))['bnft_nm'] == '발레 변경'
-    assert {key[2] for key in service.repo.links} == {'E1','E2'}
-    assert len(service.repo.docs) == 2
+    assert service.register_run('R1', IDS)[0].status == 'UPDATED'
+    assert next(iter(service.repo.common_bnft.values()))['bnft_nm'] == '발레 변경'
     new = deepcopy(service.repo.candidate)
     service.repo.prior = [{'doc_family_cd':new['doc_family_cd'], 'doc_version_no':2,
                            'stg_raw_item':new['stg_raw_item'], 'stg_normalized_item':new['stg_normalized_item']}]
     service.repo.candidate = old
-    assert service.path_a(1, {'S1':'valet-identity'})[0].status == 'CHANGE_REVIEW'
+    assert service.register_run('R1', IDS)[0].status == 'CHANGE_REVIEW'
 
 
 def with_limit(service):
@@ -153,46 +166,32 @@ def with_limit(service):
     return raw, norm
 
 
-def test_limit_is_stored_as_quoted_text_on_benefit_and_is_idempotent():
+def test_limit_and_rule_are_quoted_text_and_evidence_is_returned():
     service = fixture()
     with_limit(service)
-    assert service.path_a(1, {'S1':'id'})[0].status == 'INSERTED'
-    assert service.path_a(1, {'S1':'id'})[0].status == 'UNCHANGED'
-    row = next(iter(service.repo.benefits.values()))
+    decision = service.register_run('R1', IDS)[0]
+    assert decision.status == 'INSERTED' and set(decision.evidence_ids) == {'E1', 'E2', 'E3'}
+    assert service.register_run('R1', IDS)[0].status == 'UNCHANGED'
+    row = next(iter(service.repo.common_bnft.values()))
     assert (row['bnft_rule_txt'], row['bnft_limit_txt']) == ('발레 무료 제공', '월 2회')
-    assert 'pool_refs' not in row['rule_list'][0]
-    # 한도 근거는 혜택에, 규칙 근거는 규칙에 연결된다. 풀 대상 연결은 없다.
-    assert (1,'B1','E2') in service.repo.links
-    assert (1,'R','E3') in service.repo.links and (1,'B1','E3') not in service.repo.links
+
+
+def test_condition_quote_is_preserved_in_limit_text():
+    raw = {'evidence': [{'supports': 'BNFT', 'quote_txt': '발렛 제공'}]}
+    norm = {'bnft_cond_expr': {'branches': [{'atoms': [{'cond_raw_txt': '지난달\n50만원 이상'}]}]}}
+    assert common_texts(raw, norm) == ('발렛 제공', '지난달 50만원 이상')
 
 
 def test_limit_without_located_quote_is_reviewed():
     service = fixture()
-    raw, _ = with_limit(service)
+    with_limit(service)
     service.repo.evidence = [e for e in service.repo.evidence if e['evidence_id'] != 'E2']
-    assert service.path_a(1, {'S1':'id'})[0].status == 'REVIEW'
-    assert not service.repo.benefits
+    assert service.register_run('R1', IDS)[0].status == 'REVIEW'
+    assert not service.repo.common_bnft
     service = fixture()
     raw, _ = with_limit(service)
     raw['evidence'][1]['support_key'] = 'OTHER'
-    assert service.path_a(1, {'S1':'id'})[0].status == 'REVIEW'
-
-
-def test_limit_text_change_goes_through_revision_rule():
-    service = fixture()
-    raw, _ = with_limit(service)
-    service.path_a(1, {'S1':'id'})
-    old = deepcopy(service.repo.candidate)
-    service.repo.prior = [{'doc_family_cd':old['doc_family_cd'], 'doc_version_no':1, 'stg_raw_item':old['stg_raw_item'],
-                           'stg_normalized_item':old['stg_normalized_item']}]
-    # 같은 판의 인용만 달라지면 자동 갱신하지 않는다.
-    raw['evidence'][1]['quote_txt'] = '월 3회'
-    service.repo.evidence[1].update(quote_txt='월 3회', source_txt='월 3회')
-    assert service.path_a(1, {'S1':'id'})[0].status == 'CHANGE_REVIEW'
-    assert next(iter(service.repo.benefits.values()))['bnft_limit_txt'] == '월 2회'
-    service.repo.candidate['doc_version_no'] = 2
-    assert service.path_a(1, {'S1':'id'})[0].status == 'UPDATED'
-    assert next(iter(service.repo.benefits.values()))['bnft_limit_txt'] == '월 3회'
+    assert service.register_run('R1', IDS)[0].status == 'REVIEW'
 
 
 def test_quote_text_only_joins_source_quotes_without_duplicates():
@@ -208,8 +207,8 @@ def test_same_quote_for_different_targets_is_reviewed():
     norm = service.repo.candidate['stg_normalized_item']
     norm['rule_list'] = [{'rule_key':'R','rule_status_cd':'DRAFT','pool_refs':[]}]
     raw['evidence'].append({'supports':'RULE','support_key':'R','quote_txt':raw['evidence'][0]['quote_txt']})
-    assert service.path_a(1, {'S1':'id'})[0].status == 'REVIEW'
-    assert not service.repo.benefits
+    assert service.register_run('R1', IDS)[0].status == 'REVIEW'
+    assert not service.repo.common_bnft
 
 
 def test_explicit_grade_common_requires_product_document_evidence():
@@ -220,7 +219,23 @@ def test_explicit_grade_common_requires_product_document_evidence():
                applicable_cards=[],validity_period_txt=None,
                evidence=[{'supports':'APPLICABILITY','quote_txt':quote}])
     service.repo.evidence=[dict(evidence_id='E1',quote_txt=quote,source_txt=quote,start_pos=1,end_pos=len(quote),approval_status_cd='PENDING')]
+    assert service.register_run('R1',{'S1':'identity'})[0].status=='INSERTED'
     assert service.path_a(1,{'S1':'identity'})[0].status=='REVIEW'
     proof='Visa : Visa Signature 02 유형'
     service.repo.product_evidence=[dict(doc_title='JADE Classic 상품설명서',quote_txt=proof,source_txt=proof,approval_status_cd='PENDING')]
     assert service.path_a(1,{'S1':'identity'})[0].status=='INSERTED'
+
+
+def test_link_doc_rejects_other_document_types():
+    service = fixture()
+    service.repo.one = lambda name, **p: {'doc_type_cd': 'PRODUCT_GUIDE'}
+    with pytest.raises(ValueError):
+        service.link_doc(7, 'D1')
+
+
+def test_existing_card_benefit_is_reported_not_changed():
+    service = fixture()
+    service.register_run('R1', IDS)
+    service.repo.legacy = {'card_bnft_id': 'OLD'}
+    decision = service.path_a(1, IDS)[0]
+    assert decision.card_bnft_id == 'OLD' and service.repo.card_bnft_writes == 0

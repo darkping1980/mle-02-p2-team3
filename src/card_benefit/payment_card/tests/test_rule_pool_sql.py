@@ -29,7 +29,7 @@ def test_runtime_code_has_no_pool_table_reference():
     files += [base / 'db_pipeline_origin_search' / name for name in ('card_graphrag.py', 'neo4j_search.py', 'graph_questions.cypher')]
     for path in files:
         text = path.read_text(encoding='utf-8')
-        assert not re.search(r'pool_id|card_limit_pool|card_bnft_rule_pool|df_consumes|df_has_pool|\[.pools.\]', text), path.name
+        assert not re.search(r'pool_id|card_limit_pool|card_bnft_rule_pool|dp_consumes|dp_has_pool|\[.pools.\]', text), path.name
 
 
 def test_dbml_matches_text_structure():

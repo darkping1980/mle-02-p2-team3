@@ -2,7 +2,8 @@
 import re
 
 from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag, verify_view
-from card_benefit.payment_card.db_pipeline_origin_search.neo4j_search import NAMESPACE, QUERIES, connect
+from card_benefit.payment_card.db_pipeline_origin_search.benefit_search_service import MODE_LABELS
+from card_benefit.payment_card.db_pipeline_origin_search.neo4j_search import GRAPH_PREFIX, QUERIES, connect
 import streamlit as st
 
 EXAMPLES = [
@@ -22,9 +23,12 @@ card_graphrag.configure_card_logging()      # 재실행마다 호출해도 handl
 
 
 @st.cache_resource(show_spinner=False)
-def get_pipeline():
-    """재실행 사이에 Neo4j 드라이버와 그래프를 재사용한다. 예외는 캐시되지 않는다."""
-    return card_graphrag.CardGraphRAG(connect(), *card_graphrag.create_llms())
+def get_pipeline(search_mode: str = "A"):
+    """재실행 사이에 모드별 드라이버와 그래프를 재사용한다. 예외는 캐시되지 않는다."""
+    search = connect()
+    benefit_search = None if search_mode == "A" else card_graphrag.create_benefit_search(search)
+    return card_graphrag.CardGraphRAG(search, *card_graphrag.create_llms(), benefit_search=benefit_search,
+                                      search_mode=search_mode)
 
 
 def plain(text: str) -> str:
@@ -95,9 +99,16 @@ def show_outcome(outcome: dict) -> None:
         st.dataframe(outcome["llm_calls"], hide_index=True)
         total = sum(call["cost_usd"] or 0 for call in outcome["llm_calls"])
         st.caption(f"추정 비용 합계 USD {total:.6f}")
+        if outcome.get("candidate_search"):
+            st.markdown("**후보 검색 결과** (유사도는 후보 선정에만 사용)")
+            st.dataframe(outcome["candidate_search"]["hits"], hide_index=True)
+            st.caption(f"엔진 {outcome['candidate_search'].get('engines')} · {outcome['candidate_search']['elapsed_ms']:.0f} ms")
+        if outcome.get("retrieval_trace"):
+            st.markdown("**혜택별 상세 조회 엔진**")
+            st.dataframe(outcome["retrieval_trace"], hide_index=True)
         st.markdown("**검색 조건**")
         st.json(outcome.get("search_parameters") or {})
-        st.markdown(f"**실행한 Cypher** (namespace `{NAMESPACE}`)")
+        st.markdown(f"**실행한 Cypher** (라벨 접두사 `{GRAPH_PREFIX}`)")
         st.write(outcome.get("statements") or [])
         st.markdown("**LLM에 전달한 검색 결과**")
         st.json(outcome.get("context") or {}, expanded=False)
@@ -111,12 +122,14 @@ def show_outcome(outcome: dict) -> None:
 
 st.set_page_config(page_title="카드 혜택 GraphRAG", layout="wide")
 st.title("카드 혜택 GraphRAG — 개발 테스트", anchor=False)
-st.warning("ONE PICK STYLE 개발용 DRAFT·미승인 데이터입니다. 실제 카드 혜택으로 사용하지 마세요.")
+st.warning("개발용 DRAFT·미승인 데이터입니다. 실제 카드 혜택으로 사용하지 마세요.")
 
 if st.radio("실행 모드", ("자동 실행", "개발 검증"), horizontal=True, key="run_mode") == "개발 검증":
     verify_view.render(get_pipeline, show_outcome)
     st.stop()
 
+search_mode = st.radio("검색 모드", list(MODE_LABELS), format_func=lambda mode: f"{mode}: {MODE_LABELS[mode]}",
+                       horizontal=True, key="search_mode")
 st.pills("예시 질문", EXAMPLES, key="example", on_change=use_example)
 with st.form("question_form"):
     question = st.text_area("질문", key="question", max_chars=card_graphrag.MAX_QUESTION_CHARS, height=80,
@@ -129,13 +142,14 @@ if submitted:
     last = st.session_state.get("outcome")
     if not question:
         st.warning("질문을 입력하세요.")
-    elif last and last["question"] == question and not last.get("error") and not force:
+    elif (last and last["question"] == question and last.get("search_mode") == search_mode
+          and not last.get("error") and not force):
         st.info("같은 질문이라 API를 호출하지 않고 이전 결과를 표시합니다.")
     else:
         try:
-            pipeline = get_pipeline()
-            with st.spinner("질문 해석, Neo4j 조회, 답변 생성을 실행하는 중입니다..."):
-                st.session_state.outcome = pipeline.run(question)
+            pipeline = get_pipeline(search_mode)
+            with st.spinner("질문 해석, 혜택 조회, 답변 생성을 실행하는 중입니다..."):
+                st.session_state.outcome = {**pipeline.run(question), "search_mode": search_mode}
         except Exception:
             st.session_state.outcome = None
             st.error("실행 준비에 실패했습니다. Neo4j 연결 설정을 확인하세요.")

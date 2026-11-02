@@ -4,7 +4,7 @@ import os
 import re
 import unittest
 
-from card_benefit.payment_card.db_pipeline.neo4j_dry_run import NS
+from card_benefit.payment_card.db_pipeline.neo4j_dry_run import PREFIX
 from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag, neo4j_search
 
 
@@ -33,14 +33,15 @@ class FakeDriver:
 class SearchTests(unittest.TestCase):
     def test_queries_are_scoped_and_parameterized(self):
         for query in neo4j_search.QUERIES.values():
-            self.assertIn("$ns", query)
+            self.assertNotIn("namespace", query)
+            self.assertIn("dp_", query)
             for word in ("DELETE ", "CREATE ", "MERGE ", " SET "):
                 self.assertNotIn(word, query.upper())
         self.assertIn("$keyword", neo4j_search.LIST_QUERY)
 
     def test_queries_come_from_named_cypher_file(self):
-        names = {"catalog", "list_benefits", "benefit_context", "benefit_rules", "benefit_conditions",
-                 "benefit_limits", "benefit_evidence"}
+        names = {"catalog", "common_catalog", "list_benefits", "candidate_relations", "benefit_context", "benefit_rules",
+                 "benefit_conditions", "benefit_limits", "benefit_evidence", "common_benefit_evidence", *neo4j_search.HOP_QUERIES}
         self.assertEqual(set(neo4j_search.MAPPERS), {f"graph_questions.{name}" for name in names})
         self.assertEqual(set(neo4j_search.QUERIES.values()), set(neo4j_search.MAPPERS.values()))
 
@@ -49,18 +50,30 @@ class SearchTests(unittest.TestCase):
             self.assertNotRegex(query.upper(), r"\b(CREATE|MERGE|DELETE|DETACH|SET|REMOVE|DROP)\b")
 
     def test_evidence_query_reads_rule_path(self):
-        self.assertIn("df_has_rule", neo4j_search.EVIDENCE_QUERY)
+        self.assertIn("dp_has_rule", neo4j_search.EVIDENCE_QUERY)
         self.assertIn("+ rules AS owner", neo4j_search.EVIDENCE_QUERY)
 
-    def test_every_query_uses_df_names_only(self):
+    def test_every_query_uses_dp_names_only(self):
         for query in neo4j_search.MAPPERS.values():
-            self.assertNotRegex(query, r"A8|pf_")
+            self.assertNotRegex(query, r"A8|fp_|df_")
             names = set(re.findall(r"[(\[]\w*:(\w+)", query))
             self.assertTrue(names)
-            self.assertTrue(all(name.startswith("df_") for name in names), names)
+            self.assertTrue(all(name.startswith("dp_") for name in names), names)
 
-    def test_search_and_loader_share_one_namespace(self):
-        self.assertEqual(neo4j_search.NAMESPACE, NS)
+    def test_search_and_loader_share_one_prefix(self):
+        self.assertEqual(neo4j_search.GRAPH_PREFIX, PREFIX)
+
+    def test_common_key_uses_common_evidence_path(self):
+        key = '["card_common_bnft",1,"C1"]'
+        driver = FakeDriver([{"card": None, "card_sources": []}])
+        detail = neo4j_search.Neo4jSearch(driver).get_detail(key, ("evidence",))
+        self.assertEqual([query for query, _ in driver.tx.calls], [neo4j_search.CONTEXT_QUERY, neo4j_search.COMMON_EVIDENCE_QUERY])
+        self.assertEqual(neo4j_search.source(detail["context"]["card"]), {"product_nm": "적용 카드 미확인"})
+        self.assertEqual([item["statement_id"] for item in neo4j_search.detail_plan([key], ("evidence",))], ["card.context", "card.common_evidence"])
+
+    def test_common_evidence_requires_same_as_relation(self):
+        self.assertIn("dp_same_as", neo4j_search.COMMON_EVIDENCE_QUERY)
+        self.assertNotIn("dp_card_extr_stg", neo4j_search.COMMON_EVIDENCE_QUERY)
 
     def test_condition_order_does_not_depend_on_label_names(self):
         query = neo4j_search.CONDITION_QUERY
@@ -79,7 +92,7 @@ class SearchTests(unittest.TestCase):
             rows = neo4j_search.Neo4jSearch(driver).list_benefits("교통")
         self.assertEqual(rows, [{"a": 1}])
         self.assertEqual(driver.options[0]["default_access_mode"], neo4j_search.READ_ACCESS)
-        self.assertEqual(driver.tx.calls[0][1], {"ns": neo4j_search.NAMESPACE, "keyword": "교통"})
+        self.assertEqual(driver.tx.calls[0][1], {"keyword": "교통"})
         self.assertIn("card.list", logs.output[0])
         self.assertIn("rows=1", logs.output[0])
         self.assertNotIn("MATCH (", logs.output[0].split("path=")[0])
@@ -87,10 +100,10 @@ class SearchTests(unittest.TestCase):
     def test_debug_level_shows_cypher_text(self):
         with self.assertLogs(neo4j_search.CARD_LOGGER_NAME, "DEBUG") as logs:
             neo4j_search.Neo4jSearch(FakeDriver([])).list_benefits("교통")
-        self.assertIn("MATCH (c:df_card_product", " ".join(logs.output))
+        self.assertIn("MATCH (b:dp_node", " ".join(logs.output))
 
     def test_detail_log_shows_cypher_and_records_without_debug_level(self):
-        driver = FakeDriver([{"benefit": {"limit_text": "MONTH", "source_json": '{"secret_like": 1}'}, "labels": ["df_card_bnft"]}])
+        driver = FakeDriver([{"benefit": {"limit_text": "MONTH", "source_json": '{"secret_like": 1}'}, "labels": ["dp_card_bnft"]}])
         token = neo4j_search.DETAIL_LOG.set(True)
         try:
             with self.assertLogs(neo4j_search.CARD_LOGGER_NAME, "INFO") as logs:
@@ -98,7 +111,7 @@ class SearchTests(unittest.TestCase):
         finally:
             neo4j_search.DETAIL_LOG.reset(token)
         text = "\n".join(logs.output)
-        for word in ("QUERY [", "MATCH (c:df_card_product", "PARAMS", "RESULT DATA [", "benefit.limit_text", "MONTH"):
+        for word in ("QUERY [", "MATCH (b:dp_node", "PARAMS", "RESULT DATA [", "benefit.limit_text", "MONTH"):
             self.assertIn(word, text)
         self.assertNotIn("source_json", text)
 
@@ -111,11 +124,9 @@ class SearchTests(unittest.TestCase):
             neo4j_search.DETAIL_LOG.reset(token)
         block = next(line for line in logs.output if "card.context" in line and "QUERY" in line)
         cypher = block.split("=" * 72)[1]
-        self.assertNotIn("$ns", cypher)
         self.assertNotIn("$key", cypher)
         self.assertNotIn(":param", cypher)
-        self.assertIn(f"namespace:'{neo4j_search.NAMESPACE}'", cypher)
-        self.assertIn("PARAMS {'ns':", block)
+        self.assertIn("PARAMS {'key':", block)
 
     def test_driver_still_receives_bound_query_when_detail_log_is_on(self):
         driver = FakeDriver([])
@@ -125,8 +136,8 @@ class SearchTests(unittest.TestCase):
                 neo4j_search.Neo4jSearch(driver).list_benefits("교통")
         finally:
             neo4j_search.DETAIL_LOG.reset(token)
-        self.assertEqual(driver.tx.calls, [(neo4j_search.LIST_QUERY, {"ns": neo4j_search.NAMESPACE, "keyword": "교통"})])
-        self.assertIn("$ns", driver.tx.calls[0][0])
+        self.assertEqual(driver.tx.calls, [(neo4j_search.LIST_QUERY, {"keyword": "교통"})])
+        self.assertIn("$keyword", driver.tx.calls[0][0])
 
     def test_info_level_has_no_cypher_text_or_records(self):
         with self.assertLogs(neo4j_search.CARD_LOGGER_NAME, "INFO") as logs:
@@ -145,13 +156,11 @@ class SearchTests(unittest.TestCase):
 
     def test_browser_cypher_has_values_and_no_parameters(self):
         item = neo4j_search.statement_plan("card.limits", key="it's")
-        self.assertNotIn("$ns", item["browser_cypher"])
         self.assertNotIn("$key", item["browser_cypher"])
-        self.assertIn(f"namespace:'{neo4j_search.NAMESPACE}'", item["browser_cypher"])
         self.assertIn("it\\'s", item["browser_cypher"])
 
     def test_flatten_record_shows_source_values_and_hides_internal(self):
-        row = {"evidence": {"evidence_id": "E", "key": "k", "namespace": "n",
+        row = {"evidence": {"evidence_id": "E", "key": "k",
                             "source_json": '{"quote_txt": "원문"}'}, "labels": ["A", "B"], "rule_key": None}
         self.assertEqual(neo4j_search.flatten_record(row), {"evidence.evidence_id": "E", "evidence.quote_txt": "원문", "labels": "A, B", "rule_key": None})
 
@@ -190,9 +199,30 @@ class LiveNeo4jTests(unittest.TestCase):
             bound = self.search._query(item["cypher"], key=row["key"])
             self.assertEqual(manual, bound, item["statement_id"])
 
-    def test_four_benefits(self):
-        self.assertEqual(len(self.catalog), 4)
-        self.assertEqual({row["status"] for row in self.catalog.values()}, {"PENDING_REVIEW"})
+    def test_catalog_has_card_and_common_benefits_without_same_duplicate(self):
+        self.assertEqual(len(self.catalog), 5)
+        self.assertEqual(self.catalog["Visa 컨시어지"]["card"], "JADE Classic")
+        self.assertEqual({row["status"] for name, row in self.catalog.items() if name != "Visa 컨시어지"}, {"PENDING_REVIEW"})
+
+    def test_hops_move_real_relationships(self):
+        hop1 = self.search.hop("hop1_card_benefits", card_nm="ONE PICK STYLE")
+        hop2 = self.search.hop("hop2_card_rules", card_nm="ONE PICK STYLE")
+        hop3 = self.search.hop("hop3_card_targets", card_nm="ONE PICK STYLE")
+        self.assertEqual((len(hop1), len(hop2), len(hop3)), (4, 6, 34))
+        self.assertEqual(({row["hops"] for row in hop1}, {row["hops"] for row in hop2}, {row["hops"] for row in hop3}), ({1}, {2}, {3}))
+        common2 = self.search.hop("hop2_card_common", card_nm="JADE Classic")
+        common3 = self.search.hop("hop3_common_docs", card_nm="JADE Classic")
+        self.assertEqual([(row["common"], row["hops"]) for row in common2], [("Visa Signature", 2)])
+        self.assertEqual([(row["doc_id"], row["hops"]) for row in common3], [("20261102_000004", 3)])
+        self.assertEqual({row["card"] for row in self.search.hop("hop3_target_cards", target_nm="GS25")}, {"ONE PICK STYLE 하나 체크카드"})
+
+    def test_common_benefit_has_no_card_without_apply(self):
+        self.assertEqual(self.search.hop("hop2_card_common", card_nm="ONE PICK STYLE"), [])
+
+    def test_common_detail_reads_evidence_through_same_as_only(self):
+        detail = self.detail("Visa 컨시어지")
+        self.assertEqual(len(detail["evidence"]), 3)
+        self.assertEqual(detail["context"]["common"]["common_nm"], "Visa Signature")
 
     def test_transit_condition_keeps_or_branches_and_not(self):
         groups = card_graphrag.condition_groups(self.detail("대중교통")["conditions"])
@@ -205,11 +235,9 @@ class LiveNeo4jTests(unittest.TestCase):
 
     def test_one_pick_and_style_have_different_limits(self):
         def limits(word):
-            return sorted((item["pool"]["period"], item["pool"]["unit"], item["pool"]["value"])
-                          for item in self.detail(word)["limits"])
-        self.assertNotEqual(limits("ONE PICK"), limits("STYLE"))
-        self.assertIn(("MONTH", "COUNT", 30), limits("ONE PICK"))
-        self.assertIn(("MONTH", "COUNT", 10), limits("STYLE"))
+            return self.detail(word)["limits"][0]["limit_text"]
+        self.assertIn("월 30회", limits("ONE PICK"))
+        self.assertIn("월 10회", limits("STYLE"))
 
     def test_evidence_links_to_document_and_is_pending(self):
         detail = self.detail("놀이공원")
