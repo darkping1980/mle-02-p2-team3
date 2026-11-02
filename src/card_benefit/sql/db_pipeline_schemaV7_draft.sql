@@ -623,7 +623,6 @@ COMMENT ON COLUMN db_pipeline.card_evidence_link.evidence_id IS '원문 근거 �
 -- ---------------------------------------------------------------------------
 CREATE TABLE db_pipeline.card_doc (
     card_doc_id character varying(20) DEFAULT db_pipeline.fn_get_biz_id('card_doc'::text) NOT NULL,
-    card_id bigint,
     doc_cd character varying(50) NOT NULL,
     doc_family_cd character varying(100),
     doc_type_cd character varying(20) DEFAULT 'PRODUCT_GUIDE'::character varying NOT NULL,
@@ -655,7 +654,6 @@ CREATE TABLE db_pipeline.card_doc (
 
 COMMENT ON TABLE db_pipeline.card_doc IS '원천 문서';
 COMMENT ON COLUMN db_pipeline.card_doc.card_doc_id IS '문서 아이디';
-COMMENT ON COLUMN db_pipeline.card_doc.card_id IS '카드 아이디';
 COMMENT ON COLUMN db_pipeline.card_doc.doc_cd IS '문서 코드';
 COMMENT ON COLUMN db_pipeline.card_doc.doc_type_cd IS '문서 유형';
 COMMENT ON COLUMN db_pipeline.card_doc.doc_family_cd IS '문서 계열 코드';
@@ -1408,10 +1406,6 @@ SELECT 'product_doc_role_type_mismatch', x.card_id || '/' || x.card_doc_id
 FROM db_pipeline.card_product_doc x
 JOIN db_pipeline.card_doc d ON d.card_doc_id = x.card_doc_id
 WHERE x.doc_role_cd = 'BRAND_SERVICE' AND d.doc_type_cd <> 'BRAND_SERVICE'
-UNION ALL
-SELECT 'shared_doc_bound_to_card', d.card_doc_id
-FROM db_pipeline.card_doc d
-WHERE d.card_id IS NOT NULL AND d.doc_type_cd IN ('BRAND_SERVICE', 'TERMS')
 UNION ALL
 SELECT 'brand_doc_option_conflict', z.card_doc_id
 FROM (SELECT x.card_doc_id
