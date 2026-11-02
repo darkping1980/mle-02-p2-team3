@@ -406,7 +406,8 @@ def test_enforced_conclusion_blocks_positive_answer():
                           "benefit_name": "대중교통", "verification": "RAW_MATCH"}]}
     fixed, warnings = enforce_exclusions(answer, [{"benefit_id": "T", "name": "대중교통", "terms": ["고속버스"], "verified_by": "postgresql"}],
                                          [{"evidence_id": "E9", "quote": "시외버스, 고속버스 제외"}])
-    assert "받을 수 없습니다" in fixed["conclusion"] and warnings
+    assert "고속버스는" in fixed["answer_text"] and "받을 수 없습니다" in fixed["conclusion"] and warnings
+    assert fixed["answer_source"] == "program_exclusion"
     assert all("5% 캐시백" not in point["text"] for point in fixed["points"])
     assert fixed["points"][0]["evidence_ids"] == ["E9"] and fixed["points"][0]["origin"] == "system"
 

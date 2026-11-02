@@ -98,8 +98,9 @@ def point(text, ids=("E1",), benefit_id=None):
     return AnswerPoint(text=text, evidence_ids=list(ids), benefit_id=benefit_id)
 
 
-def card_answer(points=(), conclusion="결론입니다.", uncertain=(), reason=None):
-    return CardAnswer(conclusion=conclusion, points=list(points), uncertain=list(uncertain), cannot_answer_reason=reason)
+def card_answer(points=(), conclusion="결론입니다.", uncertain=(), reason=None, answer_text=None):
+    return CardAnswer(answer_text=answer_text if answer_text is not None else conclusion, conclusion=conclusion, points=list(points),
+                      uncertain=list(uncertain), cannot_answer_reason=reason)
 
 
 def answer_llm(text="월 1000원 한도입니다.", ids=("E1",), uncertain=(), reason=None):
@@ -254,20 +255,20 @@ class GraphTests(unittest.TestCase):
     def test_unresolved_found_without_llm(self):
         state, _, _ = run()
         text = " ".join(state["unresolved"])
-        for word in ("DRAFT", "NOT"):
+        for word in ("개발용", "제외 조건"):
             self.assertIn(word, text)
 
     def test_two_rules_mark_nested_selection_unresolved(self):
         data = detail()
         data["rules"] = data["rules"] + [{"rule": {"rule_key": "second"}, "targets": []}]
         data["rules"][0]["rule"]["rule_key"] = "first"
-        self.assertTrue(any("first, second" in text for text in card_graphrag.find_unresolved([data])))
+        self.assertTrue(any("금액 구간" in text for text in card_graphrag.find_unresolved([data])))
 
     def test_limit_intent_keeps_conditions_for_unresolved_items(self):
         search = FakeSearch()
         state, _, _ = run(search, interpret_llm("BENEFIT_LIMIT"))
         self.assertIn("conditions", search.calls[1][1])
-        self.assertTrue(any("NOT" in text for text in state["unresolved"]))
+        self.assertTrue(any("제외 조건" in text for text in state["unresolved"]))
 
     def test_rule_evidence_merges_into_benefit_evidence(self):
         rows = [evidence_row("E1", "BNFT"), {**evidence_row("E1", "RULE"), "rule_key": "transit_rate"}]
@@ -737,7 +738,7 @@ class CreateLlmTests(unittest.TestCase):
             parsed = ({"intent": "BENEFIT_DETAIL", "benefit_ids": [BENEFIT_ID], "ambiguity": None} if len(requests) == 1 else
                       {"conclusion": "월 1000원입니다.", "points": [{"text": "월 1000원 한도입니다.", "evidence_ids": ["E1"],
                                                                  "benefit_id": BENEFIT_ID}],
-                       "uncertain": [], "cannot_answer_reason": None})
+                       "answer_text": "", "uncertain": [], "cannot_answer_reason": None})
             return httpx.Response(200, json={
                 "id": "x", "object": "chat.completion", "created": 1, "model": "gpt-6-luna-snapshot",
                 "choices": [{"index": 0, "finish_reason": "stop",

@@ -17,6 +17,10 @@ STATUS_LABELS = {"ANSWERED": "답변", "PARTIAL": "일부 답변 (검증 실패 
                  "NOT_ANSWERABLE": "답변 불가", "ERROR": "실행 오류"}
 VERIFICATION_LABELS = {"RAW_MATCH": "값이 인용 원문과 일치", "STRUCTURED_ONLY": "값이 구조화 데이터와 일치, 인용 원문에서는 미확인",
                        "CALCULATED": "인용 원문 값으로 계산한 차이", "NOT_CHECKED": "값이 없는 문장, 내용 일치 미검사"}
+APPROVAL_LABELS = {"PENDING": "검토 대기", "APPROVED": "승인", "REJECTED": "반려"}
+SOURCE_LABELS = {"llm": "LLM이 작성한 문장을 그대로 표시", "validated_sentences": "LLM 문장이 검증을 통과하지 못해 근거 확인 문장을 표시",
+                 "program_exclusion": "제외 대상이라 프로그램 고정 문구로 표시", "none": "답변 문장 없음"}
+NODE_LABELS = {"interpret": "질문 해석", "answer": "답변 생성"}
 _MARKDOWN_SPECIAL = re.compile(r"([\\`*_{}\[\]<>()#+\-.!|~$:])")
 
 card_graphrag.configure_card_logging()      # 재실행마다 호출해도 handler는 공통 함수가 한 번만 붙인다.
@@ -44,8 +48,32 @@ def use_example() -> None:
 
 def show_evidence(item: dict) -> None:
     """근거 한 건을 페이지·상태·ID와 원문 그대로 표시한다."""
-    st.markdown(f"**{item['page_no']}쪽** · {item['approval_status']} · `{item['evidence_id']}`")
+    status = APPROVAL_LABELS.get(item["approval_status"], item["approval_status"])
+    st.markdown(f"**{item['page_no']}쪽** · {status} · `{item['evidence_id']}`")
     st.text(item["quote"])
+
+
+def show_generation(outcome: dict) -> None:
+    """이번 답변의 API 호출과 재사용 여부를 표시한다."""
+    calls = outcome.get("llm_calls") or []
+    lines = []
+    if outcome.get("reused"):
+        lines.append("이번 실행: API 미호출. 이전 결과를 화면에 다시 표시했습니다. 아래는 그때의 호출 기록입니다.")
+    for call in calls:
+        name = NODE_LABELS.get(call["node"], call["node"])
+        if call["input_tokens"] is None:
+            lines.append(f"{name}: {call['model']} 호출 실패 또는 사용량 없음")
+            continue
+        lines.append(f"{name}: {call['response_model'] or call['model']} 실제 호출 · 입력 {call['input_tokens']:,}토큰"
+                     f"(OpenAI 프롬프트 캐시 적중 {call['cached_tokens'] or 0:,}) · 출력 {call['output_tokens']:,}토큰 · "
+                     f"{(call['elapsed_ms'] or 0) / 1000:.1f}초")
+    if not calls:
+        lines.append("LLM 미호출: 호출 전에 종료된 경로입니다.")
+    source = (outcome.get("answer") or {}).get("answer_source", "none")
+    lines.append(f"답변 문장: {SOURCE_LABELS.get(source, source)} · 다른 모델로 전환 없음 · 재시도 0회")
+    with st.expander("답변 생성 정보 (API 호출·캐시)"):
+        for line in lines:
+            st.text(line)
 
 
 def show_outcome(outcome: dict) -> None:
@@ -62,9 +90,14 @@ def show_outcome(outcome: dict) -> None:
     ambiguity = (outcome.get("search_parameters") or {}).get("ambiguity")
     if ambiguity and answer["points"]:
         st.info("질문에서 불명확한 점: " + plain(ambiguity))
-    if answer["conclusion"]:
+    if answer.get("answer_text"):
+        st.markdown(plain(answer["answer_text"]))
+    elif answer["conclusion"]:
         st.markdown(f"**{plain(answer['conclusion'])}**")
+    show_generation(outcome)
     names = list(dict.fromkeys(point["benefit_name"] for point in answer["points"]))
+    if names:
+        st.subheader("근거로 확인한 내용", anchor=False)
     for name in names:
         if len(names) > 1 or name:
             st.markdown(f"**{plain(name or '혜택 공통')}**")
@@ -75,7 +108,7 @@ def show_outcome(outcome: dict) -> None:
                        + f" · {VERIFICATION_LABELS[point['verification']]}{origin}")
     unresolved = [*answer["uncertain"], *(outcome.get("unresolved") or [])]
     if unresolved:
-        st.subheader("미확정 사항", anchor=False)
+        st.subheader("확인이 필요한 사항", anchor=False)
         for text in dict.fromkeys(unresolved):
             st.markdown("- " + plain(text))
     cited = {item for point in answer["points"] for item in point["evidence_ids"]}
@@ -122,7 +155,7 @@ def show_outcome(outcome: dict) -> None:
 
 st.set_page_config(page_title="카드 혜택 GraphRAG", layout="wide")
 st.title("카드 혜택 GraphRAG — 개발 테스트", anchor=False)
-st.warning("개발용 DRAFT·미승인 데이터입니다. 실제 카드 혜택으로 사용하지 마세요.")
+st.warning("개발용 미승인 자료입니다. 실제 카드 혜택으로 사용하지 마세요.")
 
 if st.radio("실행 모드", ("자동 실행", "개발 검증"), horizontal=True, key="run_mode") == "개발 검증":
     verify_view.render(get_pipeline, show_outcome)
@@ -145,6 +178,7 @@ if submitted:
     elif (last and last["question"] == question and last.get("search_mode") == search_mode
           and not last.get("error") and not force):
         st.info("같은 질문이라 API를 호출하지 않고 이전 결과를 표시합니다.")
+        st.session_state.outcome = {**last, "reused": True}
     else:
         try:
             pipeline = get_pipeline(search_mode)

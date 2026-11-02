@@ -56,8 +56,8 @@ SECTIONS_BY_INTENT = {
 # 한도 질문에는 혜택·한도 근거만 전달하고 정책 공통 근거는 뺀다.
 EVIDENCE_SUBJECTS_BY_INTENT = {"BENEFIT_LIMIT": {"BNFT"}}
 UNRESOLVED_ATOMS = {
-    "transit_exclusions": "대중교통 제외 조건의 NOT 표현과 적용 범위는 미확정입니다.",
-    "amusement_per_person": "1인 1매의 정형 표현은 미확정입니다.",
+    "transit_exclusions": "대중교통 제외 조건의 세부 적용 범위는 아직 확정되지 않았습니다.",
+    "amusement_per_person": "1인 1매가 적용되는 범위는 아직 확정되지 않았습니다.",
 }
 MESSAGES = {
     "EMPTY_QUESTION": "질문을 입력하세요.",
@@ -85,12 +85,17 @@ VALUE_PATTERN = re.compile(
 PAYMENT_WORDS = re.compile(r"결제|이용|사용|쓰면|구매")
 DIFFERENCE_WORDS = re.compile(r"차이|더 많|더 적|많습니다|적습니다")
 # 데이터 상태를 말하는 문장은 혜택 사실이 아니므로 points에서 uncertain으로 옮긴다.
-STATUS_SENTENCE = re.compile(r"PENDING|미확정|확정되지|확정된|확정으로|단정할|DRAFT(?:이|상태|로|데이터)")
+STATUS_SENTENCE = re.compile(r"PENDING|미확정|확정되지|확정된|확정으로|단정할|DRAFT(?:이|상태|로|데이터)|검토 대기|개발용")
+# 고객에게 보여 줄 문장에 나오면 안 되는 내부 표기. 원문 인용과 개발자 정보에는 그대로 남는다.
+INTERNAL_CODES = {"PENDING_REVIEW": "검토 대기", "PENDING": "검토 대기", "DRAFT": "초안", "CONFIRMED": "확정", "APPROVED": "승인"}
+INTERNAL_PATTERN = re.compile("|".join(sorted(INTERNAL_CODES, key=len, reverse=True)))
+# 한글 조사가 바로 붙어도 찾도록 \\b를 쓰지 않는다.
+INTERNAL_FIELD = re.compile(r"(?<![A-Za-z0-9_])[a-z]+(?:_[a-z0-9]+)+|\d{8}_\d{6}")
 UNRESOLVED_WORDS = re.compile(r"미확정|확정할 수 없|확정되지")
 # 규칙 선택이 미확정인 혜택에서 데이터에 없는 적용 방식을 말하는 표현.
 INVENTED_RULE = re.compile(r"우선|중복|합산|더 높은|높은 금액|둘 중|하나만|동시에|함께 적용")
 # 시스템 미확정 안내가 이미 다루는 주제. LLM의 같은 주제 문장은 화면에서 생략한다.
-UNRESOLVED_TOPICS = (r"DRAFT|PENDING", r"중첩|함께 적용|선택 방식",
+UNRESOLVED_TOPICS = (r"DRAFT|PENDING|개발용|검토", r"중첩|함께 적용|선택 방식|금액 구간",
                      r"NOT|제외 조건", r"1인 1매")
 
 
@@ -110,6 +115,7 @@ class AnswerPoint(BaseModel):
 
 class CardAnswer(BaseModel):
     """답변 LLM의 구조화 출력; ``validate_answer`` 가 조회 결과와 다시 대조한다."""
+    answer_text: str = Field(description="고객에게 그대로 보여 줄 자연스러운 한국어 답변 2~4문장")
     conclusion: str = Field(description="질문에 대한 결론 한두 문장. 미확정이면 미확정이라고 씀")
     points: list[AnswerPoint]
     uncertain: list[str] = Field(description="검색 결과로 판단할 수 없거나 미확정인 내용")
@@ -145,6 +151,16 @@ INTERPRET_PROMPT = """카드 혜택 질문의 유형과 대상 혜택을 고른�
 
 ANSWER_PROMPT = """개발용 카드 혜택 데이터 검색 결과로 질문에 답한다. 한국어로 쓰고 검색 결과만 사용한다.
 
+answer_text 작성 규칙:
+- 상담원이 고객에게 말하듯 2~4문장의 자연스러운 존댓말로 쓴다. 목록이나 항목 나열로 쓰지 않는다.
+- 질문에 먼저 답한다. 가능 여부를 묻는 질문이면 가능한지, 불가능한지, 조건에 따라 다른지를 첫 문장에 드러낸다.
+- 추천이나 설명을 묻는 질문이면 해당 카드나 혜택부터 바로 말한다.
+- 최초, 지난달, 건당처럼 조건을 좁히는 표현은 빼지 않고 그대로 살린다.
+- 이어서 조건과 금액을 문장으로 풀어 쓴다. "기재되어 있습니다"를 반복하지 않는다.
+- 내부 코드, 영문 상태값, ID, 필드명을 쓰지 않는다. 데이터 검토 상태는 쓰지 않는다. 화면이 따로 안내한다.
+- 질문의 답을 바꾸는 미확정 사항만 "아직 확정되지 않았습니다"처럼 풀어서 쓴다.
+- 검색 결과에 없는 내용을 추측하거나 일반 상식으로 보충하지 않는다.
+
 규칙:
 - conclusion에 질문의 결론을 쓴다. 업무 규칙이 미확정이면 결론에 미확정이라고 쓴다.
 - points의 각 문장에 그 문장의 값이 적힌 evidence_id를 넣는다. 근거를 댈 수 없는 문장은 쓰지 않는다.
@@ -153,7 +169,7 @@ ANSWER_PROMPT = """개발용 카드 혜택 데이터 검색 결과로 질문에 
 - 없는 우선순위, 중복 적용, 예외 규칙을 만들지 않는다.
 - rule_selection_unresolved에 있는 혜택은 지급액을 하나로 정하지 않는다. tiers의 금액 구간을 모두 쓰고, 적용 방식이 미확정임을 분리해서 쓴다.
 - 계산은 같은 단위 두 값의 차이만 쓰고, 두 값을 문장에 함께 쓴다.
-- 데이터 상태(DRAFT, PENDING, 시험 가정)는 points에 쓰지 않고 uncertain에 쓴다.
+- 데이터 상태(DRAFT, PENDING, 시험 가정)는 points에 쓰지 않고 uncertain에 쓴다. uncertain에는 코드 대신 "검토 대기"처럼 풀어 쓴다.
 - 조건의 branches는 서로 OR, 같은 branch의 atoms는 서로 AND이며, negate=true는 해당 내용을 제외한다는 뜻이다.
 - rules는 계산 규칙이고 limits는 한도 원문이다. 둘을 섞지 않는다. limits가 비어 있으면 한도가 없다고 쓰지 말고 미확인이라고 쓴다.
 - unresolved에 있는 내용은 결론을 내리지 않는다. 질문의 답에 영향을 주는 내용은 conclusion에도 쓴다.
@@ -298,14 +314,20 @@ def find_exclusions(question: str, details: list[dict], read_source=None) -> lis
     return found
 
 
+def topic_marker(word: str) -> str:
+    """낱말 뒤의 은/는을 고른다. 한글 받침이 있을 때만 '은'이다."""
+    last = word[-1]
+    return "은" if "가" <= last <= "힣" and (ord(last) - 0xAC00) % 28 else "는"
+
+
 def enforce_exclusions(answer: dict, exclusions: list[dict], evidence: list[dict]) -> tuple[dict, list[str]]:
-    """제외 대상을 적용 가능하다고 답하지 못하게 한다. 결론은 프로그램 문구로 고정하고 근거는 원문에서 찾는다."""
+    """제외 대상을 적용 가능하다고 답하지 못하게 한다. 답변은 프로그램 문구로 고정하고 근거는 원문에서 찾는다."""
     if not exclusions:
         return answer, []
     warnings, sentences, points = [], [], list(answer["points"])
     for item in exclusions:
         terms = ", ".join(item["terms"])
-        text = f"{terms}은(는) {item['name']}의 제외 대상으로 기재되어 있어 이 혜택을 받을 수 없습니다."
+        text = f"{terms}{topic_marker(terms)} {item['name']}의 제외 대상이라 이 혜택을 받을 수 없습니다."
         sentences.append(text)
         kept = [point for point in points if not any(term in point["text"] for term in item["terms"])
                 or EXCLUSION_WORDS.search(point["text"])]
@@ -319,7 +341,8 @@ def enforce_exclusions(answer: dict, exclusions: list[dict], evidence: list[dict
         else:
             warnings.append(f"제외 문구의 원문 근거를 찾지 못했습니다: {terms}")
     status = answer["status"] if points else "NOT_ANSWERABLE"
-    return {**answer, "conclusion": " ".join(sentences), "points": points, "status": status}, warnings
+    text = " ".join(sentences)
+    return {**answer, "conclusion": text, "answer_text": text, "answer_source": "program_exclusion", "points": points, "status": status}, warnings
 
 
 def condition_groups(rows: list[dict]) -> list[dict]:
@@ -363,14 +386,14 @@ def benefit_context(detail: dict) -> dict:
 
 def find_unresolved(details: list[dict]) -> list[str]:
     """조회 결과에 나타난 미확정 사항을 LLM 없이 판별한다."""
-    found = ["개발용 DRAFT 데이터이며 혜택은 PENDING_REVIEW, 원문 근거는 PENDING입니다."]
+    found = ["개발용 자료로, 혜택과 원문 근거 모두 담당자 검토가 끝나지 않았습니다. 실제 카드 혜택과 다를 수 있습니다."]
     for detail in details:
         benefit = source(detail["context"]["benefit"])
         if detail["context"].get("common"):
             found.append(f"{benefit.get('bnft_nm')}: 공통 혜택에는 근거 직접 연결이 없어 동일성이 확인된 기존 행의 근거만 표시합니다.")
         keys = [item["rule"].get("rule_key") for item in detail["rules"]]
         if len(keys) > 1 and not benefit.get("rule_select_cd"):
-            found.append(f"{benefit.get('bnft_nm')}: 규칙 {', '.join(keys)}의 중첩 선택 방식은 미확정입니다.")
+            found.append(f"{benefit.get('bnft_nm')}: 여러 금액 구간이 함께 해당할 때 어떤 금액이 적용되는지는 아직 확정되지 않았습니다.")
         for row in detail["conditions"]:
             message = UNRESOLVED_ATOMS.get(row["atom"].get("key_name"))
             if message:
@@ -629,8 +652,44 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
     else:
         status = "NOT_ANSWERABLE"
         reason = reason or MESSAGES["NO_GROUNDED_POINT"]
-    return {"status": status, "conclusion": conclusion, "points": points, "uncertain": uncertain,
-            "message": reason}, warnings
+    for point in points:
+        point["text"] = customer_text(point["text"])
+    conclusion, uncertain = customer_text(conclusion), [customer_text(text) for text in uncertain]
+    # 근거 문장이 하나도 없으면 자연어 답변도 내보내지 않는다.
+    answer_text, source_cd = "", "none"
+    if points:
+        problem = answer_text_problem(raw.answer_text.strip(), context, question, all_known, numbers)
+        if problem is None:
+            answer_text, source_cd = raw.answer_text.strip(), "llm"
+        else:
+            warnings.append(f"자연어 답변 대신 검증된 문장을 표시합니다: {problem}")
+            sentences = dict.fromkeys([conclusion, *(point["text"] for point in points)])
+            answer_text, source_cd = " ".join(sentences).strip(), "validated_sentences"
+    return {"status": status, "conclusion": conclusion, "answer_text": answer_text, "answer_source": source_cd, "points": points,
+            "uncertain": uncertain, "message": reason}, warnings
+
+
+def customer_text(text: str) -> str:
+    """고객용 문장의 내부 상태 코드를 자연어로 바꾼다."""
+    return INTERNAL_PATTERN.sub(lambda match: INTERNAL_CODES[match.group(0)], text)
+
+
+def answer_text_problem(text: str, context: dict, question: str, known: set, numbers: set) -> str | None:
+    """LLM 자연어 답변을 그대로 보여 줄 수 없는 사유. points와 같은 값·규칙 검증을 적용한다."""
+    if not text:
+        return "자연어 답변이 없습니다"
+    if INTERNAL_PATTERN.search(text) or INTERNAL_FIELD.search(text):
+        return "내부 코드가 있습니다"
+    unknown = unknown_values(text, known, numbers)
+    if unknown:
+        return f"조회 결과에 없는 값 {unknown}이 있습니다"
+    conflicts = context.get("rule_selection_unresolved", [])
+    blocking = [item for item in conflicts if len(item["applicable_rule_keys"]) > 1]
+    if picks_single_tier(text, conflicts) or (blocking and not UNRESOLVED_WORDS.search(text)):
+        return "미확정 금액 구간을 단정했습니다"
+    if conflicts and INVENTED_RULE.search(text):
+        return "데이터에 없는 규칙 적용 방식이 있습니다"
+    return None
 
 
 def merge_state(state: CardState, update: CardState) -> CardState:
@@ -923,6 +982,7 @@ class CardGraphRAG:
             code = self._finish_code(state)
             message = f"질문 대상이 모호합니다: {ambiguity}" if code == "NO_TARGET" and ambiguity else MESSAGES[code]
             update["answer"] = {"status": "ERROR" if state.get("error") else "NOT_ANSWERABLE", "conclusion": "",
+                                "answer_text": "", "answer_source": "none",
                                 "points": [], "uncertain": [], "message": message}
         calls = state.get("llm_calls", [])
         costs = [call["cost_usd"] for call in calls]
