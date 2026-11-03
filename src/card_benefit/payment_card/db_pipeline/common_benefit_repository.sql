@@ -122,14 +122,18 @@ WHERE b.bnft_origin_cd = 'BRAND_SERVICE'
 ORDER BY b.card_id, b.card_bnft_id;
 
 -- name: insert_evidence_link
-INSERT INTO db_pipeline.card_evidence_link (card_id,ev_subject_cd,card_bnft_id,ev_item_cd,ev_item_key,evidence_id)
-VALUES (:CARD_ID,'BNFT',:BNFT_ID,'SELF','-',:EVIDENCE_ID)
-ON CONFLICT ON CONSTRAINT card_evidence_link_natural_key DO NOTHING RETURNING ev_link_id;
+-- 원문 근거의 문서·페이지·청크 ID는 card_source_evidence에서 evidence_id로 읽어 승계한다. 원문 근거가 없으면 등록하지 않는다.
+INSERT INTO db_pipeline.card_evidence_link (card_doc_id,page_no,card_doc_chunk_id,evidence_id,card_id,ev_subject_cd,card_bnft_id,ev_item_cd,ev_item_key)
+SELECT e.card_doc_id,e.page_no,e.card_doc_chunk_id,e.evidence_id,CAST(:CARD_ID AS bigint),'BNFT',CAST(:BNFT_ID AS varchar),'SELF','-'
+FROM db_pipeline.card_source_evidence e WHERE e.evidence_id=:EVIDENCE_ID
+ON CONFLICT ON CONSTRAINT card_evidence_link_natural_key DO NOTHING RETURNING evidence_link_id;
 
 -- name: insert_rule_evidence_link
-INSERT INTO db_pipeline.card_evidence_link (card_id,ev_subject_cd,card_bnft_id,rule_key,ev_item_cd,ev_item_key,evidence_id)
-VALUES (:CARD_ID,'RULE',:BNFT_ID,:RULE_KEY,'SELF','-',:EVIDENCE_ID)
-ON CONFLICT ON CONSTRAINT card_evidence_link_natural_key DO NOTHING RETURNING ev_link_id;
+-- 원문 근거의 문서·페이지·청크 ID는 card_source_evidence에서 evidence_id로 읽어 승계한다. 원문 근거가 없으면 등록하지 않는다.
+INSERT INTO db_pipeline.card_evidence_link (card_doc_id,page_no,card_doc_chunk_id,evidence_id,card_id,ev_subject_cd,card_bnft_id,rule_key,ev_item_cd,ev_item_key)
+SELECT e.card_doc_id,e.page_no,e.card_doc_chunk_id,e.evidence_id,CAST(:CARD_ID AS bigint),'RULE',CAST(:BNFT_ID AS varchar),CAST(:RULE_KEY AS varchar),'SELF','-'
+FROM db_pipeline.card_source_evidence e WHERE e.evidence_id=:EVIDENCE_ID
+ON CONFLICT ON CONSTRAINT card_evidence_link_natural_key DO NOTHING RETURNING evidence_link_id;
 
 -- name: list_product_candidates
 -- 상품설명서 추출 혜택. 상품·문서 연결이 있어야 하고 다른 페이지로 합쳐진 행은 읽지 않는다.

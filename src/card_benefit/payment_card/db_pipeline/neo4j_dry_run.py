@@ -106,7 +106,9 @@ def load_snapshot(conn):
             "products": "SELECT * FROM db_pipeline.card_product ORDER BY card_id",
             "product_docs": "SELECT * FROM db_pipeline.card_product_doc ORDER BY card_id, card_doc_id",
             "benefits": "SELECT * FROM db_pipeline.card_bnft ORDER BY card_id, card_bnft_id",
-            "links": "SELECT * FROM db_pipeline.card_evidence_link ORDER BY card_id, ev_link_id",
+            # Neo4j 관계 속성은 ev_link_id를 유지한다(재적재 전까지). 승계한 문서·페이지·청크 ID는 원문 근거 노드 경로로 이미 표현된다.
+            "links": ("SELECT card_id, evidence_link_id AS ev_link_id, ev_subject_cd, card_bnft_id, rule_key, relation_key, "
+                      "ev_item_cd, ev_item_key, evidence_id FROM db_pipeline.card_evidence_link ORDER BY card_id, evidence_link_id"),
             "evidence": "SELECT * FROM db_pipeline.card_source_evidence ORDER BY evidence_id",
             "chunks": "SELECT * FROM db_pipeline.card_doc_chunk ORDER BY card_doc_id, page_no, card_doc_chunk_id",
             "pages": "SELECT * FROM db_pipeline.card_doc_page ORDER BY card_doc_id, page_no",

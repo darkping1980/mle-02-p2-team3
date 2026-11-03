@@ -107,7 +107,7 @@ flowchart TD
 | P4 | 근거의 start/end 및 source 존재, 공백 제거 후 source와 quote 일치. raw의 RULE 키는 rule 목록에 있어야 하고 모든 인용이 위치 확인 근거에 대응. 혜택 자체 근거 1건 이상 및 모든 rule 키의 근거 필요 | 부족하면 `REVIEW`. 중복 링크는 제거 | [product_benefit_service.py:93](../payment_card/db_pipeline/product_benefit_service.py#L93) |
 | P5 | INSERT 결과 없음은 동시 등록 충돌. 전체 처리 전후 integrity 오류의 `(gate_cd, issue_key)` 다중집합에 신규 항목이 생김 | 예외; 해당 카드 실행 트랜잭션 전체 rollback | [product_benefit_service.py:33](../payment_card/db_pipeline/product_benefit_service.py#L33) |
 
-통과하면 `card_bnft`에 `LOCAL`, `PRODUCT`, `PENDING_REVIEW`, `bnft_cond_expr`, `rule_list`, 빈 `relation_list`, 규칙·한도 원문을 넣고 혜택 및 규칙의 `card_evidence_link`를 삽입한다. 규칙은 별도 행 INSERT가 아니라 JSON `rule_list`에 저장하며 `pool_refs`를 제거한다. 성공이 곧 승인이라는 뜻은 아니다 ([common_benefit_repository.sql:124](../payment_card/db_pipeline/common_benefit_repository.sql#L124)).
+통과하면 `card_bnft`에 `LOCAL`, `PRODUCT`, `PENDING_REVIEW`, `bnft_cond_expr`, `rule_list`, 빈 `relation_list`, 규칙·한도 원문을 넣고 혜택 및 규칙의 `card_evidence_link`를 삽입한다. 연결 행은 원문 근거의 PK 네 컬럼(`card_doc_id`, `page_no`, `card_doc_chunk_id`, `evidence_id`)을 승계하며, 앞의 세 값은 SQL이 `card_source_evidence`에서 `evidence_id`로 읽어 넣는다. 원문 근거가 없으면 연결하지 않고, 자연키가 같으면 `ON CONFLICT`로 건너뛴다. 연결 식별자는 `evidence_link_id`다. 규칙은 별도 행 INSERT가 아니라 JSON `rule_list`에 저장하며 `pool_refs`를 제거한다. 성공이 곧 승인이라는 뜻은 아니다 ([common_benefit_repository.sql:124](../payment_card/db_pipeline/common_benefit_repository.sql#L124)).
 
 ## 6. 공통 혜택 등록과 카드 적용
 

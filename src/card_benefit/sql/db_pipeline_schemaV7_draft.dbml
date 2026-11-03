@@ -91,30 +91,37 @@ Table db_pipeline.card_bnft [note: '카드 혜택'] {
   }
 }
 
-Table db_pipeline.card_source_evidence [note: '원문 근거'] {
-  evidence_id varchar(20) [not null, pk, note: '원문 근거 아이디']
+Table db_pipeline.card_source_evidence [note: '원문 근거. PK는 문서 → 페이지 → 청크 PK 승계 + evidence_id. 청크와의 Ref는 논리 관계이며 물리 FK는 없다'] {
   card_doc_id varchar(20) [not null, note: '문서 아이디']
   page_no smallint [not null, note: '페이지 번호']
   card_doc_chunk_id varchar(20) [not null, note: '청크 아이디']
+  evidence_id varchar(20) [not null, unique, note: '원문 근거 아이디']
   card_extr_stg_id varchar(20) [note: '추출 항목 아이디']
   quote_txt text [not null, note: '원문 인용 문장']
   start_pos integer [note: '인용 시작 위치']
   end_pos integer [note: '인용 종료 위치']
   approval_status_cd varchar(20) [not null, note: '승인 상태']
+  Indexes {
+    (card_doc_id, page_no, card_doc_chunk_id, evidence_id) [pk]
+  }
 }
 
-Table db_pipeline.card_evidence_link [note: '카드 근거 관계'] {
+Table db_pipeline.card_evidence_link [note: '카드 근거 관계. PK는 원문 근거 PK 전체 승계 + card_id + evidence_link_id. 원문 근거와의 Ref는 논리 관계이며 물리 FK는 없다'] {
+  card_doc_id varchar(20) [not null, note: '문서 아이디']
+  page_no smallint [not null, note: '페이지 번호']
+  card_doc_chunk_id varchar(20) [not null, note: '청크 아이디']
+  evidence_id varchar(20) [not null, note: '원문 근거 아이디']
   card_id bigint [not null, note: '카드 아이디']
-  ev_link_id varchar(20) [not null, note: '근거 연결 아이디']
-  ev_subject_cd varchar(10) [not null, note: '근거 대상 유형']
+  evidence_link_id varchar(20) [not null, note: '근거 연결 아이디']
   card_bnft_id varchar(20) [note: '혜택 아이디']
+  ev_subject_cd varchar(10) [not null, note: '근거 대상 유형']
   rule_key varchar(40) [note: '규칙 키']
   relation_key varchar(40) [note: '혜택 관계 키']
   ev_item_cd varchar(10) [not null, note: '근거 항목 유형']
   ev_item_key varchar(100) [not null, note: '근거 항목 키']
-  evidence_id varchar(20) [not null, note: '원문 근거 아이디']
   Indexes {
-    (card_id, ev_link_id) [pk]
+    (card_doc_id, page_no, card_doc_chunk_id, evidence_id, card_id, evidence_link_id) [pk]
+    (card_id, evidence_link_id) [unique]
     (card_id, ev_subject_cd, card_bnft_id, rule_key, relation_key, ev_item_cd, ev_item_key, evidence_id) [unique]
   }
 }
@@ -286,7 +293,7 @@ Ref: db_pipeline.card_product.card_id < db_pipeline.card_evidence_link.card_id
 Ref: db_pipeline.card_product.card_id < db_pipeline.card_product_doc.card_id
 Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_product_doc.card_doc_id
 Ref: db_pipeline.card_bnft.(card_id, card_bnft_id) < db_pipeline.card_evidence_link.(card_id, card_bnft_id)
-Ref: db_pipeline.card_source_evidence.evidence_id < db_pipeline.card_evidence_link.evidence_id
+Ref: db_pipeline.card_source_evidence.(card_doc_id, page_no, card_doc_chunk_id, evidence_id) < db_pipeline.card_evidence_link.(card_doc_id, page_no, card_doc_chunk_id, evidence_id)
 Ref: db_pipeline.card_doc_chunk.(card_doc_id, page_no, card_doc_chunk_id) < db_pipeline.card_source_evidence.(card_doc_id, page_no, card_doc_chunk_id)
 Ref: db_pipeline.card_extr_stg.card_extr_stg_id < db_pipeline.card_source_evidence.card_extr_stg_id
 Ref: db_pipeline.card_doc.card_doc_id < db_pipeline.card_doc_page.card_doc_id

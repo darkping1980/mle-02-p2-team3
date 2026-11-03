@@ -401,7 +401,7 @@ COMMENT ON SEQUENCE db_pipeline.seq_card_product IS 'card_product.card_id bigint
 
 CREATE SEQUENCE db_pipeline.seq_card_evidence_link INCREMENT BY 1 START WITH 1 NO MINVALUE MAXVALUE 999999 CACHE 1 CYCLE;
 
-COMMENT ON SEQUENCE db_pipeline.seq_card_evidence_link IS 'card_evidence_link.ev_link_id 로컬 업무 ID 발급';
+COMMENT ON SEQUENCE db_pipeline.seq_card_evidence_link IS 'card_evidence_link.evidence_link_id 로컬 업무 ID 발급';
 
 -- ---------------------------------------------------------------------------
 -- 공통코드 영역
@@ -583,16 +583,21 @@ COMMENT ON COLUMN db_pipeline.card_bnft.bnft_limit_txt IS '원문 근거에서 �
 -- 근거 연결 영역
 -- ---------------------------------------------------------------------------
 CREATE TABLE db_pipeline.card_evidence_link (
+    -- 원문 근거 PK 전체 승계 + 카드 + 자체 식별자. 원문 근거와 물리 FK는 두지 않는다(논리 관계).
+    card_doc_id varchar(20) NOT NULL,
+    page_no smallint NOT NULL,
+    card_doc_chunk_id varchar(20) NOT NULL,
+    evidence_id varchar(20) NOT NULL,
     card_id bigint NOT NULL,
-    ev_link_id varchar(20) DEFAULT db_pipeline.fn_get_biz_id('card_evidence_link') NOT NULL,
-    ev_subject_cd varchar(10) NOT NULL,
+    evidence_link_id varchar(20) DEFAULT db_pipeline.fn_get_biz_id('card_evidence_link') NOT NULL,
     card_bnft_id varchar(20),
+    ev_subject_cd varchar(10) NOT NULL,
     rule_key varchar(40),
     relation_key varchar(40),
     ev_item_cd varchar(10) NOT NULL DEFAULT 'SELF',
     ev_item_key varchar(100) NOT NULL DEFAULT '-',
-    evidence_id varchar(20) NOT NULL,
-    PRIMARY KEY (card_id, ev_link_id),
+    CONSTRAINT card_evidence_link_pkey PRIMARY KEY (card_doc_id, page_no, card_doc_chunk_id, evidence_id, card_id, evidence_link_id),
+    CONSTRAINT card_evidence_link_id_key UNIQUE (card_id, evidence_link_id),
     CONSTRAINT card_evidence_link_natural_key UNIQUE NULLS NOT DISTINCT
         (card_id, ev_subject_cd, card_bnft_id, rule_key, relation_key,
          ev_item_cd, ev_item_key, evidence_id),
@@ -608,15 +613,18 @@ CREATE TABLE db_pipeline.card_evidence_link (
 );
 
 COMMENT ON TABLE db_pipeline.card_evidence_link IS '카드 근거 관계';
+COMMENT ON COLUMN db_pipeline.card_evidence_link.card_doc_id IS '문서 아이디';
+COMMENT ON COLUMN db_pipeline.card_evidence_link.page_no IS '페이지 번호';
+COMMENT ON COLUMN db_pipeline.card_evidence_link.card_doc_chunk_id IS '청크 아이디';
+COMMENT ON COLUMN db_pipeline.card_evidence_link.evidence_id IS '원문 근거 아이디';
 COMMENT ON COLUMN db_pipeline.card_evidence_link.card_id IS '카드 아이디';
-COMMENT ON COLUMN db_pipeline.card_evidence_link.ev_link_id IS '근거 연결 아이디';
-COMMENT ON COLUMN db_pipeline.card_evidence_link.ev_subject_cd IS '근거 대상 유형';
+COMMENT ON COLUMN db_pipeline.card_evidence_link.evidence_link_id IS '근거 연결 아이디';
 COMMENT ON COLUMN db_pipeline.card_evidence_link.card_bnft_id IS '혜택 아이디';
+COMMENT ON COLUMN db_pipeline.card_evidence_link.ev_subject_cd IS '근거 대상 유형';
 COMMENT ON COLUMN db_pipeline.card_evidence_link.rule_key IS '규칙 키';
 COMMENT ON COLUMN db_pipeline.card_evidence_link.relation_key IS '혜택 관계 키';
 COMMENT ON COLUMN db_pipeline.card_evidence_link.ev_item_cd IS '근거 항목 유형';
 COMMENT ON COLUMN db_pipeline.card_evidence_link.ev_item_key IS '근거 항목 키';
-COMMENT ON COLUMN db_pipeline.card_evidence_link.evidence_id IS '원문 근거 아이디';
 
 -- ---------------------------------------------------------------------------
 -- 원천 문서·AI 파싱·근거 영역. 코드 열거 CHECK만 공통코드로 이관
@@ -919,25 +927,27 @@ COMMENT ON COLUMN db_pipeline.card_excl_item.update_user_id IS '수정 사용자
 COMMENT ON COLUMN db_pipeline.card_excl_item.excl_alias_nms IS '제외 항목 별칭';
 
 CREATE TABLE db_pipeline.card_source_evidence (
-    evidence_id varchar(20) DEFAULT db_pipeline.fn_get_biz_id('card_source_evidence') NOT NULL,
     card_doc_id varchar(20) NOT NULL,
     page_no smallint NOT NULL,
     card_doc_chunk_id varchar(20) NOT NULL,
+    evidence_id varchar(20) DEFAULT db_pipeline.fn_get_biz_id('card_source_evidence') NOT NULL,
     card_extr_stg_id varchar(20),
     quote_txt text NOT NULL,
     start_pos integer,
     end_pos integer,
     approval_status_cd varchar(20) NOT NULL,
-    PRIMARY KEY (evidence_id),
+    -- 문서 → 페이지 → 청크의 PK를 승계한 식별 관계. 청크 물리 FK는 두지 않는다. evidence_id 단독 참조는 UNIQUE로 유지한다.
+    CONSTRAINT card_source_evidence_pkey PRIMARY KEY (card_doc_id, page_no, card_doc_chunk_id, evidence_id),
+    CONSTRAINT card_source_evidence_evidence_id_key UNIQUE (evidence_id),
     CONSTRAINT card_source_evidence_ck_1 CHECK (start_pos IS NULL OR start_pos > 0),
     CONSTRAINT card_source_evidence_ck_2 CHECK (end_pos IS NULL OR start_pos IS NULL OR end_pos >= start_pos)
 );
 
 COMMENT ON TABLE db_pipeline.card_source_evidence IS '원문 근거';
-COMMENT ON COLUMN db_pipeline.card_source_evidence.evidence_id IS '원문 근거 아이디';
 COMMENT ON COLUMN db_pipeline.card_source_evidence.card_doc_id IS '문서 아이디';
 COMMENT ON COLUMN db_pipeline.card_source_evidence.page_no IS '페이지 번호';
 COMMENT ON COLUMN db_pipeline.card_source_evidence.card_doc_chunk_id IS '청크 아이디';
+COMMENT ON COLUMN db_pipeline.card_source_evidence.evidence_id IS '원문 근거 아이디';
 COMMENT ON COLUMN db_pipeline.card_source_evidence.card_extr_stg_id IS '추출 항목 아이디';
 COMMENT ON COLUMN db_pipeline.card_source_evidence.quote_txt IS '원문 인용 문장';
 COMMENT ON COLUMN db_pipeline.card_source_evidence.start_pos IS '인용 시작 위치';
@@ -1373,7 +1383,7 @@ SELECT 'evidence_source_orphan', e.evidence_id
 FROM db_pipeline.card_source_evidence e
 WHERE NOT EXISTS (SELECT 1 FROM db_pipeline.card_doc_chunk c WHERE (c.card_doc_id, c.page_no, c.card_doc_chunk_id) = (e.card_doc_id, e.page_no, e.card_doc_chunk_id))
 UNION ALL
-SELECT 'evidence_doc_not_linked', l.card_id || '/' || l.ev_link_id
+SELECT 'evidence_doc_not_linked', l.card_id || '/' || l.evidence_link_id
 FROM db_pipeline.card_evidence_link l
 JOIN db_pipeline.card_source_evidence e USING (evidence_id)
 WHERE NOT EXISTS (SELECT 1 FROM db_pipeline.card_product_doc d WHERE (d.card_id, d.card_doc_id) = (l.card_id, e.card_doc_id))
@@ -1383,7 +1393,7 @@ FROM (SELECT DISTINCT evidence_id FROM db_pipeline.card_evidence_link) l
 LEFT JOIN db_pipeline.card_source_evidence e USING (evidence_id)
 WHERE e.evidence_id IS NULL OR e.approval_status_cd <> 'APPROVED'
 UNION ALL
-SELECT 'evidence_subject_orphan', l.card_id || '/' || l.ev_link_id
+SELECT 'evidence_subject_orphan', l.card_id || '/' || l.evidence_link_id
 FROM db_pipeline.card_evidence_link l
 WHERE NOT CASE l.ev_subject_cd
     WHEN 'CARD' THEN EXISTS (SELECT 1 FROM db_pipeline.card_product p WHERE p.card_id = l.card_id)
@@ -1393,7 +1403,7 @@ WHERE NOT CASE l.ev_subject_cd
     ELSE false
 END
 UNION ALL
-SELECT 'evidence_item_key_missing', l.card_id || '/' || l.ev_link_id
+SELECT 'evidence_item_key_missing', l.card_id || '/' || l.evidence_link_id
 FROM db_pipeline.card_evidence_link l
 WHERE l.ev_item_cd <> 'SELF' AND NOT CASE l.ev_item_cd
     WHEN 'COND' THEN EXISTS (SELECT 1 FROM atoms a WHERE a.card_id = l.card_id AND a.atom_key = l.ev_item_key
@@ -1428,7 +1438,7 @@ WHERE b.bnft_origin_cd = 'BRAND_SERVICE' AND b.verification_status_cd = 'CONFIRM
   AND NOT EXISTS (SELECT 1 FROM db_pipeline.card_evidence_link l
                   WHERE (l.card_id, l.card_bnft_id) = (b.card_id, b.card_bnft_id))
 UNION ALL
-SELECT 'evidence_brand_opt_mismatch', l.card_id || '/' || l.ev_link_id
+SELECT 'evidence_brand_opt_mismatch', l.card_id || '/' || l.evidence_link_id
 FROM db_pipeline.card_evidence_link l
 JOIN db_pipeline.card_source_evidence e USING (evidence_id)
 JOIN db_pipeline.card_bnft b ON (b.card_id, b.card_bnft_id) = (l.card_id, l.card_bnft_id)

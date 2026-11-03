@@ -6,7 +6,8 @@ SELECT owner_cd, card_id, card_bnft_id, rule_key, branch_no, atom_seq, atom_key,
 FROM db_pipeline.v_card_cond_atom;
 
 -- name: evidence_links
-SELECT l.ev_link_id, l.ev_subject_cd, l.rule_key, l.ev_item_cd, l.ev_item_key,
+-- Neo4j 관계 속성 이름은 ev_link_id를 유지한다(재적재 전까지). PostgreSQL 컬럼은 evidence_link_id다.
+SELECT l.evidence_link_id AS ev_link_id, l.ev_subject_cd, l.rule_key, l.ev_item_cd, l.ev_item_key,
        l.evidence_id, e.start_pos, e.end_pos
 FROM db_pipeline.card_evidence_link l
 JOIN db_pipeline.card_source_evidence e ON e.evidence_id = l.evidence_id;

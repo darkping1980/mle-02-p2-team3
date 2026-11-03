@@ -81,7 +81,8 @@ class SchemaV7Tests(unittest.TestCase):
 
     def test_keys_attach_directly_to_card(self):
         for key in ("PRIMARY KEY (card_id, card_bnft_id)", "UNIQUE (card_id, bnft_cd)",
-                    "PRIMARY KEY (card_id, ev_link_id)"):
+                    "PRIMARY KEY (card_doc_id, page_no, card_doc_chunk_id, evidence_id, card_id, evidence_link_id)",
+                    "UNIQUE (card_id, evidence_link_id)"):
             self.assertIn(key, self.ddl)
 
     def test_card_condition_reuses_condition_contract(self):
