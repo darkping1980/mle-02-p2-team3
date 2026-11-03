@@ -1,0 +1,128 @@
+﻿구분,Neo4j 이름,한글 노드/관계명,영문 속성명,한글 속성명,Neo4j 타입,현재 보유 개수
+NODE,dp_card_product,카드 상품,card_id,카드 아이디,I,2
+NODE,dp_card_product,카드 상품,product_cd,상품 코드,S,2
+NODE,dp_card_product,카드 상품,product_nm,상품명,S,2
+NODE,dp_card_product,카드 상품,card_kind_cd,카드 구분,S,2
+NODE,dp_card_product,카드 상품,card_cond_status,카드 공통 조건 상태,S,2
+NODE,dp_card_product,카드 상품,key,그래프 식별키,S,2
+NODE,dp_card_product,카드 상품,source_json,원본 행/구조 JSON,S,2
+NODE,dp_card_bnft,카드 혜택,card_id,카드 아이디,I,5
+NODE,dp_card_bnft,카드 혜택,card_bnft_id,혜택 아이디,S,5
+NODE,dp_card_bnft,카드 혜택,bnft_cd,혜택 코드,S,5
+NODE,dp_card_bnft,카드 혜택,bnft_type_cd,혜택 유형,S,5
+NODE,dp_card_bnft,카드 혜택,bnft_valid_from,혜택 제공 시작일,S,1
+NODE,dp_card_bnft,카드 혜택,bnft_valid_to_excl,혜택 제공 종료일(미포함),S,1
+NODE,dp_card_bnft,카드 혜택,name,혜택명,S,5
+NODE,dp_card_bnft,카드 혜택,rule_text,혜택 계산 규칙 안내,S,4
+NODE,dp_card_bnft,카드 혜택,limit_text,혜택 이용/금액 한도,S,4
+NODE,dp_card_bnft,카드 혜택,verification_status,혜택 검증 상태,S,5
+NODE,dp_card_bnft,카드 혜택,key,그래프 식별키,S,5
+NODE,dp_card_bnft,카드 혜택,source_json,원본 행/구조 JSON,S,5
+NODE,dp_bnft_rule,혜택 계산 규칙,card_id,카드 아이디,I,6
+NODE,dp_bnft_rule,혜택 계산 규칙,card_bnft_id,혜택 아이디,S,6
+NODE,dp_bnft_rule,혜택 계산 규칙,rule_key,계산 규칙 키,S,6
+NODE,dp_bnft_rule,혜택 계산 규칙,value_num,규칙 수치 값,I,6
+NODE,dp_bnft_rule,혜택 계산 규칙,key,그래프 식별키,S,6
+NODE,dp_bnft_rule,혜택 계산 규칙,source_json,원본 행/구조 JSON,S,6
+NODE,dp_rule_target,계산 규칙 적용 대상,target_type_cd,적용 대상 유형,S,19
+NODE,dp_rule_target,계산 규칙 적용 대상,target_key,적용 대상 키,S,19
+NODE,dp_rule_target,계산 규칙 적용 대상,target_nm,적용 대상명,S,19
+NODE,dp_rule_target,계산 규칙 적용 대상,key,그래프 식별키,S,19
+NODE,dp_rule_target,계산 규칙 적용 대상,source_json,원본 행/구조 JSON,S,19
+NODE,dp_cond_expr,조건식,expr_key,조건식 식별키,S,8
+NODE,dp_cond_expr,조건식,key,그래프 식별키,S,8
+NODE,dp_cond_expr,조건식,source_json,원본 행/구조 JSON,S,8
+NODE,dp_cond_branch,조건 분기,expr_key,조건식 식별키,S,9
+NODE,dp_cond_branch,조건 분기,branch_no,조건 분기 번호,I,9
+NODE,dp_cond_branch,조건 분기,key,그래프 식별키,S,9
+NODE,dp_cond_branch,조건 분기,source_json,원본 행/구조 JSON,S,9
+NODE,dp_cond_atom,조건 항목 (원자 조건),expr_key,조건식 식별키,S,15
+NODE,dp_cond_atom,조건 항목 (원자 조건),branch_no,조건 분기 번호,I,15
+NODE,dp_cond_atom,조건 항목 (원자 조건),atom_key,조건 항목 키,S,15
+NODE,dp_cond_atom,조건 항목 (원자 조건),atom_seq,조건 항목 순번,I,15
+NODE,dp_cond_atom,조건 항목 (원자 조건),excl_raw_txt,제외 항목 원문,S,6
+NODE,dp_cond_atom,조건 항목 (원자 조건),key_name,조건 항목 키 이름,S,15
+NODE,dp_cond_atom,조건 항목 (원자 조건),kind,조건 유형,S,15
+NODE,dp_cond_atom,조건 항목 (원자 조건),min_amt,조건 최소 금액,I,6
+NODE,dp_cond_atom,조건 항목 (원자 조건),negate,부정 여부,B,15
+NODE,dp_cond_atom,조건 항목 (원자 조건),raw_text,조건 원문,S,15
+NODE,dp_cond_atom,조건 항목 (원자 조건),key,그래프 식별키,S,15
+NODE,dp_cond_atom,조건 항목 (원자 조건),source_json,원본 행/구조 JSON,S,15
+NODE,dp_card_common,브랜드 공통서비스,card_common_id,공통서비스 아이디,I,1
+NODE,dp_card_common,브랜드 공통서비스,common_cd,공통서비스 업무 코드,S,1
+NODE,dp_card_common,브랜드 공통서비스,common_nm,공통서비스명,S,1
+NODE,dp_card_common,브랜드 공통서비스,brand_cd,국제 브랜드 코드,S,1
+NODE,dp_card_common,브랜드 공통서비스,service_grade_cd,서비스 등급 코드,S,1
+NODE,dp_card_common,브랜드 공통서비스,key,그래프 식별키,S,1
+NODE,dp_card_common,브랜드 공통서비스,source_json,원본 행/구조 JSON,S,1
+NODE,dp_card_common_bnft,공통서비스 혜택,card_common_id,공통서비스 아이디 (논리 참조),I,1
+NODE,dp_card_common_bnft,공통서비스 혜택,card_common_bnft_id,공통 혜택 아이디,S,1
+NODE,dp_card_common_bnft,공통서비스 혜택,bnft_cd,공통 혜택 업무 코드,S,1
+NODE,dp_card_common_bnft,공통서비스 혜택,bnft_type_cd,혜택 유형,S,1
+NODE,dp_card_common_bnft,공통서비스 혜택,bnft_valid_from,혜택 제공 시작일,S,1
+NODE,dp_card_common_bnft,공통서비스 혜택,bnft_valid_to_excl,혜택 제공 종료일(미포함),S,1
+NODE,dp_card_common_bnft,공통서비스 혜택,name,공통 혜택명,S,1
+NODE,dp_card_common_bnft,공통서비스 혜택,rule_text,혜택 계산 규칙 안내,S,1
+NODE,dp_card_common_bnft,공통서비스 혜택,service_type_cd,공통서비스 내 유형 (COMMON/선택서비스 등),S,1
+NODE,dp_card_common_bnft,공통서비스 혜택,key,그래프 식별키,S,1
+NODE,dp_card_common_bnft,공통서비스 혜택,source_json,원본 행/구조 JSON,S,1
+NODE,dp_card_doc,원천 문서,card_doc_id,문서 아이디,S,3
+NODE,dp_card_doc,원천 문서,doc_title,문서 제목,S,3
+NODE,dp_card_doc,원천 문서,doc_type_cd,문서 유형,S,3
+NODE,dp_card_doc,원천 문서,key,그래프 식별키,S,3
+NODE,dp_card_doc,원천 문서,source_json,원본 행/구조 JSON,S,3
+NODE,dp_card_doc_page,문서 페이지,card_doc_id,문서 아이디,S,10
+NODE,dp_card_doc_page,문서 페이지,page_no,페이지 번호,I,10
+NODE,dp_card_doc_page,문서 페이지,key,그래프 식별키,S,10
+NODE,dp_card_doc_page,문서 페이지,source_json,원본 행/구조 JSON,S,10
+NODE,dp_card_doc_chunk,문서 청크,card_doc_id,문서 아이디,S,10
+NODE,dp_card_doc_chunk,문서 청크,page_no,페이지 번호,I,10
+NODE,dp_card_doc_chunk,문서 청크,card_doc_chunk_id,청크 아이디,S,10
+NODE,dp_card_doc_chunk,문서 청크,key,그래프 식별키,S,10
+NODE,dp_card_doc_chunk,문서 청크,source_json,원본 행/구조 JSON,S,10
+NODE,dp_card_source_evidence,PDF 원문 근거,card_doc_id,문서 아이디,S,35
+NODE,dp_card_source_evidence,PDF 원문 근거,page_no,페이지 번호,I,35
+NODE,dp_card_source_evidence,PDF 원문 근거,card_doc_chunk_id,청크 아이디,S,35
+NODE,dp_card_source_evidence,PDF 원문 근거,evidence_id,원문 근거 아이디,S,35
+NODE,dp_card_source_evidence,PDF 원문 근거,approval_status,승인 상태,S,35
+NODE,dp_card_source_evidence,PDF 원문 근거,start_pos,인용 시작 위치,I,35
+NODE,dp_card_source_evidence,PDF 원문 근거,end_pos,인용 종료 위치,I,35
+NODE,dp_card_source_evidence,PDF 원문 근거,key,그래프 식별키,S,35
+NODE,dp_card_source_evidence,PDF 원문 근거,source_json,원본 행/구조 JSON,S,35
+RELATIONSHIP,dp_belongs_to,공통서비스에 속함,key,그래프 식별키,S,1
+RELATIONSHIP,dp_belongs_to,공통서비스에 속함,source_json,원본 행/구조 JSON,S,1
+RELATIONSHIP,dp_has_atom,조건 항목 포함,atom_seq,조건 항목 순번,I,15
+RELATIONSHIP,dp_has_atom,조건 항목 포함,key,그래프 식별키,S,15
+RELATIONSHIP,dp_has_atom,조건 항목 포함,source_json,원본 행/구조 JSON,S,15
+RELATIONSHIP,dp_has_benefit,카드 혜택 보유,key,그래프 식별키,S,5
+RELATIONSHIP,dp_has_benefit,카드 혜택 보유,source_json,원본 행/구조 JSON,S,5
+RELATIONSHIP,dp_has_branch,조건 분기 포함,key,그래프 식별키,S,9
+RELATIONSHIP,dp_has_branch,조건 분기 포함,source_json,원본 행/구조 JSON,S,9
+RELATIONSHIP,dp_has_common_benefit,공통 혜택 적용,key,그래프 식별키,S,1
+RELATIONSHIP,dp_has_common_benefit,공통 혜택 적용,source_json,원본 행/구조 JSON,S,1
+RELATIONSHIP,dp_has_document,원천 문서 연결,approval_status_cd,승인 상태,S,3
+RELATIONSHIP,dp_has_document,원천 문서 연결,doc_role_cd,문서 역할,S,3
+RELATIONSHIP,dp_has_document,원천 문서 연결,key,그래프 식별키,S,4
+RELATIONSHIP,dp_has_document,원천 문서 연결,source_json,원본 행/구조 JSON,S,4
+RELATIONSHIP,dp_has_expr,조건식 보유,key,그래프 식별키,S,8
+RELATIONSHIP,dp_has_expr,조건식 보유,source_json,원본 행/구조 JSON,S,8
+RELATIONSHIP,dp_has_rule,계산 규칙 보유,key,그래프 식별키,S,6
+RELATIONSHIP,dp_has_rule,계산 규칙 보유,source_json,원본 행/구조 JSON,S,6
+RELATIONSHIP,dp_in_chunk,해당 청크에 포함,key,그래프 식별키,S,35
+RELATIONSHIP,dp_in_chunk,해당 청크에 포함,source_json,원본 행/구조 JSON,S,35
+RELATIONSHIP,dp_in_document,해당 문서에 속함,key,그래프 식별키,S,10
+RELATIONSHIP,dp_in_document,해당 문서에 속함,source_json,원본 행/구조 JSON,S,10
+RELATIONSHIP,dp_on_page,해당 페이지에 위치,key,그래프 식별키,S,10
+RELATIONSHIP,dp_on_page,해당 페이지에 위치,source_json,원본 행/구조 JSON,S,10
+RELATIONSHIP,dp_same_as,동일 혜택으로 확인,bnft_cd,혜택 코드,S,1
+RELATIONSHIP,dp_same_as,동일 혜택으로 확인,status,동일성 확인 상태,S,1
+RELATIONSHIP,dp_same_as,동일 혜택으로 확인,key,그래프 식별키,S,1
+RELATIONSHIP,dp_same_as,동일 혜택으로 확인,source_json,원본 행/구조 JSON,S,1
+RELATIONSHIP,dp_supported_by,원문 근거로 뒷받침됨,ev_item_cd,근거 항목 유형,S,57
+RELATIONSHIP,dp_supported_by,원문 근거로 뒷받침됨,ev_item_key,근거 항목 키,S,57
+RELATIONSHIP,dp_supported_by,원문 근거로 뒷받침됨,ev_link_id,근거 연결 아이디 (기존명),S,57
+RELATIONSHIP,dp_supported_by,원문 근거로 뒷받침됨,ev_subject_cd,근거 대상 유형,S,57
+RELATIONSHIP,dp_supported_by,원문 근거로 뒷받침됨,key,그래프 식별키,S,57
+RELATIONSHIP,dp_supported_by,원문 근거로 뒷받침됨,source_json,원본 행/구조 JSON,S,57
+RELATIONSHIP,dp_targets,규칙 적용 대상,key,그래프 식별키,S,34
+RELATIONSHIP,dp_targets,규칙 적용 대상,source_json,원본 행/구조 JSON,S,34
