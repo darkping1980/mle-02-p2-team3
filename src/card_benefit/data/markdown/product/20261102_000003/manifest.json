@@ -1,0 +1,45 @@
+{
+  "card_doc_id": "20261102_000003",
+  "doc_cd": "HANA_14955_20260609",
+  "doc_title": "JADE Classic 상품설명서",
+  "doc_type_cd": "PRODUCT_GUIDE",
+  "pdf_file": "hana_all/credit/신용_JADEClassic_상품설명서(공식PDF)_14955_20260609.pdf",
+  "pdf_sha256": "1b4dcf06fca042f276718e877f9502ffe6625557b9e454bb324dacf35a8cf949",
+  "db_page_cnt": 6,
+  "markdown_page_cnt": 6,
+  "pages": [
+    {
+      "page_no": 1,
+      "file": "page_001.md",
+      "chars": 80
+    },
+    {
+      "page_no": 2,
+      "file": "page_002.md",
+      "chars": 1228
+    },
+    {
+      "page_no": 3,
+      "file": "page_003.md",
+      "chars": 2111
+    },
+    {
+      "page_no": 4,
+      "file": "page_004.md",
+      "chars": 2063
+    },
+    {
+      "page_no": 5,
+      "file": "page_005.md",
+      "chars": 2536
+    },
+    {
+      "page_no": 6,
+      "file": "page_006.md",
+      "chars": 2792
+    }
+  ],
+  "converter": "pymupdf4llm 1.28.2",
+  "generated_at": "2026-11-03T08:31:42.538184+00:00",
+  "note": "중간 산출물. 원문 근거 위치는 card_doc_page.page_raw_txt 기준이며 이 Markdown의 문자 위치를 쓰지 않는다."
+}

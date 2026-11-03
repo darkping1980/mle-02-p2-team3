@@ -1,0 +1,25 @@
+{
+  "card_doc_id": "20261103_000016",
+  "doc_cd": "HANA_MW003_20260209",
+  "doc_title": "공통_Mastercard브랜드서비스_MW003_20260209",
+  "doc_type_cd": "BRAND_SERVICE",
+  "pdf_file": "hana_all/common/공통_Mastercard브랜드서비스_MW003_20260209.pdf",
+  "pdf_sha256": "073cbb05588c0d9cfcc8354e20143798b9a43233ecf0fe9a5edf7dbcb771a93c",
+  "db_page_cnt": 2,
+  "markdown_page_cnt": 2,
+  "pages": [
+    {
+      "page_no": 1,
+      "file": "page_001.md",
+      "chars": 3595
+    },
+    {
+      "page_no": 2,
+      "file": "page_002.md",
+      "chars": 4798
+    }
+  ],
+  "converter": "pymupdf4llm 1.28.2",
+  "generated_at": "2026-11-03T08:31:59.511012+00:00",
+  "note": "중간 산출물. 원문 근거 위치는 card_doc_page.page_raw_txt 기준이며 이 Markdown의 문자 위치를 쓰지 않는다."
+}

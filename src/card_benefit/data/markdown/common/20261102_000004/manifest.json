@@ -1,0 +1,25 @@
+{
+  "card_doc_id": "20261102_000004",
+  "doc_cd": "HANA_VS002_20260317",
+  "doc_title": "공통_VISA브랜드서비스_VS002_20260317",
+  "doc_type_cd": "BRAND_SERVICE",
+  "pdf_file": "hana_all/common/공통_VISA브랜드서비스_VS002_20260317.pdf",
+  "pdf_sha256": "cd7356d44802272d4101f07d2187e18b48c939d750231bf66ef7681ba6686fa0",
+  "db_page_cnt": 2,
+  "markdown_page_cnt": 2,
+  "pages": [
+    {
+      "page_no": 1,
+      "file": "page_001.md",
+      "chars": 2787
+    },
+    {
+      "page_no": 2,
+      "file": "page_002.md",
+      "chars": 3850
+    }
+  ],
+  "converter": "pymupdf4llm 1.28.2",
+  "generated_at": "2026-11-03T08:31:44.701865+00:00",
+  "note": "중간 산출물. 원문 근거 위치는 card_doc_page.page_raw_txt 기준이며 이 Markdown의 문자 위치를 쓰지 않는다."
+}

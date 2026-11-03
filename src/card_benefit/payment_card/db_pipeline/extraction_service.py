@@ -42,7 +42,7 @@ from .extraction_schema import (
 
 extraction_logger = logging.getLogger("card_benefit.extraction")
 
-PROMPT_VER = "EXTRACT_V3"
+PROMPT_VER = "EXTRACT_V4"
 IMAGE_DPI = 150
 INPUT_MODE = "TEXT_IMAGE"
 KEY_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,40}$")
@@ -77,6 +77,18 @@ PROMPT_TXT = """당신은 카드 상품설명서에서 혜택 정보를 구조�
 11. 한도(limits)마다 supports=LIMIT, support_key=그 limit_key인 근거를 남깁니다. 인용에는 limit_raw_txt가 들어 있어야 합니다.
 12. 입력이 [추출 대상]과 [같은 페이지 유의사항 문맥]으로 나뉘어 있으면 혜택과 조건은 [추출 대상]에서만 추출합니다.
     [같은 페이지 유의사항 문맥]은 적용 대상·제공 기간을 뒷받침하는 APPLICABILITY 인용에만 사용하고, 그 안의 내용으로 혜택을 새로 만들지 않습니다.
+13. payout_unit_cd는 고객이 실제로 받는 보상의 단위입니다(공통코드 PAYOUT_UNIT).
+    - KRW: 원문상 보상이 원화 할인 또는 원화 캐시백인 경우. 계산값이 %여도 보상이 원화이면 KRW입니다.
+    - HANAMONEY, UNIMILE, WALLET_POINT: 원문에 해당 포인트·마일리지로 지급한다고 적힌 경우.
+    - SERVICE: 금액이나 포인트가 아니라 서비스 이용 자체를 제공하는 경우.
+    - 원문에서 보상 형태를 확인할 수 없으면 UNKNOWN입니다. 할인이라는 단어만으로 다른 통화나 포인트를 추정하지 않습니다.
+14. 서비스를 무상으로 제공하는 혜택(예: 조식 제공, 그린피 면제, 멤버십 무료 가입, 수수료 무료)은 calc_method_cd=FREE_SERVICE,
+    payout_unit_cd=SERVICE, value_num=null이고 value_raw_txt에는 "조식 제공", "무료"처럼 원문 표현을 그대로 씁니다.
+    1+1, 포인트 지급처럼 정해진 계산 방법으로 표현할 수 없는 혜택은 calc_method_cd=UNKNOWN으로 두고 unresolved에 사유를 적습니다.
+15. 한도의 period_cd는 원문 표현으로 정합니다. 일·월·연 표현이 있으면 DAY·MONTH·YEAR, "건당", "1회 결제 시", "예약 시"처럼 결제 1건에만
+    적용되는 상한이거나 할인율 바로 뒤의 "(최대 N원)"처럼 해당 결제 1건의 할인 상한이면 TXN입니다. 판단할 수 없으면 UNKNOWN입니다.
+    한도 단위가 원화·하나머니·횟수가 아니면(예: USD) cap_unit_cd=UNKNOWN으로 두고 값을 환산하지 않습니다.
+16. targets[].target_nm은 원문에 적힌 가맹점·서비스 이름을 그대로 복사합니다. 혜택 설명을 덧붙이거나 여러 표현을 합쳐 새 이름을 만들지 않습니다.
 """
 
 
@@ -696,11 +708,12 @@ class ExtractionService:
         self.max_attempts = max_attempts
 
     def run(self, card_doc_id: str, card_id: int | None = None, page_numbers: set[int] | None = None,
-            split_rule_ver: str | None = None) -> RunResult:
+            split_rule_ver: str | None = None, chunk_ids: set[str] | None = None) -> RunResult:
         """문서를 추출한다. 실행할 때마다 새 ``card_ai_run_id`` 를 만들고 이전 결과는 바꾸지 않는다.
 
         한 문서에 분리 규칙이 다른 청크가 함께 있으면(예: PAGE_V1과 BLOCK_V1) ``split_rule_ver`` 로 하나를 고른다.
-        같은 원문을 두 번 추출하지 않기 위해서다.
+        같은 원문을 두 번 추출하지 않기 위해서다. ``chunk_ids`` 는 일부 청크만 시험할 때 쓰며, 그 실행은 항상 PARTIAL이고
+        재사용되지 않는다.
 
         Raises:
             ExtractionError: 상품·문서·입력 페이지·로컬 PDF가 준비되지 않은 경우.
@@ -725,13 +738,21 @@ class ExtractionService:
                 raise ExtractionError("요청 페이지가 AI 입력 대상에 없습니다")
             omitted = [c['page_no'] for c in chunks if c['page_no'] not in page_numbers]
             chunks = [c for c in chunks if c['page_no'] in page_numbers]
+        omitted_chunks = []
+        if chunk_ids is not None:
+            if not chunk_ids or not chunk_ids.issubset({c['card_doc_chunk_id'] for c in chunks}):
+                raise ExtractionError("요청 청크가 AI 입력 대상에 없습니다")
+            omitted_chunks = [c['card_doc_chunk_id'] for c in chunks if c['card_doc_chunk_id'] not in chunk_ids]
+            chunks = [c for c in chunks if c['card_doc_chunk_id'] in chunk_ids]
         pdf_path = self._local_pdf(document)
         blocked = sorted(set(self.repository.select_blocked_pages(card_doc_id)) | set(omitted))
         params = self._run_param()
         params["split_rule_ver"] = rule_of(chunks[0])
+        if chunk_ids is not None:
+            params["chunk_ids"] = sorted(chunk_ids)
         # 부분 실행, 제외 페이지 또는 알려지지 않은 모델 설정은 재사용하지 않는다.
         config = getattr(self.llm_client, "reuse_config", None)
-        if card_id is None and page_numbers is None and not blocked and isinstance(config, dict):
+        if card_id is None and page_numbers is None and chunk_ids is None and not blocked and isinstance(config, dict):
             payload = {"doc_sha256": document["doc_sha256"], "card_id": card_id,
                        "chunks": chunks, "params": params, "model_config": config,
                        "prompt_sha256": hashlib.sha256(PROMPT_TXT.encode()).hexdigest(),
@@ -747,7 +768,7 @@ class ExtractionService:
         run_id = self.repository.insert_run(self.llm_client.model_nm, PROMPT_VER, PROMPT_TXT, params, card_doc_id)
 
         try:
-            return self._run_pages(run_id, card_id, chunks, pdf_path, blocked)
+            return self._run_pages(run_id, card_id, chunks, pdf_path, blocked, omitted_chunks)
         except Exception:
             self.repository.finish_run(run_id, "FAILED", "처리 중 오류")     # RUNNING으로 남지 않게 한다
             raise
@@ -790,7 +811,8 @@ class ExtractionService:
             return False
         return True
 
-    def _run_pages(self, run_id: str, card_id: int, chunks: list[dict], pdf_path: Path, blocked: list[int]) -> RunResult:
+    def _run_pages(self, run_id: str, card_id: int, chunks: list[dict], pdf_path: Path, blocked: list[int],
+                   omitted_chunks: list[str] = ()) -> RunResult:
         """페이지를 차례로 처리하고 모두 성공했을 때만 문서 통합을 저장한다."""
         pages: list[PageResult] = []
         failed = 0
@@ -810,13 +832,15 @@ class ExtractionService:
 
         merged = False
         notes = [f"AI 입력 제외 페이지: {blocked}"] if blocked else []
+        if omitted_chunks:
+            notes.append(f"AI 입력 제외 청크: {len(omitted_chunks)}건")
         if failed:
             notes.append("실패한 페이지가 있어 문서 통합을 하지 않음")
         else:
             merged = self._store_merge(pages)
             if not merged:
                 notes.append("문서 통합 저장 실패")
-        status = "SUCCEEDED" if merged and not blocked else ("PARTIAL" if pages else "FAILED")
+        status = "SUCCEEDED" if merged and not blocked and not omitted_chunks else ("PARTIAL" if pages else "FAILED")
         note = " / ".join(notes) or None
         self.repository.finish_run(run_id, status, note)
         extraction_logger.info("EXTRACT %s run=%s pages_ok=%d pages_failed=%d", status, run_id, len(pages), failed)

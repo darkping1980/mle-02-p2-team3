@@ -1,0 +1,30 @@
+{
+  "card_doc_id": "20261103_000009",
+  "doc_cd": "HANA_AE001_20260305",
+  "doc_title": "공통_AMEX브랜드서비스_AE001_20260305",
+  "doc_type_cd": "BRAND_SERVICE",
+  "pdf_file": "hana_all/common/공통_AMEX브랜드서비스_AE001_20260305.pdf",
+  "pdf_sha256": "a52eff8857df2d431bad22a4c0fad485a789fae66b229f748fb8059ffc41bce2",
+  "db_page_cnt": 3,
+  "markdown_page_cnt": 3,
+  "pages": [
+    {
+      "page_no": 1,
+      "file": "page_001.md",
+      "chars": 1463
+    },
+    {
+      "page_no": 2,
+      "file": "page_002.md",
+      "chars": 2386
+    },
+    {
+      "page_no": 3,
+      "file": "page_003.md",
+      "chars": 2985
+    }
+  ],
+  "converter": "pymupdf4llm 1.28.2",
+  "generated_at": "2026-11-03T08:31:47.204546+00:00",
+  "note": "중간 산출물. 원문 근거 위치는 card_doc_page.page_raw_txt 기준이며 이 Markdown의 문자 위치를 쓰지 않는다."
+}

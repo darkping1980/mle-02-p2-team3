@@ -151,11 +151,37 @@ def test_default_period_applies_only_without_own_period():
         candidate_period({'validity_period_txt': '별도 공지 시까지'})
 
 
+def test_other_default_period_wordings_and_trailing_kkaji():
+    expected = (date(2026,1,1), date(2027,1,1))
+    assert period('2026년 1월 1일 ~ 12월 31일까지') == expected
+    for text in ('기간이 명시되지 않는 한 2026년 1월 1일 ~ 12월 31일까지', '기간이따로명시되지않은한 2026년1월1일~ 12월31일'):
+        assert candidate_period({'validity_period_txt': text, 'evidence': [{'supports': 'RULE', 'quote_txt': 'Trip.com 호텔 6%'}]}) == expected
+        with pytest.raises(ValueError):
+            candidate_period({'validity_period_txt': text, 'evidence': [{'supports': 'RULE', 'quote_txt': '그린피 25% 할인 (~6.30)'}]})
+    with pytest.raises(ValueError):
+        period('2026년 1월 1일 ~ 12월 31일까지 예정')
+
+
 def test_register_uses_default_period_without_own_period():
     service = fixture()
     service.repo.candidate['stg_raw_item']['validity_period_txt'] = DEFAULT_PERIOD
     assert service.register_run('R1', IDS)[0].status == 'INSERTED'
     assert next(iter(service.repo.common_bnft.values()))['bnft_valid_to_excl'] == date(2027,1,1)
+
+
+def test_same_span_stored_twice_is_one_source_but_other_position_stays_ambiguous():
+    raw = {'evidence': [{'supports': 'RULE', 'support_key': 'r1', 'quote_txt': '그린피 본인 면제'},
+                        {'supports': 'APPLICABILITY', 'quote_txt': '등급 카드 소지자에게 공통으로 제공'}]}
+    norm = {'rule_list': [{'rule_key': 'r1'}], 'limit_list': []}
+    def row(evidence_id, quote, start, chunk='C1'):
+        return dict(evidence_id=evidence_id, quote_txt=quote, card_doc_chunk_id=chunk, start_pos=start, end_pos=start + len(quote) - 1)
+    base = [row('E1', '그린피 본인 면제', 10), row('E3', '등급 카드 소지자에게 공통으로 제공', 100, 'N1')]
+    # 규칙과 조건이 같은 구절을 인용해 같은 위치의 행이 두 번 저장된 경우
+    ids, problem = CommonBenefitService._evidence_ids(raw, norm, [*base, row('E2', '그린피 본인 면제', 10)])
+    assert problem is None and ids == ['E1', 'E3']
+    # 같은 문자열이 다른 위치에도 있으면 어느 구간인지 모호하다
+    ids, problem = CommonBenefitService._evidence_ids(raw, norm, [*base, row('E2', '그린피 본인 면제', 50)])
+    assert ids == [] and '모호' in problem
 
 
 def test_original_visa_code_is_reproduced():

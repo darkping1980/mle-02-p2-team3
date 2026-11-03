@@ -1,0 +1,25 @@
+{
+  "card_doc_id": "20261103_000017",
+  "doc_cd": "HANA_UD001_20260324",
+  "doc_title": "공통_UnionPay브랜드서비스_UD001_20260324",
+  "doc_type_cd": "BRAND_SERVICE",
+  "pdf_file": "hana_all/common/공통_UnionPay브랜드서비스_UD001_20260324.pdf",
+  "pdf_sha256": "1b1d36b8e55fdacc7fcb514598c945a23f65824600a827c9f1868032eec355f5",
+  "db_page_cnt": 2,
+  "markdown_page_cnt": 2,
+  "pages": [
+    {
+      "page_no": 1,
+      "file": "page_001.md",
+      "chars": 3082
+    },
+    {
+      "page_no": 2,
+      "file": "page_002.md",
+      "chars": 4154
+    }
+  ],
+  "converter": "pymupdf4llm 1.28.2",
+  "generated_at": "2026-11-03T08:32:01.494148+00:00",
+  "note": "중간 산출물. 원문 근거 위치는 card_doc_page.page_raw_txt 기준이며 이 Markdown의 문자 위치를 쓰지 않는다."
+}

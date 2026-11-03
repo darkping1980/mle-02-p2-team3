@@ -1,0 +1,25 @@
+{
+  "card_doc_id": "20261101_000002",
+  "doc_cd": "HANA_15650_20260429",
+  "doc_title": "ONE PICK STYLE 하나 체크카드 상품설명서",
+  "doc_type_cd": "PRODUCT_GUIDE",
+  "pdf_file": "hana_all/debit/체크_ONEPICKSTYLE하나체크카드_상품설명서(공식PDF,URL추정확인)_15650_20260429.pdf",
+  "pdf_sha256": "6ec9641c2e318ce9429a916f5d01c0468ccc3cffb238eb1162a43b280e25c6d2",
+  "db_page_cnt": 2,
+  "markdown_page_cnt": 2,
+  "pages": [
+    {
+      "page_no": 1,
+      "file": "page_001.md",
+      "chars": 2808
+    },
+    {
+      "page_no": 2,
+      "file": "page_002.md",
+      "chars": 3222
+    }
+  ],
+  "converter": "pymupdf4llm 1.28.2",
+  "generated_at": "2026-11-03T08:31:37.903585+00:00",
+  "note": "중간 산출물. 원문 근거 위치는 card_doc_page.page_raw_txt 기준이며 이 Markdown의 문자 위치를 쓰지 않는다."
+}

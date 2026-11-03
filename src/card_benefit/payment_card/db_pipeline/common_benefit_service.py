@@ -44,7 +44,8 @@ def quote_text(evidence: list[dict], supports: str) -> str | None:
 def period(raw: str | None):
     if raw is None or not raw.strip():
         return None, None
-    match = re.fullmatch(r"\s*(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*[~～-]\s*(?:(\d{4})\s*년\s*)?(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*", raw)
+    # 끝의 "까지"는 종료일을 포함한다는 뜻이라 해석에 영향이 없다.
+    match = re.fullmatch(r"\s*(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*[~～-]\s*(?:(\d{4})\s*년\s*)?(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*(?:까지)?\s*", raw)
     if not match:
         raise ValueError("제공 기간을 안전하게 해석할 수 없습니다")
     y, m, d, y2, m2, d2 = match.groups()
@@ -55,8 +56,10 @@ def period(raw: str | None):
     return start, end
 
 
-# "이용기간 별도 표기한 경우 외에는 <기간>": 혜택에 별도 기간이 없을 때만 문서의 기본 기간이 적용된다.
-DEFAULT_PERIOD_PREFIX = re.compile(r"\s*이용\s*기간\s*별도\s*표기한\s*경우\s*외에는\s*")
+# "이용기간 별도 표기한 경우 외에는 <기간>"(UnionPay), "기간이 (따로) 명시되지 않는/않은 한 <기간>"(Mastercard·Visa):
+# 혜택에 별도 기간이 없을 때만 문서의 기본 기간이 적용된다.
+DEFAULT_PERIOD_PREFIX = re.compile(
+    r"\s*(?:이용\s*기간\s*별도\s*표기한\s*경우\s*외에는|기간\s*이\s*(?:따로\s*)?명시\s*되지\s*않(?:는|은)\s*한)\s*")
 # 혜택 자신의 인용에 이런 표현이 있으면 별도 기간일 수 있어 기본 기간을 쓰지 않는다.
 OWN_PERIOD_HINT = re.compile(r"\d{4}\s*년|\d{1,2}\s*월|\d{1,2}\s*\.\s*\d{1,2}|개월|기간|까지|부터")
 
@@ -297,6 +300,12 @@ class CommonBenefitService:
         source_targets = {}
         rule_keys = {r['rule_key'] for r in rules}
         limit_keys = {p['pool_key'] for p in limits}
+        # 같은 청크·같은 위치의 근거는 같은 원문 구간이다(규칙과 조건이 같은 구절을 인용하면 두 행으로 저장된다).
+        # 한 구간으로 세고, 같은 문자열이라도 위치가 다르면 서로 다른 후보로 남겨 모호성 검증을 유지한다.
+        spans = {}
+        for e in located:
+            spans.setdefault((e.get('card_doc_chunk_id'), e['start_pos'], e['end_pos']), e)
+        located = list(spans.values())
         for item in raw.get('evidence', []):
             supports = item.get('supports')
             kind = kinds.get(supports)

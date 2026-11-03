@@ -120,6 +120,16 @@ class MultiChunkRunTests(ServiceCase):
         _, llm, _ = self.run_service(whole)
         assert llm.inputs[0].image_png is not None and llm.inputs[0].page_text == self.body + self.notice
 
+    def test_selected_chunks_run_is_partial_and_records_choice(self):
+        session = FakeSession(doc=self.doc, chunks=self.chunks)
+        from payment_card.db_pipeline.extraction_service import ExtractionService
+        llm = FakeLlm({1: page_json(1)})
+        result = ExtractionService(session, llm, data_root=self.root).run("D1", card_id=1, chunk_ids={"B1"})
+        assert result.status == "PARTIAL" and len(llm.inputs) == 1 and "AI 입력 제외 청크: 1건" in result.note
+        assert session.calls("insert_run")[0]["RUN_PARAM"].obj["chunk_ids"] == ["B1"]
+        with pytest.raises(ExtractionError):
+            ExtractionService(session, llm, data_root=self.root).run("D1", card_id=1, chunk_ids={"NOPE"})
+
     def test_mixed_split_rules_require_choice(self):
         mixed = [*self.chunks, {"card_doc_id": "D1", "page_no": 1, "card_doc_chunk_id": "P1", "chunk_seq": 1,
                                 "chunk_raw_txt": self.body + self.notice, "chunk_split_rule_ver": "PAGE_V1"}]

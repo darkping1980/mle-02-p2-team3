@@ -72,7 +72,7 @@ JOIN db_pipeline.card_doc d ON d.card_doc_id=s.card_doc_id AND d.card_doc_id=r.r
 WHERE s.card_ai_run_id=:RUN_ID AND r.run_stage_cd='EXTRACT' AND r.run_status='SUCCEEDED'
   AND s.card_id IS NULL AND s.stg_kind_cd='BENEFIT' AND s.stg_normalized_item IS NOT NULL
   AND d.doc_type_cd='BRAND_SERVICE' AND d.doc_status='ACTIVE'
-ORDER BY s.page_no,s.stg_item_seq;
+ORDER BY s.page_no,s.card_doc_chunk_id,s.stg_item_seq;   -- 다중 청크는 청크마다 항목 순번이 1부터다
 
 -- name: candidate_evidence
 SELECT e.evidence_id,e.quote_txt,e.start_pos,e.end_pos,e.approval_status_cd,
@@ -145,7 +145,7 @@ JOIN db_pipeline.card_doc d ON d.card_doc_id=s.card_doc_id AND d.card_doc_id=r.r
 JOIN db_pipeline.card_product_doc pd ON pd.card_id=s.card_id AND pd.card_doc_id=s.card_doc_id AND pd.doc_role_cd='PRODUCT_GUIDE'
 WHERE s.card_ai_run_id=:RUN_ID AND s.card_id=:CARD_ID AND s.stg_kind_cd='BENEFIT' AND s.stg_normalized_item IS NOT NULL
   AND d.doc_type_cd='PRODUCT_GUIDE' AND d.doc_status='ACTIVE' AND pd.approval_status_cd<>'REJECTED'
-ORDER BY s.page_no,s.stg_item_seq;
+ORDER BY s.page_no,s.card_doc_chunk_id,s.stg_item_seq;   -- 다중 청크는 청크마다 항목 순번이 1부터다
 
 -- name: insert_local_benefit
 INSERT INTO db_pipeline.card_bnft (card_id,bnft_cd,bnft_nm,bnft_type_cd,bnft_origin_cd,bnft_scope_cd,
