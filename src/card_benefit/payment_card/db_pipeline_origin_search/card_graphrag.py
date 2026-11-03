@@ -49,16 +49,23 @@ Intent = Literal["BENEFIT_DETAIL", "BENEFIT_CONDITION", "BENEFIT_LIMIT", "BENEFI
 SECTIONS_BY_INTENT = {
     "BENEFIT_DETAIL": ALL_SECTIONS,
     "BENEFIT_CONDITION": ("rules", "conditions", "evidence"),
-    "BENEFIT_LIMIT": ("rules", "conditions", "limits", "evidence"),  # 1인 1매처럼 한도에 영향을 주는 조건 포함
+    "BENEFIT_LIMIT": ("rules", "conditions", "limits", "evidence"),  # 원문으로만 보존된 조건도 한도에 영향을 줄 수 있어 포함
     "BENEFIT_COMPARE": ALL_SECTIONS,
     "EVIDENCE_SEARCH": ("evidence",),
 }
 # 한도 질문에는 혜택·한도 근거만 전달하고 정책 공통 근거는 뺀다.
 EVIDENCE_SUBJECTS_BY_INTENT = {"BENEFIT_LIMIT": {"BNFT"}}
-UNRESOLVED_ATOMS = {
-    "transit_exclusions": "대중교통 제외 조건의 세부 적용 범위는 아직 확정되지 않았습니다.",
-    "amusement_per_person": "1인 1매가 적용되는 범위는 아직 확정되지 않았습니다.",
-}
+DATA_STATUS_NOTICE = "개발용 자료로, 혜택과 원문 근거 모두 담당자 검토가 끝나지 않았습니다. 실제 카드 혜택과 다를 수 있습니다."
+# 데이터 검토 과제로 등록된 조건 키. 카드 이용 조건 자체는 원문에 있으므로 개발자 기록에만 남긴다.
+UNRESOLVED_ATOMS = {"transit_exclusions": "대중교통 제외 조건의 세부 적용 범위는 아직 확정되지 않았습니다."}
+RAW_ONLY_COND_TYPE = "ETC"          # 정형 판정 없이 원문으로만 보존한 조건 유형(공통코드 COND_TYPE).
+RAW_ONLY_INTENTS = ("BENEFIT_DETAIL", "BENEFIT_LIMIT", "BENEFIT_COMPARE")
+RAW_ONLY_WORDS = r"몇 명|몇 매|몇 장|인원|동반|가족|본인|입장권|티켓"     # 이용 대상·수량을 묻는 표현.
+TIER_NAME = "금액 구간"
+TIER_INTENTS = ("BENEFIT_DETAIL", "BENEFIT_COMPARE")
+TIER_WORDS = r"얼마|금액|구간"
+TIER_OPEN = "여러 금액 구간이 함께 해당할 때 어떤 금액이 적용되는지는 아직 확정되지 않았습니다."
+TIER_PAYMENT_BASIS = "TXN_AMT"      # 결제 1건의 금액을 비교하는 기준(공통코드 COND_BASIS).
 MESSAGES = {
     "EMPTY_QUESTION": "질문을 입력하세요.",
     "QUESTION_TOO_LONG": f"질문은 {MAX_QUESTION_CHARS}자 이내로 입력하세요.",
@@ -92,11 +99,22 @@ INTERNAL_PATTERN = re.compile("|".join(sorted(INTERNAL_CODES, key=len, reverse=T
 # 한글 조사가 바로 붙어도 찾도록 \\b를 쓰지 않는다.
 INTERNAL_FIELD = re.compile(r"(?<![A-Za-z0-9_])[a-z]+(?:_[a-z0-9]+)+|\d{8}_\d{6}")
 UNRESOLVED_WORDS = re.compile(r"미확정|확정할 수 없|확정되지")
+# 자연어 답변의 미확정·데이터 상태 표현. 전달받은 미확정 주제를 말하는 문장만 허용한다.
+UNBACKED_STATUS = re.compile(UNRESOLVED_WORDS.pattern + r"|개발용|검토 대기|담당자 검토|시험 가정")
+TIER_TOPIC = r"금액|구간|지급|적용 방식|선택 방식|규칙"
+SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 # 규칙 선택이 미확정인 혜택에서 데이터에 없는 적용 방식을 말하는 표현.
 INVENTED_RULE = re.compile(r"우선|중복|합산|더 높은|높은 금액|둘 중|하나만|동시에|함께 적용")
+# 금액 뒤의 표현으로 그 금액이 지급액의 적용 조건인지 판별한다.
+TIER_MINIMUM = re.compile(r"\s*이상")
+TIER_PAYMENT = re.compile(r"\s*(?:을|를)?\s*결제")
+# 값 뒤에 "구간"이 오면 지급액 단정이 아니라 구간을 가리키는 말이다.
+TIER_LABEL = re.compile(r"(?:\s*(?:과|와|및|또는|·|,)\s*\d[\d,.]*\s*(?:원|%))*\s*구간")
+# 구간이 같은 혜택들을 두고 혜택이나 가맹점에 따라 금액이 다르다고 쓴 표현.
+SAME_TIER_CLAIM = re.compile(r"(?:가맹점|결제처|혜택|영역|업종)[^.\n]{0,10}(?:따라|별로)[^.\n]{0,15}(?:다르|다릅|달라)")
 # 시스템 미확정 안내가 이미 다루는 주제. LLM의 같은 주제 문장은 화면에서 생략한다.
-UNRESOLVED_TOPICS = (r"DRAFT|PENDING|개발용|검토", r"중첩|함께 적용|선택 방식|금액 구간",
-                     r"NOT|제외 조건", r"1인 1매")
+UNRESOLVED_TOPICS = (r"DRAFT|PENDING|개발용|검토", r"중첩|함께 적용|함께 해당|선택 방식|적용 방식|구간",
+                     r"NOT|제외 조건")
 
 
 class Interpretation(BaseModel):
@@ -115,10 +133,10 @@ class AnswerPoint(BaseModel):
 
 class CardAnswer(BaseModel):
     """답변 LLM의 구조화 출력; ``validate_answer`` 가 조회 결과와 다시 대조한다."""
-    answer_text: str = Field(description="고객에게 그대로 보여 줄 자연스러운 한국어 답변 2~4문장")
+    answer_text: str = Field(description="고객에게 그대로 보여 줄 자연스러운 한국어 설명문. 핵심 답을 먼저 쓰고 조건은 문단을 나눠 쓴다")
     conclusion: str = Field(description="질문에 대한 결론 한두 문장. 미확정이면 미확정이라고 씀")
     points: list[AnswerPoint]
-    uncertain: list[str] = Field(description="검색 결과로 판단할 수 없거나 미확정인 내용")
+    uncertain: list[str] = Field(description="질문의 답에 영향을 주는데 검색 결과로 판단할 수 없는 카드 이용 조건. 없으면 빈 목록")
     cannot_answer_reason: str | None = Field(description="답할 수 없을 때의 이유. 답할 수 있으면 null")
 
 
@@ -149,17 +167,28 @@ INTERPRET_PROMPT = """카드 혜택 질문의 유형과 대상 혜택을 고른�
 {question}
 </question>"""
 
-ANSWER_PROMPT = """개발용 카드 혜택 데이터 검색 결과로 질문에 답한다. 한국어로 쓰고 검색 결과만 사용한다.
+ANSWER_PROMPT = """카드 혜택 검색 결과로 고객의 질문에 답한다. 한국어로 쓰고 검색 결과만 사용한다.
 
-answer_text 작성 규칙:
-- 상담원이 고객에게 말하듯 2~4문장의 자연스러운 존댓말로 쓴다. 목록이나 항목 나열로 쓰지 않는다.
-- 질문에 먼저 답한다. 가능 여부를 묻는 질문이면 가능한지, 불가능한지, 조건에 따라 다른지를 첫 문장에 드러낸다.
-- 추천이나 설명을 묻는 질문이면 해당 카드나 혜택부터 바로 말한다.
+answer_text 작성 규칙 (고객이 읽는 설명문):
+- 상담원이 고객에게 설명하듯 자연스러운 존댓말로 쓴다. 목록이나 항목 나열로 쓰지 않는다.
+- 첫 문단은 질문의 핵심 답이다. 혜택 이름과 질문이 물은 값을 1~2문장으로 먼저 말한다.
+- 가능 여부를 묻는 질문이면 가능한지, 불가능한지, 조건에 따라 다른지를 첫 문장에 드러낸다.
+- 비교 질문이면 차이를 먼저 빠짐없이 쓰고 같은 점을 뒤에 쓴다.
+- 둘째 문단은 혜택을 받을 때 알아야 할 내용이다. 횟수·금액 한도, 지난달 실적 같은 이용 조건, 제외 대상 순서로 쓴다.
+- 질문이 묻지 않았어도 혜택을 못 받게 하는 혜택별 조건은 빼지 않는다. 카드 공통 제외 문구는 질문과 직접 관련될 때만 쓴다.
+- 문단은 빈 줄로 나눈다. 전체 2~5문장으로 쓰고, 내용이 짧으면 한 문단으로 쓴다.
+- 한 문장에 조건을 세 개 이상 넣지 않는다. 앞에서 말한 값을 되풀이하지 않는다.
 - 최초, 지난달, 건당처럼 조건을 좁히는 표현은 빼지 않고 그대로 살린다.
-- 이어서 조건과 금액을 문장으로 풀어 쓴다. "기재되어 있습니다"를 반복하지 않는다.
-- 내부 코드, 영문 상태값, ID, 필드명을 쓰지 않는다. 데이터 검토 상태는 쓰지 않는다. 화면이 따로 안내한다.
-- 질문의 답을 바꾸는 미확정 사항만 "아직 확정되지 않았습니다"처럼 풀어서 쓴다.
+- 원문에서 특정 값에 붙은 표기는 그 값과 함께 쓰고 다른 한도와 합치지 않는다.
+- 실적 기준은 conditions의 min_amt만 쓴다. evidence의 amount_note에 적힌 금액은 근거 문구에 있어도 쓰지 않는다.
+- 여러 혜택의 금액 구간이 같으면 혜택이나 가맹점에 따라 다르다고 쓰지 않는다.
+- "기재되어 있습니다"를 반복하지 않는다.
+- 내부 코드, 영문 상태값, ID, 필드명을 쓰지 않는다.
+- 데이터 검토 상태와 승인 여부는 쓰지 않는다. 화면이 따로 안내한다.
+- open_conditions의 confirmed는 원문 표기이므로 사실로 쓴다. open은 화면이 따로 안내하므로 질문의 답을 바꿀 때만 쓴다.
+- open_conditions와 rule_selection_unresolved가 모두 비어 있으면 "확정되지 않았습니다", "미확정" 같은 표현을 쓰지 않는다.
 - 검색 결과에 없는 내용을 추측하거나 일반 상식으로 보충하지 않는다.
+- answer_text에 쓴 사실은 모두 points에도 근거와 함께 쓴다.
 
 규칙:
 - conclusion에 질문의 결론을 쓴다. 업무 규칙이 미확정이면 결론에 미확정이라고 쓴다.
@@ -168,11 +197,15 @@ answer_text 작성 규칙:
 - 확인된 사실만 단정한다. 검색 결과에 없는 금액·비율·조건·한도를 만들지 않는다.
 - 없는 우선순위, 중복 적용, 예외 규칙을 만들지 않는다.
 - rule_selection_unresolved에 있는 혜택은 지급액을 하나로 정하지 않는다. tiers의 금액 구간을 모두 쓰고, 적용 방식이 미확정임을 분리해서 쓴다.
+- 금액 구간은 기준 금액과 지급액을 짝지어 모두 쓴다. "A원 또는 B원"처럼 줄이지 않는다.
+- 결제 금액을 물었는데 여러 구간이 함께 해당하면 rule_selection_unresolved의 rule_text를 그대로 옮긴 뒤 "이 금액은 여러 구간에 모두 해당하는데, 어떤 금액이 적용되는지는 아직 확정되지 않았습니다."처럼 쓴다. 이때 answer_text는 3문장 이내로 쓰고 한도와 공통 제외는 points에만 쓴다.
+- points의 금액 구간 문장에는 구간 사실만 쓴다. 적용 방식이 미확정이라는 말은 conclusion과 answer_text에만 쓴다.
 - 계산은 같은 단위 두 값의 차이만 쓰고, 두 값을 문장에 함께 쓴다.
-- 데이터 상태(DRAFT, PENDING, 시험 가정)는 points에 쓰지 않고 uncertain에 쓴다. uncertain에는 코드 대신 "검토 대기"처럼 풀어 쓴다.
+- 데이터 상태(DRAFT, PENDING, 시험 가정)는 어느 항목에도 쓰지 않는다.
+- uncertain에는 질문의 답에 영향을 주는데 검색 결과로 판단할 수 없는 카드 이용 조건만 쓴다. open_conditions의 내용은 쓰지 않는다.
 - 조건의 branches는 서로 OR, 같은 branch의 atoms는 서로 AND이며, negate=true는 해당 내용을 제외한다는 뜻이다.
 - rules는 계산 규칙이고 limits는 한도 원문이다. 둘을 섞지 않는다. limits가 비어 있으면 한도가 없다고 쓰지 말고 미확인이라고 쓴다.
-- unresolved에 있는 내용은 결론을 내리지 않는다. 질문의 답에 영향을 주는 내용은 conclusion에도 쓴다.
+- open_conditions의 open은 결론을 내리지 않는다. 질문의 답을 바꾸는 내용은 conclusion에도 쓴다.
 - excluded_terms에 있는 낱말은 혜택 적용 대상이 아니다. 해당 혜택이 적용된다고 쓰지 않는다.
 - applied_cards가 비어 있는 공통 혜택은 특정 카드에 적용된다고 쓰지 않는다.
 - 답할 수 없으면 points를 비우고 cannot_answer_reason에 이유를 쓴다.
@@ -202,7 +235,10 @@ class CardState(TypedDict, total=False):
     retrieved_for: str  # 검증 모드: 조회에 쓴 질문·검색 조건.
     evidence: list[dict]  # retrieve가 evidence_id 기준으로 합친 근거.
     statements: list[str]  # retrieve가 실행한 Cypher 식별자.
-    unresolved: list[str]  # 조회 결과에서 판별한 미확정 사항.
+    unresolved: list[str]  # 조회 결과에서 판별한 미확정 사항 전체(개발자 기록).
+    open_conditions: list[dict]  # 이번 질문에 영향을 주는 미확정 카드 이용 조건.
+    data_notices: list[str]  # 카드 이용 조건이 아닌 자료 검토 상태 안내.
+    other_unresolved: list[str]  # 이번 질문과 직접 관련이 없어 고객 화면에서 뺀 미확정 사항.
     context: dict  # answer가 LLM에 전달한 검색 결과.
     answer: dict  # answer 또는 finish가 만든 화면용 답변.
     error: dict | None  # 실패 단계, 코드, 예외 형식 이름.
@@ -354,7 +390,8 @@ def condition_groups(rows: list[dict]) -> list[dict]:
         atom = source(row["atom"])
         group["branches"].setdefault(row["branch_no"], []).append({
             "atom_key": atom.get("atom_key"), "negate": atom.get("negate_yn"), "type": atom.get("cond_type_cd"),
-            "min_amt": atom.get("cond_min_amt"), "text": atom.get("cond_raw_txt") or atom.get("excl_raw_txt"),
+            "min_amt": atom.get("cond_min_amt"), "max_amt": atom.get("cond_max_amt_excl"), "basis": atom.get("cond_basis_cd"),
+            "text": atom.get("cond_raw_txt") or atom.get("excl_raw_txt"),
             "status": atom.get("cond_status_cd")})
     return [{"scope": group["scope"], "branches": [{"branch_no": number, "atoms": atoms}
                                                    for number, atoms in sorted(group["branches"].items())]}
@@ -384,21 +421,70 @@ def benefit_context(detail: dict) -> dict:
             "conditions": condition_groups(detail["conditions"]), "limits": limits}
 
 
-def find_unresolved(details: list[dict]) -> list[str]:
-    """조회 결과에 나타난 미확정 사항을 LLM 없이 판별한다."""
-    found = ["개발용 자료로, 혜택과 원문 근거 모두 담당자 검토가 끝나지 않았습니다. 실제 카드 혜택과 다를 수 있습니다."]
+def _evidence_ids(detail: dict, matches) -> list[str]:
+    """조회된 근거 연결 중 조건에 맞는 evidence_id를 중복 없이 돌려준다."""
+    return list(dict.fromkeys(source(row["evidence"])["evidence_id"] for row in detail["evidence"] if matches(row)))
+
+
+def unresolved_items(details: list[dict]) -> list[dict]:
+    """조회 결과에 나타난 미확정 사항을 LLM 없이 판별한다. kind가 DATA면 자료 상태, CONDITION이면 카드 이용 조건이다."""
+    found = [{"kind": "DATA", "text": DATA_STATUS_NOTICE}]
     for detail in details:
         benefit = source(detail["context"]["benefit"])
+        name = benefit.get("bnft_nm")
         if detail["context"].get("common"):
-            found.append(f"{benefit.get('bnft_nm')}: 공통 혜택에는 근거 직접 연결이 없어 동일성이 확인된 기존 행의 근거만 표시합니다.")
+            found.append({"kind": "DATA", "text": f"{name}: 공통 혜택에는 근거 직접 연결이 없어 동일성이 확인된 기존 행의 근거만 표시합니다."})
         keys = [item["rule"].get("rule_key") for item in detail["rules"]]
         if len(keys) > 1 and not benefit.get("rule_select_cd"):
-            found.append(f"{benefit.get('bnft_nm')}: 여러 금액 구간이 함께 해당할 때 어떤 금액이 적용되는지는 아직 확정되지 않았습니다.")
+            found.append({"kind": "CONDITION", "text": f"{name}: {TIER_OPEN}", "topic": TIER_NAME, "benefit": name, "open": TIER_OPEN,
+                          "confirmed": benefit.get("bnft_rule_txt"), "intents": TIER_INTENTS, "words": TIER_WORDS,
+                          "evidence_ids": _evidence_ids(detail, lambda row, keys=keys: row.get("rule_key") in keys)})
         for row in detail["conditions"]:
-            message = UNRESOLVED_ATOMS.get(row["atom"].get("key_name"))
-            if message:
-                found.append(message)
-    return list(dict.fromkeys(found))
+            key = row["atom"].get("key_name")
+            atom = source(row["atom"])
+            raw = " ".join((atom.get("cond_raw_txt") or atom.get("excl_raw_txt") or "").split())
+            if key in UNRESOLVED_ATOMS:
+                found.append({"kind": "REVIEW", "text": UNRESOLVED_ATOMS[key], "topic": raw})
+            elif atom.get("cond_type_cd") == RAW_ONLY_COND_TYPE and raw:
+                rule_text = benefit.get("bnft_rule_txt") or ""
+                found.append({"kind": "CONDITION", "text": f"'{raw}'의 적용 범위는 아직 확정되지 않았습니다.", "topic": raw, "benefit": name,
+                              "open": f"조회된 근거에는 '{raw}'라고만 표기되어 있고, 구체적인 적용 기준은 확인되지 않습니다.",
+                              "confirmed": rule_text if raw in rule_text else raw, "intents": RAW_ONLY_INTENTS,
+                              "words": f"{RAW_ONLY_WORDS}|{re.escape(raw)}",
+                              "evidence_ids": _evidence_ids(detail, lambda item, key=key: item["link"].get("ev_item_key") == key)})
+    return found
+
+
+def find_unresolved(details: list[dict]) -> list[str]:
+    """미확정 사항 문장 전체. 개발자 기록과 답변의 중복 문장 판별에 쓴다."""
+    return list(dict.fromkeys(item["text"] for item in unresolved_items(details)))
+
+
+def affects_question(item: dict, question: str, intent: str, amount: int | None) -> bool:
+    """미확정 조건이 이번 질문의 답에 영향을 주는지 판정한다. 금액 구간은 결제 금액이나 그 구간의 값을 묻는 질문에도 영향을 준다."""
+    if intent in item["intents"] or re.search(item["words"], question):
+        return True
+    if item["topic"] != TIER_NAME:
+        return False
+    asked = {token[:2] for token in value_tokens(question)}
+    return amount is not None or bool(asked & {token[:2] for token in value_tokens(item["confirmed"] or "")})
+
+
+def split_unresolved(details: list[dict], question: str, intent: str, amount: int | None) -> tuple[list[dict], list[str], list[str]]:
+    """미확정 사항을 (질문에 영향을 주는 조건, 자료 상태, 나머지)로 나눈다. 같은 내용은 혜택 이름을 합쳐 한 건으로 만든다."""
+    conditions: dict[tuple, dict] = {}
+    notices, others = [], []
+    for item in unresolved_items(details):
+        if item["kind"] == "DATA":
+            notices.append(item["text"])
+        elif item["kind"] == "CONDITION" and affects_question(item, question, intent, amount):
+            merged = conditions.setdefault((item["topic"], item["open"]), {
+                "topic": item["topic"], "benefits": [], "confirmed": item["confirmed"], "open": item["open"], "evidence_ids": []})
+            merged["benefits"] = list(dict.fromkeys([*merged["benefits"], item["benefit"]]))
+            merged["evidence_ids"] = list(dict.fromkeys([*merged["evidence_ids"], *item["evidence_ids"]]))
+        else:
+            others.append(item["text"])
+    return list(conditions.values()), list(dict.fromkeys(notices)), list(dict.fromkeys(others))
 
 
 def numbers_in(text: str) -> set[str]:
@@ -453,28 +539,63 @@ def rule_conflicts(benefits: list[dict], amount: int | None) -> list[dict]:
     for benefit in benefits:
         if len(benefit["rules"]) < 2 or benefit["rule_select"]:
             continue
-        minimums = {group["scope"]: atom["min_amt"] for group in benefit["conditions"] for branch in group["branches"]
-                    for atom in branch["atoms"] if atom["type"] == "SPEND_REQ" and atom["min_amt"] is not None}
-        tiers = sorted(({"rule_key": rule["rule_key"], "value": rule["value"], "unit": rule["unit"],
-                         "min_amt": minimums.get(rule["rule_key"])} for rule in benefit["rules"]),
+        spends = {group["scope"]: atom for group in benefit["conditions"] for branch in group["branches"]
+                  for atom in branch["atoms"] if atom["type"] == "SPEND_REQ" and atom["min_amt"] is not None}
+
+        def spend(rule: dict, field: str):
+            return (spends.get(rule["rule_key"]) or {}).get(field)
+
+        tiers = sorted(({"rule_key": rule["rule_key"], "value": rule["value"], "unit": rule["unit"], "min_amt": spend(rule, "min_amt"),
+                         "max_amt": spend(rule, "max_amt"), "basis": spend(rule, "basis")} for rule in benefit["rules"]),
                        key=lambda tier: tier["min_amt"] or 0)
-        applicable = [tier["rule_key"] for tier in tiers
-                      if amount is not None and tier["min_amt"] is not None and amount >= tier["min_amt"]]
-        conflicts.append({"benefit_id": benefit["benefit_id"], "name": benefit["name"], "tiers": tiers,
-                          "applicable_rule_keys": applicable})
+        conflicts.append({"benefit_id": benefit["benefit_id"], "name": benefit["name"], "tiers": tiers, "rule_text": benefit.get("rule_text"),
+                          "applicable_rule_keys": [tier["rule_key"] for tier in tiers if tier_applies(tier, amount)]})
     return conflicts
+
+
+def tier_applies(tier: dict, amount: int | None) -> bool:
+    """결제 금액이 구간에 드는지 확인한다. 전월 실적처럼 결제 1건을 비교하지 않는 구간은 판정하지 않는다."""
+    if amount is None or tier["min_amt"] is None or tier.get("basis") not in (None, TIER_PAYMENT_BASIS):
+        return False
+    return amount >= tier["min_amt"] and (tier.get("max_amt") is None or amount < tier["max_amt"])
+
+
+def tier_token(tier: dict) -> tuple[str | None, float]:
+    """구간 지급액을 문장의 값과 비교할 ``(종류, 값)`` 으로 만든다."""
+    return UNIT_KINDS.get(tier["unit"]), float(tier["value"])
+
+
+def tier_label(tier: dict) -> str:
+    """구간 하나를 조회값으로 표기한다."""
+    kind, value = tier_token(tier)
+    payout = won(value) if kind == "MONEY" else f"{value:g}{UNIT_LABELS.get(kind, '')}"
+    basis = "결제 건당 " if tier.get("basis") == TIER_PAYMENT_BASIS else ""
+    return f"{basis}{won(tier['min_amt'])} 이상 시 {payout}"
 
 
 def tier_text(conflict: dict) -> str:
     """금액 구간을 혜택별 문장으로 만든다."""
-    parts = [f"결제 건당 {tier['min_amt']:,}원 이상 {tier['value']:,}원" for tier in conflict["tiers"]
-             if tier["min_amt"] is not None]
+    parts = [tier_label(tier) for tier in conflict["tiers"] if tier["min_amt"] is not None]
     return f"{', '.join(parts)} 구간이 기재되어 있습니다."
 
 
 def _in_scope(item: dict, benefit_id: str | None) -> bool:
     """근거가 해당 혜택 조회에서 나왔는지 확인한다. 정책 공통 근거는 조회한 모든 혜택에 속한다."""
     return benefit_id is None or benefit_id in item.get("benefit_ids", [benefit_id])
+
+
+def foreign_spend_values(context: dict) -> set[float]:
+    """공유 문구에 함께 적힌, 조회한 어느 혜택의 실적 기준도 아닌 금액."""
+    atoms = [atom for benefit in context.get("benefits", []) for group in benefit["conditions"] for branch in group["branches"]
+             for atom in branch["atoms"] if atom["type"] == "SPEND_REQ" and atom["min_amt"] is not None]
+    written = {token[1] for atom in atoms for token in value_tokens(atom["text"] or "") if token[0] == "MONEY"}
+    return written - {float(atom["min_amt"]) for atom in atoms}
+
+
+def foreign_spend_in(text: str, context: dict) -> list[str]:
+    """문장에 쓰인 다른 혜택의 실적 기준을 찾는다."""
+    foreign = foreign_spend_values(context)
+    return [token_label(token) for token in value_tokens(text) if token[0] == "MONEY" and token[1] in foreign]
 
 
 def known_values(context: dict, question: str, benefit_id: str | None) -> set[tuple]:
@@ -534,26 +655,100 @@ def verification_level(text: str, cited: list[dict]) -> str:
     return "CALCULATED" if not unknown_values(text, quoted, numbers_in(text)) else "STRUCTURED_ONLY"
 
 
+def distorts_tier(text: str, conflicts: list[dict]) -> bool:
+    """문장의 "기준 금액 → 지급액" 관계가 조회된 금액 구간과 어긋나는지 확인한다. 값이 모두 근거에 있어도 관계가 틀리면 다른 뜻이 된다.
+
+    "N원 이상"이 구간 기준이면 그 구간의 지급액만 맞다. 구간 기준이 아닌 금액이나 "N원 결제"는 그 금액이 구간에 들어야 맞다.
+    """
+    tiers = [tier for conflict in conflicts for tier in conflict["tiers"] if tier["min_amt"] is not None]
+    minimums, values = {float(tier["min_amt"]) for tier in tiers}, {tier_token(tier) for tier in tiers}
+    for sentence in SENTENCE_END.split(text):
+        basis, is_minimum = None, False
+        for match in VALUE_PATTERN.finditer(sentence):
+            token = value_tokens(match.group(0))[0]
+            after = sentence[match.end():]
+            if token[2] is not None:                            # 기간이 붙은 값은 한도라 구간과 무관하다.
+                continue
+            if token[0] == "MONEY" and (TIER_MINIMUM.match(after) or TIER_PAYMENT.match(after)):
+                if TIER_MINIMUM.match(after) and token[:2] in values and token[1] not in minimums:
+                    return True                                 # 지급액을 구간 기준처럼 쓴 문장.
+                basis, is_minimum = token[1], TIER_MINIMUM.match(after) is not None
+            elif basis is not None and token[:2] in values and not TIER_LABEL.match(after):
+                exact = is_minimum and basis in minimums
+                if not any(tier_token(tier) == token[:2] and (basis == float(tier["min_amt"]) if exact else tier_applies(tier, basis))
+                           for tier in tiers):
+                    return True
+    return False
+
+
+def stated_minimums(text: str) -> set[float]:
+    """문장에 "N원 이상"으로 쓰인 기준 금액을 모은다."""
+    return {value_tokens(match.group(0))[0][1] for match in VALUE_PATTERN.finditer(text)
+            if value_tokens(match.group(0))[0][0] == "MONEY" and TIER_MINIMUM.match(text[match.end():])}
+
+
 def picks_single_tier(text: str, conflicts: list[dict], benefit_id: str | None = None) -> str | None:
-    """결제 금액에 여러 구간이 해당하는데 그중 일부 금액만 쓴 문장이면 해당 혜택 이름을 돌려준다."""
-    money = {token[1] for token in value_tokens(text) if token[0] == "MONEY"}
+    """결제 금액에 여러 구간이 해당하는데 그중 일부 구간만 쓴 문장이면 해당 혜택 이름을 돌려준다. 구간은 지급액이나 "기준 금액 이상"으로 언급한다."""
+    written, minimums = {token[:2] for token in value_tokens(text)}, stated_minimums(text)
     for conflict in conflicts:
         if benefit_id is not None and conflict["benefit_id"] != benefit_id:
             continue
-        values = [float(tier["value"]) for tier in conflict["tiers"] if tier["rule_key"] in conflict["applicable_rule_keys"]]
-        if len(values) > 1 and 0 < sum(value in money for value in values) < len(values):
+        tiers = [tier for tier in conflict["tiers"] if tier["rule_key"] in conflict["applicable_rule_keys"]]
+        mentioned = sum(tier_token(tier) in written or float(tier["min_amt"]) in minimums for tier in tiers)
+        if len(tiers) > 1 and sum(tier_token(tier) in written for tier in tiers) and mentioned < len(tiers):
             return conflict["name"]
     return None
 
 
-def fixed_conclusion(conclusion: str, conflicts: list[dict], amount: int | None) -> tuple[str, bool]:
+def won(amount: float) -> str:
+    """금액을 만원·천원 단위 표기로 쓴다."""
+    value = int(amount)
+    if value and value % 10000 == 0:
+        return f"{value // 10000}만원"
+    return f"{value // 1000}천원" if value and value < 10000 and value % 1000 == 0 else f"{value:,}원"
+
+
+def tier_is_quoted(conflict: dict, evidence: list[dict]) -> bool:
+    """혜택 범위의 인용 원문 한 건에 구간의 기준과 지급액이 같은 관계로 적혀 있는지 확인한다."""
+    tiers = [tier for tier in conflict["tiers"] if tier["min_amt"] is not None]
+    needed = {("MONEY", float(tier["min_amt"])) for tier in tiers} | {tier_token(tier) for tier in tiers}
+    for item in evidence:
+        quote = " ".join(item.get("quote", "").split())
+        if _in_scope(item, conflict["benefit_id"]) and needed <= {token[:2] for token in value_tokens(quote)} and not distorts_tier(quote, [conflict]):
+            return True
+    return False
+
+
+def tier_answer(conflicts: list[dict], amount: int | None, evidence: list[dict]) -> str | None:
+    """결제 금액에 여러 구간이 해당할 때의 답. 원문으로 확인된 구간만 쓰고 지급액은 단정하지 않는다. 해당 없으면 None."""
+    groups: dict[str, list[str]] = {}
+    missing = []
+    for conflict in conflicts:
+        if len(conflict["applicable_rule_keys"]) < 2:
+            continue
+        if tier_is_quoted(conflict, evidence):
+            parts = ", ".join(tier_label(tier) for tier in conflict["tiers"] if tier["min_amt"] is not None)
+            groups.setdefault(parts, []).append(conflict["name"])
+        else:
+            missing.append(conflict["name"])
+    if not groups and not missing:
+        return None
+    lines = [(f"{', '.join(names)} 모두" if len(names) > 1 else f"{names[0]}{topic_marker(names[0])}")
+             + f" {parts}{'으로' if topic_marker(parts) == '은' else '로'} 안내되어 있습니다." for parts, names in groups.items()]
+    if missing:
+        lines.append(f"{', '.join(missing)}의 금액 구간은 연결된 원문 근거에서 확인하지 못했습니다.")
+    return (" ".join(lines) + f"\n\n{won(amount)} 결제는 여러 구간에 함께 해당하는데, 어떤 금액이 적용되는지 조회된 근거에서 확인되지 않아 "
+            "실제 지급액은 확정할 수 없습니다.")
+
+
+def fixed_conclusion(conclusion: str, conflicts: list[dict], amount: int | None, evidence: list[dict]) -> tuple[str, bool]:
     """규칙 선택이 미확정인데 결론에 드러나지 않으면 프로그램 문구로 바로잡는다."""
     if not conflicts:
         return conclusion, False
     blocking = [item["name"] for item in conflicts if len(item["applicable_rule_keys"]) > 1]
-    if blocking and (picks_single_tier(conclusion, conflicts) or not UNRESOLVED_WORDS.search(conclusion)):
-        return (f"{amount:,}원 결제의 실제 지급액은 확정할 수 없습니다. {', '.join(blocking)}은(는) 여러 금액 구간이 "
-                "함께 해당하고 규칙 선택 방식이 미확정입니다."), True
+    if blocking and (picks_single_tier(conclusion, conflicts) or distorts_tier(conclusion, conflicts)
+                     or not UNRESOLVED_WORDS.search(conclusion)):
+        return tier_answer(conflicts, amount, evidence), True
     if not UNRESOLVED_WORDS.search(conclusion):
         names = ", ".join(item["name"] for item in conflicts)
         note = f"{names}의 규칙 선택 방식은 미확정입니다."
@@ -600,6 +795,13 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
         if unknown:
             drop(f"조회 결과에 없는 값 {unknown}이 있는 문장을 버렸습니다", text)
             continue
+        foreign = foreign_spend_in(text, context)
+        if foreign:
+            drop(f"다른 혜택의 실적 기준 {foreign}이 있는 문장을 버렸습니다", text)
+            continue
+        if distorts_tier(text, conflicts):
+            drop("금액 구간의 기준과 지급액이 원문과 다른 문장을 버렸습니다", text)
+            continue
         name = picks_single_tier(text, conflicts, benefit_id)
         if name:
             drop(f"{name}의 규칙 선택이 미확정인데 일부 구간 금액만 답한 문장을 버렸습니다", text)
@@ -614,7 +816,7 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
     for conflict in conflicts:
         if len(conflict["applicable_rule_keys"]) < 2:
             continue
-        values = {("MONEY", float(tier["value"]), None) for tier in conflict["tiers"]}
+        values = {(*tier_token(tier), None) for tier in conflict["tiers"]}
         if any(point["benefit_id"] == conflict["benefit_id"]
                and all(_matches(value, set(value_tokens(point["text"]))) for value in values) for point in points):
             continue
@@ -632,11 +834,16 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
     if unknown:
         warnings.append(f"결론에서 조회 결과에 없는 값 {unknown}을 발견해 결론을 제거했습니다: {conclusion[:60]}")
         conclusion = ""
-    conclusion, replaced = fixed_conclusion(conclusion, conflicts, context.get("payment_amount"))
+    conclusion, replaced = fixed_conclusion(conclusion, conflicts, context.get("payment_amount"), context["evidence"])
     if replaced:
         warnings.append("규칙 선택 미확정이 결론에 없어 프로그램 문구로 보완했습니다.")
+    unbacked = unbacked_status(conclusion, context)
+    if unbacked:
+        warnings.append(f"결론에서 근거 없는 미확정 문구를 제거했습니다: {unbacked[:60]}")
+        conclusion = ""
 
     covered = [topic for topic in UNRESOLVED_TOPICS if re.search(topic, " ".join(context.get("unresolved", [])))]
+    covered += [re.escape(topic) for topic in context.get("unresolved_topics", [])]
     uncertain = []
     for text in [*raw.uncertain, *moved]:
         text = text.strip()
@@ -663,8 +870,11 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
             answer_text, source_cd = raw.answer_text.strip(), "llm"
         else:
             warnings.append(f"자연어 답변 대신 검증된 문장을 표시합니다: {problem}")
-            sentences = dict.fromkeys([conclusion, *(point["text"] for point in points)])
-            answer_text, source_cd = " ".join(sentences).strip(), "validated_sentences"
+            body = " ".join(dict.fromkeys(point["text"] for point in points if point["text"] != conclusion))
+            answer_text, source_cd = "\n\n".join(part for part in (conclusion, body) if part), "validated_sentences"
+            program = tier_answer(conflicts, context.get("payment_amount"), context["evidence"])
+            if program:
+                answer_text, source_cd = program, "program_tier"
     return {"status": status, "conclusion": conclusion, "answer_text": answer_text, "answer_source": source_cd, "points": points,
             "uncertain": uncertain, "message": reason}, warnings
 
@@ -672,6 +882,17 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
 def customer_text(text: str) -> str:
     """고객용 문장의 내부 상태 코드를 자연어로 바꾼다."""
     return INTERNAL_PATTERN.sub(lambda match: INTERNAL_CODES[match.group(0)], text)
+
+
+def unbacked_status(text: str, context: dict) -> str | None:
+    """조회 결과가 전달하지 않은 미확정·데이터 상태를 말하는 문장을 찾는다."""
+    allowed = [re.escape(item["topic"]) for item in context.get("open_conditions", [])]
+    if context.get("rule_selection_unresolved"):
+        allowed.append(TIER_TOPIC)
+    for sentence in SENTENCE_END.split(text):
+        if UNBACKED_STATUS.search(sentence) and not any(re.search(topic, sentence) for topic in allowed):
+            return sentence
+    return None
 
 
 def answer_text_problem(text: str, context: dict, question: str, known: set, numbers: set) -> str | None:
@@ -683,10 +904,21 @@ def answer_text_problem(text: str, context: dict, question: str, known: set, num
     unknown = unknown_values(text, known, numbers)
     if unknown:
         return f"조회 결과에 없는 값 {unknown}이 있습니다"
+    foreign = foreign_spend_in(text, context)
+    if foreign:
+        return f"다른 혜택의 실적 기준 {foreign}이 있습니다"
+    unbacked = unbacked_status(text, context)
+    if unbacked:
+        return f"근거 없는 미확정 문구가 있습니다: {unbacked[:60]}"
     conflicts = context.get("rule_selection_unresolved", [])
     blocking = [item for item in conflicts if len(item["applicable_rule_keys"]) > 1]
     if picks_single_tier(text, conflicts) or (blocking and not UNRESOLVED_WORDS.search(text)):
         return "미확정 금액 구간을 단정했습니다"
+    if distorts_tier(text, conflicts):
+        return "금액 구간의 기준과 지급액이 원문과 다릅니다"
+    same_tiers = len({json.dumps([(tier["min_amt"], tier["value"]) for tier in item["tiers"]]) for item in blocking}) == 1
+    if same_tiers and SAME_TIER_CLAIM.search(text):
+        return "구간이 같은 혜택의 금액이 다르다고 썼습니다"
     if conflicts and INVENTED_RULE.search(text):
         return "데이터에 없는 규칙 적용 방식이 있습니다"
     return None
@@ -930,9 +1162,10 @@ class CardGraphRAG:
                              limits=sum(len(d["limits"]) for d in details), evidence=len(evidence),
                              evidence_ids=[item["evidence_id"] for item in evidence],
                              elapsed_ms=(perf_counter() - started) * 1000)
+        conditions, notices, others = split_unresolved(details, state["question"], intent, parameters.get("payment_amount"))
         return {"path": ["retrieve"], "retrieved_data": details, "evidence": evidence, "statements": statements,
                 "retrieval_trace": trace, "exclusions": exclusions,
-                "unresolved": find_unresolved(details),
+                "unresolved": find_unresolved(details), "open_conditions": conditions, "data_notices": notices, "other_unresolved": others,
                 "warnings": [f"조회되지 않은 혜택 {len(missing)}건이 있습니다."] if missing else []}
 
     def after_retrieve(self, state: CardState) -> str:
@@ -945,10 +1178,15 @@ class CardGraphRAG:
         benefits = [benefit_context(detail) for detail in state["retrieved_data"]]
         amount = state["search_parameters"].get("payment_amount")
         context = {"benefits": benefits, "payment_amount": amount,
-                   "rule_selection_unresolved": rule_conflicts(benefits, amount), "unresolved": state["unresolved"],
+                   "rule_selection_unresolved": rule_conflicts(benefits, amount), "open_conditions": state["open_conditions"],
                    "excluded_terms": state.get("exclusions", []),
                    "evidence": [{key: item[key] for key in ("evidence_id", "page_no", "approval_status", "quote", "benefit_ids")}
                                 for item in evidence]}
+        foreign = foreign_spend_values(context)
+        for item in context["evidence"]:
+            labels = [token_label(token) for token in value_tokens(item["quote"]) if token[0] == "MONEY" and token[1] in foreign]
+            if labels:
+                item["amount_note"] = f"이 문구의 {', '.join(labels)}은 이번 혜택의 실적 기준이 아니다."
         text = json.dumps(context, ensure_ascii=False)
         prompt = ANSWER_PROMPT.format(question=state["question"], context=text)
         update: CardState = {"path": ["answer"], "context": context}
@@ -960,7 +1198,9 @@ class CardGraphRAG:
         update["llm_calls"] = [call]
         if parsed is None:
             return {**update, "error": {"stage": "answer", "code": "LLM_FAILED", "type": "ParsingError"}}
-        answer, warnings = validate_answer(parsed, context, state["question"])
+        # LLM에는 질문에 영향을 주는 조건만 보내고, 중복 문장 판별에는 미확정 사항 전체를 쓴다.
+        topics = [item["topic"] for item in unresolved_items(state["retrieved_data"]) if item["kind"] == "CONDITION"]
+        answer, warnings = validate_answer(parsed, {**context, "unresolved": state["unresolved"], "unresolved_topics": topics}, state["question"])
         answer, guarded = enforce_exclusions(answer, state.get("exclusions", []), evidence)
         warnings = [*warnings, *guarded]
         CARD_LOG.log_summary("ANSWER", request_id, model=self.model, response_model=call["response_model"],

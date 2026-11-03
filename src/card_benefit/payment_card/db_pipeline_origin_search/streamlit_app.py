@@ -19,7 +19,8 @@ VERIFICATION_LABELS = {"RAW_MATCH": "값이 인용 원문과 일치", "STRUCTURE
                        "CALCULATED": "인용 원문 값으로 계산한 차이", "NOT_CHECKED": "값이 없는 문장, 내용 일치 미검사"}
 APPROVAL_LABELS = {"PENDING": "검토 대기", "APPROVED": "승인", "REJECTED": "반려"}
 SOURCE_LABELS = {"llm": "LLM이 작성한 문장을 그대로 표시", "validated_sentences": "LLM 문장이 검증을 통과하지 못해 근거 확인 문장을 표시",
-                 "program_exclusion": "제외 대상이라 프로그램 고정 문구로 표시", "none": "답변 문장 없음"}
+                 "program_exclusion": "제외 대상이라 프로그램 고정 문구로 표시",
+                 "program_tier": "LLM 문장이 금액 구간 검증을 통과하지 못해 조회 값으로 만든 구간 안내를 표시", "none": "답변 문장 없음"}
 NODE_LABELS = {"interpret": "질문 해석", "answer": "답변 생성"}
 _MARKDOWN_SPECIAL = re.compile(r"([\\`*_{}\[\]<>()#+\-.!|~$:])")
 
@@ -76,6 +77,28 @@ def show_generation(outcome: dict) -> None:
             st.text(line)
 
 
+def show_open_items(outcome: dict, pages: dict) -> None:
+    """미확정 카드 이용 조건과 자료 검토 상태를 구분해 표시한다."""
+    conditions = outcome.get("open_conditions") or []
+    uncertain = outcome["answer"]["uncertain"]
+    notices = outcome.get("data_notices") or []
+    if not (conditions or uncertain or notices):
+        return
+    st.subheader("확인이 필요한 사항", anchor=False)
+    if conditions or uncertain:
+        st.markdown("**카드 이용 조건**")
+    for item in conditions:
+        st.markdown(f"- **{plain(item['topic'])}** ({plain(', '.join(item['benefits']))}): {plain(item['open'])}")
+        cited = ", ".join(f"{evidence_id} ({pages[evidence_id]}쪽)" for evidence_id in item["evidence_ids"] if evidence_id in pages)
+        st.caption(f"PDF 표기: {plain(item['confirmed'])}" + (f" · 근거: {cited}" if cited else ""))
+    for text in dict.fromkeys(uncertain):
+        st.markdown("- " + plain(text))
+    if notices:
+        st.markdown("**자료 검토 상태** (카드 이용 조건이 아닌 개발 자료 안내)")
+        for text in notices:
+            st.caption(plain(text))
+
+
 def show_outcome(outcome: dict) -> None:
     """마지막 실행 결과를 표시한다. 위젯 재실행은 이 저장값만 읽는다."""
     answer = outcome["answer"]
@@ -106,12 +129,9 @@ def show_outcome(outcome: dict) -> None:
             origin = " · 프로그램이 조회 값으로 작성" if point["origin"] == "system" else ""
             st.caption("근거: " + ", ".join(f"{item} ({pages[item]}쪽)" for item in point["evidence_ids"])
                        + f" · {VERIFICATION_LABELS[point['verification']]}{origin}")
-    unresolved = [*answer["uncertain"], *(outcome.get("unresolved") or [])]
-    if unresolved:
-        st.subheader("확인이 필요한 사항", anchor=False)
-        for text in dict.fromkeys(unresolved):
-            st.markdown("- " + plain(text))
+    show_open_items(outcome, pages)
     cited = {item for point in answer["points"] for item in point["evidence_ids"]}
+    cited.update(item for condition in outcome.get("open_conditions") or [] for item in condition["evidence_ids"])
     used = [item for item in evidence if item["evidence_id"] in cited]
     others = [item for item in evidence if item["evidence_id"] not in cited]
     if evidence:
@@ -128,6 +148,10 @@ def show_outcome(outcome: dict) -> None:
             st.json(outcome["error"])
         for warning in outcome["warnings"]:
             st.warning(warning)
+        if outcome.get("other_unresolved"):
+            st.markdown("**고객 화면에서 뺀 미확정 사항** (이번 질문과 직접 관련 없음)")
+            for text in outcome["other_unresolved"]:
+                st.caption(plain(text))
         st.markdown("**LLM 호출과 토큰**")
         st.dataframe(outcome["llm_calls"], hide_index=True)
         total = sum(call["cost_usd"] or 0 for call in outcome["llm_calls"])
