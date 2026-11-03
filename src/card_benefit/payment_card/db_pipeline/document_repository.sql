@@ -95,6 +95,7 @@ INSERT INTO db_pipeline.card_doc_chunk (
     chunk_start_pos,
     chunk_end_pos,
     chunk_raw_txt,
+    chunk_type_cd,
     chunk_status,
     chunk_split_rule_ver,
     create_user_id,
@@ -106,11 +107,27 @@ INSERT INTO db_pipeline.card_doc_chunk (
     :CHUNK_START_POS,
     :CHUNK_END_POS,
     :CHUNK_RAW_TXT,
+    :CHUNK_TYPE_CD,
     :CHUNK_STATUS,
     :CHUNK_SPLIT_RULE_VER,
     :USER_ID,
     :USER_ID
 );
+
+-- name: select_chunk_state
+-- 기존 문서에 청크를 추가하기 전 페이지 수, 마지막 청크 순번, 이미 있는 분리 규칙을 확인한다.
+SELECT (SELECT count(*) FROM db_pipeline.card_doc_page p WHERE p.card_doc_id = :CARD_DOC_ID) AS page_cnt,
+       COALESCE((SELECT max(c.chunk_seq) FROM db_pipeline.card_doc_chunk c WHERE c.card_doc_id = :CARD_DOC_ID), 0) AS max_seq,
+       (SELECT array_agg(DISTINCT c.chunk_split_rule_ver) FROM db_pipeline.card_doc_chunk c WHERE c.card_doc_id = :CARD_DOC_ID) AS split_rules
+;
+
+-- name: select_page_texts
+-- 등록된 페이지 원문. 새 청크는 이 원문의 연속 구간이다.
+SELECT page_no, page_raw_txt, page_note
+FROM db_pipeline.card_doc_page
+WHERE card_doc_id = :CARD_DOC_ID
+ORDER BY page_no
+;
 
 -- name: select_page_hashes
 -- PDF를 다시 추출한 결과와 대조할 페이지 해시를 조회한다.
@@ -223,13 +240,19 @@ page AS (
 chunk AS (
     SELECT c.* FROM db_pipeline.card_doc_chunk c JOIN doc d ON d.card_doc_id = c.card_doc_id
 ),
+-- 분리 규칙(chunk_split_rule_ver)별로 검증한다. 기존 PAGE_V1 청크를 둔 채 BLOCK_V1 청크를 추가한 문서도 각 청크 묶음이
+-- 페이지를 빈틈없이 덮고 순번이 이어지는지 따로 확인한다.
 ordered AS (
     SELECT c.*,
-           ROW_NUMBER() OVER (ORDER BY c.page_no, c.chunk_start_pos, c.chunk_end_pos) AS expected_seq,
+           ROW_NUMBER() OVER (PARTITION BY c.chunk_split_rule_ver ORDER BY c.page_no, c.chunk_start_pos, c.chunk_end_pos)
+               + MIN(c.chunk_seq) OVER (PARTITION BY c.chunk_split_rule_ver) - 1 AS expected_seq,
            COALESCE(MAX(c.chunk_end_pos) OVER (
-               PARTITION BY c.page_no ORDER BY c.chunk_start_pos, c.chunk_end_pos
+               PARTITION BY c.chunk_split_rule_ver, c.page_no ORDER BY c.chunk_start_pos, c.chunk_end_pos
                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS covered_end
     FROM chunk c
+),
+rule_ver AS (
+    SELECT DISTINCT chunk_split_rule_ver FROM chunk
 ),
 gap AS (
     SELECT o.page_no, o.covered_end + 1 AS gap_start, o.chunk_start_pos - 1 AS gap_end
@@ -238,8 +261,9 @@ gap AS (
     UNION ALL
     SELECT p.page_no, COALESCE(MAX(c.chunk_end_pos), 0) + 1, p.page_char_cnt
     FROM page p
-    LEFT JOIN chunk c ON c.page_no = p.page_no
-    GROUP BY p.page_no, p.page_char_cnt
+    CROSS JOIN rule_ver r
+    LEFT JOIN chunk c ON c.page_no = p.page_no AND c.chunk_split_rule_ver = r.chunk_split_rule_ver
+    GROUP BY p.page_no, p.page_char_cnt, r.chunk_split_rule_ver
 ),
 code AS (
     SELECT 'DOC_TYPE' AS grp, doc_type_cd AS cd FROM doc
@@ -276,10 +300,10 @@ SELECT 'CHUNK_SEQ', 'ERROR',
 UNION ALL
 SELECT 'CHUNK_DUP_POS', 'ERROR',
        (SELECT COUNT(*) FROM (
-            SELECT 1 FROM chunk GROUP BY page_no, chunk_start_pos, chunk_end_pos HAVING COUNT(*) > 1) x)
+            SELECT 1 FROM chunk GROUP BY chunk_split_rule_ver, page_no, chunk_start_pos, chunk_end_pos HAVING COUNT(*) > 1) x)
 UNION ALL
 SELECT 'CHUNK_DUP_TXT', 'WARN',
-       (SELECT COUNT(*) FROM (SELECT 1 FROM chunk GROUP BY chunk_raw_txt HAVING COUNT(*) > 1) x)
+       (SELECT COUNT(*) FROM (SELECT 1 FROM chunk GROUP BY chunk_split_rule_ver, chunk_raw_txt HAVING COUNT(*) > 1) x)
 UNION ALL
 SELECT 'CHUNK_GAP', 'ERROR',
        (SELECT COUNT(*) FROM gap g JOIN page p ON p.page_no = g.page_no

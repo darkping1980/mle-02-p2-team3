@@ -6,7 +6,8 @@ from pathlib import Path
 
 from common.postgres_db_session import PostgresDbSession
 
-from .document_service import SPLIT_RULE_VER, ParsedDocument
+from .block_chunking import SPLIT_RULE_BLOCK
+from .document_service import DocChunk, ParsedDocument, page_chunks
 
 MAPPER_ROOT = Path(__file__).resolve().parent
 SYSTEM_USER_ID = "SYSTEM"   # 생성·수정 사용자 컬럼에 기록할 시스템 사용자 ID
@@ -74,8 +75,31 @@ class DocRepository:
             ],
         )
 
+    def add_block_chunks(self, card_doc_id: str) -> list[DocChunk]:
+        """이미 등록된 문서에 BLOCK_V1 청크를 추가한다. 기존 청크·근거는 바꾸지 않는다.
+
+        페이지 원문은 DB의 ``card_doc_page`` 를 그대로 쓴다. BLOCK_V1 청크가 이미 있으면 중복을 막기 위해 거부한다.
+        호출자가 트랜잭션을 연다.
+        """
+        state = self.sql_session.select_one("document_repository.select_chunk_state", {"CARD_DOC_ID": card_doc_id})
+        if not state or not state["page_cnt"]:
+            raise ValueError(f"페이지가 없는 문서입니다: {card_doc_id}")
+        if SPLIT_RULE_BLOCK in (state["split_rules"] or []):
+            raise ValueError(f"{SPLIT_RULE_BLOCK} 청크가 이미 있습니다: {card_doc_id}")
+        chunks: list[DocChunk] = []
+        for page in self.sql_session.select_list("document_repository.select_page_texts", {"CARD_DOC_ID": card_doc_id}):
+            if page["page_raw_txt"].strip():
+                status = "EXCLUDED" if (page["page_note"] or "").startswith("OCR_REVIEW") else "RAW"
+                chunks.extend(page_chunks(page["page_no"], page["page_raw_txt"], state["max_seq"] + len(chunks) + 1,
+                                          SPLIT_RULE_BLOCK, status))
+        self._insert_chunk_rows(card_doc_id, chunks)
+        return chunks
+
     def insert_chunks(self, card_doc_id: str, document: ParsedDocument) -> int:
         """청크를 일괄 등록하고 등록 건수를 반환한다. 청크 ID는 DB 기본값으로 발급된다."""
+        return self._insert_chunk_rows(card_doc_id, document.chunks)
+
+    def _insert_chunk_rows(self, card_doc_id: str, chunks) -> int:
         return self.sql_session.execute_many(
             "document_repository.insert_doc_chunk",
             [
@@ -86,11 +110,12 @@ class DocRepository:
                     "CHUNK_START_POS": chunk.start_pos,
                     "CHUNK_END_POS": chunk.end_pos,
                     "CHUNK_RAW_TXT": chunk.text,
+                    "CHUNK_TYPE_CD": chunk.chunk_type_cd,
                     "CHUNK_STATUS": chunk.status,
-                    "CHUNK_SPLIT_RULE_VER": SPLIT_RULE_VER,
+                    "CHUNK_SPLIT_RULE_VER": chunk.split_rule_ver,
                     "USER_ID": SYSTEM_USER_ID,
                 }
-                for chunk in document.chunks
+                for chunk in chunks
             ],
         )
 

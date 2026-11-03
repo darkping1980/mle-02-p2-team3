@@ -42,7 +42,7 @@ from .extraction_schema import (
 
 extraction_logger = logging.getLogger("card_benefit.extraction")
 
-PROMPT_VER = "EXTRACT_V2"
+PROMPT_VER = "EXTRACT_V3"
 IMAGE_DPI = 150
 INPUT_MODE = "TEXT_IMAGE"
 KEY_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,40}$")
@@ -71,6 +71,12 @@ PROMPT_TXT = """당신은 카드 상품설명서에서 혜택 정보를 구조�
 7. 값이 같다는 이유로 한도를 공유한다고 판단하지 않습니다. 원문에 공유 표현이 있을 때만 shared_scope_txt를 씁니다.
 8. 해석하지 못한 문구는 버리지 말고 unresolved에 사유와 함께 적습니다.
 9. 공통 브랜드 안내서는 혜택별 브랜드, 등급, 대상 카드, 선택서비스, 제외 카드와 제공 기간을 원문 그대로 기록합니다. 적용 대상과 기간을 뒷받침하는 인용은 APPLICABILITY 근거로 남깁니다. 문서에 없거나 다른 페이지와의 연결이 불명확하면 추정하지 말고 검토 대상으로 남깁니다.
+10. 규칙(rules)마다 supports=RULE, support_key=그 rule_key인 근거를 반드시 남깁니다. quote_txt는 그 규칙의 value_raw_txt가 들어 있는 가장 짧은 원문 구간입니다.
+    한 문장에 여러 규칙의 값이 있으면 규칙마다 자기 값이 있는 구간을 나눠 인용합니다. 예: "Trip.com 호텔 6%" / "항공 3%" / "액티비티 5% 할인".
+    혜택 전체를 소개하는 문장을 BNFT 근거로만 남기고 규칙 근거를 생략하지 않습니다. 원문에서 값을 찾을 수 없으면 규칙을 만들지 말고 unresolved에 적습니다.
+11. 한도(limits)마다 supports=LIMIT, support_key=그 limit_key인 근거를 남깁니다. 인용에는 limit_raw_txt가 들어 있어야 합니다.
+12. 입력이 [추출 대상]과 [같은 페이지 유의사항 문맥]으로 나뉘어 있으면 혜택과 조건은 [추출 대상]에서만 추출합니다.
+    [같은 페이지 유의사항 문맥]은 적용 대상·제공 기간을 뒷받침하는 APPLICABILITY 인용에만 사용하고, 그 안의 내용으로 혜택을 새로 만들지 않습니다.
 """
 
 
@@ -85,7 +91,7 @@ class PageInput:
     prompt_txt: str
     page_no: int
     page_text: str
-    image_png: bytes
+    image_png: bytes | None       # 청크가 페이지 일부이면 None이다. 이미지는 페이지 전체를 보여 다른 청크 항목이 섞이기 때문이다.
     input_sha256: str
 
 
@@ -127,6 +133,9 @@ class PageResult:
     extraction: PageExtraction
     benefits: list[StoredItem] = field(default_factory=list)
     conditions: list[StoredItem] = field(default_factory=list)
+    chunk_seq: int = 0
+    # 같은 페이지 유의사항 청크 ``(청크 ID, 원문)``. 인용이 대상 청크에 없을 때만 여기서 위치를 찾는다.
+    context: list[tuple[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -195,6 +204,11 @@ def json_number(value: Decimal | int | None) -> int | float | None:
     return int(value) if value == value.to_integral_value() else float(value)
 
 
+def rule_of(chunk: dict) -> str:
+    """청크의 분리 규칙. 값이 없는 이전 형식은 PAGE_V1이다."""
+    return chunk.get("chunk_split_rule_ver") or SPLIT_RULE_VER
+
+
 def make_item_key(prefix: str, name: str) -> str:
     """혜택명으로 실행마다 같은 키를 만든다. LLM이 준 키는 실행마다 달라질 수 있어 쓰지 않는다."""
     digest = hashlib.sha256(compact(name).lower().encode("utf-8")).hexdigest()[:12].upper()
@@ -210,17 +224,22 @@ def worst_value_check(codes: list[str]) -> str:
 # 원문 대조
 # =========================================================
 def locate_evidence(quotes: list[EvidenceQuote], page: PageResult) -> list[EvidenceCheck]:
-    """인용문을 원문에서 찾아 위치를 채운다."""
+    """인용문을 원문에서 찾아 위치를 채운다. 대상 청크에 없으면 같은 페이지 유의사항 청크에서 찾고 그 청크를 기록한다."""
     checks = []
     for quote in quotes:
-        position = locate_quote(page.text, quote.quote_txt)
+        chunk_id, position = page.chunk_id, locate_quote(page.text, quote.quote_txt)
+        for context_id, context_text in page.context if position is None else ():
+            position = locate_quote(context_text, quote.quote_txt)
+            if position is not None:
+                chunk_id = context_id
+                break
         checks.append(EvidenceCheck(
             quote_txt=quote.quote_txt,
             supports=quote.supports,
             support_key=quote.support_key,
             link_basis=quote.link_basis,
             page_no=page.page_no,
-            card_doc_chunk_id=page.chunk_id,
+            card_doc_chunk_id=chunk_id,
             start_pos=position[0] if position else None,
             end_pos=position[1] if position else None,
         ))
@@ -469,7 +488,7 @@ def find_benefit_key(name: str, item_keys: dict[str, str]) -> str | None:
 
 def merge_benefit_group(group: list[tuple[PageResult, StoredItem]]) -> tuple[BenefitItem, list[str]]:
     """같은 혜택의 페이지별 항목을 합친다. 대표는 상세 페이지를 우선한다. 값이 다르면 충돌로 남긴다."""
-    ordered = sorted(group, key=lambda pair: (pair[0].extraction.page_role == "SUMMARY", pair[0].page_no))
+    ordered = sorted(group, key=page_order)
     base = ordered[0][1].item.model_copy(deep=True)
     conflicts: list[str] = []
     rule_sign = lambda rule: (rule.calc_method_cd, rule.value_num, rule.value_unit_cd, rule.min_txn_amt)  # noqa: E731
@@ -568,9 +587,9 @@ def combine_checks(checks: list[ItemCheck]) -> ItemCheck:
     )
 
 
-def page_order(pair: tuple[PageResult, StoredItem]) -> tuple[bool, int]:
-    """대표 항목 선택 순서. 상세 페이지를 요약 페이지보다 먼저 본다."""
-    return pair[0].extraction.page_role == "SUMMARY", pair[0].page_no
+def page_order(pair: tuple[PageResult, StoredItem]) -> tuple[bool, int, int]:
+    """대표 항목 선택 순서. 상세 페이지를 요약 페이지보다 먼저 보고, 같은 페이지는 청크 순번을 따른다."""
+    return pair[0].extraction.page_role == "SUMMARY", pair[0].page_no, pair[0].chunk_seq
 
 
 def source_refs(group: list[tuple[PageResult, StoredItem]]) -> list[SourceRef]:
@@ -676,8 +695,12 @@ class ExtractionService:
         self.data_root = Path(data_root)
         self.max_attempts = max_attempts
 
-    def run(self, card_doc_id: str, card_id: int | None = None, page_numbers: set[int] | None = None) -> RunResult:
+    def run(self, card_doc_id: str, card_id: int | None = None, page_numbers: set[int] | None = None,
+            split_rule_ver: str | None = None) -> RunResult:
         """문서를 추출한다. 실행할 때마다 새 ``card_ai_run_id`` 를 만들고 이전 결과는 바꾸지 않는다.
+
+        한 문서에 분리 규칙이 다른 청크가 함께 있으면(예: PAGE_V1과 BLOCK_V1) ``split_rule_ver`` 로 하나를 고른다.
+        같은 원문을 두 번 추출하지 않기 위해서다.
 
         Raises:
             ExtractionError: 상품·문서·입력 페이지·로컬 PDF가 준비되지 않은 경우.
@@ -690,6 +713,10 @@ class ExtractionService:
         if card_id is None and document.get("doc_type_cd") != "BRAND_SERVICE":
             raise ExtractionError("카드 없는 추출은 BRAND_SERVICE 문서만 지원합니다")
         chunks = self.repository.select_ai_input_chunks(card_doc_id)
+        if split_rule_ver is not None:
+            chunks = [c for c in chunks if rule_of(c) == split_rule_ver]
+        elif len({rule_of(c) for c in chunks}) > 1:
+            raise ExtractionError("분리 규칙이 다른 청크가 함께 있어 split_rule_ver를 지정해야 합니다")
         if not chunks:
             raise ExtractionError(f"AI 입력 페이지가 없습니다: {card_doc_id}")
         omitted = []
@@ -701,6 +728,7 @@ class ExtractionService:
         pdf_path = self._local_pdf(document)
         blocked = sorted(set(self.repository.select_blocked_pages(card_doc_id)) | set(omitted))
         params = self._run_param()
+        params["split_rule_ver"] = rule_of(chunks[0])
         # 부분 실행, 제외 페이지 또는 알려지지 않은 모델 설정은 재사용하지 않는다.
         config = getattr(self.llm_client, "reuse_config", None)
         if card_id is None and page_numbers is None and not blocked and isinstance(config, dict):
@@ -766,8 +794,15 @@ class ExtractionService:
         """페이지를 차례로 처리하고 모두 성공했을 때만 문서 통합을 저장한다."""
         pages: list[PageResult] = []
         failed = 0
+        per_page: dict[int, list[dict]] = {}
+        for chunk in self.repository.select_ai_input_chunks(chunks[0]["card_doc_id"]):
+            if rule_of(chunk) == rule_of(chunks[0]):
+                per_page.setdefault(chunk["page_no"], []).append(chunk)
         for chunk in chunks:
-            page = self._process_chunk(run_id, card_id, chunk, pdf_path)
+            siblings = per_page.get(chunk["page_no"], [chunk])
+            context = [(c["card_doc_chunk_id"], c["chunk_raw_txt"]) for c in siblings
+                       if c.get("chunk_type_cd") == "NOTICE" and c["card_doc_chunk_id"] != chunk["card_doc_chunk_id"]]
+            page = self._process_chunk(run_id, card_id, chunk, pdf_path, context, whole_page=len(siblings) == 1)
             if page is None:
                 failed += 1
             else:
@@ -807,23 +842,37 @@ class ExtractionService:
             raise ExtractionError(f"로컬 PDF를 쓸 수 없습니다: {resolved.source}")
         return path
 
-    def build_input(self, chunk: dict, pdf_path: Path) -> PageInput:
-        """페이지 전체 텍스트와 페이지 이미지로 LLM 입력을 만든다. 이미지는 저장하지 않는다."""
-        with pymupdf.open(pdf_path) as document:
-            image = document[chunk["page_no"] - 1].get_pixmap(dpi=IMAGE_DPI).tobytes("png")
-        digest = hashlib.sha256()
-        for part in (PROMPT_TXT.encode("utf-8"), chunk["chunk_raw_txt"].encode("utf-8"), image):
-            digest.update(part)
-        return PageInput(PROMPT_TXT, chunk["page_no"], chunk["chunk_raw_txt"], image, digest.hexdigest())
+    def build_input(self, chunk: dict, pdf_path: Path, context: list[tuple[str, str]] = (),
+                    whole_page: bool = True) -> PageInput:
+        """LLM 입력을 만든다. 이미지는 저장하지 않는다.
 
-    def _process_chunk(self, run_id: str, card_id: int, chunk: dict, pdf_path: Path) -> PageResult | None:
-        """청크 1건을 호출하고 저장한다. 실패하면 ``None`` 을 반환하고 다음 페이지를 계속 처리한다."""
-        page_input = self.build_input(chunk, pdf_path)
+        청크가 페이지 전체이면 기존처럼 페이지 텍스트와 이미지를 보낸다. 페이지 일부이면 이미지를 빼고
+        대상 청크와 같은 페이지 유의사항 청크를 구분해 보낸다. 추출은 대상 청크에서만 한다.
+        """
+        image = None
+        if whole_page:
+            with pymupdf.open(pdf_path) as document:
+                image = document[chunk["page_no"] - 1].get_pixmap(dpi=IMAGE_DPI).tobytes("png")
+            text = chunk["chunk_raw_txt"]
+        else:
+            text = f"[추출 대상: 청크 {chunk['chunk_seq']}]\n{chunk['chunk_raw_txt']}"
+            if context:
+                text += "\n\n[같은 페이지 유의사항 문맥: 인용 전용]\n" + "\n".join(body for _, body in context)
+        digest = hashlib.sha256()
+        for part in (PROMPT_TXT.encode("utf-8"), text.encode("utf-8"), image or b""):
+            digest.update(part)
+        return PageInput(PROMPT_TXT, chunk["page_no"], text, image, digest.hexdigest())
+
+    def _process_chunk(self, run_id: str, card_id: int, chunk: dict, pdf_path: Path,
+                       context: list[tuple[str, str]] = (), whole_page: bool = True) -> PageResult | None:
+        """청크 1건을 호출하고 저장한다. 실패하면 ``None`` 을 반환하고 다음 청크를 계속 처리한다."""
+        page_input = self.build_input(chunk, pdf_path, context, whole_page)
         for call_seq in range(1, self.max_attempts + 1):
             extraction = self._call_llm(run_id, chunk, call_seq, page_input)
             if extraction is None:
                 continue
-            page = PageResult(chunk["page_no"], chunk["card_doc_chunk_id"], chunk["chunk_raw_txt"], extraction)
+            page = PageResult(chunk["page_no"], chunk["card_doc_chunk_id"], chunk["chunk_raw_txt"], extraction,
+                              chunk_seq=chunk.get("chunk_seq", 0), context=list(context))
             try:
                 with self.sql_session.transaction():
                     self._store_page(run_id, card_id, chunk, call_seq, page)
@@ -930,12 +979,14 @@ class ExtractionService:
     def _store_merge(self, pages: list[PageResult]) -> bool:
         """문서 통합 결과를 한 트랜잭션으로 저장한다. 실패해도 페이지 원본은 남는다."""
         benefits, conditions = merge_pages(pages)
+        # 한 페이지에 청크가 여럿이면 항목 순번이 청크마다 1부터 시작한다. 청크 ID로 구분한다.
         lookup = {
-            (page.page_no, stored.seq): stored.stg_id
+            (page.chunk_id, stored.seq): stored.stg_id
             for page in pages for stored in (*page.benefits, *page.conditions)
         }
         benefit_ids = {
-            benefit.merge.item_key: lookup[(benefit.merge.source_refs[0].page_no, benefit.merge.source_refs[0].stg_item_seq)]
+            benefit.merge.item_key: lookup[(benefit.merge.source_refs[0].card_doc_chunk_id,
+                                            benefit.merge.source_refs[0].stg_item_seq)]
             for benefit in benefits
         }
         try:
@@ -954,8 +1005,8 @@ class ExtractionService:
     def _store_group(self, merge: MergeInfo, normalized: dict, check_cd: str, parent: str | None, lookup: dict) -> None:
         """대표 행에 정제본을 쓰고 나머지 행은 대표 행을 가리키게 한다."""
         first, *others = merge.source_refs
-        canonical = lookup[(first.page_no, first.stg_item_seq)]
+        canonical = lookup[(first.card_doc_chunk_id, first.stg_item_seq)]
         self.repository.update_stg_merge(canonical, normalized, parent, check_cd)
         duplicate_cd = "MERGE_CONFLICT" if merge.conflicts else "MERGED_DUP"
         for ref in others:
-            self.repository.update_stg_merge(lookup[(ref.page_no, ref.stg_item_seq)], None, canonical, duplicate_cd)
+            self.repository.update_stg_merge(lookup[(ref.card_doc_chunk_id, ref.stg_item_seq)], None, canonical, duplicate_cd)

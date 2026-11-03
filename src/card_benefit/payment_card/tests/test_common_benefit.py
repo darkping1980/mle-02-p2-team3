@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 from datetime import date
 
-from payment_card.db_pipeline.common_benefit_service import CommonBenefitService, benefit_code, common_texts, period, quote_text
+from payment_card.db_pipeline.common_benefit_service import CommonBenefitService, benefit_code, brand_key, candidate_period, common_texts, period, quote_text
 import pytest
 
 
@@ -84,6 +84,11 @@ def fixture():
 IDS = {'S1': 'valet-identity'}
 
 
+def test_unionpay_names_match_upi_without_matching_other_brands():
+    assert brand_key('UPI') == brand_key('UnionPay') == brand_key('유니온페이')
+    assert brand_key('VISA') != brand_key('UPI')
+
+
 def test_common_benefit_is_stored_once_and_applied_only_to_listed_cards():
     a = fixture()
     assert a.register_run('R1', IDS)[0].status == 'INSERTED'
@@ -127,6 +132,30 @@ def test_identity_is_family_scoped_and_period_is_end_exclusive():
     assert benefit_code('family','key') == benefit_code('family','key')
     assert benefit_code('family','key') != benefit_code('other','key')
     assert period('2026년 1월 1일 ~ 12월 31일') == (date(2026,1,1), date(2027,1,1))
+
+
+DEFAULT_PERIOD = '이용기간 별도 표기한 경우 외에는 2026년 1월 1일 ~ 12월 31일'
+
+
+def test_default_period_applies_only_without_own_period():
+    def raw(quote):
+        return {'validity_period_txt': DEFAULT_PERIOD,
+                'evidence': [{'supports': 'RULE', 'quote_txt': quote},
+                             {'supports': 'APPLICABILITY', 'quote_txt': '* 본 서비스는 ' + DEFAULT_PERIOD + '까지 제공됩니다.'}]}
+    assert candidate_period(raw('· 국내 특급호텔 식음료 매장 5~15% 할인')) == (date(2026,1,1), date(2027,1,1))
+    for own in ('· 글로벌 원심 무료 이용 서비스 제공 (4.1~)', '· 현대면세점 할인 (4월 중 오픈 예정)', '· 멤버십 혜택 3개월간 제공'):
+        with pytest.raises(ValueError):
+            candidate_period(raw(own))
+    assert candidate_period({'validity_period_txt': '2026년 1월 1일 ~ 12월 31일'}) == (date(2026,1,1), date(2027,1,1))
+    with pytest.raises(ValueError):
+        candidate_period({'validity_period_txt': '별도 공지 시까지'})
+
+
+def test_register_uses_default_period_without_own_period():
+    service = fixture()
+    service.repo.candidate['stg_raw_item']['validity_period_txt'] = DEFAULT_PERIOD
+    assert service.register_run('R1', IDS)[0].status == 'INSERTED'
+    assert next(iter(service.repo.common_bnft.values()))['bnft_valid_to_excl'] == date(2027,1,1)
 
 
 def test_original_visa_code_is_reproduced():

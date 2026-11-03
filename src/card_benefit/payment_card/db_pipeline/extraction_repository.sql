@@ -31,7 +31,7 @@ WHERE card_doc_id = :CARD_DOC_ID
 
 -- name: select_ai_input_chunks
 -- AI 입력 청크를 조회한다. 사용 중인 문서의 RAW·CLEANED 청크이고, 페이지가 OCR 검토 대기가 아니어야 한다.
-SELECT c.card_doc_id, c.page_no, c.card_doc_chunk_id, c.chunk_seq, c.chunk_raw_txt, c.chunk_split_rule_ver,
+SELECT c.card_doc_id, c.page_no, c.card_doc_chunk_id, c.chunk_seq, c.chunk_raw_txt, c.chunk_split_rule_ver, c.chunk_type_cd,
        p.page_layer_cd, p.page_note, p.page_txt_sha256, p.page_extractor_nm, p.page_extractor_ver,
        c.chunk_start_pos, c.chunk_end_pos, c.chunk_status
 FROM db_pipeline.card_doc_chunk c

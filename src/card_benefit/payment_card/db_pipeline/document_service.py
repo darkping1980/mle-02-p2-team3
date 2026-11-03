@@ -15,6 +15,8 @@ import re
 
 from common.document_reader import DocumentReader
 
+from .block_chunking import SPLIT_RULE_BLOCK, split_blocks
+
 DATA_ROOT = Path(__file__).resolve().parents[2] / "data" / "raw" / "hana_all"
 MANIFEST_NAME = "manifest.csv"
 
@@ -78,6 +80,8 @@ class DocChunk:
     end_pos: int
     text: str
     status: str = "RAW"          # CHUNK_STATUS 공통코드. 검토 대상 페이지의 청크는 EXCLUDED로 AI 입력에서 뺀다
+    chunk_type_cd: str = "BODY"  # CHUNK_TYPE 공통코드. BLOCK_V1은 유의사항을 NOTICE로 나눈다
+    split_rule_ver: str = SPLIT_RULE_VER
 
 
 @dataclass(frozen=True)
@@ -126,9 +130,10 @@ def sha256_hex(data: bytes) -> str:
 class DocumentService:
     """manifest에 있는 공식 상품설명서 PDF를 검증하고 페이지·청크로 구성한다."""
 
-    def __init__(self, data_root: Path = DATA_ROOT, ocr_engine=None):
+    def __init__(self, data_root: Path = DATA_ROOT, ocr_engine=None, split_rule: str = SPLIT_RULE_VER):
         self.data_root = Path(data_root)
         self.ocr_engine = ocr_engine
+        self.split_rule = split_rule
 
     def inspect(self, pdf: str | Path) -> ParsedDocument:
         """파일과 manifest를 확인하되 페이지를 파싱하지 않는다."""
@@ -258,10 +263,25 @@ class DocumentService:
         return None, None
 
     def _split_pages(self, pages: tuple[DocPage, ...]) -> tuple[DocChunk, ...]:
-        """페이지 전체를 청크 1건으로 만든다. 내용이 없는 페이지는 건너뛰고, 순번은 문서 전체 기준이다."""
+        """페이지를 청크로 만든다. 내용이 없는 페이지는 건너뛰고, 순번은 문서 전체 기준이다.
+
+        PAGE_V1은 페이지 전체 1건, BLOCK_V1은 ``block_chunking.split_blocks`` 의 의미 단위 청크다.
+        """
         chunks: list[DocChunk] = []
         for page in pages:
             if page.text.strip():
-                status = "EXCLUDED" if page.in_review else "RAW"
-                chunks.append(DocChunk(page.page_no, len(chunks) + 1, 1, page.char_cnt, page.text, status))
+                chunks.extend(page_chunks(page.page_no, page.text, len(chunks) + 1, self.split_rule,
+                                          "EXCLUDED" if page.in_review else "RAW"))
         return tuple(chunks)
+
+
+def page_chunks(page_no: int, text: str, first_seq: int, split_rule: str = SPLIT_RULE_VER,
+                status: str = "RAW") -> list[DocChunk]:
+    """페이지 1쪽의 청크. 위치는 페이지 원문 기준 1부터이고 청크를 이어 붙이면 원문과 같다."""
+    if split_rule == SPLIT_RULE_VER:
+        return [DocChunk(page_no, first_seq, 1, len(text), text, status)]
+    if split_rule != SPLIT_RULE_BLOCK:
+        raise ValueError(f"지원하지 않는 청크 분리 규칙입니다: {split_rule}")
+    return [DocChunk(page_no, first_seq + index, block.start_pos, block.end_pos, block.text, status,
+                     block.chunk_type_cd, SPLIT_RULE_BLOCK)
+            for index, block in enumerate(split_blocks(page_no, text))]

@@ -30,7 +30,8 @@ from common.query_logger import DEFAULT_SENSITIVE_KEYS
 
 from .benefit_search_service import BenefitSearchService, search_terms
 from .neo4j_search import (
-    ALL_SECTIONS, CARD_LOG, CARD_LOGGER_NAME, DETAIL_LOG, REQUEST_ID, detail_plan, detail_statements, source, statement_plan,
+    ALL_SECTIONS, CARD_LOG, CARD_LOGGER_NAME, DETAIL_LOG, REQUEST_ID, detail_plan, detail_statements, is_common_key, source,
+    statement_plan,
 )
 
 # region 1. 설정과 출력 형식
@@ -303,6 +304,14 @@ def estimate_cost(model: str, input_tokens: int | None, output_tokens: int | Non
 
 # endregion
 # region 2. 조회 결과 정리와 답변 검증
+def postgresql_common_key(key: str) -> str | None:
+    """Neo4j 공통 혜택 key ``["card_common_bnft", 공통서비스ID, 혜택ID]`` 를 같은 혜택의 PostgreSQL 조회 key로 바꾼다."""
+    if not is_common_key(key):
+        return None
+    _, common_id, bnft_id = json.loads(key)
+    return f"pg:CARD_COMMON_BNFT:{int(common_id)}:{bnft_id}"
+
+
 def collect_evidence(details: list[dict], intent: str) -> list[dict]:
     """혜택별 근거를 evidence_id 하나로 합치고 질문 유형에 맞는 주체만 남긴다."""
     allowed = EVIDENCE_SUBJECTS_BY_INTENT.get(intent)
@@ -1139,9 +1148,17 @@ class CardGraphRAG:
                 # 그래프에 없는 혜택(공통 혜택 등)은 검색 후보의 pg: 키로 PostgreSQL에서 읽는다.
                 source_search = self.benefit_search if key.startswith("pg:") else self.search
                 detail = source_search.get_detail(key, sections)
+                # 그래프의 공통 혜택 근거는 dp_same_as가 있을 때만 있다. 0건이면 같은 공통서비스·혜택 ID의 PostgreSQL 근거만 읽는다.
+                fallback = postgresql_common_key(key) if detail is not None and "evidence" in sections and not detail["evidence"] else None
+                if fallback and self.benefit_search is not None:
+                    original = self.benefit_search.get_detail(fallback, ("evidence",))
+                    detail["evidence"] = original["evidence"] if original else []
+                    if detail["evidence"]:
+                        detail["evidence_source"] = "postgresql_fallback"
                 (details if detail is not None else missing).append(detail if detail is not None else key)
                 if detail is not None:
                     trace.append({"benefit": detail["context"]["benefit"].get("name"), "engine": "postgresql" if key.startswith("pg:") else "neo4j",
+                                  "evidence_engine": detail.get("evidence_source", "postgresql" if key.startswith("pg:") else "neo4j"),
                                   "rules": len(detail["rules"]), "conditions": len(detail["conditions"]),
                                   "limits": len(detail["limits"]), "evidence": len(detail["evidence"])})
         except Exception as error:

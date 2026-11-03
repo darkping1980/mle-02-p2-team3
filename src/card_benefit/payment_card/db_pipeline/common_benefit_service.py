@@ -20,6 +20,12 @@ def compact(value: str) -> str:
     return "".join(value.casefold().split())
 
 
+def brand_key(value: str | None) -> str:
+    """공통코드 UPI와 안내서의 UnionPay 표기를 같은 브랜드로 비교한다."""
+    key = compact(value or '')
+    return 'upi' if key in ('upi', 'unionpay', '유니온페이') else key
+
+
 def benefit_code(family: str, identity: str) -> str:
     """문서 계열과 검토된 업무 식별자만 사용한다. 문서 버전과 혜택명은 사용하지 않는다."""
     if not family or not identity or len(identity) > 200:
@@ -47,6 +53,24 @@ def period(raw: str | None):
     if end <= start:
         raise ValueError("제공 기간이 올바르지 않습니다")
     return start, end
+
+
+# "이용기간 별도 표기한 경우 외에는 <기간>": 혜택에 별도 기간이 없을 때만 문서의 기본 기간이 적용된다.
+DEFAULT_PERIOD_PREFIX = re.compile(r"\s*이용\s*기간\s*별도\s*표기한\s*경우\s*외에는\s*")
+# 혜택 자신의 인용에 이런 표현이 있으면 별도 기간일 수 있어 기본 기간을 쓰지 않는다.
+OWN_PERIOD_HINT = re.compile(r"\d{4}\s*년|\d{1,2}\s*월|\d{1,2}\s*\.\s*\d{1,2}|개월|기간|까지|부터")
+
+
+def candidate_period(raw: dict):
+    """후보의 제공 기간. 조건부 기본 기간은 혜택·규칙·한도 인용에 기간 표현이 없을 때만 적용한다."""
+    text = raw.get('validity_period_txt')
+    match = DEFAULT_PERIOD_PREFIX.match(text or '')
+    if not match:
+        return period(text)
+    own = [item.get('quote_txt') or '' for item in raw.get('evidence', []) if item.get('supports') != 'APPLICABILITY']
+    if any(OWN_PERIOD_HINT.search(quote) for quote in own):
+        raise ValueError("혜택 원문에 별도 기간 표현이 있어 기본 제공 기간을 적용할 수 없습니다")
+    return period(text[match.end():])
 
 
 def service_type_of(selection: str | None) -> str | None:
@@ -313,14 +337,14 @@ class CommonBenefitService:
         common = commons[0]
         common_id = common['card_common_id']
         brand, grade = raw.get('brand_txt'), raw.get('service_grade_txt')
-        if ((brand and compact(brand) != compact(common.get('brand_cd') or ''))
+        if ((brand and brand_key(brand) != brand_key(common.get('brand_cd')))
                 or (grade and compact(grade) != compact(common.get('service_grade_cd') or ''))):
             return review('후보의 브랜드·등급이 공통서비스와 다릅니다', common_id=common_id)
         service_type = service_type_of(raw.get('selection_service_txt'))
         if service_type is None:
             return review('선택서비스 번호가 하나로 확인되지 않습니다', common_id=common_id)
         try:
-            start, end = period(raw.get('validity_period_txt'))
+            start, end = candidate_period(raw)
             code = benefit_code(candidate.get('doc_family_cd'), identities.get(stg_id))
         except (ValueError, OverflowError) as error:
             return review(str(error), common_id=common_id)
@@ -364,7 +388,7 @@ class CommonBenefitService:
                 continue
             old = source['stg_normalized_item']
             try:
-                start, end = period(source['stg_raw_item'].get('validity_period_txt'))
+                start, end = candidate_period(source['stg_raw_item'])
             except (ValueError, OverflowError):
                 continue
             rule_txt, limit_txt = common_texts(source['stg_raw_item'], old)
@@ -412,7 +436,7 @@ class CommonBenefitService:
         if selection and len(selection_codes) != 1:
             return review('선택서비스 번호가 하나로 확인되지 않습니다')
         options = [o for o in card['brand_opt_list'] if o.get('brand_opt_status_cd') == 'ACTIVE'
-                   and compact(o.get('brand_cd', '')) == compact(brand)
+                   and brand_key(o.get('brand_cd')) == brand_key(brand)
                    and compact(o.get('service_grade_cd', '')) == compact(grade)
                    and (not selection or o.get('service_type_cd') in selection_codes)]
         if len(options) != 1:

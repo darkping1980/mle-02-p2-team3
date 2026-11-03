@@ -294,6 +294,66 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(answer["status"], "PARTIAL")
 
 
+COMMON_KEY = '["card_common_bnft",15,"C5"]'
+
+
+class FakeBenefitSearch:
+    """PostgreSQL 상세 조회 Mock. 요청한 pg: key별로 근거를 돌려준다."""
+    def __init__(self, evidence_by_key):
+        self.evidence_by_key, self.calls = evidence_by_key, []
+
+    def get_detail(self, key, sections):
+        self.calls.append((key, sections))
+        evidence = self.evidence_by_key.get(key)
+        return None if evidence is None else {**detail([]), "evidence": evidence}
+
+
+class CommonEvidenceFallbackTests(unittest.TestCase):
+    def common_run(self, graph_evidence, benefit_search, key=COMMON_KEY):
+        search = FakeSearch(detail(graph_evidence))
+        search.catalog = [{"id": "C5", "key": key, "name": "트립닷컴 국내외 호텔 할인", "card": "적용 카드 미확인",
+                           "targets": [], "payment_min_amounts": []}]
+        second = answer_llm("호텔 15% 할인입니다.", ("PE1",))
+        state = CardGraphRAG(search, interpret_llm(ids=("C5",)), second, benefit_search=benefit_search).run("트립닷컴 호텔 할인?")
+        return state, second
+
+    def test_zero_graph_evidence_reads_same_common_benefit_from_postgresql(self):
+        pg = FakeBenefitSearch({"pg:CARD_COMMON_BNFT:15:C5": [evidence_row("PE1", quote="국내외 호텔 15% 할인")],
+                                "pg:CARD_COMMON_BNFT:15:C6": [evidence_row("OTHER")]})
+        state, _ = self.common_run([], pg)
+        self.assertEqual(pg.calls, [("pg:CARD_COMMON_BNFT:15:C5", ("evidence",))])
+        self.assertEqual([item["evidence_id"] for item in state["evidence"]], ["PE1"])
+        self.assertEqual(state["retrieval_trace"][0]["evidence_engine"], "postgresql_fallback")
+        self.assertEqual(state["answer"]["status"], "ANSWERED")
+
+    def test_no_postgresql_evidence_stays_not_answerable(self):
+        for evidence_by_key in ({}, {"pg:CARD_COMMON_BNFT:15:C5": []}):
+            state, second = self.common_run([], FakeBenefitSearch(evidence_by_key))
+            self.assertEqual(state["evidence"], [])
+            self.assertEqual(state["answer"]["status"], "NOT_ANSWERABLE")
+            self.assertEqual(second.prompts, [])
+            self.assertEqual(state["retrieval_trace"][0]["evidence_engine"], "neo4j")
+
+    def test_graph_evidence_is_used_without_fallback(self):
+        pg = FakeBenefitSearch({"pg:CARD_COMMON_BNFT:15:C5": [evidence_row("PE1")]})
+        state, _ = self.common_run([evidence_row("E1")], pg)
+        self.assertEqual(pg.calls, [])
+        self.assertEqual([item["evidence_id"] for item in state["evidence"]], ["E1"])
+
+    def test_card_benefit_and_mode_a_do_not_fall_back(self):
+        pg = FakeBenefitSearch({"pg:CARD_COMMON_BNFT:15:C5": [evidence_row("PE1")]})
+        state, _ = self.common_run([], pg, key=KEY)
+        self.assertEqual(pg.calls, [])
+        self.assertEqual(state["answer"]["status"], "NOT_ANSWERABLE")
+        state, _ = self.common_run([], None)
+        self.assertEqual(state["answer"]["status"], "NOT_ANSWERABLE")
+
+    def test_postgresql_key_keeps_exact_ids(self):
+        self.assertEqual(card_graphrag.postgresql_common_key('["card_common_bnft",15,"20261103_000006"]'),
+                         "pg:CARD_COMMON_BNFT:15:20261103_000006")
+        self.assertIsNone(card_graphrag.postgresql_common_key('["card_bnft",2,"20261101_000001"]'))
+
+
 class ValueParsingTests(unittest.TestCase):
     def test_units_and_periods(self):
         self.assertEqual(value_tokens("월 1천원"), [("MONEY", 1000.0, "MONTH")])

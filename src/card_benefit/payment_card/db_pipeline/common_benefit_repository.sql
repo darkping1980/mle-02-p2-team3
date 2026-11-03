@@ -82,7 +82,8 @@ FROM db_pipeline.card_source_evidence e
 JOIN db_pipeline.card_extr_stg s ON s.card_extr_stg_id=e.card_extr_stg_id
 JOIN db_pipeline.card_doc_chunk c ON (c.card_doc_id,c.page_no,c.card_doc_chunk_id)=(e.card_doc_id,e.page_no,e.card_doc_chunk_id)
 WHERE (s.card_extr_stg_id=:STG_ID OR s.stg_parent_card_extr_stg_id=:STG_ID)
-  AND e.card_doc_id=s.card_doc_id AND e.page_no=s.page_no AND e.card_doc_chunk_id=s.card_doc_chunk_id
+  -- 다중 청크(BLOCK_V1)에서는 적용 대상·기간 근거가 같은 페이지 유의사항 청크에 있을 수 있다. 위치는 근거 자신의 청크 기준이다.
+  AND e.card_doc_id=s.card_doc_id AND e.page_no=s.page_no
 ORDER BY e.evidence_id;
 
 -- name: find_benefit

@@ -26,6 +26,22 @@ def test_structured_request_and_usage():
     assert adapter.spent_usd == Decimal('0.0035')
 
 
+def test_sol_model_reasoning_and_price():
+    responses = Mock()
+    responses.create.return_value = SimpleNamespace(output_text='{}', usage=SimpleNamespace(input_tokens=1000, output_tokens=500))
+    adapter = TerraClient(SimpleNamespace(responses=responses), input_token_estimate=10000, max_output_tokens=32000,
+                          model_nm='gpt-6.1-sol', reasoning_effort='low')
+    adapter.extract(page())
+    request = responses.create.call_args.kwargs
+    assert (request['model'], request['reasoning'], request['max_output_tokens']) == ('gpt-6.1-sol', {'effort': 'low'}, 32000)
+    assert adapter.spent_usd == Decimal('0.007')
+    assert adapter.reuse_config['reasoning'] == 'low'
+    assert TerraClient(responses, input_token_estimate=1).reuse_config == {
+        'adapter': 'terra_v1', 'reasoning': 'medium', 'image_detail': 'high', 'max_output_tokens': 8000}
+    with pytest.raises(ValueError):
+        TerraClient(responses, input_token_estimate=1, model_nm='unknown-model')
+
+
 def test_budget_blocks_before_call():
     responses = Mock()
     adapter = TerraClient(SimpleNamespace(responses=responses), input_token_estimate=10000,
