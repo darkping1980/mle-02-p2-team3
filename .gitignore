@@ -34,5 +34,30 @@ Thumbs.db
 /.chart-data-*/
 /data/*.pdf
 
+# Card source text and database/graph snapshots that contain extracted source data
+/src/data/backup/*postgres*.sql
+/src/data/backup/**/*.dump
+/src/data/backup/a10_*/card_policy_evidence.csv
+/src/data/backup/a10_*/card_source_evidence.csv
+/src/data/backup/a10_*/restore*.sql
+/src/data/backup/a10_3_pre_neo4j_resync_20261101/nodes.jsonl
+/src/data/backup/a72_pre_reset_20261101/card_ai_call.csv
+/src/data/backup/a72_pre_reset_20261101/card_doc_page.csv
+/src/data/backup/a72_pre_reset_20261101/card_doc_chunk.csv
+/src/data/backup/a72_pre_reset_20261101/card_extr_stg.csv
+/src/data/backup/a72_pre_reset_20261101/card_source_evidence.csv
+/src/data/backup/pre_calc_cleanup_20261103/
+/src/data/backup/pre_product_reset_20261103/
+/src/data/backup/pre_card_evidence_link_pk_inheritance_20261103/
+/src/data/backup/pre_card_source_evidence_*_20261103/
+/src/data/backup/pre_common_transfer_20261103.json
+/src/data/backup/pre_drop_card_doc_card_id_20261102.json
+/src/data/backup/**/card_ai_call.csv
+/src/data/backup/**/card_doc_page.csv
+/src/data/backup/**/card_doc_chunk.csv
+/src/data/backup/**/card_extr_stg.csv
+/src/data/backup/**/card_source_evidence.csv
+/src/data/backup/**/card_policy_evidence.csv
+
 # Windows alternate data stream metadata
 *:[Zz]one.[Ii]dentifier

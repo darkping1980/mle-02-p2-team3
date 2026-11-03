@@ -1,2 +1,7 @@
 # Locally generated intermediate extraction and structured data.
 /processed/
+# Page Markdown is converted from card product source PDFs; keep it local.
+/markdown/common/*/page_*
+/markdown/product/*/page_*
+/markdown/common/*/chunk*
+/markdown/product/*/chunk*
