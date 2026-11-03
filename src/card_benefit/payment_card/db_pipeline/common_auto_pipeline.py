@@ -27,7 +27,7 @@ class PipelineResult:
 def identity_for(candidate: dict, evidence: list[dict]) -> str | None:
     """원문에서 확인된 고유한 혜택명만 식별자로 쓴다. 이름만으로 유사명 병합하지 않는다."""
     raw = candidate.get('stg_raw_item') or {}
-    name = unicodedata.normalize('NFKC', (candidate.get('stg_normalized_item') or {}).get('bnft_nm') or '').strip()
+    name = unicodedata.normalize('NFKC', raw.get('bnft_nm') or '').strip()
     if (not name or len(name) > 160 or raw.get('certainty') != 'HIGH' or raw.get('uncertainty_note')
             or not re.search(r'[가-힣A-Za-z0-9]', name)):
         return None
@@ -93,28 +93,31 @@ class PostgresCommonApproval:
             candidates = conn.execute("""select s.*,d.doc_family_cd,d.doc_version_no from db_pipeline.card_extr_stg s
                 join db_pipeline.card_doc d on d.card_doc_id=s.card_doc_id
                 where s.card_ai_run_id=%s and s.card_doc_id=%s and s.card_id is null and s.stg_kind_cd='BENEFIT'
-                and s.stg_normalized_item is not null for update of s""", (run_id, doc['card_doc_id'])).fetchall()
+                and s.stg_sql_check_cd is not null and s.stg_parent_card_extr_stg_id is null
+                for update of s""", (run_id, doc['card_doc_id'])).fetchall()
+            # 정제본은 저장하지 않으므로 원본 행에서 다시 만들어 붙인다(검증 코드·통합 출처 수 포함).
+            candidates = self.common.repo.attach_normalized(run_id, candidates)
             before = self.common._integrity_errors()
             commons = self.common.repo.rows('common_of_doc', DOC_ID=doc['card_doc_id'])
             if len(commons) == 1:
                 self.common.repo.one('lock_common', COMMON_ID=commons[0]['card_common_id'])
-            names = [compact((item['stg_normalized_item'].get('bnft_nm') or '')) for item in candidates]
+            names = [compact(item['stg_raw_item'].get('bnft_nm') or '') for item in candidates]
             for candidate in candidates:
                 stg_id = candidate['card_extr_stg_id']
                 conn.execute('select evidence_id from db_pipeline.card_source_evidence where card_extr_stg_id=%s for update', (stg_id,)).fetchall()
                 evidence = self.common.repo.rows('candidate_evidence', STG_ID=stg_id)
                 identity = identity_for(candidate, evidence)
-                unique = names.count(compact(candidate['stg_normalized_item'].get('bnft_nm') or '')) == 1
+                unique = names.count(compact(candidate['stg_raw_item'].get('bnft_nm') or '')) == 1
                 existing = []
                 if len(commons) == 1 and identity:
                     code = benefit_code(candidate['doc_family_cd'], identity)
                     existing = conn.execute('select bnft_cd,bnft_nm from db_pipeline.card_common_bnft where card_common_id=%s and bnft_nm=%s for update',
-                                            (commons[0]['card_common_id'], candidate['stg_normalized_item']['bnft_nm'])).fetchall()
+                                            (commons[0]['card_common_id'], candidate['stg_raw_item']['bnft_nm'])).fetchall()
                     unique = unique and all(row['bnft_cd'] == code for row in existing)
                 if identity and unique and len(commons) == 1:
                     identities[stg_id] = identity
                 located = self.common._located(evidence)
-                _, proof_problem = self.common._evidence_ids(candidate['stg_raw_item'], candidate['stg_normalized_item'], located)
+                _, proof_problem = self.common._evidence_ids(candidate['stg_raw_item'], candidate['normalized'] or {}, located)
                 parent_ok = len(commons) == 1 and not self.common._candidate_problem(candidate) and not proof_problem
                 decision = check_auto_approval(candidate, evidence, parent_integrity_ok=parent_ok, duplicate_free=bool(identity and unique))
                 if decision.eligible and candidate['stg_status'] == 'PENDING_REVIEW':

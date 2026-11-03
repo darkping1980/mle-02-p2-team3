@@ -7,7 +7,7 @@ from psycopg.types.json import Jsonb
 
 SYSTEM_USER_ID = "SYSTEM"   # 생성·수정 사용자 컬럼에 기록할 시스템 사용자 ID
 RAW_RESPONSE_LOG_KEYS = (   # SQL 로그에서 가릴 프롬프트·응답·원문 파라미터
-    "RUN_PROMPT_TXT", "CALL_RESP_RAW", "CALL_RESP_JSON", "STG_RAW_ITEM", "STG_NORMALIZED_ITEM",
+    "RUN_PROMPT_TXT", "CALL_RESP_RAW", "CALL_RESP_JSON", "STG_RAW_ITEM",
     "STG_EVIDENCE_TXT", "QUOTE_TXT",
 )
 
@@ -89,13 +89,12 @@ class ExtractionRepository:
         """원문 근거를 일괄 등록하고 등록 건수를 반환한다."""
         return self.sql_session.execute_many("extraction_repository.insert_evidence", evidence_list)
 
-    def update_stg_merge(self, card_extr_stg_id: str, normalized: dict | None, parent_id: str | None, check_cd: str) -> None:
-        """문서 단위 통합 결과를 항목에 기록한다."""
+    def update_stg_merge(self, card_extr_stg_id: str, parent_id: str | None, check_cd: str) -> None:
+        """문서 단위 통합 결과(대표 항목 연결·검증 코드)를 기록한다."""
         self.sql_session.execute(
             "extraction_repository.update_stg_merge",
             {
                 "CARD_EXTR_STG_ID": card_extr_stg_id,
-                "STG_NORMALIZED_ITEM": _jsonb(normalized),
                 "STG_PARENT_CARD_EXTR_STG_ID": parent_id,
                 "STG_SQL_CHECK_CD": check_cd,
                 "USER_ID": SYSTEM_USER_ID,
@@ -120,16 +119,4 @@ class ExtractionRepository:
         """실행의 항목을 검증 결과별로 집계한다."""
         return self.sql_session.select_list(
             "extraction_repository.select_review_queue", {"CARD_AI_RUN_ID": card_ai_run_id},
-        )
-
-    def select_contract_check(self, card_ai_run_id: str) -> list[dict]:
-        """정제본을 V6 JSONB 계약 함수로 검사한 결과를 반환한다."""
-        return self.sql_session.select_list(
-            "extraction_repository.select_contract_check", {"CARD_AI_RUN_ID": card_ai_run_id},
-        )
-
-    def select_run_compare(self, old_run_id: str, new_run_id: str) -> list[dict]:
-        """두 실행의 혜택 차이를 반환한다."""
-        return self.sql_session.select_list(
-            "extraction_repository.select_run_compare", {"OLD_RUN_ID": old_run_id, "NEW_RUN_ID": new_run_id},
         )

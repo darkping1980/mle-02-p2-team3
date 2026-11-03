@@ -53,7 +53,7 @@ ORDER BY run_start_date DESC;
 
 -- name: select_reuse_items
 SELECT s.card_doc_chunk_id, s.call_seq, s.card_id, s.stg_kind_cd, s.stg_item_seq, s.stg_raw_item,
-       s.stg_sql_check_cd, s.stg_normalized_item, s.stg_parent_card_extr_stg_id,
+       s.stg_sql_check_cd, s.stg_parent_card_extr_stg_id,
        (SELECT COALESCE(jsonb_agg(e.quote_txt ORDER BY e.quote_txt), '[]'::jsonb) FROM db_pipeline.card_source_evidence e
         WHERE e.card_extr_stg_id = s.card_extr_stg_id AND e.card_doc_id = s.card_doc_id
           AND e.page_no = s.page_no AND e.card_doc_chunk_id = s.card_doc_chunk_id) AS evidence_quotes
@@ -142,7 +142,7 @@ INSERT INTO db_pipeline.card_ai_call (
 );
 
 -- name: insert_stg
--- 페이지별 추출 항목을 등록한다. 정제본은 문서 단위 통합 뒤에 채운다.
+-- 페이지별 추출 항목을 등록한다. 통합 연결·검증 코드는 문서 단위 통합 뒤에 채운다.
 INSERT INTO db_pipeline.card_extr_stg (
     card_ai_run_id,
     card_doc_id,
@@ -199,10 +199,10 @@ INSERT INTO db_pipeline.card_source_evidence (
 );
 
 -- name: update_stg_merge!
--- 문서 단위 통합 결과를 항목에 기록한다. stg_raw_item은 바꾸지 않는다.
+-- 문서 단위 통합 결과(대표 항목 연결·검증 코드)를 기록한다. stg_raw_item은 바꾸지 않는다.
+-- 등록용 정제본은 저장하지 않고 등록 시 stg_raw_item에서 다시 만든다(normalize_stored_run).
 UPDATE db_pipeline.card_extr_stg
-SET stg_normalized_item = :STG_NORMALIZED_ITEM,
-    stg_parent_card_extr_stg_id = :STG_PARENT_CARD_EXTR_STG_ID,
+SET stg_parent_card_extr_stg_id = :STG_PARENT_CARD_EXTR_STG_ID,
     stg_sql_check_cd = :STG_SQL_CHECK_CD,
     update_date = now(),
     update_user_id = :USER_ID
@@ -228,45 +228,47 @@ ORDER BY stg_kind_cd, stg_sql_check_cd
 ;
 
 -- name: select_merged_benefits
--- 문서 단위 통합 혜택과 검증 상태를 조회한다.
+-- 문서 단위 대표 혜택과 검증 상태를 조회한다. 대표 항목은 검증 코드가 있고 같은 종류의 부모가 없는 행이다.
 SELECT s.card_extr_stg_id, s.page_no, s.stg_status, s.stg_sql_check_cd,
-       s.stg_normalized_item->>'bnft_cd' AS bnft_cd,
-       s.stg_normalized_item->>'bnft_nm' AS bnft_nm,
-       s.stg_normalized_item->'merge'->'source_pages' AS source_pages,
-       s.stg_normalized_item->'merge'->'conflicts' AS conflicts,
-       s.stg_normalized_item->'checks'->>'value_check_cd' AS value_check_cd,
-       s.stg_normalized_item->'checks'->>'link_check_cd' AS link_check_cd
+       s.stg_raw_item->>'bnft_nm' AS bnft_nm,
+       (SELECT count(*) FROM db_pipeline.card_extr_stg d
+        WHERE d.stg_parent_card_extr_stg_id = s.card_extr_stg_id AND d.stg_kind_cd = 'BENEFIT') + 1 AS source_cnt
 FROM db_pipeline.card_extr_stg s
+LEFT JOIN db_pipeline.card_extr_stg p ON p.card_extr_stg_id = s.stg_parent_card_extr_stg_id
 WHERE s.card_ai_run_id = :CARD_AI_RUN_ID
   AND s.stg_kind_cd = 'BENEFIT'
-  AND s.stg_normalized_item IS NOT NULL
+  AND s.stg_sql_check_cd IS NOT NULL
+  AND p.card_extr_stg_id IS NULL
 ORDER BY s.page_no, s.stg_item_seq
 ;
 
 -- name: select_merged_rules
--- 통합 혜택의 계산 규칙을 컬럼으로 조회한다.
+-- 대표 혜택 원문 항목의 규칙 값을 컬럼으로 조회한다(통합 전 페이지 원문 기준).
 SELECT s.page_no, s.stg_sql_check_cd,
-       s.stg_normalized_item->>'bnft_nm' AS bnft_nm,
+       s.stg_raw_item->>'bnft_nm' AS bnft_nm,
        r.value->>'rule_key' AS rule_key,
        (r.value->>'value_num')::numeric AS value_num,
-       r.value->>'value_unit_cd' AS value_unit_cd
+       r.value->>'value_unit_cd' AS value_unit_cd,
+       r.value->>'value_raw_txt' AS value_raw_txt
 FROM db_pipeline.card_extr_stg s
-CROSS JOIN LATERAL jsonb_array_elements(s.stg_normalized_item->'rule_list') AS r(value)
+CROSS JOIN LATERAL jsonb_array_elements(COALESCE(s.stg_raw_item->'rules', '[]'::jsonb)) AS r(value)
 WHERE s.card_ai_run_id = :CARD_AI_RUN_ID
   AND s.stg_kind_cd = 'BENEFIT'
+  AND s.stg_sql_check_cd IS NOT NULL
+  AND s.stg_parent_card_extr_stg_id IS NULL
 ORDER BY s.page_no, s.stg_item_seq
 ;
 
 -- name: select_merged_conditions
 -- 문서 단위 조건과 연결된 혜택을 조회한다. 조건과 혜택의 페이지가 달라도 연결된다.
 SELECT c.card_extr_stg_id, c.page_no AS cond_page, b.page_no AS benefit_page,
-       b.stg_normalized_item->>'bnft_nm' AS bnft_nm,
-       c.stg_normalized_item->>'scope_cd' AS scope_cd,
-       c.stg_normalized_item->'applies_to_item_keys' AS applies_to_item_keys,
+       b.stg_raw_item->>'bnft_nm' AS bnft_nm,
+       c.stg_raw_item->>'scope' AS scope_cd,
        c.stg_raw_item->>'cond_raw_txt' AS cond_raw_txt,
        c.stg_sql_check_cd
 FROM db_pipeline.card_extr_stg c
-LEFT JOIN db_pipeline.card_extr_stg b ON b.card_extr_stg_id = c.stg_parent_card_extr_stg_id
+LEFT JOIN db_pipeline.card_extr_stg b
+  ON b.card_extr_stg_id = c.stg_parent_card_extr_stg_id AND b.stg_kind_cd = 'BENEFIT'
 WHERE c.card_ai_run_id = :CARD_AI_RUN_ID
   AND c.stg_kind_cd = 'CONDITION'
 ORDER BY c.page_no, c.stg_item_seq
@@ -283,43 +285,4 @@ JOIN db_pipeline.card_doc_chunk c
   ON (c.card_doc_id, c.page_no, c.card_doc_chunk_id) = (e.card_doc_id, e.page_no, e.card_doc_chunk_id)
 WHERE s.card_ai_run_id = :CARD_AI_RUN_ID
 ORDER BY s.page_no, s.stg_item_seq, e.evidence_id
-;
-
--- name: select_contract_check
--- 정제본을 V6 JSONB 계약 함수로 검사한다. 키는 승인 시 실제 ID로 바뀌므로 자리표시 값을 그대로 검사한다.
-SELECT s.card_extr_stg_id, s.stg_kind_cd,
-       CASE WHEN s.stg_kind_cd = 'BENEFIT'
-            THEN db_pipeline.fn_valid_rule_list(
-                (SELECT coalesce(jsonb_agg(r.value - 'pool_refs' ORDER BY r.ord), '[]'::jsonb)
-                 FROM jsonb_array_elements(s.stg_normalized_item->'rule_list') WITH ORDINALITY AS r(value,ord)), 'LOCAL') END AS rule_ok,
-       CASE WHEN s.stg_kind_cd = 'BENEFIT'
-            THEN db_pipeline.fn_valid_cond_expr(NULLIF(s.stg_normalized_item->'bnft_cond_expr', 'null'::jsonb))
-            ELSE db_pipeline.fn_valid_cond_expr(NULLIF(s.stg_normalized_item->'cond_expr', 'null'::jsonb)) END AS cond_ok,
-       CASE WHEN s.stg_kind_cd = 'BENEFIT'
-            THEN db_pipeline.fn_valid_relation_list(s.stg_normalized_item->'relation_list', '-') END AS relation_ok
-FROM db_pipeline.card_extr_stg s
-WHERE s.card_ai_run_id = :CARD_AI_RUN_ID
-  AND s.stg_normalized_item IS NOT NULL
-ORDER BY s.page_no, s.stg_item_seq
-;
-
--- name: select_run_compare
--- 두 실행의 혜택 정제본을 비교한다. 비교 키는 Python이 혜택명으로 만든 bnft_cd이고, 검증 정보는 비교하지 않는다.
-WITH item AS (
-    SELECT card_ai_run_id, stg_normalized_item->>'bnft_cd' AS bnft_cd,
-           stg_normalized_item->'rule_list' AS rule_list,
-           stg_normalized_item->'bnft_cond_expr' AS cond_expr
-    FROM db_pipeline.card_extr_stg
-    WHERE stg_kind_cd = 'BENEFIT'
-      AND stg_normalized_item IS NOT NULL
-)
-SELECT COALESCE(o.bnft_cd, n.bnft_cd) AS bnft_cd,
-       CASE WHEN o.bnft_cd IS NULL THEN 'ADDED'
-            WHEN n.bnft_cd IS NULL THEN 'REMOVED'
-            WHEN (o.rule_list, o.cond_expr) IS DISTINCT FROM (n.rule_list, n.cond_expr)
-            THEN 'CHANGED'
-            ELSE 'SAME' END AS diff_cd
-FROM (SELECT * FROM item WHERE card_ai_run_id = :OLD_RUN_ID) o
-FULL JOIN (SELECT * FROM item WHERE card_ai_run_id = :NEW_RUN_ID) n USING (bnft_cd)
-ORDER BY 1
 ;

@@ -6,10 +6,11 @@ from card_benefit.payment_card.db_pipeline.auto_approval_policy import check_aut
 
 class ApprovalPolicyTests(unittest.TestCase):
     def setUp(self):
+        # normalized·check_cd·source_cnt·conflicts는 CommonBenefitRepository.attach_normalized가 원본 행에서 다시 만든 값이다.
         self.candidate = {"stg_status": "PENDING_REVIEW", "stg_kind_cd": "BENEFIT", "stg_sql_check_cd": "OK",
                           "stg_raw_item": {"certainty": "HIGH", "relations": []},
-                          "stg_normalized_item": {"checks": {"value_check_cd": "OK", "link_check_cd": "TEXT_CONFIRMED", "issues": []},
-                                                  "merge": {"source_refs": [{}], "conflicts": []}, "relation_list": []}}
+                          "check_cd": "OK", "source_cnt": 1, "conflicts": [],
+                          "normalized": {"bnft_nm": "n", "relation_list": []}}
         self.evidence = [{"approval_status_cd": "PENDING", "start_pos": 1, "end_pos": 4,
                           "quote_txt": "원문 근거", "source_txt": "원문 근거"}]
 
@@ -25,7 +26,8 @@ class ApprovalPolicyTests(unittest.TestCase):
         self.assertTrue(self.decide().eligible)
 
     def test_review_or_unsafe_sources_are_not_approved(self):
-        for field, value in (("stg_sql_check_cd", "LINK_REVIEW"), ("stg_status", "REJECTED")):
+        for field, value in (("stg_sql_check_cd", "LINK_REVIEW"), ("check_cd", "LINK_REVIEW"),
+                             ("stg_status", "REJECTED"), ("normalized", None), ("source_cnt", 2)):
             candidate = copy.deepcopy(self.candidate)
             candidate[field] = value
             self.assertFalse(self.decide(candidate).eligible)
@@ -39,7 +41,7 @@ class ApprovalPolicyTests(unittest.TestCase):
         candidate["stg_raw_item"]["uncertainty_note"] = "불명확"
         self.assertFalse(self.decide(candidate).eligible)
         candidate = copy.deepcopy(self.candidate)
-        candidate["stg_normalized_item"]["merge"]["conflicts"] = ["금액 불일치"]
+        candidate["conflicts"] = ["금액 불일치"]
         self.assertFalse(self.decide(candidate).eligible)
 
 

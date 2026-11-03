@@ -42,7 +42,7 @@ from .extraction_schema import (
 
 extraction_logger = logging.getLogger("card_benefit.extraction")
 
-PROMPT_VER = "EXTRACT_V7"
+PROMPT_VER = "EXTRACT_V8"
 IMAGE_DPI = 150
 INPUT_MODE = "TEXT_IMAGE"
 KEY_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,40}$")
@@ -53,6 +53,8 @@ VALUE_CHECK_ORDER = ("NO_EVIDENCE", "QUOTE_NOT_FOUND", "VALUE_NOT_IN_QUOTE", "VA
 AMOUNT_PATTERN = re.compile(r"(?:(\d[\d,]*)만)?(?:(\d[\d,]*)천)?(\d[\d,]*)?원")
 COUNT_PATTERN = re.compile(r"(\d[\d,]*)회")
 RATE_PATTERN = re.compile(r"(\d+(?:\.\d+)?)%")
+# 외화 한도(예: "최대 USD 100", "$30", "50달러"). 공백을 지운 문자열에서 읽는다.
+FOREIGN_AMOUNT_PATTERN = re.compile(r"(?:USD|US\$|\$)(\d[\d,]*(?:\.\d+)?)|(\d[\d,]*(?:\.\d+)?)(?:USD|달러)", re.IGNORECASE)
 
 PROMPT_TXT = """당신은 카드 상품설명서에서 혜택 정보를 구조화하는 추출기입니다.
 입력은 페이지 전체 텍스트와 같은 페이지의 이미지입니다.
@@ -77,13 +79,10 @@ PROMPT_TXT = """당신은 카드 상품설명서에서 혜택 정보를 구조�
 11. 한도(limits)마다 supports=LIMIT, support_key=그 limit_key인 근거를 남깁니다. 인용에는 limit_raw_txt가 들어 있어야 합니다.
 12. 입력이 [추출 대상]과 [같은 페이지 유의사항 문맥]으로 나뉘어 있으면 혜택과 조건은 [추출 대상]에서만 추출합니다.
     [같은 페이지 유의사항 문맥]은 적용 대상·제공 기간을 뒷받침하는 APPLICABILITY 인용에만 사용하고, 그 안의 내용으로 혜택을 새로 만들지 않습니다.
-13. calc_method_cd, value_unit_cd, payout_unit_cd는 원문에서 읽은 분류입니다. 보상액을 계산하지 않으며, 확인할 수 없으면 UNKNOWN으로 둡니다.
-    등록되는 값은 value_num·value_unit_cd와 원문 인용이며, calc_method_cd·payout_unit_cd는 추출 확인에만 씁니다.
-    payout_unit_cd는 고객이 받는 보상의 형태입니다(결제 통화가 아닙니다). 포인트·마일리지로 지급한다고 적혀 있으면 HANAMONEY·UNIMILE·WALLET_POINT,
-    서비스 이용 자체를 제공하면 SERVICE, 원화 할인·캐시백으로 확인되면 KRW, 그 밖에는 UNKNOWN입니다.
-14. 서비스를 무상으로 제공하는 혜택(예: 조식 제공, 그린피 면제, 멤버십 무료 가입, 수수료 무료)은 calc_method_cd=FREE_SERVICE,
-    payout_unit_cd=SERVICE, value_num=null이고 value_raw_txt에는 "조식 제공", "무료"처럼 원문 표현을 그대로 씁니다.
-    1+1, 포인트 지급처럼 정해진 계산 방법으로 표현할 수 없는 혜택은 calc_method_cd=UNKNOWN으로 두고 unresolved에 사유를 적습니다.
+13. 규칙의 value_num·value_unit_cd는 원문 값(%, 원, 배)을 그대로 옮긴 설명 값입니다. 보상액이나 지급 방식은 판단하지 않습니다.
+    단위를 원문에서 확인할 수 없으면 value_unit_cd=UNKNOWN입니다.
+14. 수치 하나로 쓸 수 없는 혜택(예: 조식 제공, 그린피 면제, 멤버십 무료 가입, 수수료 무료, 1+1, 포인트 지급)도 규칙으로 남깁니다.
+    이때 value_num=null, value_unit_cd=null이고 value_raw_txt에는 "조식 제공", "1+1"처럼 원문 표현을 그대로 씁니다.
 15. 한도의 period_cd는 원문 표현으로 정합니다. 일·월·연 표현이 있으면 DAY·MONTH·YEAR, "건당", "1회 결제 시", "예약 시"처럼 결제 1건에만
     적용되는 상한이거나 할인율 바로 뒤의 "(최대 N원)"처럼 해당 결제 1건의 할인 상한이면 TXN입니다. 판단할 수 없으면 UNKNOWN입니다.
     한도 단위가 원화·하나머니·횟수가 아니면(예: USD) cap_unit_cd=UNKNOWN으로 두고 값을 환산하지 않습니다.
@@ -201,6 +200,16 @@ def amounts_in(text: str) -> set[int]:
             to_int = lambda value: int(value.replace(",", "")) if value else 0  # noqa: E731
             amounts.add(to_int(man) * 10000 + to_int(cheon) * 1000 + to_int(won))
     return amounts
+
+
+def foreign_amounts_in(text: str) -> set[Decimal]:
+    """문자열의 외화(달러) 금액 표기를 읽는다. 환산하지 않고 표기된 숫자만 돌려준다."""
+    return {Decimal((before or after).replace(",", "")) for before, after in FOREIGN_AMOUNT_PATTERN.findall(compact(text))}
+
+
+def limit_values_in(text: str) -> set:
+    """단위를 정하지 못한 한도 값. 원화와 외화 표기를 모두 읽는다(원문 숫자 대조용이며 환산하지 않는다)."""
+    return amounts_in(text) | foreign_amounts_in(text)
 
 
 def counts_in(text: str) -> set[int]:
@@ -346,8 +355,8 @@ def check_benefit(benefit: BenefitItem, page: PageResult) -> ItemCheck:
     for limit in benefit.limits:
         quotes = supporting("LIMIT", limit.limit_key)
         expected = None if limit.limit_num is None else {limit.limit_num}
-        add(check_values(limit.limit_key, quotes, limit.limit_raw_txt, expected,
-                         counts_in if limit.cap_unit_cd == "COUNT" else amounts_in))
+        parse = {"COUNT": counts_in, "KRW": amounts_in, "HANAMONEY": amounts_in}.get(limit.cap_unit_cd, limit_values_in)
+        add(check_values(limit.limit_key, quotes, limit.limit_raw_txt, expected, parse))
     for condition in benefit.conditions:
         result = check_condition(condition, page)
         add((result.value_check_cd, result.issues))
@@ -514,15 +523,22 @@ def find_benefit_key(name: str, item_keys: dict[str, str]) -> str | None:
 def merge_benefit_group(group: list[tuple[PageResult, StoredItem]]) -> tuple[BenefitItem, list[str]]:
     """같은 혜택의 페이지별 항목을 합친다. 대표는 상세 페이지를 우선한다. 값이 다르면 충돌로 남긴다."""
     ordered = sorted(group, key=page_order)
-    base = ordered[0][1].item.model_copy(deep=True)
+    return merge_items([(page.page_no, stored.item) for page, stored in ordered])
+
+
+def merge_items(ordered: list[tuple[int, BenefitItem]]) -> tuple[BenefitItem, list[str]]:
+    """대표 순서로 정렬된 ``(페이지, 혜택 항목)`` 을 합친다. 첫 항목이 대표다. DB·LLM을 쓰지 않는다.
+
+    추출 직후 통합과 저장된 추출 원본(stg_raw_item)에서 다시 만드는 통합이 같은 함수를 쓴다.
+    """
+    base = ordered[0][1].model_copy(deep=True)
     conflicts: list[str] = []
-    rule_sign = lambda rule: (rule.calc_method_cd, rule.value_num, rule.value_unit_cd, rule.min_txn_amt)  # noqa: E731
+    rule_sign = lambda rule: (rule.value_num, rule.value_unit_cd, rule.min_txn_amt)  # noqa: E731
     base_rules = {rule_sign(rule) for rule in base.rules}
-    for page, stored in ordered[1:]:
-        other = stored.item
+    for page_no, other in ordered[1:]:
         other_rules = {rule_sign(rule) for rule in other.rules}
         if base_rules and other_rules and other_rules != base_rules:
-            conflicts.append(f"규칙 값이 페이지 {ordered[0][0].page_no}와 {page.page_no}에서 다름")
+            conflicts.append(f"규칙 값이 페이지 {ordered[0][0]}와 {page_no}에서 다름")
         elif not base_rules:
             base.rules = list(other.rules)
             base_rules = other_rules
@@ -686,6 +702,78 @@ def merge_pages(pages: list[PageResult]) -> tuple[list[MergedBenefit], list[Merg
 
 
 # =========================================================
+# 저장된 추출 원본에서 등록용 혜택 만들기
+# =========================================================
+@dataclass
+class StoredCandidate:
+    """통합 대표 행 1건을 추출 원본(stg_raw_item)에서 다시 만든 결과. DB에 저장하지 않는다."""
+
+    stg_id: str
+    normalized: dict
+    invalid: list[str]
+    conflicts: list[str]
+    unresolved: bool
+    source_cnt: int
+    check_cd: str | None        # 현재 계약으로 다시 판단한 검증 코드(effective_check_cd)
+
+
+def effective_check_cd(stored: str | None, invalid: list[str], conflicts: list[str], unresolved: bool) -> str | None:
+    """저장된 검증 코드를 현재 계약으로 다시 판단한다.
+
+    값·근거 검증(NO_EVIDENCE 등)과 병합·연결 판정은 저장된 결과를 따른다. 계약 오류(CONTRACT_INVALID)는
+    계약 기준이 바뀌었으므로(2026-11-03 계산 구조 정리) 다시 계산하며, 대상 연결 확인 여부는 알 수 없어 LINK_REVIEW로 둔다.
+    """
+    if stored != "CONTRACT_INVALID":
+        return stored
+    if invalid:
+        return "CONTRACT_INVALID"
+    if conflicts:
+        return "MERGE_CONFLICT"
+    if unresolved:
+        return "SCOPE_UNRESOLVED"
+    return "LINK_REVIEW"
+
+
+def normalize_stored_run(rows: list[dict]) -> dict[str, StoredCandidate]:
+    """실행 1건의 저장 행으로 통합 혜택을 다시 만든다. ``merge_pages`` 와 같은 규칙이다.
+
+    ``rows`` 는 같은 실행의 card_extr_stg 행이며 card_extr_stg_id, stg_kind_cd, stg_raw_item,
+    stg_parent_card_extr_stg_id, stg_sql_check_cd, page_no, chunk_seq, stg_item_seq, page_role 키가 있어야 한다.
+    통합 대표는 검증 코드가 있고 상위 행이 없는 혜택이며, 같은 이름으로 합쳐진 행은 대표를 상위 행으로 가리킨다.
+    """
+    by_id = {row["card_extr_stg_id"]: row for row in rows}
+    order = lambda row: (row.get("page_role") == "SUMMARY", row["page_no"], row.get("chunk_seq") or 0, row["stg_item_seq"])  # noqa: E731
+    found = lambda row: (row.get("chunk_seq") or 0, row["stg_item_seq"])  # noqa: E731
+    children: dict[str, list[dict]] = {}
+    for row in rows:
+        parent = row.get("stg_parent_card_extr_stg_id")
+        if parent and parent in by_id and by_id[parent]["stg_kind_cd"] == row["stg_kind_cd"]:
+            children.setdefault(parent, []).append(row)
+    canon = lambda kind: [row for row in rows if row["stg_kind_cd"] == kind and row.get("stg_sql_check_cd")  # noqa: E731
+                          and not (row.get("stg_parent_card_extr_stg_id") in by_id
+                                   and by_id[row["stg_parent_card_extr_stg_id"]]["stg_kind_cd"] == kind)]
+    benefits = canon("BENEFIT")
+    item_keys = {row["stg_raw_item"]["bnft_nm"]: make_item_key("BNFT", row["stg_raw_item"]["bnft_nm"]) for row in benefits}
+    extra: dict[str, list[ConditionItem]] = {}
+    # 문서 단위 조건은 추출 직후 통합과 같은 순서(처리 순서상 처음 나온 위치)로 혜택 조건식에 붙인다.
+    for row in sorted(canon("CONDITION"), key=lambda r: min(found(x) for x in [r, *children.get(r["card_extr_stg_id"], [])])):
+        condition = ConditionItem.model_validate(row["stg_raw_item"])
+        keys = [find_benefit_key(name, item_keys) for name in condition.target_benefit_nms]
+        for key in dict.fromkeys(key for key in keys if key):
+            extra.setdefault(key, []).append(condition)
+    out = {}
+    for row in benefits:
+        group = sorted([row, *children.get(row["card_extr_stg_id"], [])], key=order)
+        item, conflicts = merge_items([(member["page_no"], BenefitItem.model_validate(member["stg_raw_item"])) for member in group])
+        bnft_cd = item_keys[row["stg_raw_item"]["bnft_nm"]]
+        normalized, invalid, unresolved = normalize_benefit(item, bnft_cd, extra.get(bnft_cd, []), item_keys)
+        out[row["card_extr_stg_id"]] = StoredCandidate(
+            row["card_extr_stg_id"], normalized, invalid, conflicts, unresolved, len(group),
+            effective_check_cd(row.get("stg_sql_check_cd"), invalid, conflicts, unresolved))
+    return out
+
+
+# =========================================================
 # 실행 흐름
 # =========================================================
 class ExtractionService:
@@ -805,8 +893,7 @@ class ExtractionService:
                 row = indexed.get((chunk_id, call_seq, seq))
                 if (not row or row["card_id"] is not None or row["stg_kind_cd"] != kind or
                         row["stg_raw_item"] != raw or sorted(row["evidence_quotes"]) != quotes
-                        or not row["stg_sql_check_cd"] or
-                        (row["stg_normalized_item"] is None and row["stg_parent_card_extr_stg_id"] is None)):
+                        or not row["stg_sql_check_cd"]):
                     return False
         except (ValidationError, KeyError, TypeError):
             return False
@@ -1017,21 +1104,24 @@ class ExtractionService:
         try:
             with self.sql_session.transaction():
                 for benefit in benefits:
-                    self._store_group(benefit.merge, benefit.normalized, benefit.sql_check_cd, None, lookup)
+                    self._store_group(benefit.merge, benefit.sql_check_cd, None, lookup)
                 for condition in conditions:
                     keys = condition.applies_to_item_keys
                     parent = benefit_ids[keys[0]] if len(keys) == 1 else None
-                    self._store_group(condition.merge, condition.normalized, condition.sql_check_cd, parent, lookup)
+                    self._store_group(condition.merge, condition.sql_check_cd, parent, lookup)
         except psycopg.Error as error:
             extraction_logger.error("EXTRACT MERGE SAVE FAILED: %s", type(error).__name__)
             return False
         return True
 
-    def _store_group(self, merge: MergeInfo, normalized: dict, check_cd: str, parent: str | None, lookup: dict) -> None:
-        """대표 행에 정제본을 쓰고 나머지 행은 대표 행을 가리키게 한다."""
+    def _store_group(self, merge: MergeInfo, check_cd: str, parent: str | None, lookup: dict) -> None:
+        """대표 행에 검증 코드를 쓰고 나머지 행은 대표 행을 가리키게 한다.
+
+        등록용 정제본은 저장하지 않는다. 등록할 때 ``normalize_stored_run`` 이 원본 행과 이 연결로 다시 만든다.
+        """
         first, *others = merge.source_refs
         canonical = lookup[(first.card_doc_chunk_id, first.stg_item_seq)]
-        self.repository.update_stg_merge(canonical, normalized, parent, check_cd)
+        self.repository.update_stg_merge(canonical, parent, check_cd)
         duplicate_cd = "MERGE_CONFLICT" if merge.conflicts else "MERGED_DUP"
         for ref in others:
-            self.repository.update_stg_merge(lookup[(ref.card_doc_chunk_id, ref.stg_item_seq)], None, canonical, duplicate_cd)
+            self.repository.update_stg_merge(lookup[(ref.card_doc_chunk_id, ref.stg_item_seq)], canonical, duplicate_cd)

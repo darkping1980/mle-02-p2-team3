@@ -38,7 +38,8 @@ class ProductBenefitService:
             before = self._errors()
             if not self.repo.one('lock_card', CARD_ID=card_id):
                 raise ValueError('카드가 없습니다')
-            for candidate in self.repo.rows('list_product_candidates', RUN_ID=run_id, CARD_ID=card_id):
+            rows = self.repo.rows('list_product_candidates', RUN_ID=run_id, CARD_ID=card_id)
+            for candidate in self.repo.attach_normalized(run_id, rows):
                 evidence = self.repo.rows('candidate_evidence', STG_ID=candidate['card_extr_stg_id'])
                 results.append(self._register(card_id, candidate, evidence))
             new = self._errors() - before
@@ -56,15 +57,18 @@ class ProductBenefitService:
         stg_id = candidate['card_extr_stg_id']
         def review(reason, status='REVIEW'):
             return ProductDecision(card_id, stg_id, status, reason)
-        raw, norm = candidate['stg_raw_item'], candidate['stg_normalized_item']
+        raw, norm = candidate['stg_raw_item'], candidate.get('normalized')
+        if norm is None:
+            return review('추출 원본에서 등록 형태를 다시 만들 수 없습니다')
         code = norm.get('bnft_cd')
         existing = self.repo.one('find_benefit', CARD_ID=card_id, BNFT_CD=code)
         if existing:
             return ProductDecision(card_id, stg_id, 'UNCHANGED', '등록된 혜택은 수정하지 않습니다', code, existing['card_bnft_id'])
         if candidate['stg_status'] in ('REJECTED', 'RETIRED'):
             return review('제외된 후보입니다', 'EXCLUDED')
-        if candidate['stg_sql_check_cd'] not in ('OK', 'LINK_REVIEW'):
-            return review(f"후보 검증이 필요합니다: {candidate['stg_sql_check_cd']}")
+        # check_cd는 저장된 검증 코드를 현재 계약으로 다시 판단한 값이다(계산 구조 정리 전 CONTRACT_INVALID 재판정).
+        if candidate.get('check_cd') not in ('OK', 'LINK_REVIEW'):
+            return review(f"후보 검증이 필요합니다: {candidate.get('check_cd')}")
         if norm.get('is_common_candidate'):
             return review('공통서비스 후보는 카드별 혜택으로 등록하지 않습니다')
         if norm.get('relation_list'):

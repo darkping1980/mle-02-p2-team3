@@ -10,17 +10,15 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema
+from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, model_validator
 
-SCHEMA_VER = "EXTRACT_SCHEMA_V2"
+SCHEMA_VER = "EXTRACT_SCHEMA_V3"     # V3: 규칙의 계산 방법·지급 단위 제거(2026-11-03 계산 구조 정리)
 MERGE_VER = "MERGE_V1"
 
 BnftType = Literal["DISCOUNT", "CASHBACK", "POINT", "FEE_WAIVER", "SERVICE", "INSTALLMENT", "ETC", "UNKNOWN"]
-CalcMethod = Literal[
-    "PERCENT_OF_TXN", "FIXED_PER_TXN", "UNITS_PER_AMOUNT", "MULTIPLY_EXTERNAL_POINTS", "FREE_SERVICE", "UNKNOWN",
-]
 ValueUnit = Literal["PERCENT", "KRW", "UNIMILE", "MULTIPLIER", "UNKNOWN"]
-PayoutUnit = Literal["KRW", "HANAMONEY", "UNIMILE", "WALLET_POINT", "SERVICE", "UNKNOWN"]
+# 이전 스키마(V2) 응답에만 있는 규칙 키. 저장된 응답·추출 원본을 다시 읽을 때 무시한다.
+LEGACY_RULE_KEYS = ("calc_method_cd", "payout_unit_cd")
 LimitPeriod = Literal["TXN", "DAY", "MONTH", "YEAR", "UNKNOWN"]
 LimitUnit = Literal["KRW", "HANAMONEY", "COUNT", "UNKNOWN"]
 CondType = Literal[
@@ -90,18 +88,24 @@ class LimitItem(ExtractionModel):
 
 
 class RuleItem(ExtractionModel):
-    """계산 규칙 1건."""
+    """혜택 값 1건. 값과 단위는 원문 인용과 대조하는 설명 값이며 보상액을 계산하지 않는다."""
 
     rule_key: str
-    calc_method_cd: CalcMethod
     value_num: NumberValue | None = None
     value_raw_txt: str
     value_unit_cd: ValueUnit | None = None
-    payout_unit_cd: PayoutUnit | None = None
     min_txn_amt: int | None = None
     min_txn_raw_txt: str | None = None
     conditions: list[ConditionItem] = Field(default_factory=list)
     limit_keys: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_legacy_keys(cls, data: Any) -> Any:
+        """이전 스키마 응답의 계산 방법·지급 단위는 읽지 않는다. 새 응답 스키마에는 없다."""
+        if isinstance(data, dict) and any(key in data for key in LEGACY_RULE_KEYS):
+            return {key: value for key, value in data.items() if key not in LEGACY_RULE_KEYS}
+        return data
 
 
 class RelationItem(ExtractionModel):

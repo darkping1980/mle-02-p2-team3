@@ -191,7 +191,8 @@ SELECT DISTINCT 'BNFT' AS ev_subject_cd, NULL AS rule_key, '-' AS ev_item_key,
 FROM db_pipeline.card_common_bnft b
 JOIN db_pipeline.card_common_doc d ON d.card_common_id = b.card_common_id
 JOIN db_pipeline.card_extr_stg s
-  ON s.card_doc_id = d.card_doc_id AND s.stg_kind_cd = 'BENEFIT' AND s.stg_normalized_item->>'bnft_nm' = b.bnft_nm
+  ON s.card_doc_id = d.card_doc_id AND s.stg_kind_cd = 'BENEFIT' AND s.stg_raw_item->>'bnft_nm' = b.bnft_nm
+ AND s.stg_sql_check_cd IS NOT NULL AND s.stg_parent_card_extr_stg_id IS NULL   -- 문서 단위 대표 혜택
 JOIN db_pipeline.card_source_evidence e ON e.card_extr_stg_id = s.card_extr_stg_id
 WHERE b.card_common_id = :COMMON_ID AND b.card_common_bnft_id = :BNFT_ID
 ORDER BY e.page_no, e.evidence_id

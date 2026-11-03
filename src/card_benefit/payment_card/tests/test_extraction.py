@@ -33,11 +33,15 @@ from payment_card.db_pipeline.extraction_service import (
     check_condition,
     counts_in,
     json_number,
+    effective_check_cd,
+    limit_values_in,
     locate_quote,
     make_item_key,
     merge_pages,
+    normalize_stored_run,
     rates_in,
 )
+from payment_card.db_pipeline import extraction_service as extraction_module
 
 # 표의 값이 줄 단위로 흩어진 ONE PICK STYLE 원문 형식을 본뜬 시험용 페이지. 실제 PDF 값이 아니다.
 PAGE1 = """서비스 영역
@@ -171,6 +175,23 @@ class FakeSession:
         return len(parameters_list)
 
 
+def stored_rows(session, roles=None):
+    """FakeSession에 기록된 저장 호출로 card_extr_stg 행을 다시 만든다(list_run_items와 같은 키)."""
+    rows = {}
+    for number, item in enumerate(session.calls("insert_stg"), 1):
+        rows[f"STG{number}"] = {
+            "card_extr_stg_id": f"STG{number}", "stg_kind_cd": item["STG_KIND_CD"],
+            "stg_raw_item": item["STG_RAW_ITEM"].obj, "page_no": item["PAGE_NO"],
+            "card_doc_chunk_id": item["CARD_DOC_CHUNK_ID"], "stg_item_seq": item["STG_ITEM_SEQ"],
+            "chunk_seq": None, "page_role": (roles or {}).get(item["PAGE_NO"]),
+            "stg_parent_card_extr_stg_id": None, "stg_sql_check_cd": None,
+        }
+    for merge in session.calls("update_stg_merge"):
+        rows[merge["CARD_EXTR_STG_ID"]].update(stg_parent_card_extr_stg_id=merge["STG_PARENT_CARD_EXTR_STG_ID"],
+                                               stg_sql_check_cd=merge["STG_SQL_CHECK_CD"])
+    return list(rows.values())
+
+
 class FakeLlm:
     """페이지 번호별 응답을 돌려주는 Mock LLM."""
 
@@ -234,7 +255,10 @@ class CommonReuseTests(ServiceCase):
         self.assertTrue(session.calls("insert_evidence"))
         raw = saved[0]["STG_RAW_ITEM"].obj
         self.assertEqual(raw["applicable_cards"], ["JADE"])
-        normalized = session.calls("update_stg_merge")[0]["STG_NORMALIZED_ITEM"].obj
+        # 정제본은 저장하지 않는다(stg_normalized_item 제거). 저장된 원본 행으로 다시 만든다.
+        self.assertTrue(all("STG_NORMALIZED_ITEM" not in merge for merge in session.calls("update_stg_merge")))
+        rebuilt = normalize_stored_run(stored_rows(session))
+        normalized = rebuilt["STG1"].normalized
         self.assertIsNone(normalized["bnft_origin_cd"])
         self.assertNotIn("limit_list", normalized)          # 한도 풀 정규화 제거(2026-11-03)
         self.assertEqual(raw["limits"][0]["limit_raw_txt"], "월 1천원")   # 한도 원문은 추출 원본에 남는다
@@ -275,7 +299,7 @@ class CommonReuseTests(ServiceCase):
         row = {"card_doc_chunk_id": "C1", "call_seq": 1, "stg_item_seq": 1,
                "card_id": None, "stg_kind_cd": "BENEFIT", "stg_raw_item": page.benefits[0].model_dump(mode="json"),
                "evidence_quotes": sorted(e.quote_txt for e in page.benefits[0].evidence),
-               "stg_sql_check_cd": "OK", "stg_normalized_item": {}, "stg_parent_card_extr_stg_id": None}
+               "stg_sql_check_cd": "OK", "stg_parent_card_extr_stg_id": None}
         with patch.object(service.repository, "select_run_calls", return_value=calls), \
              patch.object(service.repository, "select_reuse_items", return_value=[row]) as items:
             self.assertTrue(service._complete_reuse("OLD", self.chunks[:1]))
@@ -556,6 +580,33 @@ class RunTests(ServiceCase):
         self.assertEqual(merges[1]["STG_PARENT_CARD_EXTR_STG_ID"], "STG1")   # 2쪽 조건이 1쪽 혜택을 가리킨다
         self.assertEqual(session.calls("finish_run")[0]["RUN_STATUS"], "SUCCEEDED")
 
+    def test_registration_rebuild_matches_extraction_merge(self):
+        """등록 시 원본 행으로 다시 만든 혜택이 추출 직후 통합 결과와 같아야 한다(요약·상세 중복, 다른 쪽 조건 포함)."""
+        responses = {
+            1: page_json(1, benefits=[benefit(), benefit("쇼핑", 10, "10%")], role="SUMMARY"),
+            2: page_json(2, benefits=[benefit(limit=5000, limit_raw="월 5천원")], conditions=[condition()]),
+        }
+        session, service = self.service(responses)
+        captured = []
+        original = extraction_module.merge_pages
+        with patch.object(extraction_module, "merge_pages", side_effect=lambda pages: captured.append(original(pages)) or captured[-1]):
+            service.run("D1", 1)
+        rows = stored_rows(session, {1: "SUMMARY", 2: "DETAIL"})
+        ids = {(row["card_doc_chunk_id"], row["stg_item_seq"]): row["card_extr_stg_id"] for row in rows}
+        rebuilt = normalize_stored_run(rows)
+        merged_benefits = captured[0][0]
+        self.assertEqual(len(rebuilt), len(merged_benefits))
+        for merged in merged_benefits:
+            first = merged.merge.source_refs[0]
+            item = rebuilt[ids[(first.card_doc_chunk_id, first.stg_item_seq)]]
+            expected = {k: v for k, v in merged.normalized.items() if k not in ("merge", "checks")}
+            self.assertEqual(item.normalized, expected)
+            self.assertEqual((item.source_cnt, item.conflicts), (len(merged.merge.source_refs), merged.merge.conflicts))
+            self.assertEqual(item.check_cd, merged.sql_check_cd)
+        transport = next(item for item in rebuilt.values() if item.normalized["bnft_nm"] == "대중교통")
+        self.assertEqual(transport.source_cnt, 2)                        # 상세(2쪽)가 대표, 요약(1쪽)은 중복 행
+        self.assertIsNotNone(transport.normalized["bnft_cond_expr"])     # 2쪽 조건이 연결된다
+
     def test_input_has_page_text_png_image_and_run_param(self):
         session, service = self.service(self.RESPONSES)
         service.run("D1", 1)
@@ -678,7 +729,7 @@ class MapperTests(unittest.TestCase):
     def test_every_statement_is_loaded_and_names_the_schema(self):
         session = PostgresDbSession(mapper_root=MAPPER_ROOT, camel_case_keys=False, sql_log_mode="none")
         names = [name for name in session.mappers["extraction_repository"].available_queries if not name.endswith("_cursor")]
-        self.assertEqual(len(names), 21)       # select_merged_limits 제거(한도 풀 정규화 삭제)
+        self.assertEqual(len(names), 19)       # select_contract_check·select_run_compare 제거(stg_normalized_item 제거)
         for name in names:
             self.assertIn("db_pipeline.", session._query(f"extraction_repository.{name}").sql, name)
         self.assertEqual(session.database_manager._pools, {})
@@ -686,3 +737,26 @@ class MapperTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StoredCheckTests(unittest.TestCase):
+    def test_old_contract_invalid_is_rejudged_without_calculation_rules(self):
+        self.assertEqual(effective_check_cd("CONTRACT_INVALID", [], [], False), "LINK_REVIEW")
+        self.assertEqual(effective_check_cd("CONTRACT_INVALID", ["x"], [], False), "CONTRACT_INVALID")
+        self.assertEqual(effective_check_cd("CONTRACT_INVALID", [], ["c"], False), "MERGE_CONFLICT")
+        self.assertEqual(effective_check_cd("CONTRACT_INVALID", [], [], True), "SCOPE_UNRESOLVED")
+        for code in ("OK", "LINK_REVIEW", "NO_EVIDENCE", "VALUE_PARSE_DIFF"):
+            self.assertEqual(effective_check_cd(code, ["x"], ["c"], True), code)   # 값·근거 검증은 저장 결과를 따른다
+
+    def test_foreign_currency_limit_is_compared_as_written(self):
+        self.assertEqual(limit_values_in("최대 USD 100"), {Decimal("100")})
+        self.assertEqual(limit_values_in("월 1만원"), {10000})
+        text = "Airalo eSIM 최대 20% 할인 (최대 USD 100)"
+        item = benefit("Airalo", 20, "최대 20% 할인", limit=100, limit_raw="최대 USD 100")
+        item["limits"][0]["cap_unit_cd"] = "UNKNOWN"
+        item["targets"] = []
+        item["evidence"] = [quote("최대 20% 할인", "RULE", "RATE", "SAME_TEXT"), quote("최대 USD 100", "LIMIT", "MONTH_KRW", "SAME_TEXT")]
+        page = checked_page(1, text, page_json(1, [item]))
+        self.assertEqual(page.benefits[0].check.value_check_cd, "OK")
+        item["limits"][0]["limit_num"] = 30
+        self.assertEqual(checked_page(1, text, page_json(1, [item])).benefits[0].check.value_check_cd, "VALUE_PARSE_DIFF")

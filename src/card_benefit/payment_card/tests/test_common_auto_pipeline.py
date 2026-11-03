@@ -26,8 +26,9 @@ def make_pipeline(link_review):
     raw = item.model_dump(mode='json')
     norm = merged.normalized
     candidate = service.repo.candidate
-    candidate.update(stg_raw_item=raw, stg_normalized_item=norm, stg_kind_cd='BENEFIT',
-                     stg_status='PENDING_REVIEW', stg_sql_check_cd='LINK_REVIEW' if link_review else merged.sql_check_cd)
+    code = 'LINK_REVIEW' if link_review else merged.sql_check_cd
+    candidate.update(stg_raw_item=raw, normalized=norm, check_cd=code, source_cnt=1, conflicts=[], stg_kind_cd='BENEFIT',
+                     stg_status='PENDING_REVIEW', stg_sql_check_cd=code)
     service.repo.evidence = [dict(evidence_id='E1', quote_txt='카페', source_txt='카페', start_pos=1, end_pos=2, approval_status_cd='PENDING'),
                              dict(evidence_id='E2', quote_txt=source, source_txt=source, start_pos=1, end_pos=len(source), approval_status_cd='PENDING')]
 

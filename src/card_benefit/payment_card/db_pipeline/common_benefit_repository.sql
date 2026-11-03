@@ -64,15 +64,31 @@ WHERE r.run_status='SUCCEEDED' AND r.run_stage_cd='EXTRACT' AND d.doc_type_cd='B
   AND d.doc_status='ACTIVE' ORDER BY r.run_start_date, r.card_ai_run_id;
 
 -- name: list_candidates
-SELECT s.card_extr_stg_id, s.stg_raw_item, s.stg_normalized_item, s.stg_status,
+-- 문서 단위 대표 혜택. 대표 행은 통합 검증 코드가 있고 다른 혜택 행으로 합쳐지지 않은 행이다.
+-- 등록 형태(조건식·규칙)는 Python이 list_run_items의 원본 행으로 다시 만든다(normalize_stored_run).
+SELECT s.card_extr_stg_id, s.card_ai_run_id, s.stg_raw_item, s.stg_status,
        s.stg_sql_check_cd, d.card_doc_id, d.doc_family_cd, d.doc_sha256,d.doc_version_no
 FROM db_pipeline.card_extr_stg s
 JOIN db_pipeline.card_ai_run r ON r.card_ai_run_id=s.card_ai_run_id
 JOIN db_pipeline.card_doc d ON d.card_doc_id=s.card_doc_id AND d.card_doc_id=r.run_target_card_doc_id
 WHERE s.card_ai_run_id=:RUN_ID AND r.run_stage_cd='EXTRACT' AND r.run_status='SUCCEEDED'
-  AND s.card_id IS NULL AND s.stg_kind_cd='BENEFIT' AND s.stg_normalized_item IS NOT NULL
+  AND s.card_id IS NULL AND s.stg_kind_cd='BENEFIT'
+  AND s.stg_sql_check_cd IS NOT NULL AND s.stg_parent_card_extr_stg_id IS NULL
   AND d.doc_type_cd='BRAND_SERVICE' AND d.doc_status='ACTIVE'
 ORDER BY s.page_no,s.card_doc_chunk_id,s.stg_item_seq;   -- 다중 청크는 청크마다 항목 순번이 1부터다
+
+-- name: list_run_items
+-- 실행 1건의 추출 원본 행 전체. 페이지 처리 순서(청크 순번)와 페이지 역할은 통합 대표 선택 순서를 다시 만드는 데 쓴다.
+SELECT s.card_extr_stg_id, s.stg_kind_cd, s.stg_raw_item, s.stg_parent_card_extr_stg_id, s.stg_sql_check_cd,
+       s.page_no, s.stg_item_seq, c.chunk_seq, a.call_resp_json->>'page_role' AS page_role
+FROM db_pipeline.card_extr_stg s
+LEFT JOIN db_pipeline.card_doc_chunk c
+  ON (c.card_doc_id, c.page_no, c.card_doc_chunk_id) = (s.card_doc_id, s.page_no, s.card_doc_chunk_id)
+LEFT JOIN db_pipeline.card_ai_call a
+  ON (a.card_ai_run_id, a.card_doc_id, a.page_no, a.card_doc_chunk_id, a.call_seq)
+   = (s.card_ai_run_id, s.card_doc_id, s.page_no, s.card_doc_chunk_id, s.call_seq)
+WHERE s.card_ai_run_id = :RUN_ID
+ORDER BY c.chunk_seq, s.stg_item_seq;
 
 -- name: candidate_evidence
 SELECT e.evidence_id,e.quote_txt,e.start_pos,e.end_pos,e.approval_status_cd,
@@ -110,7 +126,8 @@ SELECT b.card_id, b.card_bnft_id, b.bnft_cd, b.bnft_nm, b.bnft_type_cd, b.bnft_v
         WHERE d.card_common_id = cb.card_common_id) AS common_doc_ids,
        (SELECT array_agg(DISTINCT e.evidence_id::text) FROM db_pipeline.card_common_doc d
         JOIN db_pipeline.card_extr_stg s
-          ON s.card_doc_id = d.card_doc_id AND s.stg_kind_cd = 'BENEFIT' AND s.stg_normalized_item->>'bnft_nm' = cb.bnft_nm
+          ON s.card_doc_id = d.card_doc_id AND s.stg_kind_cd = 'BENEFIT' AND s.stg_raw_item->>'bnft_nm' = cb.bnft_nm
+         AND s.stg_sql_check_cd IS NOT NULL AND s.stg_parent_card_extr_stg_id IS NULL   -- 문서 단위 대표 혜택
         JOIN db_pipeline.card_source_evidence e ON e.card_extr_stg_id = s.card_extr_stg_id
         WHERE d.card_common_id = cb.card_common_id) AS common_evidence_ids,
        EXISTS (SELECT 1 FROM db_pipeline.card_common_bnft_apply a
@@ -138,12 +155,13 @@ ON CONFLICT ON CONSTRAINT card_evidence_link_natural_key DO NOTHING RETURNING ev
 
 -- name: list_product_candidates
 -- 상품설명서 추출 혜택. 상품·문서 연결이 있어야 하고 다른 페이지로 합쳐진 행은 읽지 않는다.
-SELECT s.card_extr_stg_id,s.stg_raw_item,s.stg_normalized_item,s.stg_status,s.stg_sql_check_cd,s.card_doc_id
+SELECT s.card_extr_stg_id,s.card_ai_run_id,s.stg_raw_item,s.stg_status,s.stg_sql_check_cd,s.card_doc_id
 FROM db_pipeline.card_extr_stg s
 JOIN db_pipeline.card_ai_run r ON r.card_ai_run_id=s.card_ai_run_id
 JOIN db_pipeline.card_doc d ON d.card_doc_id=s.card_doc_id AND d.card_doc_id=r.run_target_card_doc_id
 JOIN db_pipeline.card_product_doc pd ON pd.card_id=s.card_id AND pd.card_doc_id=s.card_doc_id AND pd.doc_role_cd='PRODUCT_GUIDE'
-WHERE s.card_ai_run_id=:RUN_ID AND s.card_id=:CARD_ID AND s.stg_kind_cd='BENEFIT' AND s.stg_normalized_item IS NOT NULL
+WHERE s.card_ai_run_id=:RUN_ID AND s.card_id=:CARD_ID AND s.stg_kind_cd='BENEFIT'
+  AND s.stg_sql_check_cd IS NOT NULL AND s.stg_parent_card_extr_stg_id IS NULL
   AND d.doc_type_cd='PRODUCT_GUIDE' AND d.doc_status='ACTIVE' AND pd.approval_status_cd<>'REJECTED'
 ORDER BY s.page_no,s.card_doc_chunk_id,s.stg_item_seq;   -- 다중 청크는 청크마다 항목 순번이 1부터다
 
@@ -197,11 +215,13 @@ WHERE card_common_id=:COMMON_ID AND card_common_bnft_id=:BNFT_ID RETURNING card_
 
 -- name: prior_common_sources
 -- 같은 공통서비스 문서의 후보. 현재 행이 수동 수정 없이 이전 판에서 왔는지 비교한다.
-SELECT DISTINCT d.doc_family_cd,d.doc_version_no,s.stg_raw_item,s.stg_normalized_item
+SELECT d.doc_family_cd,d.doc_version_no,s.card_ai_run_id,s.card_extr_stg_id,s.stg_raw_item
 FROM db_pipeline.card_common_doc x
 JOIN db_pipeline.card_doc d ON d.card_doc_id=x.card_doc_id
 JOIN db_pipeline.card_extr_stg s ON s.card_doc_id=d.card_doc_id
-WHERE x.card_common_id=:COMMON_ID AND s.stg_kind_cd='BENEFIT' AND s.stg_normalized_item IS NOT NULL;
+WHERE x.card_common_id=:COMMON_ID AND s.stg_kind_cd='BENEFIT'
+  AND s.stg_sql_check_cd IS NOT NULL AND s.stg_parent_card_extr_stg_id IS NULL
+ORDER BY d.doc_version_no, s.card_ai_run_id, s.card_extr_stg_id;
 
 -- name: insert_common_apply
 INSERT INTO db_pipeline.card_common_bnft_apply (card_common_id,card_common_bnft_id,card_id)

@@ -18,23 +18,25 @@ class ApprovalDecision:
 
 def check_auto_approval(candidate: dict, evidence: list[dict], *,
                         parent_integrity_ok: bool, duplicate_free: bool) -> ApprovalDecision:
-    """정규화 후보와 원문 근거가 보수적 자동 승인 기준을 만족하는지 판정한다."""
+    """후보와 원문 근거가 보수적 자동 승인 기준을 만족하는지 판정한다.
+
+    ``candidate`` 는 ``CommonBenefitRepository.attach_normalized`` 가 붙인 normalized·source_cnt·conflicts·check_cd를 가진다.
+    저장된 검증 코드 OK는 값 검증 OK와 대상 연결 TEXT_CONFIRMED가 모두 통과했고 계약 오류가 없다는 뜻이다(sql_check_code).
+    """
     reasons = []
-    norm = candidate.get("stg_normalized_item") or {}
+    norm = candidate.get("normalized") or {}
     raw = candidate.get("stg_raw_item") or {}
-    checks = norm.get("checks") or {}
-    merge = norm.get("merge") or {}
     if candidate.get("stg_status") not in ("PENDING_REVIEW", "AUTO_APPROVED"):
         reasons.append("후보 상태가 자동 승인 대상이 아님")
     if candidate.get("stg_kind_cd") != "BENEFIT":
         reasons.append("혜택 후보가 아님")
     if candidate.get("stg_sql_check_cd") != "OK":
         reasons.append("SQL 검증이 OK가 아님")
-    if checks.get("value_check_cd") != "OK" or checks.get("link_check_cd") != "TEXT_CONFIRMED" or checks.get("issues"):
+    if candidate.get("check_cd") != "OK" or not candidate.get("normalized"):
         reasons.append("값 또는 대상 연결 검증 미통과")
     if raw.get("certainty") != "HIGH" or raw.get("uncertainty_note"):
         reasons.append("추출 의미가 불확실함")
-    if len(merge.get("source_refs") or []) != 1 or merge.get("conflicts"):
+    if candidate.get("source_cnt") != 1 or candidate.get("conflicts"):
         reasons.append("복수 출처 또는 병합 충돌")
     if norm.get("relation_list") or raw.get("relations"):
         reasons.append("혜택 관계는 별도 검토 필요")

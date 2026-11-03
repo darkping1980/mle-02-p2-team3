@@ -206,12 +206,16 @@ class ProductRepo:
         self.candidate = {"card_extr_stg_id": "S1", "stg_status": "PENDING_REVIEW", "stg_sql_check_cd": "OK",
                           "stg_raw_item": {"evidence": [{"supports": "BNFT", "quote_txt": "5% 캐시백"},
                                                         {"supports": "RULE", "support_key": "r", "quote_txt": "5% 캐시백"}]},
-                          "stg_normalized_item": {"bnft_cd": "C1", "bnft_nm": "n", "bnft_type_cd": "CASHBACK",
+                          "check_cd": "OK", "source_cnt": 1, "conflicts": [],
+                          "normalized": {"bnft_cd": "C1", "bnft_nm": "n", "bnft_type_cd": "CASHBACK",
                                                   "relation_list": [], "bnft_cond_expr": None,
                                                   "rule_list": [{"rule_key": "r", "rule_status_cd": "DRAFT", "pool_refs": [1]}]}}
 
     def rows(self, name, **p):
         return {"integrity_errors": [], "list_product_candidates": [self.candidate], "candidate_evidence": self.evidence}[name]
+
+    def attach_normalized(self, run_id, rows):
+        return rows
 
     def one(self, name, **p):
         if name == "lock_card":
@@ -248,10 +252,10 @@ def test_product_registration_is_idempotent_and_embeds_only_new():
 def test_product_candidate_blockers_are_reviewed():
     item = ProductBenefitService(Session())
     item.repo = ProductRepo()
-    item.repo.candidate["stg_sql_check_cd"] = "NO_EVIDENCE"
+    item.repo.candidate["check_cd"] = "NO_EVIDENCE"
     assert item.register_run(1, "R")[0].status == "REVIEW" and not item.repo.benefits
-    item.repo.candidate["stg_sql_check_cd"] = "OK"
-    item.repo.candidate["stg_normalized_item"]["is_common_candidate"] = True
+    item.repo.candidate["check_cd"] = "OK"
+    item.repo.candidate["normalized"]["is_common_candidate"] = True
     assert item.register_run(1, "R")[0].status == "REVIEW" and not item.repo.benefits
 
 

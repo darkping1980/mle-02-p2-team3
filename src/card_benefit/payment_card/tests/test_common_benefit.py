@@ -3,7 +3,9 @@ from contextlib import contextmanager
 from copy import deepcopy
 from datetime import date
 
-from payment_card.db_pipeline.common_benefit_service import CommonBenefitService, benefit_code, brand_key, candidate_period, common_texts, period, quote_text
+from types import SimpleNamespace
+
+from payment_card.db_pipeline.common_benefit_service import CommonBenefitService, benefit_code, brand_key, candidate_period, common_texts, grade_key, period, quote_text
 import pytest
 
 
@@ -40,6 +42,14 @@ class Repo:
         if name == 'find_benefit': return self.legacy
         raise AssertionError(name)
 
+    def attach_normalized(self, run_id, rows):
+        # 실제 저장소는 list_run_items 원본 행으로 normalized·check_cd·source_cnt를 다시 만든다(test_extraction에서 검증).
+        return rows
+
+    def stored_run(self, run_id):
+        return {p['card_extr_stg_id']: SimpleNamespace(normalized=p['normalized'])
+                for p in self.prior if p['card_ai_run_id'] == run_id}
+
     def write(self, name, **p):
         if name == 'insert_common_bnft':
             row = dict(card_common_id=p['COMMON_ID'], card_common_bnft_id='C1', bnft_nm=p['BNFT_NM'], bnft_type_cd=p['BNFT_TYPE'],
@@ -72,9 +82,10 @@ def fixture():
            'evidence':[{'supports':'APPLICABILITY','quote_txt':quote}]}
     candidate = {'card_extr_stg_id':'S1','card_doc_id':'D1','doc_family_cd':'VISA_SIG', 'doc_version_no':1, 'stg_raw_item':raw,
                  'stg_status':'PENDING_REVIEW','stg_sql_check_cd':'LINK_REVIEW',
-                 'stg_normalized_item':{'bnft_nm':'발레','bnft_type_cd':'SERVICE','bnft_cond_expr':None,
-                   'rule_list':[],'relation_list':[],
-                   'checks':{'value_check_cd':'OK'},'merge':{'source_refs':[{'page_no':1}]}}}
+                 # attach_normalized가 붙이는 값: 원본에서 다시 만든 등록 형태, 현재 기준 검증 코드, 통합 출처 수
+                 'check_cd':'LINK_REVIEW','source_cnt':1,'conflicts':[],
+                 'normalized':{'bnft_nm':'발레','bnft_type_cd':'SERVICE','bnft_cond_expr':None,
+                   'rule_list':[],'relation_list':[]}}
     evidence = [dict(evidence_id='E1',quote_txt=quote,source_txt=quote,start_pos=1,end_pos=len(quote),approval_status_cd='PENDING')]
     service = CommonBenefitService(Session())
     service.repo = Repo(cards, candidate, evidence)
@@ -120,7 +131,7 @@ def test_register_needs_identity_single_common_and_matching_grade():
 def test_changed_candidate_is_not_overwritten_and_unsupported_selection_is_reviewed():
     service = fixture()
     service.register_run('R1', IDS)
-    service.repo.candidate['stg_normalized_item']['bnft_nm'] = 'changed'
+    service.repo.candidate['normalized']['bnft_nm'] = 'changed'
     assert service.register_run('R1', IDS)[0].status == 'CHANGE_REVIEW'
     assert next(iter(service.repo.common_bnft.values()))['bnft_nm'] == '발레'
     ambiguous = fixture()
@@ -194,22 +205,22 @@ def test_revision_updates_only_unmodified_prior_version():
     service.register_run('R1', IDS)
     old = deepcopy(service.repo.candidate)
     service.repo.prior = [{'doc_family_cd':old['doc_family_cd'], 'doc_version_no':1, 'stg_raw_item':old['stg_raw_item'],
-                           'stg_normalized_item':old['stg_normalized_item']}]
+                           'card_ai_run_id':'R0', 'card_extr_stg_id':'P1', 'normalized':old['normalized']}]
     service.repo.candidate['card_doc_id'] = 'D2'
     service.repo.candidate['doc_version_no'] = 2
-    service.repo.candidate['stg_normalized_item']['bnft_nm'] = '발레 변경'
+    service.repo.candidate['normalized']['bnft_nm'] = '발레 변경'
     assert service.register_run('R1', IDS)[0].status == 'UPDATED'
     assert next(iter(service.repo.common_bnft.values()))['bnft_nm'] == '발레 변경'
     new = deepcopy(service.repo.candidate)
-    service.repo.prior = [{'doc_family_cd':new['doc_family_cd'], 'doc_version_no':2,
-                           'stg_raw_item':new['stg_raw_item'], 'stg_normalized_item':new['stg_normalized_item']}]
+    service.repo.prior = [{'doc_family_cd':new['doc_family_cd'], 'doc_version_no':2, 'stg_raw_item':new['stg_raw_item'],
+                           'card_ai_run_id':'R0', 'card_extr_stg_id':'P2', 'normalized':new['normalized']}]
     service.repo.candidate = old
     assert service.register_run('R1', IDS)[0].status == 'CHANGE_REVIEW'
 
 
 def with_limit(service):
     raw = service.repo.candidate['stg_raw_item']
-    norm = service.repo.candidate['stg_normalized_item']
+    norm = service.repo.candidate['normalized']
     raw['evidence'].append({'supports':'LIMIT','support_key':'L1','quote_txt':'월\n2회'})
     raw['evidence'].append({'supports':'RULE','support_key':'R','quote_txt':'발레 무료 제공'})
     service.repo.evidence.append({'evidence_id':'E2','quote_txt':'월\n2회','source_txt':'월\n2회',
@@ -260,7 +271,7 @@ def test_quote_text_only_joins_source_quotes_without_duplicates():
 def test_same_quote_for_different_targets_is_reviewed():
     service = fixture()
     raw = service.repo.candidate['stg_raw_item']
-    norm = service.repo.candidate['stg_normalized_item']
+    norm = service.repo.candidate['normalized']
     norm['rule_list'] = [{'rule_key':'R','rule_status_cd':'DRAFT'}]
     raw['evidence'].append({'supports':'RULE','support_key':'R','quote_txt':raw['evidence'][0]['quote_txt']})
     assert service.register_run('R1', IDS)[0].status == 'REVIEW'
@@ -295,3 +306,63 @@ def test_existing_card_benefit_is_reported_not_changed():
     service.repo.legacy = {'card_bnft_id': 'OLD'}
     decision = service.path_a(1, IDS)[0]
     assert decision.card_bnft_id == 'OLD' and service.repo.card_bnft_writes == 0
+
+
+def test_candidate_problem_uses_rebuilt_check_and_source_count():
+    service = fixture()
+    service.repo.candidate['check_cd'] = 'CONTRACT_INVALID'
+    assert service.register_run('R1', IDS)[0].reason == '후보 값 또는 구조 검증이 필요합니다'
+    service = fixture()
+    service.repo.candidate['source_cnt'] = 2
+    assert service.register_run('R1', IDS)[0].reason == '이름 기준 다중 항목 병합을 별도 검토해야 합니다'
+    service = fixture()
+    service.repo.candidate['normalized'] = None
+    assert service.register_run('R1', IDS)[0].reason == '추출 원본에서 등록 형태를 다시 만들 수 없습니다'
+
+
+def test_grade_key_ignores_brand_prefix_and_selection_number():
+    assert grade_key('Mastercard Platinum') == grade_key('Platinum04') == grade_key('PLATINUM') == 'platinum'
+    assert grade_key('Platinum Elite') == grade_key('PLATINUM_ELITE')
+    assert grade_key('Platinum') != grade_key('WORLD') and grade_key('Signature') != grade_key('Infinite')
+
+
+def test_brand_prefixed_grade_is_registered_and_selection_grade_is_applied():
+    service = fixture()
+    raw = service.repo.candidate['stg_raw_item']
+    raw['service_grade_txt'] = 'Visa SIGNATURE'
+    assert service.register_run('R1', IDS)[0].status == 'INSERTED'
+    service = fixture()
+    raw = service.repo.candidate['stg_raw_item']
+    quote = raw['evidence'][0]['quote_txt'].replace('SIGNATURE 선택서비스 02', 'SIGNATURE02 선택서비스 02')
+    raw.update(service_grade_txt='SIGNATURE02', evidence=[{'supports':'APPLICABILITY','quote_txt':quote}])
+    service.repo.evidence = [dict(evidence_id='E1',quote_txt=quote,source_txt=quote,start_pos=1,end_pos=len(quote),approval_status_cd='PENDING')]
+    assert service.register_run('R1', IDS)[0].status == 'INSERTED'
+    assert service.path_a(1, IDS)[0].status == 'INSERTED'
+
+
+def single_rule_quote(service, quote, keys):
+    raw = service.repo.candidate['stg_raw_item']
+    service.repo.candidate['normalized']['rule_list'] = [{'rule_key':k,'rule_status_cd':'DRAFT'} for k in keys]
+    raw['evidence'].append({'supports':'BNFT','quote_txt':quote})
+    raw['evidence'] += [{'supports':'RULE','support_key':k,'quote_txt':quote} for k in keys]
+    service.repo.evidence.append(dict(evidence_id='E9',quote_txt=quote,source_txt=quote,start_pos=1,end_pos=len(quote),approval_status_cd='PENDING'))
+
+
+def test_same_quote_for_benefit_and_its_single_rule_is_one_source():
+    service = fixture()
+    single_rule_quote(service, 'Europcar 최대 15% 할인', ['r9'])
+    decision = service.register_run('R1', IDS)[0]
+    assert decision.status == 'INSERTED' and set(decision.evidence_ids) == {'E1', 'E9'}
+    # 두 규칙이 같은 구절을 쓰면 값과 규칙의 짝을 알 수 없어 검토로 남긴다.
+    service = fixture()
+    single_rule_quote(service, '패키지 5%, 렌터카 12%', ['r6', 'r7'])
+    assert service.register_run('R1', IDS)[0].reason == '동일 인용이 여러 대상에 사용되어 근거 연결을 검토해야 합니다'
+
+
+def test_target_quote_supports_the_benefit():
+    service = fixture()
+    single_rule_quote(service, '무료 발렛파킹 서비스 제공', ['free'])
+    service.repo.candidate['stg_raw_item']['evidence'].append({'supports':'TARGET','support_key':'valet','quote_txt':'대상 호텔'})
+    service.repo.evidence.append(dict(evidence_id='E8',quote_txt='대상 호텔',source_txt='대상 호텔',start_pos=1,end_pos=5,approval_status_cd='PENDING'))
+    decision = service.register_run('R1', IDS)[0]
+    assert decision.status == 'INSERTED' and 'E8' in decision.evidence_ids
