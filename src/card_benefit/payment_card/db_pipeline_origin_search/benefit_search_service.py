@@ -227,7 +227,7 @@ class BenefitSearchService:
             return None
         benefit = {"card_bnft_id": bnft_id, "bnft_nm": row["bnft_nm"], "bnft_type_cd": row["bnft_type_cd"],
                    "verification_status_cd": row.get("verification_status_cd", "PENDING_REVIEW"),
-                   "rule_select_cd": row.get("rule_select_cd"), "bnft_rule_txt": row.get("bnft_rule_txt")}
+                   "bnft_rule_txt": row.get("bnft_rule_txt")}
         detail = {"context": {"card": {"source_json": json.dumps({"product_nm": card_nm}, ensure_ascii=False)},
                               "benefit": {"name": row["bnft_nm"], "source_json": json.dumps(benefit, ensure_ascii=False)}},
                   "rules": [], "conditions": [], "limits": [], "evidence": []}

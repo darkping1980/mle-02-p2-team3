@@ -157,7 +157,7 @@ WHERE (b.bnft_valid_to_excl IS NULL OR b.bnft_valid_to_excl > CURRENT_DATE)
 
 -- name: select_card_bnft_detail
 -- Neo4j에 없는 혜택의 상세. 카드 조건과 함께 읽는다.
-SELECT b.card_id, b.card_bnft_id, b.bnft_nm, b.bnft_type_cd, b.verification_status_cd, b.rule_select_cd,
+SELECT b.card_id, b.card_bnft_id, b.bnft_nm, b.bnft_type_cd, b.verification_status_cd,
        b.bnft_rule_txt, b.bnft_limit_txt, b.rule_list, b.bnft_cond_expr, p.product_nm, p.card_cond_expr
 FROM db_pipeline.card_bnft b
 JOIN db_pipeline.card_product p ON p.card_id = b.card_id

@@ -42,7 +42,7 @@ from .extraction_schema import (
 
 extraction_logger = logging.getLogger("card_benefit.extraction")
 
-PROMPT_VER = "EXTRACT_V4"
+PROMPT_VER = "EXTRACT_V7"
 IMAGE_DPI = 150
 INPUT_MODE = "TEXT_IMAGE"
 KEY_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,40}$")
@@ -77,11 +77,10 @@ PROMPT_TXT = """당신은 카드 상품설명서에서 혜택 정보를 구조�
 11. 한도(limits)마다 supports=LIMIT, support_key=그 limit_key인 근거를 남깁니다. 인용에는 limit_raw_txt가 들어 있어야 합니다.
 12. 입력이 [추출 대상]과 [같은 페이지 유의사항 문맥]으로 나뉘어 있으면 혜택과 조건은 [추출 대상]에서만 추출합니다.
     [같은 페이지 유의사항 문맥]은 적용 대상·제공 기간을 뒷받침하는 APPLICABILITY 인용에만 사용하고, 그 안의 내용으로 혜택을 새로 만들지 않습니다.
-13. payout_unit_cd는 고객이 실제로 받는 보상의 단위입니다(공통코드 PAYOUT_UNIT).
-    - KRW: 원문상 보상이 원화 할인 또는 원화 캐시백인 경우. 계산값이 %여도 보상이 원화이면 KRW입니다.
-    - HANAMONEY, UNIMILE, WALLET_POINT: 원문에 해당 포인트·마일리지로 지급한다고 적힌 경우.
-    - SERVICE: 금액이나 포인트가 아니라 서비스 이용 자체를 제공하는 경우.
-    - 원문에서 보상 형태를 확인할 수 없으면 UNKNOWN입니다. 할인이라는 단어만으로 다른 통화나 포인트를 추정하지 않습니다.
+13. calc_method_cd, value_unit_cd, payout_unit_cd는 원문에서 읽은 분류입니다. 보상액을 계산하지 않으며, 확인할 수 없으면 UNKNOWN으로 둡니다.
+    등록되는 값은 value_num·value_unit_cd와 원문 인용이며, calc_method_cd·payout_unit_cd는 추출 확인에만 씁니다.
+    payout_unit_cd는 고객이 받는 보상의 형태입니다(결제 통화가 아닙니다). 포인트·마일리지로 지급한다고 적혀 있으면 HANAMONEY·UNIMILE·WALLET_POINT,
+    서비스 이용 자체를 제공하면 SERVICE, 원화 할인·캐시백으로 확인되면 KRW, 그 밖에는 UNKNOWN입니다.
 14. 서비스를 무상으로 제공하는 혜택(예: 조식 제공, 그린피 면제, 멤버십 무료 가입, 수수료 무료)은 calc_method_cd=FREE_SERVICE,
     payout_unit_cd=SERVICE, value_num=null이고 value_raw_txt에는 "조식 제공", "무료"처럼 원문 표현을 그대로 씁니다.
     1+1, 포인트 지급처럼 정해진 계산 방법으로 표현할 수 없는 혜택은 calc_method_cd=UNKNOWN으로 두고 unresolved에 사유를 적습니다.
@@ -89,6 +88,11 @@ PROMPT_TXT = """당신은 카드 상품설명서에서 혜택 정보를 구조�
     적용되는 상한이거나 할인율 바로 뒤의 "(최대 N원)"처럼 해당 결제 1건의 할인 상한이면 TXN입니다. 판단할 수 없으면 UNKNOWN입니다.
     한도 단위가 원화·하나머니·횟수가 아니면(예: USD) cap_unit_cd=UNKNOWN으로 두고 값을 환산하지 않습니다.
 16. targets[].target_nm은 원문에 적힌 가맹점·서비스 이름을 그대로 복사합니다. 혜택 설명을 덧붙이거나 여러 표현을 합쳐 새 이름을 만들지 않습니다.
+17. 모든 조건(benefits[].conditions, rules[].conditions, card_conditions)에는 evidence를 1건 이상 남깁니다. quote_txt는 그 조건의
+    cond_raw_txt가 들어 있는 원문 구간을 그대로 복사하고, supports=COND, support_key=그 cond_key입니다.
+    원문에서 인용할 수 없는 조건은 만들지 말고 unresolved에 적습니다.
+18. bnft_nm은 혜택 내용(서비스혜택·할인 내용) 문장에서 정합니다. 주변 제목과 내용이 서로 다른 서비스를 가리키면 내용을 따르고,
+    uncertainty_note에 제목과 내용이 다르다고 적으며 certainty=LOW로 둡니다.
 """
 
 
@@ -384,13 +388,8 @@ def build_cond_expr(conditions: list[ConditionItem]) -> dict | None:
             "cond_basis_cd": condition.cond_basis_cd,
             "cond_min_amt": condition.cond_min_amt,
             "cond_max_amt_excl": condition.cond_max_amt_excl,
-            "predicate_method_cd": None,
-            "predicate_method_ver": None,
-            "cond_params": None,
-            "card_excl_item_id": None,
             "excl_raw_txt": condition.excl_raw_txt,
             "cond_raw_txt": condition.cond_raw_txt,
-            "link_role_cd": None,
             "cond_status_cd": "DRAFT",
         }
         for seq, condition in enumerate(conditions, start=1)
@@ -398,8 +397,35 @@ def build_cond_expr(conditions: list[ConditionItem]) -> dict | None:
     return {"expr_status_cd": "DRAFT", "branches": [{"branch_no": 1, "atoms": atoms}]}
 
 
+# 2026-11-03 계산 구조 정리에서 제거한 키. 이전 추출 이력(card_extr_stg)에는 남아 있어 등록할 때 걸러낸다.
+REMOVED_RULE_KEYS = ("predicate_state_cd", "method_ver", "calc_params", "rule_priority", "pool_refs",
+                     "calc_method_cd", "payout_unit_cd", "basis_amt")
+REMOVED_ATOM_KEYS = ("predicate_method_cd", "predicate_method_ver", "cond_params", "card_excl_item_id", "link_role_cd")
+
+
+def strip_calc_atoms(expr: dict | None) -> dict | None:
+    """조건식 atom에서 계산 실행용 키를 뺀다. 조건 원문·유형·금액은 그대로 둔다."""
+    if not isinstance(expr, dict):
+        return expr
+    return {**expr, "branches": [{**branch, "atoms": [{k: v for k, v in atom.items() if k not in REMOVED_ATOM_KEYS}
+                                                     for atom in branch.get("atoms", [])]}
+                                 for branch in expr.get("branches", [])]}
+
+
+def strip_calc_rule(rule: dict) -> dict:
+    """규칙에서 계산 실행용 키를 뺀다. 값·단위·대상·조건은 설명 정보로 남긴다."""
+    cleaned = {k: v for k, v in rule.items() if k not in REMOVED_RULE_KEYS}
+    if "cond_expr" in cleaned:
+        cleaned["cond_expr"] = strip_calc_atoms(cleaned["cond_expr"])
+    return cleaned
+
+
 def build_rule(rule, targets: list[dict]) -> dict:
-    """규칙 1건을 ``rule_list`` 항목으로 만든다. 건당 최소 금액은 규칙 조건이다."""
+    """규칙 1건을 ``rule_list`` 항목으로 만든다. 건당 최소 금액은 규칙 조건이다.
+
+    값과 단위(value_num·value_unit_cd)는 답변의 수치 확인과 검색 텍스트에 쓰는 설명 값이다. 계산 방법·지급 단위·기준 금액은
+    저장하지 않는다(LLM 응답에는 추출 확인용으로 남는다). 보상액을 계산하지 않는다.
+    """
     conditions = list(rule.conditions)
     if rule.min_txn_amt is not None:
         conditions.append(ConditionItem(
@@ -415,23 +441,18 @@ def build_rule(rule, targets: list[dict]) -> dict:
     return {
         "rule_key": rule.rule_key,
         "cond_expr": cond_expr,
-        "predicate_state_cd": "CONDITIONAL" if cond_expr else "PENDING_REVIEW",
         "target_list": targets,
-        "calc_method_cd": rule.calc_method_cd,
-        "method_ver": 1,
         "value_num": json_number(rule.value_num),
         "value_unit_cd": rule.value_unit_cd,
-        "payout_unit_cd": rule.payout_unit_cd,
-        "basis_amt": None,
-        "calc_params": None,
-        "rule_priority": None,
         "rule_status_cd": "DRAFT",
-        "pool_refs": [{"pool_id": key, "pool_role_cd": "CONSUME"} for key in rule.limit_keys],
     }
 
 
 def contract_issues(conditions: list[ConditionItem], normalized: dict) -> list[str]:
-    """V6 JSONB 계약에 맞지 않는 값을 찾는다. 최종 판정은 DB의 ``fn_valid_*`` 와 같아야 한다."""
+    """JSONB 계약에 맞지 않는 구조를 찾는다. 최종 판정은 DB의 ``fn_valid_*`` 와 같아야 한다.
+
+    계산 방법·지급 단위가 UNKNOWN인 것은 문제로 보지 않는다(2026-11-03 계산 구조 정리). 혜택 내용은 원문 근거로 검증한다.
+    """
     issues = []
     for condition in conditions:
         if not KEY_PATTERN.match(condition.cond_key):
@@ -450,16 +471,8 @@ def contract_issues(conditions: list[ConditionItem], normalized: dict) -> list[s
     for rule in normalized.get("rule_list", []):
         if not KEY_PATTERN.match(rule["rule_key"]):
             issues.append(f"{rule['rule_key']}: rule_key 형식 오류")
-        if rule["calc_method_cd"] == "UNKNOWN" or rule["payout_unit_cd"] in (None, "UNKNOWN"):
-            issues.append(f"{rule['rule_key']}: 계산 방법 미확정")
-    pool_keys = {pool["pool_key"] for pool in normalized.get("limit_list", [])}
-    for rule in normalized.get("rule_list", []):
-        for ref in rule["pool_refs"]:
-            if ref["pool_id"] not in pool_keys:
-                issues.append(f"{rule['rule_key']}: 없는 한도 참조 {ref['pool_id']}")
-    for pool in normalized.get("limit_list", []):
-        if pool["limit_num"] is None or pool["period_cd"] == "UNKNOWN" or pool["cap_unit_cd"] == "UNKNOWN":
-            issues.append(f"{pool['pool_key']}: 한도 값 미확정")
+    if len({rule["rule_key"] for rule in normalized.get("rule_list", [])}) != len(normalized.get("rule_list", [])):
+        issues.append("rule_key 중복")
     if normalized.get("bnft_type_cd") == "UNKNOWN":
         issues.append("혜택 유형 미확정")
     return issues
@@ -567,21 +580,9 @@ def normalize_benefit(
         "bnft_scope_cd": None,
         "bnft_brand_opt_cds": None,
         "bnft_cond_expr": build_cond_expr(conditions),
-        "rule_select_cd": None,
         "rule_list": [build_rule(rule, targets) for rule in item.rules],
         "relation_list": relations,
-        "limit_list": [
-            {
-                "pool_key": limit.limit_key,
-                "pool_scope_cd": "BENEFIT_GROUP" if limit.shared_scope_txt else "BENEFIT",
-                "period_cd": limit.period_cd,
-                "cap_unit_cd": limit.cap_unit_cd,
-                "aggregation_key_cd": None,
-                "limit_num": json_number(limit.limit_num),
-                "shared_scope_txt": limit.shared_scope_txt,
-            }
-            for limit in item.limits
-        ],
+        # 한도는 원문 인용(bnft_limit_txt)으로 보관한다. 한도 풀(limit_list·pool_refs) 정규화는 제거했다.
         "verification_status_cd": "PENDING_REVIEW",
     }
     rule_conditions = [condition for rule in item.rules for condition in rule.conditions]

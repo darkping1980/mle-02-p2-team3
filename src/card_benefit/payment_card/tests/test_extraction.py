@@ -236,7 +236,8 @@ class CommonReuseTests(ServiceCase):
         self.assertEqual(raw["applicable_cards"], ["JADE"])
         normalized = session.calls("update_stg_merge")[0]["STG_NORMALIZED_ITEM"].obj
         self.assertIsNone(normalized["bnft_origin_cd"])
-        self.assertIsNone(normalized["limit_list"][0]["aggregation_key_cd"])
+        self.assertNotIn("limit_list", normalized)          # 한도 풀 정규화 제거(2026-11-03)
+        self.assertEqual(raw["limits"][0]["limit_raw_txt"], "월 1천원")   # 한도 원문은 추출 원본에 남는다
 
     def test_reuse_requires_complete_success_and_matching_fingerprint(self):
         session, service = self.setup_common()
@@ -467,15 +468,13 @@ class MergeTests(unittest.TestCase):
         self.assertEqual(benefits[0].sql_check_cd, "MERGE_CONFLICT")
         self.assertTrue(benefits[0].merge.conflicts)
 
-    def test_equal_values_do_not_become_shared_limit(self):
+    def test_limits_stay_as_evidence_without_pool_normalization(self):
+        """한도는 원문 인용으로만 남기고 한도 풀(limit_list·pool_refs)을 만들지 않는다. 수치와 원문 대조는 유지한다."""
         benefits, _ = merge_pages([checked_page(1, PAGE1, page_json(1, benefits=[benefit("대중교통"), benefit("쇼핑")]))])
-        self.assertEqual({item["pool_scope_cd"] for bnft in benefits for item in bnft.normalized["limit_list"]}, {"BENEFIT"})
-
-    def test_explicit_shared_limit_is_marked(self):
-        item = benefit()
-        item["limits"][0]["shared_scope_txt"] = "대상 가맹점 합산"
-        benefits, _ = merge_pages([checked_page(1, PAGE1, page_json(1, benefits=[item]))])
-        self.assertEqual(benefits[0].normalized["limit_list"][0]["pool_scope_cd"], "BENEFIT_GROUP")
+        self.assertTrue(all("limit_list" not in bnft.normalized for bnft in benefits))
+        self.assertTrue(all("pool_refs" not in rule for bnft in benefits for rule in bnft.normalized["rule_list"]))
+        wrong = merge_pages([checked_page(1, PAGE1, page_json(1, benefits=[benefit(limit=9000)]))])[0][0]
+        self.assertEqual(wrong.sql_check_cd, "VALUE_PARSE_DIFF")      # 원문 '월 1천원'과 다른 숫자는 계속 검토 대상
 
     def test_relation_across_pages_uses_benefit_key(self):
         relation = {"relation_key": "REL1", "rel_type_cd": "MUTUALLY_EXCLUSIVE", "to_benefit_nm": "쇼핑"}
@@ -497,29 +496,36 @@ class NormalizationTests(unittest.TestCase):
     def normalized(self, item):
         return merge_pages([checked_page(1, PAGE1, page_json(1, benefits=[item]))])[0][0]
 
-    def test_rule_matches_v6_contract_shape(self):
+    def test_rule_has_description_fields_without_calc_keys(self):
         rule = self.normalized(benefit()).normalized["rule_list"][0]
-        self.assertEqual(rule["predicate_state_cd"], "PENDING_REVIEW")
+        self.assertEqual(set(rule), {"rule_key", "cond_expr", "target_list", "value_num", "value_unit_cd", "rule_status_cd"})
         self.assertIsNone(rule["cond_expr"])
-        self.assertEqual(rule["pool_refs"], [{"pool_id": "MONTH_KRW", "pool_role_cd": "CONSUME"}])
         self.assertEqual(rule["value_num"], 5)
         self.assertIsInstance(rule["value_num"], int)
-
-    def test_missing_condition_is_never_marked_unconditional(self):
-        result = self.normalized(benefit(no_condition_stated=True))
-        self.assertEqual(result.normalized["rule_list"][0]["predicate_state_cd"], "PENDING_REVIEW")
+        atom = self.normalized(benefit(conditions=[condition()])).normalized["bnft_cond_expr"]["branches"][0]["atoms"][0]
+        self.assertFalse({"predicate_method_cd", "predicate_method_ver", "cond_params", "card_excl_item_id", "link_role_cd"} & set(atom))
 
     def test_contract_failures_are_reported(self):
         no_basis = benefit(conditions=[{**condition("10만원"), "cond_basis_cd": None}])
         bad_range = benefit(conditions=[{**condition("10만원"), "cond_max_amt_excl": 100000}])
-        no_limit = benefit(limit=None)
-        unknown_method = benefit()
-        unknown_method["rules"][0]["calc_method_cd"] = "UNKNOWN"
-        bad_pool = benefit()
-        bad_pool["rules"][0]["limit_keys"] = ["NOT_DEFINED"]
-        for item in (no_basis, bad_range, no_limit, unknown_method, bad_pool):
-            with self.subTest(item=item["rules"][0]["calc_method_cd"]):
+        bad_key = benefit(evidence=[quote("5%", "RULE", "bad key!"), quote("월 1천원", "LIMIT", "MONTH_KRW")])
+        bad_key["rules"][0]["rule_key"] = "bad key!"
+        for item in (no_basis, bad_range, bad_key):
+            with self.subTest(item=item["rules"][0]["rule_key"]):
                 self.assertEqual(self.normalized(item).sql_check_cd, "CONTRACT_INVALID")
+
+    def test_unknown_calc_unit_with_clear_evidence_is_not_blocked(self):
+        """계산 방법·지급 단위가 UNKNOWN이어도 근거가 맞으면 계약 오류가 아니다. 근거·수치 검증은 그대로 적용된다."""
+        unknown = benefit()
+        unknown["rules"][0]["calc_method_cd"] = "UNKNOWN"
+        unknown["rules"][0]["payout_unit_cd"] = "UNKNOWN"
+        no_limit_num = benefit(limit=None)
+        for item in (unknown, no_limit_num):
+            with self.subTest(item=item["rules"][0]["calc_method_cd"]):
+                self.assertNotEqual(self.normalized(item).sql_check_cd, "CONTRACT_INVALID")
+        no_quote = benefit(evidence=[quote("월 1천원", "LIMIT", "MONTH_KRW")])
+        no_quote["rules"][0]["calc_method_cd"] = "UNKNOWN"
+        self.assertEqual(self.normalized(no_quote).sql_check_cd, "NO_EVIDENCE")
 
     def test_decimal_rule_stays_numeric_in_json(self):
         text = "대중교통 0.5% 월 1천원 버스, 지하철"
@@ -672,7 +678,7 @@ class MapperTests(unittest.TestCase):
     def test_every_statement_is_loaded_and_names_the_schema(self):
         session = PostgresDbSession(mapper_root=MAPPER_ROOT, camel_case_keys=False, sql_log_mode="none")
         names = [name for name in session.mappers["extraction_repository"].available_queries if not name.endswith("_cursor")]
-        self.assertEqual(len(names), 22)
+        self.assertEqual(len(names), 21)       # select_merged_limits 제거(한도 풀 정규화 삭제)
         for name in names:
             self.assertIn("db_pipeline.", session._query(f"extraction_repository.{name}").sql, name)
         self.assertEqual(session.database_manager._pools, {})

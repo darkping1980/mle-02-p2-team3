@@ -1,0 +1,26 @@
+benefits 53 | stored→new sql_check {('LINK_REVIEW', 'LINK_REVIEW'): 15, ('CONTRACT_INVALID', 'LINK_REVIEW'): 33, ('VALUE_PARSE_DIFF', 'VALUE_PARSE_DIFF'): 5}
+registration (new contract, existing extraction): [('REGISTRABLE', 29), ('브랜드·등급 불일치', 12), ('후보:VALUE_PARSE_DIFF', 5), ('근거: 동일 인용이 여러 대상에 사용되어 근거 연결을 검토해야 합니다', 5), ('기간', 2)]
+   후보 값 또는 구조 검증이 필요합니다 | Agoda.com 할인 | VALUE_PARSE_DIFF → VALUE_PARSE_DIFF
+   후보 값 또는 구조 검증이 필요합니다 | Hotels.com 할인 | VALUE_PARSE_DIFF → VALUE_PARSE_DIFF
+   기간 | Expedia.com 할인 | LINK_REVIEW → LINK_REVIEW
+   후보 값 또는 구조 검증이 필요합니다 | Rakuten Travel 할인 | VALUE_PARSE_DIFF → VALUE_PARSE_DIFF
+   기간 | Kkday 티켓/교통/액티비티 할인 | CONTRACT_INVALID → LINK_REVIEW
+   후보 값 또는 구조 검증이 필요합니다 | Kkday 해외투어/eSIM 할인 | VALUE_PARSE_DIFF → VALUE_PARSE_DIFF
+   근거: 동일 인용이 여러 대상에 사용되어 근거 연결을 검토해야 합니다 | Oh Show 자유의 여신상 크루즈 티켓 1+1 | CONTRACT_INVALID → LINK_REVIEW
+   근거: 동일 인용이 여러 대상에 사용되어 근거 연결을 검토해야 합니다 | 제주도닷컴 국내선 항공권 발권대행수수료 무료 | LINK_REVIEW → LINK_REVIEW
+   근거: 동일 인용이 여러 대상에 사용되어 근거 연결을 검토해야 합니다 | Europcar 할인 | CONTRACT_INVALID → LINK_REVIEW
+   근거: 동일 인용이 여러 대상에 사용되어 근거 연결을 검토해야 합니다 | Hertz 렌트 예약 할인 | CONTRACT_INVALID → LINK_REVIEW
+   근거: 동일 인용이 여러 대상에 사용되어 근거 연결을 검토해야 합니다 | 짐캐리 할인 | CONTRACT_INVALID → LINK_REVIEW
+   후보 값 또는 구조 검증이 필요합니다 | Airalo eSIM 할인 | VALUE_PARSE_DIFF → VALUE_PARSE_DIFF
+   브랜드·등급 불일치 | 신세계면세점 골드 멤버십 제공 | CONTRACT_INVALID → LINK_REVIEW
+   브랜드·등급 불일치 | 트래블메이트 캐리어/여행용품 12% 추가 할인 | CONTRACT_INVALID → LINK_REVIEW
+   브랜드·등급 불일치 | 해외 프리미엄 아울렛 VIP 패스 제공 | CONTRACT_INVALID → LINK_REVIEW
+   브랜드·등급 불일치 | 몽쥬약국 구매 금액별 10~15% 할인 | CONTRACT_INVALID → LINK_REVIEW
+   브랜드·등급 불일치 | 몽쥬약국 최대 15% 면세 혜택 | CONTRACT_INVALID → LINK_REVIEW
+   브랜드·등급 불일치 | Mastercard E-Commerce Protecti | LINK_REVIEW → LINK_REVIEW
+   브랜드·등급 불일치 | 15개국 48개 골프장 그린피 25% 할인 | CONTRACT_INVALID → LINK_REVIEW
+   브랜드·등급 불일치 | 코타키나발루 수트라하버 리조트 골프&컨트리클럽 그린피  | LINK_REVIEW → LINK_REVIEW
+   브랜드·등급 불일치 | LANE4 Golf 골프장 이동 서비스 5만원 할인 | LINK_REVIEW → LINK_REVIEW
+   브랜드·등급 불일치 | 특급호텔 발렛파킹 서비스 | LINK_REVIEW → LINK_REVIEW
+   브랜드·등급 불일치 | 인천공항 발렛파킹 서비스 | LINK_REVIEW → LINK_REVIEW
+   브랜드·등급 불일치 | 김포공항 발렛파킹 서비스 | LINK_REVIEW → LINK_REVIEW

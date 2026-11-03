@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from psycopg.types.json import Jsonb
 
 from .common_benefit_service import CommonBenefitRepository, compact, quote_text
+from .extraction_service import strip_calc_atoms, strip_calc_rule
 
 
 @dataclass(frozen=True)
@@ -68,7 +69,9 @@ class ProductBenefitService:
             return review('공통서비스 후보는 카드별 혜택으로 등록하지 않습니다')
         if norm.get('relation_list'):
             return review('혜택 간 관계의 ID 연결을 확인해야 합니다')
-        rules = [{key: value for key, value in rule.items() if key != 'pool_refs'} for rule in norm.get('rule_list', [])]
+        # 이전 추출 이력의 계산 실행용 키(method_ver·pool_refs 등)는 저장하지 않는다.
+        rules = [strip_calc_rule(rule) for rule in norm.get('rule_list', [])]
+        bnft_cond = strip_calc_atoms(norm.get('bnft_cond_expr'))
         if not rules or any(rule.get('rule_status_cd') != 'DRAFT' for rule in rules):
             return review('규칙이 없거나 상태가 불명확합니다')
         links, problem = self._links(raw, rules, evidence)
@@ -77,7 +80,7 @@ class ProductBenefitService:
         evidence_items = raw.get('evidence', [])
         inserted = self.repo.write(
             'insert_local_benefit', CARD_ID=card_id, BNFT_CD=code, BNFT_NM=norm['bnft_nm'], BNFT_TYPE=norm['bnft_type_cd'],
-            COND=Jsonb(norm['bnft_cond_expr']) if norm.get('bnft_cond_expr') is not None else None, RULES=Jsonb(rules),
+            COND=Jsonb(bnft_cond) if bnft_cond is not None else None, RULES=Jsonb(rules),
             RULE_TXT=quote_text(evidence_items, 'RULE'), LIMIT_TXT=quote_text(evidence_items, 'LIMIT'))
         if not inserted:
             raise ValueError('동시 등록 충돌: 전체 트랜잭션을 롤백합니다')

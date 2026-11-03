@@ -292,14 +292,14 @@ class CommonBenefitService:
     def _evidence_ids(raw, norm, located) -> tuple[list[str], str | None]:
         """인용이 어떤 혜택·규칙·한도를 뒷받침하는지 확인한다. ``(근거 ID, 검토 사유)`` 를 반환한다."""
         rules = norm.get('rule_list', [])
-        limits = norm.get('limit_list', [])
+        # 한도는 추출 원본의 limit_key로 근거를 확인한다(한도 풀 정규화 limit_list는 2026-11-03에 제거).
+        limit_keys = {limit['limit_key'] for limit in raw.get('limits', []) if limit.get('limit_key')}
         quotes = [compact(e['quote_txt']) for e in located]
         # 원천 테이블에는 supports/support_key가 없으므로 원문 인용이 유일하게
         # 하나의 대상에 대응할 때만 인정한다. 중복 인용은 임의로 배정하지 않는다.
         kinds = {'BNFT': 'BNFT', 'APPLICABILITY': 'BNFT', 'RULE': 'RULE', 'LIMIT': 'BNFT'}
         source_targets = {}
         rule_keys = {r['rule_key'] for r in rules}
-        limit_keys = {p['pool_key'] for p in limits}
         # 같은 청크·같은 위치의 근거는 같은 원문 구간이다(규칙과 조건이 같은 구절을 인용하면 두 행으로 저장된다).
         # 한 구간으로 세고, 같은 문자열이라도 위치가 다르면 서로 다른 후보로 남겨 모호성 검증을 유지한다.
         spans = {}
@@ -323,9 +323,9 @@ class CommonBenefitService:
         targets = {target for target, _ in source_targets.values()}
         if ('BNFT', None) not in targets or any(('RULE', k) not in targets for k in rule_keys):
             return [], '혜택 또는 계산 규칙을 뒷받침하는 근거가 없습니다'
-        for limit in limits:
+        for limit_key in limit_keys:
             source_quotes = [compact(e['quote_txt']) for e in raw.get('evidence', [])
-                             if e.get('supports') == 'LIMIT' and e.get('support_key') == limit['pool_key']]
+                             if e.get('supports') == 'LIMIT' and e.get('support_key') == limit_key]
             if not any(q in quotes for q in source_quotes):
                 return [], '한도의 원문 근거를 확인해야 합니다'
         return sorted({evidence_id for _, evidence_id in source_targets.values()}), None

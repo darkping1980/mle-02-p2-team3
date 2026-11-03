@@ -38,7 +38,7 @@ def detail(evidence=None):
         "context": {"card": {"source_json": js({"product_nm": "테스트 카드"})},
                     "benefit": {"name": "ONE MORE 대중교통 캐시백",
                                 "source_json": js({"card_bnft_id": BENEFIT_ID, "bnft_nm": "ONE MORE 대중교통 캐시백",
-                                                   "rule_select_cd": None, "bnft_rule_txt": "5% 캐시백"})}},
+                                                   "bnft_rule_txt": "5% 캐시백"})}},
         "rules": [{"rule": {"rule_key": "transit_rate", "source_json": js(rule)}, "targets": ["버스", "지하철"]}],
         "conditions": [{"owner_cd": "RULE", "rule_key": "transit_rate", "expression": {"key": "e1"}, "branch_no": 1,
                         "atom": {"key_name": "transit_exclusions", "source_json": js(atom)}}],
@@ -111,7 +111,7 @@ def tier_benefit(benefit_id, name, month_count, targets):
     """ONE PICK·STYLE과 같은 형태의 조회 결과를 만든 혜택 문맥."""
     def rule(key, value, min_amt):
         return {"rule_key": key, "value": value, "unit": "KRW", "calc_method": "FIXED_PER_TXN", "basis_amt": None,
-                "calc_params": None, "status": "DRAFT", "targets": targets}, {
+                "status": "DRAFT", "targets": targets}, {
             "scope": key, "branches": [{"branch_no": 1, "atoms": [{"atom_key": f"MIN_{key}", "negate": False,
                                                                    "type": "SPEND_REQ", "min_amt": min_amt, "basis": "TXN_AMT",
                                                                    "text": "결제 건당 이상 시", "status": "DRAFT"}]}]}
@@ -849,7 +849,7 @@ class GenericRuleTests(unittest.TestCase):
         rules, conditions = [], []
         for index, (minimum, value, unit) in enumerate(tiers):
             key = f"rule_{index}"
-            rules.append({"rule_key": key, "value": value, "unit": unit, "calc_method": None, "basis_amt": None, "calc_params": None,
+            rules.append({"rule_key": key, "value": value, "unit": unit, "calc_method": None, "basis_amt": None,
                           "status": "DRAFT", "targets": ["주유소"]})
             conditions.append({"scope": key, "branches": [{"branch_no": 1, "atoms": [{
                 "atom_key": f"min_{key}", "negate": False, "type": "SPEND_REQ", "min_amt": minimum, "basis": basis,

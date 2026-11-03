@@ -84,7 +84,7 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(set(neo4j_search.QUERIES.values()), set(neo4j_search.STATEMENT_IDS))
 
     def test_source_preserves_unknown(self):
-        self.assertEqual(neo4j_search.source({"source_json": '{"rule_select_cd": null}'}), {"rule_select_cd": None})
+        self.assertEqual(neo4j_search.source({"source_json": '{"bnft_limit_txt": null}'}), {"bnft_limit_txt": None})
 
     def test_query_is_read_only_and_logged_without_cypher_text(self):
         driver = FakeDriver([{"a": 1}])

@@ -248,29 +248,10 @@ ORDER BY s.page_no, s.stg_item_seq
 SELECT s.page_no, s.stg_sql_check_cd,
        s.stg_normalized_item->>'bnft_nm' AS bnft_nm,
        r.value->>'rule_key' AS rule_key,
-       r.value->>'calc_method_cd' AS calc_method_cd,
        (r.value->>'value_num')::numeric AS value_num,
-       r.value->>'value_unit_cd' AS value_unit_cd,
-       r.value->>'payout_unit_cd' AS payout_unit_cd,
-       r.value->>'predicate_state_cd' AS predicate_state_cd
+       r.value->>'value_unit_cd' AS value_unit_cd
 FROM db_pipeline.card_extr_stg s
 CROSS JOIN LATERAL jsonb_array_elements(s.stg_normalized_item->'rule_list') AS r(value)
-WHERE s.card_ai_run_id = :CARD_AI_RUN_ID
-  AND s.stg_kind_cd = 'BENEFIT'
-ORDER BY s.page_no, s.stg_item_seq
-;
-
--- name: select_merged_limits
--- 통합 혜택의 한도를 컬럼으로 조회한다.
-SELECT s.page_no,
-       s.stg_normalized_item->>'bnft_nm' AS bnft_nm,
-       l.value->>'pool_key' AS pool_key,
-       l.value->>'pool_scope_cd' AS pool_scope_cd,
-       l.value->>'period_cd' AS period_cd,
-       l.value->>'cap_unit_cd' AS cap_unit_cd,
-       (l.value->>'limit_num')::numeric AS limit_num
-FROM db_pipeline.card_extr_stg s
-CROSS JOIN LATERAL jsonb_array_elements(s.stg_normalized_item->'limit_list') AS l(value)
 WHERE s.card_ai_run_id = :CARD_AI_RUN_ID
   AND s.stg_kind_cd = 'BENEFIT'
 ORDER BY s.page_no, s.stg_item_seq
@@ -327,7 +308,6 @@ ORDER BY s.page_no, s.stg_item_seq
 WITH item AS (
     SELECT card_ai_run_id, stg_normalized_item->>'bnft_cd' AS bnft_cd,
            stg_normalized_item->'rule_list' AS rule_list,
-           stg_normalized_item->'limit_list' AS limit_list,
            stg_normalized_item->'bnft_cond_expr' AS cond_expr
     FROM db_pipeline.card_extr_stg
     WHERE stg_kind_cd = 'BENEFIT'
@@ -336,7 +316,7 @@ WITH item AS (
 SELECT COALESCE(o.bnft_cd, n.bnft_cd) AS bnft_cd,
        CASE WHEN o.bnft_cd IS NULL THEN 'ADDED'
             WHEN n.bnft_cd IS NULL THEN 'REMOVED'
-            WHEN (o.rule_list, o.limit_list, o.cond_expr) IS DISTINCT FROM (n.rule_list, n.limit_list, n.cond_expr)
+            WHEN (o.rule_list, o.cond_expr) IS DISTINCT FROM (n.rule_list, n.cond_expr)
             THEN 'CHANGED'
             ELSE 'SAME' END AS diff_cd
 FROM (SELECT * FROM item WHERE card_ai_run_id = :OLD_RUN_ID) o

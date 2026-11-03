@@ -1,0 +1,3225 @@
+{
+ "views": {
+  "v_card_bnft_rel": " SELECT b.card_id,\n    b.card_bnft_id AS from_bnft_id,\n    x.value ->> 'to_bnft_id'::text AS to_bnft_id,\n    x.value ->> 'relation_key'::text AS relation_key,\n    x.value ->> 'rel_type_cd'::text AS rel_type_cd,\n    (x.value ->> 'rel_priority'::text)::integer AS rel_priority,\n    false AS reverse_yn\n   FROM db_pipeline.card_bnft b\n     CROSS JOIN LATERAL jsonb_array_elements(b.relation_list) x(value)\nUNION ALL\n SELECT b.card_id,\n    x.value ->> 'to_bnft_id'::text AS from_bnft_id,\n    b.card_bnft_id AS to_bnft_id,\n    x.value ->> 'relation_key'::text AS relation_key,\n    x.value ->> 'rel_type_cd'::text AS rel_type_cd,\n    (x.value ->> 'rel_priority'::text)::integer AS rel_priority,\n    true AS reverse_yn\n   FROM db_pipeline.card_bnft b\n     CROSS JOIN LATERAL jsonb_array_elements(b.relation_list) x(value)\n  WHERE (x.value ->> 'rel_type_cd'::text) = 'MUTUALLY_EXCLUSIVE'::text;",
+  "v_card_bnft_rule_effective": " SELECT b.card_id,\n    b.card_bnft_id,\n    b.bnft_nm,\n    b.bnft_origin_cd,\n    b.bnft_scope_cd,\n    b.bnft_brand_opt_cds,\n    b.bnft_valid_from,\n    b.bnft_valid_to_excl,\n    r.rule_key,\n    r.calc_method_cd,\n    r.method_ver,\n    r.value_num,\n    r.value_unit_cd,\n    r.payout_unit_cd,\n    r.basis_amt,\n    r.calc_params,\n    r.predicate_state_cd,\n    r.target_list,\n    b.bnft_cond_expr,\n    r.cond_expr AS rule_cond_expr,\n    r.rule_status_cd\n   FROM db_pipeline.card_bnft b\n     JOIN db_pipeline.v_card_rule r ON r.card_id = b.card_id AND r.card_bnft_id::text = b.card_bnft_id::text;",
+  "v_card_brand_opt": " SELECT p.card_id,\n    p.product_cd,\n    p.product_nm,\n    o.value ->> 'brand_opt_cd'::text AS brand_opt_cd,\n    o.value ->> 'brand_opt_nm'::text AS brand_opt_nm,\n    o.value ->> 'brand_cd'::text AS brand_cd,\n    o.value ->> 'service_grade_cd'::text AS service_grade_cd,\n    o.value ->> 'service_type_cd'::text AS service_type_cd,\n    o.value ->> 'brand_opt_status_cd'::text AS brand_opt_status_cd\n   FROM db_pipeline.card_product p\n     CROSS JOIN LATERAL jsonb_array_elements(p.brand_opt_list) o(value);",
+  "v_card_cond_atom": " WITH src AS (\n         SELECT 'CARD'::text AS owner_cd,\n            p.card_id,\n            NULL::character varying AS card_bnft_id,\n            NULL::text AS rule_key,\n            p.card_cond_expr AS expr\n           FROM db_pipeline.card_product p\n          WHERE p.card_cond_expr IS NOT NULL\n        UNION ALL\n         SELECT 'BNFT'::text,\n            b_1.card_id,\n            b_1.card_bnft_id,\n            NULL::text,\n            b_1.bnft_cond_expr\n           FROM db_pipeline.card_bnft b_1\n          WHERE b_1.bnft_cond_expr IS NOT NULL\n        UNION ALL\n         SELECT 'RULE'::text,\n            r.card_id,\n            r.card_bnft_id,\n            r.rule_key,\n            r.cond_expr\n           FROM db_pipeline.v_card_rule r\n          WHERE r.cond_expr IS NOT NULL\n        )\n SELECT s.owner_cd,\n    s.card_id,\n    s.card_bnft_id,\n    s.rule_key,\n    s.expr ->> 'expr_status_cd'::text AS expr_status_cd,\n    (b.value ->> 'branch_no'::text)::integer AS branch_no,\n    (a.value ->> 'atom_seq'::text)::integer AS atom_seq,\n    a.value ->> 'atom_key'::text AS atom_key,\n    (a.value ->> 'negate_yn'::text)::boolean AS negate_yn,\n    a.value ->> 'cond_type_cd'::text AS cond_type_cd,\n    a.value ->> 'cond_basis_cd'::text AS cond_basis_cd,\n    ((a.value ->> 'cond_min_amt'::text))::numeric(18,2) AS cond_min_amt,\n    ((a.value ->> 'cond_max_amt_excl'::text))::numeric(18,2) AS cond_max_amt_excl,\n    a.value ->> 'predicate_method_cd'::text AS predicate_method_cd,\n    (a.value ->> 'predicate_method_ver'::text)::integer AS predicate_method_ver,\n    a.value -> 'cond_params'::text AS cond_params,\n    a.value ->> 'card_excl_item_id'::text AS card_excl_item_id,\n    a.value ->> 'excl_raw_txt'::text AS excl_raw_txt,\n    a.value ->> 'cond_raw_txt'::text AS cond_raw_txt,\n    a.value ->> 'link_role_cd'::text AS link_role_cd,\n    a.value ->> 'cond_status_cd'::text AS cond_status_cd\n   FROM src s\n     CROSS JOIN LATERAL jsonb_array_elements(s.expr -> 'branches'::text) b(value)\n     CROSS JOIN LATERAL jsonb_array_elements(b.value -> 'atoms'::text) a(value);",
+  "v_card_integrity_issue": " WITH atoms AS (\n         SELECT v_card_cond_atom.owner_cd,\n            v_card_cond_atom.card_id,\n            v_card_cond_atom.card_bnft_id,\n            v_card_cond_atom.rule_key,\n            v_card_cond_atom.expr_status_cd,\n            v_card_cond_atom.branch_no,\n            v_card_cond_atom.atom_seq,\n            v_card_cond_atom.atom_key,\n            v_card_cond_atom.negate_yn,\n            v_card_cond_atom.cond_type_cd,\n            v_card_cond_atom.cond_basis_cd,\n            v_card_cond_atom.cond_min_amt,\n            v_card_cond_atom.cond_max_amt_excl,\n            v_card_cond_atom.predicate_method_cd,\n            v_card_cond_atom.predicate_method_ver,\n            v_card_cond_atom.cond_params,\n            v_card_cond_atom.card_excl_item_id,\n            v_card_cond_atom.excl_raw_txt,\n            v_card_cond_atom.cond_raw_txt,\n            v_card_cond_atom.link_role_cd,\n            v_card_cond_atom.cond_status_cd\n           FROM db_pipeline.v_card_cond_atom\n        ), rule_value_gap AS (\n         SELECT r.card_id,\n            r.card_bnft_id,\n            r.rule_key,\n            r.rule_status_cd = 'CONFIRMED'::text OR b.verification_status_cd::text = 'CONFIRMED'::text AS final_yn\n           FROM db_pipeline.v_card_rule r\n             JOIN db_pipeline.card_bnft b ON b.card_id = r.card_id AND b.card_bnft_id::text = r.card_bnft_id::text\n          WHERE r.rule_status_cd <> 'RETIRED'::text AND ((r.calc_method_cd = ANY (ARRAY['PERCENT_OF_TXN'::text, 'FIXED_PER_TXN'::text, 'UNITS_PER_AMOUNT'::text, 'MULTIPLY_EXTERNAL_POINTS'::text])) AND r.value_num IS NULL OR r.calc_method_cd = 'UNITS_PER_AMOUNT'::text AND r.basis_amt IS NULL OR r.calc_method_cd = 'PERCENT_OF_TXN'::text AND r.value_unit_cd IS DISTINCT FROM 'PERCENT'::text OR r.calc_method_cd = 'MULTIPLY_EXTERNAL_POINTS'::text AND r.value_unit_cd IS DISTINCT FROM 'MULTIPLIER'::text OR (r.calc_method_cd = ANY (ARRAY['FIXED_PER_TXN'::text, 'UNITS_PER_AMOUNT'::text])) AND (r.value_unit_cd = ANY (ARRAY['PERCENT'::text, 'MULTIPLIER'::text])))\n        ), predicate_param_gap AS (\n         SELECT a.owner_cd,\n            a.card_id,\n            a.atom_key,\n            a.cond_status_cd = 'CONFIRMED'::text OR a.expr_status_cd = 'CONFIRMED'::text AS final_yn\n           FROM atoms a\n          WHERE a.cond_status_cd <> 'RETIRED'::text AND (a.predicate_method_cd = 'EVERY_MONTH_MIN_SPEND'::text AND (a.cond_min_amt IS NULL OR jsonb_typeof(a.cond_params -> 'window_months'::text) IS DISTINCT FROM 'number'::text) OR a.predicate_method_cd = 'MONTH_IN'::text AND\n                CASE\n                    WHEN jsonb_typeof(a.cond_params -> 'months'::text) = 'array'::text THEN jsonb_array_length(a.cond_params -> 'months'::text) = 0\n                    ELSE true\n                END)\n        ), fallback AS (\n         SELECT v_card_bnft_rel.card_id,\n            v_card_bnft_rel.from_bnft_id,\n            v_card_bnft_rel.to_bnft_id\n           FROM db_pipeline.v_card_bnft_rel\n          WHERE v_card_bnft_rel.rel_type_cd = 'FALLBACK_AFTER_CAP'::text AND NOT v_card_bnft_rel.reverse_yn\n        ), cycle AS (\n         WITH RECURSIVE walk(card_id, start_id, cur_id, path) AS (\n                 SELECT fallback.card_id,\n                    fallback.from_bnft_id,\n                    fallback.to_bnft_id,\n                    ARRAY[fallback.from_bnft_id, fallback.to_bnft_id::character varying] AS \"array\"\n                   FROM fallback\n                UNION ALL\n                 SELECT w.card_id,\n                    w.start_id,\n                    f.to_bnft_id,\n                    w.path || f.to_bnft_id::character varying\n                   FROM walk w\n                     JOIN fallback f ON f.card_id = w.card_id AND f.from_bnft_id::text = w.cur_id\n                  WHERE NOT (f.to_bnft_id = ANY (w.path[2:]::text[]))\n                )\n         SELECT DISTINCT walk.card_id,\n            walk.start_id\n           FROM walk\n          WHERE walk.cur_id = walk.start_id::text\n        )\n SELECT 'bnft_without_product'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_bnft_id::text AS issue_key\n   FROM db_pipeline.card_bnft x\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_product p\n          WHERE p.card_id = x.card_id))\nUNION ALL\n SELECT 'local_confirmed_without_rule'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_bnft_id::text AS issue_key\n   FROM db_pipeline.card_bnft x\n  WHERE x.verification_status_cd::text = 'CONFIRMED'::text AND jsonb_array_length(x.rule_list) = 0\nUNION ALL\n SELECT 'bnft_txt_without_evidence'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_bnft_id::text AS issue_key\n   FROM db_pipeline.card_bnft x\n  WHERE (x.bnft_rule_txt IS NOT NULL OR x.bnft_limit_txt IS NOT NULL) AND NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_evidence_link l\n          WHERE l.card_id = x.card_id AND l.card_bnft_id::text = x.card_bnft_id::text AND l.ev_subject_cd::text = 'BNFT'::text AND l.ev_item_cd::text = 'SELF'::text))\nUNION ALL\n SELECT 'rel_to_bnft_orphan'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.relation_key AS issue_key\n   FROM db_pipeline.v_card_bnft_rel x\n  WHERE NOT x.reverse_yn AND NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_bnft b\n          WHERE b.card_id = x.card_id AND b.card_bnft_id::text = x.to_bnft_id))\nUNION ALL\n SELECT 'rel_mutual_stored_twice'::text AS gate_cd,\n    (((a.card_id || '/'::text) || a.from_bnft_id::text) || '/'::text) || a.to_bnft_id AS issue_key\n   FROM db_pipeline.v_card_bnft_rel a\n     JOIN db_pipeline.v_card_bnft_rel b ON a.card_id = b.card_id AND a.from_bnft_id::text = b.to_bnft_id AND a.to_bnft_id = b.from_bnft_id::text AND a.rel_type_cd = b.rel_type_cd\n  WHERE NOT a.reverse_yn AND NOT b.reverse_yn AND a.rel_type_cd = 'MUTUALLY_EXCLUSIVE'::text AND a.from_bnft_id::text < a.to_bnft_id\nUNION ALL\n SELECT 'rel_fallback_cycle'::text AS gate_cd,\n    (c.card_id || '/'::text) || c.start_id::text AS issue_key\n   FROM cycle c\nUNION ALL\n SELECT 'product_doc_without_product'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_doc_id::text AS issue_key\n   FROM db_pipeline.card_product_doc x\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_product p\n          WHERE p.card_id = x.card_id))\nUNION ALL\n SELECT 'product_doc_orphan'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_doc_id::text AS issue_key\n   FROM db_pipeline.card_product_doc x\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_doc d\n          WHERE d.card_doc_id::text = x.card_doc_id::text))\nUNION ALL\n SELECT 'bnft_brand_opt_unknown'::text AS gate_cd,\n    (((b.card_id || '/'::text) || b.card_bnft_id::text) || '/'::text) || o.cd AS issue_key\n   FROM db_pipeline.card_bnft b\n     CROSS JOIN LATERAL unnest(b.bnft_brand_opt_cds) o(cd)\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.v_card_brand_opt v\n          WHERE v.card_id = b.card_id AND v.brand_opt_cd = o.cd))\nUNION ALL\n SELECT 'doc_brand_opt_unknown'::text AS gate_cd,\n    (((d.card_id || '/'::text) || d.card_doc_id::text) || '/'::text) || o.cd AS issue_key\n   FROM db_pipeline.card_product_doc d\n     CROSS JOIN LATERAL unnest(d.brand_opt_cds) o(cd)\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.v_card_brand_opt v\n          WHERE v.card_id = d.card_id AND v.brand_opt_cd = o.cd))\nUNION ALL\n SELECT\n        CASE\n            WHEN g.final_yn THEN 'rule_method_value_missing'::text\n            ELSE 'rule_method_value_pending'::text\n        END AS gate_cd,\n    (((g.card_id || '/'::text) || g.card_bnft_id::text) || '/'::text) || g.rule_key AS issue_key\n   FROM rule_value_gap g\nUNION ALL\n SELECT\n        CASE\n            WHEN g.final_yn THEN 'predicate_params_missing'::text\n            ELSE 'predicate_params_pending'::text\n        END AS gate_cd,\n    (((g.owner_cd || '/'::text) || g.card_id) || '/'::text) || g.atom_key AS issue_key\n   FROM predicate_param_gap g\nUNION ALL\n SELECT 'excl_item_unknown'::text AS gate_cd,\n    (a.owner_cd || '/'::text) || a.atom_key AS issue_key\n   FROM atoms a\n  WHERE a.card_excl_item_id IS NOT NULL AND NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_excl_item i\n          WHERE i.card_excl_item_id::text = a.card_excl_item_id))\nUNION ALL\n SELECT 'evidence_source_orphan'::text AS gate_cd,\n    e.evidence_id AS issue_key\n   FROM db_pipeline.card_source_evidence e\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_doc_chunk c\n          WHERE c.card_doc_id::text = e.card_doc_id::text AND c.page_no = e.page_no AND c.card_doc_chunk_id::text = e.card_doc_chunk_id::text))\nUNION ALL\n SELECT 'evidence_doc_not_linked'::text AS gate_cd,\n    (l.card_id || '/'::text) || l.evidence_link_id::text AS issue_key\n   FROM db_pipeline.card_evidence_link l\n     JOIN db_pipeline.card_source_evidence e USING (evidence_id)\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_product_doc d\n          WHERE d.card_id = l.card_id AND d.card_doc_id::text = e.card_doc_id::text))\nUNION ALL\n SELECT 'evidence_not_approved'::text AS gate_cd,\n    l.evidence_id AS issue_key\n   FROM ( SELECT DISTINCT card_evidence_link.evidence_id\n           FROM db_pipeline.card_evidence_link) l\n     LEFT JOIN db_pipeline.card_source_evidence e USING (evidence_id)\n  WHERE e.evidence_id IS NULL OR e.approval_status_cd::text <> 'APPROVED'::text\nUNION ALL\n SELECT 'evidence_subject_orphan'::text AS gate_cd,\n    (l.card_id || '/'::text) || l.evidence_link_id::text AS issue_key\n   FROM db_pipeline.card_evidence_link l\n  WHERE NOT\n        CASE l.ev_subject_cd\n            WHEN 'CARD'::text THEN (EXISTS ( SELECT 1\n               FROM db_pipeline.card_product p\n              WHERE p.card_id = l.card_id))\n            WHEN 'BNFT'::text THEN (EXISTS ( SELECT 1\n               FROM db_pipeline.card_bnft b\n              WHERE b.card_id = l.card_id AND b.card_bnft_id::text = l.card_bnft_id::text))\n            WHEN 'RULE'::text THEN (EXISTS ( SELECT 1\n               FROM db_pipeline.v_card_rule r\n              WHERE r.card_id = l.card_id AND r.card_bnft_id::text = l.card_bnft_id::text AND r.rule_key = l.rule_key::text))\n            WHEN 'REL'::text THEN (EXISTS ( SELECT 1\n               FROM db_pipeline.v_card_bnft_rel r\n              WHERE NOT r.reverse_yn AND r.card_id = l.card_id AND r.from_bnft_id::text = l.card_bnft_id::text AND r.relation_key = l.relation_key::text))\n            ELSE false\n        END\nUNION ALL\n SELECT 'evidence_item_key_missing'::text AS gate_cd,\n    (l.card_id || '/'::text) || l.evidence_link_id::text AS issue_key\n   FROM db_pipeline.card_evidence_link l\n  WHERE l.ev_item_cd::text <> 'SELF'::text AND NOT\n        CASE l.ev_item_cd\n            WHEN 'COND'::text THEN (EXISTS ( SELECT 1\n               FROM atoms a\n              WHERE a.card_id = l.card_id AND a.atom_key = l.ev_item_key::text AND NOT a.card_bnft_id::text IS DISTINCT FROM l.card_bnft_id::text AND NOT a.rule_key IS DISTINCT FROM l.rule_key::text))\n            WHEN 'TARGET'::text THEN (EXISTS ( SELECT 1\n               FROM db_pipeline.v_card_rule_target t\n              WHERE t.card_id = l.card_id AND t.card_bnft_id::text = l.card_bnft_id::text AND t.rule_key = l.rule_key::text AND t.target_key = l.ev_item_key::text))\n            ELSE false\n        END\nUNION ALL\n SELECT 'product_doc_role_type_mismatch'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_doc_id::text AS issue_key\n   FROM db_pipeline.card_product_doc x\n     JOIN db_pipeline.card_doc d ON d.card_doc_id::text = x.card_doc_id::text\n  WHERE x.doc_role_cd::text = 'BRAND_SERVICE'::text AND d.doc_type_cd::text <> 'BRAND_SERVICE'::text\nUNION ALL\n SELECT 'brand_doc_option_conflict'::text AS gate_cd,\n    z.card_doc_id AS issue_key\n   FROM ( SELECT x.card_doc_id\n           FROM db_pipeline.card_product_doc x\n             CROSS JOIN LATERAL unnest(x.brand_opt_cds) o(cd)\n             JOIN db_pipeline.v_card_brand_opt v ON v.card_id = x.card_id AND v.brand_opt_cd = o.cd\n          WHERE x.doc_role_cd::text = 'BRAND_SERVICE'::text\n          GROUP BY x.card_doc_id\n         HAVING count(DISTINCT ROW(v.brand_cd, v.service_grade_cd, v.service_type_cd)) > 1) z\nUNION ALL\n SELECT 'brand_bnft_doc_not_linked'::text AS gate_cd,\n    (((b.card_id || '/'::text) || b.card_bnft_id::text) || '/'::text) || o.cd AS issue_key\n   FROM db_pipeline.card_bnft b\n     CROSS JOIN LATERAL unnest(b.bnft_brand_opt_cds) o(cd)\n  WHERE b.bnft_origin_cd::text = 'BRAND_SERVICE'::text AND NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_product_doc x\n          WHERE x.card_id = b.card_id AND x.doc_role_cd::text = 'BRAND_SERVICE'::text AND (o.cd = ANY (x.brand_opt_cds))))\nUNION ALL\n SELECT 'brand_bnft_confirmed_without_evidence'::text AS gate_cd,\n    (b.card_id || '/'::text) || b.card_bnft_id::text AS issue_key\n   FROM db_pipeline.card_bnft b\n  WHERE b.bnft_origin_cd::text = 'BRAND_SERVICE'::text AND b.verification_status_cd::text = 'CONFIRMED'::text AND NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_evidence_link l\n          WHERE l.card_id = b.card_id AND l.card_bnft_id::text = b.card_bnft_id::text))\nUNION ALL\n SELECT 'evidence_brand_opt_mismatch'::text AS gate_cd,\n    (l.card_id || '/'::text) || l.evidence_link_id::text AS issue_key\n   FROM db_pipeline.card_evidence_link l\n     JOIN db_pipeline.card_source_evidence e USING (evidence_id)\n     JOIN db_pipeline.card_bnft b ON b.card_id = l.card_id AND b.card_bnft_id::text = l.card_bnft_id::text\n     JOIN db_pipeline.card_product_doc x ON x.card_id = l.card_id AND x.card_doc_id::text = e.card_doc_id::text\n  WHERE x.doc_role_cd::text = 'BRAND_SERVICE'::text AND NOT COALESCE(b.bnft_brand_opt_cds, '{}'::text[]) && x.brand_opt_cds\nUNION ALL\n SELECT 'stg_card_not_linked'::text AS gate_cd,\n    s.card_extr_stg_id AS issue_key\n   FROM db_pipeline.card_extr_stg s\n  WHERE s.card_id IS NOT NULL AND NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_product_doc x\n          WHERE x.card_id = s.card_id AND x.card_doc_id::text = s.card_doc_id::text))\nUNION ALL\n SELECT 'common_cd_invalid'::text AS gate_cd,\n    (u.source_nm || '='::text) || u.cd_value AS issue_key\n   FROM db_pipeline.v_common_cd_usage u\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.common_cd c\n          WHERE c.common_code_grp_id::text = u.common_code_grp_id::text AND c.common_cd::text = u.cd_value))\nUNION ALL\n SELECT 'common_cd_group_orphan'::text AS gate_cd,\n    (c.common_code_grp_id::text || '/'::text) || c.common_cd::text AS issue_key\n   FROM db_pipeline.common_cd c\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.common_code_grp g\n          WHERE g.common_code_grp_id::text = c.common_code_grp_id::text))\nUNION ALL\n SELECT 'common_code_grp_empty'::text AS gate_cd,\n    g.common_code_grp_id AS issue_key\n   FROM db_pipeline.common_code_grp g\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.common_cd c\n          WHERE c.common_code_grp_id::text = g.common_code_grp_id::text));",
+  "v_card_rule": " SELECT b.card_id,\n    b.card_bnft_id,\n    r.value ->> 'rule_key'::text AS rule_key,\n    r.ord AS rule_seq,\n    NULLIF(r.value -> 'cond_expr'::text, 'null'::jsonb) AS cond_expr,\n    db_pipeline.fn_cond_spend_bound(NULLIF(r.value -> 'cond_expr'::text, 'null'::jsonb), 'cond_min_amt'::text)::numeric(18,2) AS spend_min_amt,\n    db_pipeline.fn_cond_spend_bound(NULLIF(r.value -> 'cond_expr'::text, 'null'::jsonb), 'cond_max_amt_excl'::text)::numeric(18,2) AS spend_max_amt_excl,\n    COALESCE(r.value -> 'target_list'::text, '[]'::jsonb) AS target_list,\n    r.value ->> 'predicate_state_cd'::text AS predicate_state_cd,\n    r.value ->> 'calc_method_cd'::text AS calc_method_cd,\n    (r.value ->> 'method_ver'::text)::integer AS method_ver,\n    ((r.value ->> 'value_num'::text))::numeric(18,4) AS value_num,\n    r.value ->> 'value_unit_cd'::text AS value_unit_cd,\n    r.value ->> 'payout_unit_cd'::text AS payout_unit_cd,\n    ((r.value ->> 'basis_amt'::text))::numeric(18,2) AS basis_amt,\n    NULLIF(r.value -> 'calc_params'::text, 'null'::jsonb) AS calc_params,\n    (r.value ->> 'rule_priority'::text)::integer AS rule_priority,\n    r.value ->> 'rule_status_cd'::text AS rule_status_cd\n   FROM db_pipeline.card_bnft b\n     CROSS JOIN LATERAL jsonb_array_elements(b.rule_list) WITH ORDINALITY r(value, ord);",
+  "v_card_rule_target": " SELECT r.card_id,\n    r.card_bnft_id,\n    r.rule_key,\n    t.value ->> 'target_type_cd'::text AS target_type_cd,\n    t.value ->> 'target_key'::text AS target_key,\n    t.value ->> 'target_nm'::text AS target_nm\n   FROM db_pipeline.v_card_rule r\n     CROSS JOIN LATERAL jsonb_array_elements(r.target_list) t(value);",
+  "v_common_cd_usage": " SELECT 'card_product.card_kind_cd'::text AS source_nm,\n    'CARD_KIND'::character varying(20) AS common_code_grp_id,\n    card_product.card_kind_cd::text AS cd_value\n   FROM db_pipeline.card_product\n  WHERE card_product.card_kind_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.product_status_cd'::text AS source_nm,\n    'PRODUCT_STATUS'::character varying(20) AS common_code_grp_id,\n    card_product.product_status_cd::text AS cd_value\n   FROM db_pipeline.card_product\n  WHERE card_product.product_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.card_cond_status_cd'::text AS source_nm,\n    'ITEM_STATUS'::character varying(20) AS common_code_grp_id,\n    card_product.card_cond_status_cd::text AS cd_value\n   FROM db_pipeline.card_product\n  WHERE card_product.card_cond_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product_doc.doc_role_cd'::text AS source_nm,\n    'DOC_ROLE'::character varying(20) AS common_code_grp_id,\n    card_product_doc.doc_role_cd::text AS cd_value\n   FROM db_pipeline.card_product_doc\n  WHERE card_product_doc.doc_role_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product_doc.approval_status_cd'::text AS source_nm,\n    'APPROVAL_STATUS'::character varying(20) AS common_code_grp_id,\n    card_product_doc.approval_status_cd::text AS cd_value\n   FROM db_pipeline.card_product_doc\n  WHERE card_product_doc.approval_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.bnft_type_cd'::text AS source_nm,\n    'BNFT_TYPE'::character varying(20) AS common_code_grp_id,\n    card_bnft.bnft_type_cd::text AS cd_value\n   FROM db_pipeline.card_bnft\n  WHERE card_bnft.bnft_type_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.bnft_origin_cd'::text AS source_nm,\n    'BNFT_ORIGIN'::character varying(20) AS common_code_grp_id,\n    card_bnft.bnft_origin_cd::text AS cd_value\n   FROM db_pipeline.card_bnft\n  WHERE card_bnft.bnft_origin_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.bnft_scope_cd'::text AS source_nm,\n    'BNFT_SCOPE'::character varying(20) AS common_code_grp_id,\n    card_bnft.bnft_scope_cd::text AS cd_value\n   FROM db_pipeline.card_bnft\n  WHERE card_bnft.bnft_scope_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.rule_select_cd'::text AS source_nm,\n    'RULE_SELECT'::character varying(20) AS common_code_grp_id,\n    card_bnft.rule_select_cd::text AS cd_value\n   FROM db_pipeline.card_bnft\n  WHERE card_bnft.rule_select_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.verification_status_cd'::text AS source_nm,\n    'VERIFY_STATUS'::character varying(20) AS common_code_grp_id,\n    card_bnft.verification_status_cd::text AS cd_value\n   FROM db_pipeline.card_bnft\n  WHERE card_bnft.verification_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_source_evidence.approval_status_cd'::text AS source_nm,\n    'APPROVAL_STATUS'::character varying(20) AS common_code_grp_id,\n    card_source_evidence.approval_status_cd::text AS cd_value\n   FROM db_pipeline.card_source_evidence\n  WHERE card_source_evidence.approval_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_evidence_link.ev_subject_cd'::text AS source_nm,\n    'EV_SUBJECT'::character varying(20) AS common_code_grp_id,\n    card_evidence_link.ev_subject_cd::text AS cd_value\n   FROM db_pipeline.card_evidence_link\n  WHERE card_evidence_link.ev_subject_cd IS NOT NULL\nUNION ALL\n SELECT 'card_evidence_link.ev_item_cd'::text AS source_nm,\n    'EV_ITEM'::character varying(20) AS common_code_grp_id,\n    card_evidence_link.ev_item_cd::text AS cd_value\n   FROM db_pipeline.card_evidence_link\n  WHERE card_evidence_link.ev_item_cd IS NOT NULL\nUNION ALL\n SELECT 'card_doc.doc_type_cd'::text AS source_nm,\n    'DOC_TYPE'::character varying(20) AS common_code_grp_id,\n    card_doc.doc_type_cd::text AS cd_value\n   FROM db_pipeline.card_doc\n  WHERE card_doc.doc_type_cd IS NOT NULL\nUNION ALL\n SELECT 'card_doc.doc_status'::text AS source_nm,\n    'DOC_STATUS'::character varying(20) AS common_code_grp_id,\n    card_doc.doc_status::text AS cd_value\n   FROM db_pipeline.card_doc\n  WHERE card_doc.doc_status IS NOT NULL\nUNION ALL\n SELECT 'card_doc_page.page_layer_cd'::text AS source_nm,\n    'PAGE_LAYER'::character varying(20) AS common_code_grp_id,\n    card_doc_page.page_layer_cd::text AS cd_value\n   FROM db_pipeline.card_doc_page\n  WHERE card_doc_page.page_layer_cd IS NOT NULL\nUNION ALL\n SELECT 'card_doc_chunk.chunk_type_cd'::text AS source_nm,\n    'CHUNK_TYPE'::character varying(20) AS common_code_grp_id,\n    card_doc_chunk.chunk_type_cd::text AS cd_value\n   FROM db_pipeline.card_doc_chunk\n  WHERE card_doc_chunk.chunk_type_cd IS NOT NULL\nUNION ALL\n SELECT 'card_doc_chunk.chunk_status'::text AS source_nm,\n    'CHUNK_STATUS'::character varying(20) AS common_code_grp_id,\n    card_doc_chunk.chunk_status::text AS cd_value\n   FROM db_pipeline.card_doc_chunk\n  WHERE card_doc_chunk.chunk_status IS NOT NULL\nUNION ALL\n SELECT 'card_ai_run.run_stage_cd'::text AS source_nm,\n    'RUN_STAGE'::character varying(20) AS common_code_grp_id,\n    card_ai_run.run_stage_cd::text AS cd_value\n   FROM db_pipeline.card_ai_run\n  WHERE card_ai_run.run_stage_cd IS NOT NULL\nUNION ALL\n SELECT 'card_ai_run.run_call_mthd_cd'::text AS source_nm,\n    'RUN_CALL_METHOD'::character varying(20) AS common_code_grp_id,\n    card_ai_run.run_call_mthd_cd::text AS cd_value\n   FROM db_pipeline.card_ai_run\n  WHERE card_ai_run.run_call_mthd_cd IS NOT NULL\nUNION ALL\n SELECT 'card_ai_run.run_status'::text AS source_nm,\n    'RUN_STATUS'::character varying(20) AS common_code_grp_id,\n    card_ai_run.run_status::text AS cd_value\n   FROM db_pipeline.card_ai_run\n  WHERE card_ai_run.run_status IS NOT NULL\nUNION ALL\n SELECT 'card_ai_call.call_status'::text AS source_nm,\n    'CALL_STATUS'::character varying(20) AS common_code_grp_id,\n    card_ai_call.call_status::text AS cd_value\n   FROM db_pipeline.card_ai_call\n  WHERE card_ai_call.call_status IS NOT NULL\nUNION ALL\n SELECT 'card_extr_stg.stg_kind_cd'::text AS source_nm,\n    'STG_KIND'::character varying(20) AS common_code_grp_id,\n    card_extr_stg.stg_kind_cd::text AS cd_value\n   FROM db_pipeline.card_extr_stg\n  WHERE card_extr_stg.stg_kind_cd IS NOT NULL\nUNION ALL\n SELECT 'card_extr_stg.stg_status'::text AS source_nm,\n    'STG_STATUS'::character varying(20) AS common_code_grp_id,\n    card_extr_stg.stg_status::text AS cd_value\n   FROM db_pipeline.card_extr_stg\n  WHERE card_extr_stg.stg_status IS NOT NULL\nUNION ALL\n SELECT 'card_extr_stg.stg_ai_vrfy_cd'::text AS source_nm,\n    'STG_AI_VRFY'::character varying(20) AS common_code_grp_id,\n    card_extr_stg.stg_ai_vrfy_cd::text AS cd_value\n   FROM db_pipeline.card_extr_stg\n  WHERE card_extr_stg.stg_ai_vrfy_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.brand_opt_list[].brand_cd'::text AS source_nm,\n    'BRAND'::character varying AS common_code_grp_id,\n    v_card_brand_opt.brand_cd AS cd_value\n   FROM db_pipeline.v_card_brand_opt\n  WHERE v_card_brand_opt.brand_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.brand_opt_list[].service_grade_cd'::text AS source_nm,\n    'SERVICE_GRADE'::character varying AS common_code_grp_id,\n    v_card_brand_opt.service_grade_cd AS cd_value\n   FROM db_pipeline.v_card_brand_opt\n  WHERE v_card_brand_opt.service_grade_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.brand_opt_list[].service_type_cd'::text AS source_nm,\n    'SERVICE_TYPE'::character varying AS common_code_grp_id,\n    v_card_brand_opt.service_type_cd AS cd_value\n   FROM db_pipeline.v_card_brand_opt\n  WHERE v_card_brand_opt.service_type_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.brand_opt_list[].brand_opt_status_cd'::text AS source_nm,\n    'PRODUCT_STATUS'::character varying AS common_code_grp_id,\n    v_card_brand_opt.brand_opt_status_cd AS cd_value\n   FROM db_pipeline.v_card_brand_opt\n  WHERE v_card_brand_opt.brand_opt_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.rule_list[].predicate_state_cd'::text AS source_nm,\n    'PREDICATE_STATE'::character varying AS common_code_grp_id,\n    v_card_rule.predicate_state_cd AS cd_value\n   FROM db_pipeline.v_card_rule\n  WHERE v_card_rule.predicate_state_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.rule_list[].calc_method_cd'::text AS source_nm,\n    'CALC_METHOD'::character varying AS common_code_grp_id,\n    v_card_rule.calc_method_cd AS cd_value\n   FROM db_pipeline.v_card_rule\n  WHERE v_card_rule.calc_method_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.rule_list[].value_unit_cd'::text AS source_nm,\n    'VALUE_UNIT'::character varying AS common_code_grp_id,\n    v_card_rule.value_unit_cd AS cd_value\n   FROM db_pipeline.v_card_rule\n  WHERE v_card_rule.value_unit_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.rule_list[].payout_unit_cd'::text AS source_nm,\n    'PAYOUT_UNIT'::character varying AS common_code_grp_id,\n    v_card_rule.payout_unit_cd AS cd_value\n   FROM db_pipeline.v_card_rule\n  WHERE v_card_rule.payout_unit_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.rule_list[].rule_status_cd'::text AS source_nm,\n    'ITEM_STATUS'::character varying AS common_code_grp_id,\n    v_card_rule.rule_status_cd AS cd_value\n   FROM db_pipeline.v_card_rule\n  WHERE v_card_rule.rule_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.relation_list[].rel_type_cd'::text AS source_nm,\n    'REL_TYPE'::character varying AS common_code_grp_id,\n    v_card_bnft_rel.rel_type_cd AS cd_value\n   FROM db_pipeline.v_card_bnft_rel\n  WHERE v_card_bnft_rel.rel_type_cd IS NOT NULL AND NOT v_card_bnft_rel.reverse_yn\nUNION ALL\n SELECT 'rule_list[].target_list[].target_type_cd'::text AS source_nm,\n    'TARGET_TYPE'::character varying AS common_code_grp_id,\n    v_card_rule_target.target_type_cd AS cd_value\n   FROM db_pipeline.v_card_rule_target\n  WHERE v_card_rule_target.target_type_cd IS NOT NULL\nUNION ALL\n SELECT 'cond_expr atom cond_type_cd'::text AS source_nm,\n    'COND_TYPE'::character varying AS common_code_grp_id,\n    v_card_cond_atom.cond_type_cd AS cd_value\n   FROM db_pipeline.v_card_cond_atom\n  WHERE v_card_cond_atom.cond_type_cd IS NOT NULL\nUNION ALL\n SELECT 'cond_expr atom cond_basis_cd'::text AS source_nm,\n    'COND_BASIS'::character varying AS common_code_grp_id,\n    v_card_cond_atom.cond_basis_cd AS cd_value\n   FROM db_pipeline.v_card_cond_atom\n  WHERE v_card_cond_atom.cond_basis_cd IS NOT NULL\nUNION ALL\n SELECT 'cond_expr atom predicate_method_cd'::text AS source_nm,\n    'PREDICATE_METHOD'::character varying AS common_code_grp_id,\n    v_card_cond_atom.predicate_method_cd AS cd_value\n   FROM db_pipeline.v_card_cond_atom\n  WHERE v_card_cond_atom.predicate_method_cd IS NOT NULL\nUNION ALL\n SELECT 'cond_expr atom cond_status_cd'::text AS source_nm,\n    'ITEM_STATUS'::character varying AS common_code_grp_id,\n    v_card_cond_atom.cond_status_cd AS cd_value\n   FROM db_pipeline.v_card_cond_atom\n  WHERE v_card_cond_atom.cond_status_cd IS NOT NULL\nUNION ALL\n SELECT 'cond_expr.expr_status_cd'::text AS source_nm,\n    'ITEM_STATUS'::character varying AS common_code_grp_id,\n    v_card_cond_atom.expr_status_cd AS cd_value\n   FROM db_pipeline.v_card_cond_atom\n  WHERE v_card_cond_atom.expr_status_cd IS NOT NULL;"
+ },
+ "view_comments": {
+  "v_card_bnft_rel": "혜택 관계를 행으로 복원. MUTUALLY_EXCLUSIVE는 reverse_yn=true 행을 더해 양방향 제공. 저장 행 조회는 reverse_yn=false",
+  "v_card_cond_atom": "모든 조건식의 atom을 소유자와 함께 행으로 복원",
+  "v_card_rule": "상품 계산 규칙을 행으로 복원. V5 card_bnft_rule 조회 대체",
+  "v_card_rule_target": "규칙 대상을 행으로 복원",
+  "v_card_bnft_rule_effective": "혜택과 계산 규칙의 단일 출력. 제공 기간은 걸러내지 않으므로 조회 기준일로 판정. 값은 정책 후보이며 거래별 보상액이 아님",
+  "v_common_cd_usage": "모든 공통코드 사용처(물리 컬럼·JSONB 키)와 소속 그룹. 공통코드 정합성 검증의 기준",
+  "v_card_brand_opt": "상품별 브랜드 선택지를 행으로 복원",
+  "v_card_integrity_issue": "승인 전 정합성 게이트. 물리 FK가 없으므로 행이 1건이라도 있으면 승인하지 않음. *_pending은 확정 전 항목의 값 누락(검토 대기)이고 나머지는 무결성 위반"
+ },
+ "functions": {
+  "fn_get_biz_id": "CREATE OR REPLACE FUNCTION db_pipeline.fn_get_biz_id(p_tbl_nm text)\n RETURNS character varying\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog'\nAS $function$\nDECLARE\n    v_seq regclass;\nBEGIN\n    IF p_tbl_nm IS NULL OR p_tbl_nm !~ '^[A-Za-z][A-Za-z0-9_]*$' THEN\n        RAISE EXCEPTION USING\n            ERRCODE = '22023',\n            MESSAGE = format('Invalid db_pipeline table name for business ID: %s', coalesce(p_tbl_nm, '<NULL>'));\n    END IF;\n\n    v_seq := to_regclass('db_pipeline.seq_' || lower(p_tbl_nm));\n    IF v_seq IS NULL OR NOT EXISTS (\n        SELECT 1\n        FROM pg_catalog.pg_class AS c\n        WHERE c.oid = v_seq\n          AND c.relkind = 'S'\n    ) THEN\n        RAISE EXCEPTION USING\n            ERRCODE = '42P01',\n            MESSAGE = format('db_pipeline ID sequence does not exist: %s', 'db_pipeline.seq_' || lower(p_tbl_nm));\n    END IF;\n\n    RETURN to_char((clock_timestamp() AT TIME ZONE 'Asia/Seoul')::date, 'YYYYMMDD')\n        || '_' || lpad(nextval(v_seq)::text, 6, '0');\nEND;\n$function$\n",
+  "fn_valid_cond_expr": "CREATE OR REPLACE FUNCTION db_pipeline.fn_valid_cond_expr(p_expr jsonb)\n RETURNS boolean\n LANGUAGE plpgsql\n IMMUTABLE\n SET search_path TO 'pg_catalog'\nAS $function$\nDECLARE\n    v_branch jsonb;\n    v_atom jsonb;\n    v_branch_nos integer[] := '{}';\n    v_atom_keys text[] := '{}';\n    v_atom_seqs integer[];\n    v_branch_no integer;\n    v_atom_seq integer;\n    v_key text;\n    v_type text;\nBEGIN\n    IF p_expr IS NULL THEN\n        RETURN true;\n    END IF;\n    IF jsonb_typeof(p_expr) <> 'object'\n       OR coalesce(p_expr->>'expr_status_cd', '') = ''\n       OR jsonb_typeof(p_expr->'branches') IS DISTINCT FROM 'array'\n       OR jsonb_array_length(p_expr->'branches') = 0 THEN\n        RETURN false;\n    END IF;\n\n    FOR v_branch IN SELECT value FROM jsonb_array_elements(p_expr->'branches') LOOP\n        IF jsonb_typeof(v_branch) <> 'object'\n           OR jsonb_typeof(v_branch->'branch_no') IS DISTINCT FROM 'number'\n           OR jsonb_typeof(v_branch->'atoms') IS DISTINCT FROM 'array'\n           OR jsonb_array_length(v_branch->'atoms') = 0 THEN\n            RETURN false;\n        END IF;\n        v_branch_no := (v_branch->>'branch_no')::integer;\n        IF v_branch_no < 1 OR v_branch_no = ANY (v_branch_nos) THEN\n            RETURN false;\n        END IF;\n        v_branch_nos := v_branch_nos || v_branch_no;\n        v_atom_seqs := '{}';\n\n        FOR v_atom IN SELECT value FROM jsonb_array_elements(v_branch->'atoms') LOOP\n            IF jsonb_typeof(v_atom) <> 'object'\n               OR jsonb_typeof(v_atom->'atom_seq') IS DISTINCT FROM 'number'\n               OR jsonb_typeof(v_atom->'negate_yn') IS DISTINCT FROM 'boolean' THEN\n                RETURN false;\n            END IF;\n            v_atom_seq := (v_atom->>'atom_seq')::integer;\n            v_key := v_atom->>'atom_key';\n            v_type := v_atom->>'cond_type_cd';\n            IF v_atom_seq < 1 OR v_atom_seq = ANY (v_atom_seqs)\n               OR coalesce(v_key, '') !~ '^[A-Za-z0-9_.:-]{1,40}$'\n               OR coalesce(v_type, '') = ''\n               OR coalesce(v_atom->>'cond_status_cd', '') = '' THEN\n                RETURN false;\n            END IF;\n            v_atom_seqs := v_atom_seqs || v_atom_seq;\n\n            -- 같은 atom_key를 여러 branch에서 다시 쓰는 것은 금지. 근거 연결 키가 모호해지기 때문\n            IF v_key = ANY (v_atom_keys) THEN\n                RETURN false;\n            END IF;\n            v_atom_keys := v_atom_keys || v_key;\n\n            IF jsonb_typeof(v_atom->'cond_min_amt') NOT IN ('number','null')\n               OR jsonb_typeof(v_atom->'cond_max_amt_excl') NOT IN ('number','null') THEN\n                RETURN false;\n            END IF;\n            IF (v_atom->>'cond_min_amt')::numeric < 0\n               OR (v_atom->>'cond_max_amt_excl')::numeric <= (v_atom->>'cond_min_amt')::numeric THEN\n                RETURN false;\n            END IF;\n            IF v_type = 'SPEND_REQ' AND coalesce(v_atom->>'cond_basis_cd', '') = '' THEN\n                RETURN false;\n            END IF;\n            IF v_type IN ('SPEND_EXCL','BNFT_EXCL')\n               AND coalesce(v_atom->>'card_excl_item_id', v_atom->>'excl_raw_txt', '') = '' THEN\n                RETURN false;\n            END IF;\n            -- 술어 방법 코드와 버전은 짝으로 저장\n            IF (v_atom->>'predicate_method_cd' IS NULL) <> (v_atom->>'predicate_method_ver' IS NULL) THEN\n                RETURN false;\n            END IF;\n            IF jsonb_typeof(v_atom->'predicate_method_ver') NOT IN ('number','null') THEN\n                RETURN false;\n            END IF;\n            IF (v_atom->>'predicate_method_ver')::integer < 1 THEN\n                RETURN false;\n            END IF;\n            IF jsonb_typeof(v_atom->'cond_params') NOT IN ('object','null') THEN\n                RETURN false;\n            END IF;\n        END LOOP;\n    END LOOP;\n    RETURN true;\nEND;\n$function$\n",
+  "fn_cond_spend_bound": "CREATE OR REPLACE FUNCTION db_pipeline.fn_cond_spend_bound(p_expr jsonb, p_bound text)\n RETURNS numeric\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'pg_catalog'\nAS $function$\n    SELECT CASE WHEN count(*) = 1 THEN max((a.value->>p_bound)::numeric) END\n    FROM jsonb_array_elements(p_expr->'branches') AS b(value)\n    CROSS JOIN LATERAL jsonb_array_elements(b.value->'atoms') AS a(value)\n    WHERE jsonb_array_length(p_expr->'branches') = 1\n      AND a.value->>'cond_type_cd' = 'SPEND_REQ'\n      AND a.value->>'cond_basis_cd' = 'PREV_MONTH_SPEND'\n      AND (a.value->>'negate_yn')::boolean = false\n$function$\n",
+  "fn_valid_target_list": "CREATE OR REPLACE FUNCTION db_pipeline.fn_valid_target_list(p_list jsonb)\n RETURNS boolean\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'pg_catalog'\nAS $function$\n    SELECT CASE\n        WHEN jsonb_typeof(p_list) IS DISTINCT FROM 'array' THEN false\n        ELSE coalesce((\n            SELECT bool_and(\n                       jsonb_typeof(t.value) = 'object'\n                       AND coalesce(t.value->>'target_type_cd', '') <> ''\n                       AND coalesce(t.value->>'target_key', '') ~ '^.{1,100}$'\n                       AND coalesce(t.value->>'target_nm', '') <> '')\n                   AND count(*) = count(DISTINCT (t.value->>'target_type_cd', t.value->>'target_key'))\n            FROM jsonb_array_elements(p_list) AS t(value)), true)\n    END\n$function$\n",
+  "fn_valid_brand_opt_list": "CREATE OR REPLACE FUNCTION db_pipeline.fn_valid_brand_opt_list(p_list jsonb)\n RETURNS boolean\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'pg_catalog'\nAS $function$\n    SELECT CASE\n        WHEN jsonb_typeof(p_list) IS DISTINCT FROM 'array' THEN false\n        ELSE coalesce((\n            SELECT bool_and(\n                       jsonb_typeof(t.value) = 'object'\n                       AND coalesce(t.value->>'brand_opt_cd', '') ~ '^[A-Za-z0-9_.:-]{1,80}$'\n                       AND coalesce(t.value->>'brand_opt_nm', '') <> ''\n                       AND coalesce(t.value->>'brand_cd', '') <> ''\n                       AND coalesce(t.value->>'service_grade_cd', '') <> ''\n                       AND coalesce(t.value->>'service_type_cd', '') <> ''\n                       AND coalesce(t.value->>'brand_opt_status_cd', '') <> '')\n                   AND count(*) = count(DISTINCT t.value->>'brand_opt_cd')\n            FROM jsonb_array_elements(p_list) AS t(value)), true)\n    END\n$function$\n",
+  "fn_valid_rule_list": "CREATE OR REPLACE FUNCTION db_pipeline.fn_valid_rule_list(p_list jsonb, p_owner text)\n RETURNS boolean\n LANGUAGE plpgsql\n IMMUTABLE\n SET search_path TO 'pg_catalog'\nAS $function$\nDECLARE\n    v_rule jsonb;\n    v_keys text[] := '{}';\n    v_state text;\nBEGIN\n    IF jsonb_typeof(p_list) IS DISTINCT FROM 'array' THEN\n        RETURN false;\n    END IF;\n    FOR v_rule IN SELECT value FROM jsonb_array_elements(p_list) LOOP\n        IF jsonb_typeof(v_rule) <> 'object'\n           OR coalesce(v_rule->>'rule_key', '') !~ '^[A-Za-z0-9_.:-]{1,40}$'\n           OR v_rule->>'rule_key' = ANY (v_keys)\n           OR coalesce(v_rule->>'calc_method_cd', '') = ''\n           OR coalesce(v_rule->>'payout_unit_cd', '') = ''\n           OR coalesce(v_rule->>'rule_status_cd', '') = ''\n           OR jsonb_typeof(v_rule->'method_ver') IS DISTINCT FROM 'number'\n           OR (v_rule->>'method_ver')::integer < 1 THEN\n            RETURN false;\n        END IF;\n        v_keys := v_keys || (v_rule->>'rule_key');\n\n        IF coalesce(jsonb_typeof(v_rule->'value_num'), 'null') NOT IN ('number','null')\n           OR coalesce(jsonb_typeof(v_rule->'basis_amt'), 'null') NOT IN ('number','null')\n           OR coalesce(jsonb_typeof(v_rule->'rule_priority'), 'null') NOT IN ('number','null')\n           OR coalesce(jsonb_typeof(v_rule->'calc_params'), 'null') NOT IN ('object','null') THEN\n            RETURN false;\n        END IF;\n        IF coalesce((v_rule->>'value_num')::numeric, 0) < 0\n           OR coalesce((v_rule->>'basis_amt')::numeric, 0) < 0 THEN\n            RETURN false;\n        END IF;\n\n        v_state := v_rule->>'predicate_state_cd';\n        IF NOT db_pipeline.fn_valid_cond_expr(nullif(v_rule->'cond_expr', 'null'::jsonb)) THEN\n            RETURN false;\n        END IF;\n        IF v_state = 'CONDITIONAL' AND coalesce(jsonb_typeof(v_rule->'cond_expr'), 'null') = 'null' THEN\n            RETURN false;\n        END IF;\n        IF v_state = 'VERIFIED_UNCONDITIONAL' AND coalesce(jsonb_typeof(v_rule->'cond_expr'), 'null') <> 'null' THEN\n            RETURN false;\n        END IF;\n        IF coalesce(v_state, '') = '' THEN\n            RETURN false;\n        END IF;\n\n        IF NOT db_pipeline.fn_valid_target_list(coalesce(v_rule->'target_list', '[]'::jsonb)) THEN\n            RETURN false;\n        END IF;\n        IF v_rule->>'rule_status_cd' = 'CONFIRMED'\n           AND coalesce(jsonb_array_length(v_rule->'target_list'), 0) = 0 THEN\n            RETURN false;\n        END IF;\n\n        IF p_owner IS DISTINCT FROM 'LOCAL' OR v_rule ? 'pool_refs' THEN\n            RETURN false;\n        END IF;\n    END LOOP;\n    RETURN true;\nEND;\n$function$\n",
+  "fn_valid_relation_list": "CREATE OR REPLACE FUNCTION db_pipeline.fn_valid_relation_list(p_list jsonb, p_self_bnft_id text)\n RETURNS boolean\n LANGUAGE plpgsql\n IMMUTABLE\n SET search_path TO 'pg_catalog'\nAS $function$\r\nDECLARE\r\n    v_rel jsonb;\r\n    v_keys text[] := '{}';\r\n    v_pairs text[] := '{}';\r\n    v_pair text;\r\nBEGIN\r\n    IF jsonb_typeof(p_list) IS DISTINCT FROM 'array' THEN\r\n        RETURN false;\r\n    END IF;\r\n    FOR v_rel IN SELECT value FROM jsonb_array_elements(p_list) LOOP\r\n        IF jsonb_typeof(v_rel) <> 'object'\r\n           OR coalesce(v_rel->>'relation_key', '') !~ '^[A-Za-z0-9_.:-]{1,40}$'\r\n           OR v_rel->>'relation_key' = ANY (v_keys)\r\n           OR coalesce(v_rel->>'to_bnft_id', '') = ''\r\n           OR v_rel->>'to_bnft_id' = p_self_bnft_id\r\n           OR coalesce(v_rel->>'rel_type_cd', '') = ''\r\n           OR coalesce(jsonb_typeof(v_rel->'rel_priority'), 'null') NOT IN ('number','null')\r\n           OR v_rel ? 'trigger_pool_id' THEN\r\n            RETURN false;\r\n        END IF;\r\n        v_pair := (v_rel->>'to_bnft_id') || '|' || (v_rel->>'rel_type_cd');\r\n        IF v_pair = ANY (v_pairs) THEN\r\n            RETURN false;\r\n        END IF;\r\n        v_pairs := v_pairs || v_pair;\r\n        v_keys := v_keys || (v_rel->>'relation_key');\r\n    END LOOP;\r\n    RETURN true;\r\nEND;\r\n$function$\n"
+ },
+ "function_comments": {
+  "fn_get_biz_id": "db_pipeline.seq_<테이블명> 시퀀스로 YYYYMMDD_000001 형식 업무 ID 발급(Asia/Seoul 기준)",
+  "fn_valid_cond_expr": "조건식 JSONB 계약 검증. branch 사이 OR, branch 안 atom AND, negate_yn=NOT",
+  "fn_cond_spend_bound": "단일 branch의 전월 실적 구간 값 추출. OR식이나 구간 atom이 둘 이상이면 NULL을 반환하고 v_card_cond_atom으로 조회",
+  "fn_valid_target_list": "대상 목록 JSONB 계약 검증. 비율·금액 키는 두지 않으며 대상별 비율이 다르면 규칙 행을 나눔",
+  "fn_valid_brand_opt_list": "상품의 브랜드 선택지 목록 검증. 코드값 소속은 v_common_cd_usage로 검사",
+  "fn_valid_rule_list": "계산 규칙 목록 JSONB 계약 검증. 최종 규칙에는 pool_refs를 허용하지 않는다. p_owner는 LOCAL만 허용",
+  "fn_valid_relation_list": "혜택 관계 목록 JSONB 계약 검증. 자기 참조, relation_key 중복, 같은 대상·유형 중복, 제거된 trigger_pool_id 거부"
+ },
+ "constraints": [
+  [
+   "db_pipeline.card_ai_call",
+   "card_ai_call_call_seq_check",
+   "CHECK ((call_seq > 0))"
+  ],
+  [
+   "db_pipeline.card_ai_call",
+   "card_ai_call_check",
+   "CHECK ((((call_status)::text <> 'SUCCEEDED'::text) OR (call_resp_json IS NOT NULL)))"
+  ],
+  [
+   "db_pipeline.card_ai_call",
+   "card_ai_call_pkey",
+   "PRIMARY KEY (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq)"
+  ],
+  [
+   "db_pipeline.card_ai_run",
+   "card_ai_run_check",
+   "CHECK (((run_end_date IS NULL) OR (run_end_date >= run_start_date)))"
+  ],
+  [
+   "db_pipeline.card_ai_run",
+   "card_ai_run_pkey",
+   "PRIMARY KEY (card_ai_run_id)"
+  ],
+  [
+   "db_pipeline.card_bnft",
+   "card_bnft_card_id_bnft_cd_key",
+   "UNIQUE (card_id, bnft_cd)"
+  ],
+  [
+   "db_pipeline.card_bnft",
+   "card_bnft_ck_1",
+   "CHECK (((((bnft_scope_cd)::text = 'PRODUCT'::text) AND (bnft_brand_opt_cds IS NULL)) OR (((bnft_scope_cd)::text <> 'PRODUCT'::text) AND (COALESCE(cardinality(bnft_brand_opt_cds), 0) > 0))))"
+  ],
+  [
+   "db_pipeline.card_bnft",
+   "card_bnft_ck_2",
+   "CHECK (db_pipeline.fn_valid_cond_expr(bnft_cond_expr))"
+  ],
+  [
+   "db_pipeline.card_bnft",
+   "card_bnft_ck_3",
+   "CHECK (db_pipeline.fn_valid_rule_list(rule_list, 'LOCAL'::text))"
+  ],
+  [
+   "db_pipeline.card_bnft",
+   "card_bnft_ck_4",
+   "CHECK (db_pipeline.fn_valid_relation_list(relation_list, (card_bnft_id)::text))"
+  ],
+  [
+   "db_pipeline.card_bnft",
+   "card_bnft_ck_5",
+   "CHECK ((((bnft_origin_cd)::text <> 'BRAND_SERVICE'::text) OR ((bnft_scope_cd)::text = 'BRAND'::text)))"
+  ],
+  [
+   "db_pipeline.card_bnft",
+   "card_bnft_ck_6",
+   "CHECK (((bnft_valid_to_excl IS NULL) OR (bnft_valid_from IS NULL) OR (bnft_valid_to_excl > bnft_valid_from)))"
+  ],
+  [
+   "db_pipeline.card_bnft",
+   "card_bnft_pkey",
+   "PRIMARY KEY (card_id, card_bnft_id)"
+  ],
+  [
+   "db_pipeline.card_common",
+   "card_common_common_cd_key",
+   "UNIQUE (common_cd)"
+  ],
+  [
+   "db_pipeline.card_common",
+   "card_common_pkey",
+   "PRIMARY KEY (card_common_id)"
+  ],
+  [
+   "db_pipeline.card_common_bnft",
+   "card_common_bnft_cd_key",
+   "UNIQUE (card_common_id, bnft_cd)"
+  ],
+  [
+   "db_pipeline.card_common_bnft",
+   "card_common_bnft_date_check",
+   "CHECK (((bnft_valid_to_excl IS NULL) OR (bnft_valid_from IS NULL) OR (bnft_valid_to_excl > bnft_valid_from)))"
+  ],
+  [
+   "db_pipeline.card_common_bnft",
+   "card_common_bnft_pkey",
+   "PRIMARY KEY (card_common_id, card_common_bnft_id)"
+  ],
+  [
+   "db_pipeline.card_common_bnft_apply",
+   "card_common_bnft_apply_pkey",
+   "PRIMARY KEY (card_common_id, card_common_bnft_id, card_id)"
+  ],
+  [
+   "db_pipeline.card_common_doc",
+   "card_common_doc_pkey",
+   "PRIMARY KEY (card_common_id, card_doc_id)"
+  ],
+  [
+   "db_pipeline.card_doc",
+   "card_doc_doc_cd_key",
+   "UNIQUE (doc_cd)"
+  ],
+  [
+   "db_pipeline.card_doc",
+   "card_doc_doc_page_cnt_check",
+   "CHECK (((doc_page_cnt IS NULL) OR (doc_page_cnt > 0)))"
+  ],
+  [
+   "db_pipeline.card_doc",
+   "card_doc_doc_sha256_check",
+   "CHECK (((doc_sha256)::text ~ '^[0-9a-f]{64}$'::text))"
+  ],
+  [
+   "db_pipeline.card_doc",
+   "card_doc_doc_sha256_key",
+   "UNIQUE (doc_sha256)"
+  ],
+  [
+   "db_pipeline.card_doc",
+   "card_doc_doc_version_no_check",
+   "CHECK ((doc_version_no > 0))"
+  ],
+  [
+   "db_pipeline.card_doc",
+   "card_doc_family_cd_check",
+   "CHECK (((doc_family_cd IS NULL) OR ((doc_family_cd)::text ~ '^[A-Za-z0-9][A-Za-z0-9_.:-]*$'::text)))"
+  ],
+  [
+   "db_pipeline.card_doc",
+   "card_doc_pkey",
+   "PRIMARY KEY (card_doc_id)"
+  ],
+  [
+   "db_pipeline.card_doc_chunk",
+   "card_doc_chunk_card_doc_chunk_id_key",
+   "UNIQUE (card_doc_chunk_id)"
+  ],
+  [
+   "db_pipeline.card_doc_chunk",
+   "card_doc_chunk_card_doc_id_chunk_seq_key",
+   "UNIQUE (card_doc_id, chunk_seq)"
+  ],
+  [
+   "db_pipeline.card_doc_chunk",
+   "card_doc_chunk_check",
+   "CHECK (((chunk_start_pos >= 1) AND (chunk_end_pos >= chunk_start_pos)))"
+  ],
+  [
+   "db_pipeline.card_doc_chunk",
+   "card_doc_chunk_check1",
+   "CHECK ((((chunk_status)::text <> 'CLEANED'::text) OR ((chunk_clean_txt IS NOT NULL) AND (chunk_clean_rule_ver IS NOT NULL))))"
+  ],
+  [
+   "db_pipeline.card_doc_chunk",
+   "card_doc_chunk_chunk_seq_check",
+   "CHECK ((chunk_seq > 0))"
+  ],
+  [
+   "db_pipeline.card_doc_chunk",
+   "card_doc_chunk_pkey",
+   "PRIMARY KEY (card_doc_id, page_no, card_doc_chunk_id)"
+  ],
+  [
+   "db_pipeline.card_doc_page",
+   "card_doc_page_page_char_cnt_check",
+   "CHECK ((page_char_cnt >= 0))"
+  ],
+  [
+   "db_pipeline.card_doc_page",
+   "card_doc_page_page_no_check",
+   "CHECK ((page_no > 0))"
+  ],
+  [
+   "db_pipeline.card_doc_page",
+   "card_doc_page_pkey",
+   "PRIMARY KEY (card_doc_id, page_no)"
+  ],
+  [
+   "db_pipeline.card_evidence_link",
+   "card_evidence_link_ck_1",
+   "CHECK ((((ev_item_cd)::text = 'SELF'::text) = ((ev_item_key)::text = '-'::text)))"
+  ],
+  [
+   "db_pipeline.card_evidence_link",
+   "card_evidence_link_ck_2",
+   "CHECK (\nCASE ev_subject_cd\n    WHEN 'CARD'::text THEN (num_nonnulls(card_bnft_id, rule_key, relation_key) = 0)\n    WHEN 'BNFT'::text THEN ((card_bnft_id IS NOT NULL) AND (num_nonnulls(rule_key, relation_key) = 0))\n    WHEN 'RULE'::text THEN ((card_bnft_id IS NOT NULL) AND (rule_key IS NOT NULL) AND (relation_key IS NULL))\n    WHEN 'REL'::text THEN ((card_bnft_id IS NOT NULL) AND (relation_key IS NOT NULL) AND (rule_key IS NULL))\n    ELSE false\nEND)"
+  ],
+  [
+   "db_pipeline.card_evidence_link",
+   "card_evidence_link_id_key",
+   "UNIQUE (card_id, evidence_link_id)"
+  ],
+  [
+   "db_pipeline.card_evidence_link",
+   "card_evidence_link_natural_key",
+   "UNIQUE NULLS NOT DISTINCT (card_id, ev_subject_cd, card_bnft_id, rule_key, relation_key, ev_item_cd, ev_item_key, evidence_id)"
+  ],
+  [
+   "db_pipeline.card_evidence_link",
+   "card_evidence_link_pkey",
+   "PRIMARY KEY (card_doc_id, page_no, card_doc_chunk_id, evidence_id, card_id, evidence_link_id)"
+  ],
+  [
+   "db_pipeline.card_excl_item",
+   "card_excl_item_issuer_excl_item_nm_key",
+   "UNIQUE (issuer, excl_item_nm)"
+  ],
+  [
+   "db_pipeline.card_excl_item",
+   "card_excl_item_pkey",
+   "PRIMARY KEY (card_excl_item_id)"
+  ],
+  [
+   "db_pipeline.card_extr_stg",
+   "card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key",
+   "UNIQUE (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, stg_item_seq)"
+  ],
+  [
+   "db_pipeline.card_extr_stg",
+   "card_extr_stg_card_extr_stg_id_key",
+   "UNIQUE (card_extr_stg_id)"
+  ],
+  [
+   "db_pipeline.card_extr_stg",
+   "card_extr_stg_check",
+   "CHECK ((((stg_evidence_start_pos IS NULL) AND (stg_evidence_end_pos IS NULL)) OR ((stg_evidence_start_pos >= 1) AND (stg_evidence_end_pos >= stg_evidence_start_pos))))"
+  ],
+  [
+   "db_pipeline.card_extr_stg",
+   "card_extr_stg_check1",
+   "CHECK ((((stg_status)::text <> ALL (ARRAY[('AUTO_APPROVED'::character varying)::text, ('MANUAL_APPROVED'::character varying)::text])) OR ((stg_normalized_item IS NOT NULL) AND (NOT ((stg_sql_check_cd)::text IS DISTINCT FROM 'OK'::text)) AND (stg_evidence_start_pos IS NOT NULL) AND (stg_evidence_end_pos IS NOT NULL) AND (btrim(stg_evidence_txt) <> ''::text))))"
+  ],
+  [
+   "db_pipeline.card_extr_stg",
+   "card_extr_stg_pkey",
+   "PRIMARY KEY (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, card_extr_stg_id)"
+  ],
+  [
+   "db_pipeline.card_extr_stg",
+   "card_extr_stg_stg_item_seq_check",
+   "CHECK ((stg_item_seq > 0))"
+  ],
+  [
+   "db_pipeline.card_product",
+   "card_product_brand_opt_list_check",
+   "CHECK (db_pipeline.fn_valid_brand_opt_list(brand_opt_list))"
+  ],
+  [
+   "db_pipeline.card_product",
+   "card_product_card_cond_expr_check",
+   "CHECK (db_pipeline.fn_valid_cond_expr(card_cond_expr))"
+  ],
+  [
+   "db_pipeline.card_product",
+   "card_product_dates_check",
+   "CHECK (((discontinued_on IS NULL) OR (launched_on IS NULL) OR (discontinued_on >= launched_on)))"
+  ],
+  [
+   "db_pipeline.card_product",
+   "card_product_pkey",
+   "PRIMARY KEY (card_id)"
+  ],
+  [
+   "db_pipeline.card_product",
+   "card_product_product_cd_key",
+   "UNIQUE (product_cd)"
+  ],
+  [
+   "db_pipeline.card_product_doc",
+   "card_product_doc_approved_check",
+   "CHECK ((((approval_status_cd)::text <> 'APPROVED'::text) OR (length(TRIM(BOTH FROM applicability_basis_txt)) > 0)))"
+  ],
+  [
+   "db_pipeline.card_product_doc",
+   "card_product_doc_brand_check",
+   "CHECK ((((doc_role_cd)::text <> 'BRAND_SERVICE'::text) OR (COALESCE(cardinality(brand_opt_cds), 0) > 0)))"
+  ],
+  [
+   "db_pipeline.card_product_doc",
+   "card_product_doc_pkey",
+   "PRIMARY KEY (card_id, card_doc_id)"
+  ],
+  [
+   "db_pipeline.card_source_evidence",
+   "card_source_evidence_ck_1",
+   "CHECK (((start_pos IS NULL) OR (start_pos > 0)))"
+  ],
+  [
+   "db_pipeline.card_source_evidence",
+   "card_source_evidence_ck_2",
+   "CHECK (((end_pos IS NULL) OR (start_pos IS NULL) OR (end_pos >= start_pos)))"
+  ],
+  [
+   "db_pipeline.card_source_evidence",
+   "card_source_evidence_evidence_id_key",
+   "UNIQUE (evidence_id)"
+  ],
+  [
+   "db_pipeline.card_source_evidence",
+   "card_source_evidence_pkey",
+   "PRIMARY KEY (card_doc_id, page_no, card_doc_chunk_id, evidence_id)"
+  ],
+  [
+   "db_pipeline.common_cd",
+   "pk_common_cd",
+   "PRIMARY KEY (common_code_grp_id, common_cd)"
+  ],
+  [
+   "db_pipeline.common_code_grp",
+   "pk_common_code_grp",
+   "PRIMARY KEY (common_code_grp_id)"
+  ]
+ ],
+ "indexes": [
+  [
+   "card_ai_call",
+   "card_ai_call_pkey",
+   "CREATE UNIQUE INDEX card_ai_call_pkey ON db_pipeline.card_ai_call USING btree (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq)"
+  ],
+  [
+   "card_ai_call",
+   "ix_card_ai_call_chunk_key",
+   "CREATE INDEX ix_card_ai_call_chunk_key ON db_pipeline.card_ai_call USING btree (card_doc_chunk_id)"
+  ],
+  [
+   "card_ai_call",
+   "ix_card_ai_call_doc_chunk_key",
+   "CREATE INDEX ix_card_ai_call_doc_chunk_key ON db_pipeline.card_ai_call USING btree (card_doc_id, page_no, card_doc_chunk_id)"
+  ],
+  [
+   "card_ai_run",
+   "card_ai_run_pkey",
+   "CREATE UNIQUE INDEX card_ai_run_pkey ON db_pipeline.card_ai_run USING btree (card_ai_run_id)"
+  ],
+  [
+   "card_ai_run",
+   "ix_card_ai_run_doc_key",
+   "CREATE INDEX ix_card_ai_run_doc_key ON db_pipeline.card_ai_run USING btree (run_target_card_doc_id)"
+  ],
+  [
+   "card_bnft",
+   "card_bnft_card_id_bnft_cd_key",
+   "CREATE UNIQUE INDEX card_bnft_card_id_bnft_cd_key ON db_pipeline.card_bnft USING btree (card_id, bnft_cd)"
+  ],
+  [
+   "card_bnft",
+   "card_bnft_pkey",
+   "CREATE UNIQUE INDEX card_bnft_pkey ON db_pipeline.card_bnft USING btree (card_id, card_bnft_id)"
+  ],
+  [
+   "card_bnft",
+   "ix_card_bnft_brand_opt_gin",
+   "CREATE INDEX ix_card_bnft_brand_opt_gin ON db_pipeline.card_bnft USING gin (bnft_brand_opt_cds)"
+  ],
+  [
+   "card_bnft",
+   "ix_card_bnft_cond_gin",
+   "CREATE INDEX ix_card_bnft_cond_gin ON db_pipeline.card_bnft USING gin (bnft_cond_expr jsonb_path_ops)"
+  ],
+  [
+   "card_bnft",
+   "ix_card_bnft_relation_list_gin",
+   "CREATE INDEX ix_card_bnft_relation_list_gin ON db_pipeline.card_bnft USING gin (relation_list jsonb_path_ops)"
+  ],
+  [
+   "card_bnft",
+   "ix_card_bnft_rule_list_gin",
+   "CREATE INDEX ix_card_bnft_rule_list_gin ON db_pipeline.card_bnft USING gin (rule_list jsonb_path_ops)"
+  ],
+  [
+   "card_common",
+   "card_common_common_cd_key",
+   "CREATE UNIQUE INDEX card_common_common_cd_key ON db_pipeline.card_common USING btree (common_cd)"
+  ],
+  [
+   "card_common",
+   "card_common_pkey",
+   "CREATE UNIQUE INDEX card_common_pkey ON db_pipeline.card_common USING btree (card_common_id)"
+  ],
+  [
+   "card_common_bnft",
+   "card_common_bnft_cd_key",
+   "CREATE UNIQUE INDEX card_common_bnft_cd_key ON db_pipeline.card_common_bnft USING btree (card_common_id, bnft_cd)"
+  ],
+  [
+   "card_common_bnft",
+   "card_common_bnft_pkey",
+   "CREATE UNIQUE INDEX card_common_bnft_pkey ON db_pipeline.card_common_bnft USING btree (card_common_id, card_common_bnft_id)"
+  ],
+  [
+   "card_common_bnft_apply",
+   "card_common_bnft_apply_pkey",
+   "CREATE UNIQUE INDEX card_common_bnft_apply_pkey ON db_pipeline.card_common_bnft_apply USING btree (card_common_id, card_common_bnft_id, card_id)"
+  ],
+  [
+   "card_common_doc",
+   "card_common_doc_pkey",
+   "CREATE UNIQUE INDEX card_common_doc_pkey ON db_pipeline.card_common_doc USING btree (card_common_id, card_doc_id)"
+  ],
+  [
+   "card_doc",
+   "card_doc_doc_cd_key",
+   "CREATE UNIQUE INDEX card_doc_doc_cd_key ON db_pipeline.card_doc USING btree (doc_cd)"
+  ],
+  [
+   "card_doc",
+   "card_doc_doc_sha256_key",
+   "CREATE UNIQUE INDEX card_doc_doc_sha256_key ON db_pipeline.card_doc USING btree (doc_sha256)"
+  ],
+  [
+   "card_doc",
+   "card_doc_family_version_idx",
+   "CREATE INDEX card_doc_family_version_idx ON db_pipeline.card_doc USING btree (doc_family_cd, doc_version_no, doc_release_date)"
+  ],
+  [
+   "card_doc",
+   "card_doc_pkey",
+   "CREATE UNIQUE INDEX card_doc_pkey ON db_pipeline.card_doc USING btree (card_doc_id)"
+  ],
+  [
+   "card_doc_chunk",
+   "card_doc_chunk_card_doc_chunk_id_key",
+   "CREATE UNIQUE INDEX card_doc_chunk_card_doc_chunk_id_key ON db_pipeline.card_doc_chunk USING btree (card_doc_chunk_id)"
+  ],
+  [
+   "card_doc_chunk",
+   "card_doc_chunk_card_doc_id_chunk_seq_key",
+   "CREATE UNIQUE INDEX card_doc_chunk_card_doc_id_chunk_seq_key ON db_pipeline.card_doc_chunk USING btree (card_doc_id, chunk_seq)"
+  ],
+  [
+   "card_doc_chunk",
+   "card_doc_chunk_pkey",
+   "CREATE UNIQUE INDEX card_doc_chunk_pkey ON db_pipeline.card_doc_chunk USING btree (card_doc_id, page_no, card_doc_chunk_id)"
+  ],
+  [
+   "card_doc_page",
+   "card_doc_page_pkey",
+   "CREATE UNIQUE INDEX card_doc_page_pkey ON db_pipeline.card_doc_page USING btree (card_doc_id, page_no)"
+  ],
+  [
+   "card_evidence_link",
+   "card_evidence_link_id_key",
+   "CREATE UNIQUE INDEX card_evidence_link_id_key ON db_pipeline.card_evidence_link USING btree (card_id, evidence_link_id)"
+  ],
+  [
+   "card_evidence_link",
+   "card_evidence_link_natural_key",
+   "CREATE UNIQUE INDEX card_evidence_link_natural_key ON db_pipeline.card_evidence_link USING btree (card_id, ev_subject_cd, card_bnft_id, rule_key, relation_key, ev_item_cd, ev_item_key, evidence_id) NULLS NOT DISTINCT"
+  ],
+  [
+   "card_evidence_link",
+   "card_evidence_link_pkey",
+   "CREATE UNIQUE INDEX card_evidence_link_pkey ON db_pipeline.card_evidence_link USING btree (card_doc_id, page_no, card_doc_chunk_id, evidence_id, card_id, evidence_link_id)"
+  ],
+  [
+   "card_evidence_link",
+   "ix_card_evidence_link_evidence",
+   "CREATE INDEX ix_card_evidence_link_evidence ON db_pipeline.card_evidence_link USING btree (evidence_id)"
+  ],
+  [
+   "card_evidence_link",
+   "ix_card_evidence_link_subject",
+   "CREATE INDEX ix_card_evidence_link_subject ON db_pipeline.card_evidence_link USING btree (card_id, ev_subject_cd, card_bnft_id, rule_key)"
+  ],
+  [
+   "card_excl_item",
+   "card_excl_item_issuer_excl_item_nm_key",
+   "CREATE UNIQUE INDEX card_excl_item_issuer_excl_item_nm_key ON db_pipeline.card_excl_item USING btree (issuer, excl_item_nm)"
+  ],
+  [
+   "card_excl_item",
+   "card_excl_item_pkey",
+   "CREATE UNIQUE INDEX card_excl_item_pkey ON db_pipeline.card_excl_item USING btree (card_excl_item_id)"
+  ],
+  [
+   "card_excl_item",
+   "ix_card_excl_item_alias_gin",
+   "CREATE INDEX ix_card_excl_item_alias_gin ON db_pipeline.card_excl_item USING gin (excl_alias_nms)"
+  ],
+  [
+   "card_excl_item",
+   "ix_card_excl_item_concept_key",
+   "CREATE INDEX ix_card_excl_item_concept_key ON db_pipeline.card_excl_item USING btree (excl_concept_cd)"
+  ],
+  [
+   "card_extr_stg",
+   "card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key",
+   "CREATE UNIQUE INDEX card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key ON db_pipeline.card_extr_stg USING btree (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, stg_item_seq)"
+  ],
+  [
+   "card_extr_stg",
+   "card_extr_stg_card_extr_stg_id_key",
+   "CREATE UNIQUE INDEX card_extr_stg_card_extr_stg_id_key ON db_pipeline.card_extr_stg USING btree (card_extr_stg_id)"
+  ],
+  [
+   "card_extr_stg",
+   "card_extr_stg_pkey",
+   "CREATE UNIQUE INDEX card_extr_stg_pkey ON db_pipeline.card_extr_stg USING btree (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, card_extr_stg_id)"
+  ],
+  [
+   "card_extr_stg",
+   "ix_card_extr_stg_chunk_key",
+   "CREATE INDEX ix_card_extr_stg_chunk_key ON db_pipeline.card_extr_stg USING btree (card_doc_chunk_id)"
+  ],
+  [
+   "card_extr_stg",
+   "ix_card_extr_stg_excl_item_key",
+   "CREATE INDEX ix_card_extr_stg_excl_item_key ON db_pipeline.card_extr_stg USING btree (card_excl_item_id)"
+  ],
+  [
+   "card_extr_stg",
+   "ix_card_extr_stg_status_key",
+   "CREATE INDEX ix_card_extr_stg_status_key ON db_pipeline.card_extr_stg USING btree (stg_status, stg_kind_cd)"
+  ],
+  [
+   "card_product",
+   "card_product_brand_opt_gin_idx",
+   "CREATE INDEX card_product_brand_opt_gin_idx ON db_pipeline.card_product USING gin (brand_opt_list jsonb_path_ops)"
+  ],
+  [
+   "card_product",
+   "card_product_kind_status_idx",
+   "CREATE INDEX card_product_kind_status_idx ON db_pipeline.card_product USING btree (card_kind_cd, product_status_cd)"
+  ],
+  [
+   "card_product",
+   "card_product_pkey",
+   "CREATE UNIQUE INDEX card_product_pkey ON db_pipeline.card_product USING btree (card_id)"
+  ],
+  [
+   "card_product",
+   "card_product_product_cd_key",
+   "CREATE UNIQUE INDEX card_product_product_cd_key ON db_pipeline.card_product USING btree (product_cd)"
+  ],
+  [
+   "card_product_doc",
+   "card_product_doc_doc_idx",
+   "CREATE INDEX card_product_doc_doc_idx ON db_pipeline.card_product_doc USING btree (card_doc_id, card_id)"
+  ],
+  [
+   "card_product_doc",
+   "card_product_doc_pkey",
+   "CREATE UNIQUE INDEX card_product_doc_pkey ON db_pipeline.card_product_doc USING btree (card_id, card_doc_id)"
+  ],
+  [
+   "card_source_evidence",
+   "card_source_evidence_evidence_id_key",
+   "CREATE UNIQUE INDEX card_source_evidence_evidence_id_key ON db_pipeline.card_source_evidence USING btree (evidence_id)"
+  ],
+  [
+   "card_source_evidence",
+   "card_source_evidence_pkey",
+   "CREATE UNIQUE INDEX card_source_evidence_pkey ON db_pipeline.card_source_evidence USING btree (card_doc_id, page_no, card_doc_chunk_id, evidence_id)"
+  ],
+  [
+   "card_source_evidence",
+   "ix_card_source_evidence_lookup",
+   "CREATE INDEX ix_card_source_evidence_lookup ON db_pipeline.card_source_evidence USING btree (card_doc_id, page_no, card_doc_chunk_id)"
+  ],
+  [
+   "common_cd",
+   "pk_common_cd",
+   "CREATE UNIQUE INDEX pk_common_cd ON db_pipeline.common_cd USING btree (common_code_grp_id, common_cd)"
+  ],
+  [
+   "common_code_grp",
+   "pk_common_code_grp",
+   "CREATE UNIQUE INDEX pk_common_code_grp ON db_pipeline.common_code_grp USING btree (common_code_grp_id)"
+  ]
+ ],
+ "columns": [
+  [
+   "card_ai_call",
+   1,
+   "card_ai_run_id",
+   "character varying",
+   "NO",
+   null,
+   "AI 실행 아이디"
+  ],
+  [
+   "card_ai_call",
+   2,
+   "card_doc_id",
+   "character varying",
+   "NO",
+   null,
+   "문서 아이디"
+  ],
+  [
+   "card_ai_call",
+   3,
+   "page_no",
+   "smallint",
+   "NO",
+   null,
+   "페이지 번호"
+  ],
+  [
+   "card_ai_call",
+   4,
+   "card_doc_chunk_id",
+   "character varying",
+   "NO",
+   null,
+   "청크 아이디"
+  ],
+  [
+   "card_ai_call",
+   5,
+   "call_seq",
+   "smallint",
+   "NO",
+   "1",
+   "호출 순번"
+  ],
+  [
+   "card_ai_call",
+   6,
+   "call_input_sha256",
+   "character varying",
+   "NO",
+   null,
+   "호출 입력 해시"
+  ],
+  [
+   "card_ai_call",
+   7,
+   "call_status",
+   "character varying",
+   "NO",
+   null,
+   "호출 상태"
+  ],
+  [
+   "card_ai_call",
+   8,
+   "call_resp_raw",
+   "text",
+   "YES",
+   null,
+   "응답 원문"
+  ],
+  [
+   "card_ai_call",
+   9,
+   "call_resp_json",
+   "jsonb",
+   "YES",
+   null,
+   "응답 JSON"
+  ],
+  [
+   "card_ai_call",
+   10,
+   "call_error_msg",
+   "text",
+   "YES",
+   null,
+   "오류 메시지"
+  ],
+  [
+   "card_ai_call",
+   11,
+   "call_input_token_cnt",
+   "integer",
+   "YES",
+   null,
+   "입력 토큰 수"
+  ],
+  [
+   "card_ai_call",
+   12,
+   "call_output_token_cnt",
+   "integer",
+   "YES",
+   null,
+   "출력 토큰 수"
+  ],
+  [
+   "card_ai_call",
+   13,
+   "call_latency_ms",
+   "integer",
+   "YES",
+   null,
+   "응답 시간"
+  ],
+  [
+   "card_ai_call",
+   14,
+   "call_req_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "요청 일시"
+  ],
+  [
+   "card_ai_call",
+   15,
+   "create_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "생성 일시"
+  ],
+  [
+   "card_ai_call",
+   16,
+   "create_user_id",
+   "character varying",
+   "NO",
+   null,
+   "생성 사용자 아이디"
+  ],
+  [
+   "card_ai_call",
+   17,
+   "update_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "수정 일시"
+  ],
+  [
+   "card_ai_call",
+   18,
+   "update_user_id",
+   "character varying",
+   "NO",
+   null,
+   "수정 사용자 아이디"
+  ],
+  [
+   "card_ai_run",
+   1,
+   "card_ai_run_id",
+   "character varying",
+   "NO",
+   "db_pipeline.fn_get_biz_id('card_ai_run'::text)",
+   "AI 실행 아이디"
+  ],
+  [
+   "card_ai_run",
+   2,
+   "run_stage_cd",
+   "character varying",
+   "NO",
+   null,
+   "실행 단계"
+  ],
+  [
+   "card_ai_run",
+   3,
+   "run_call_mthd_cd",
+   "character varying",
+   "NO",
+   null,
+   "AI 호출 방식"
+  ],
+  [
+   "card_ai_run",
+   4,
+   "run_model_nm",
+   "character varying",
+   "NO",
+   null,
+   "모델명"
+  ],
+  [
+   "card_ai_run",
+   5,
+   "run_prompt_ver",
+   "character varying",
+   "NO",
+   null,
+   "프롬프트 버전"
+  ],
+  [
+   "card_ai_run",
+   6,
+   "run_prompt_txt",
+   "text",
+   "NO",
+   null,
+   "프롬프트 원문"
+  ],
+  [
+   "card_ai_run",
+   7,
+   "run_param",
+   "jsonb",
+   "YES",
+   null,
+   "모델 파라미터"
+  ],
+  [
+   "card_ai_run",
+   8,
+   "run_target_card_doc_id",
+   "character varying",
+   "YES",
+   null,
+   "대상 문서 아이디"
+  ],
+  [
+   "card_ai_run",
+   9,
+   "run_status",
+   "character varying",
+   "NO",
+   "'RUNNING'::character varying",
+   "실행 상태"
+  ],
+  [
+   "card_ai_run",
+   10,
+   "run_start_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "실행 시작 일시"
+  ],
+  [
+   "card_ai_run",
+   11,
+   "run_end_date",
+   "timestamp with time zone",
+   "YES",
+   null,
+   "실행 종료 일시"
+  ],
+  [
+   "card_ai_run",
+   12,
+   "run_note",
+   "text",
+   "YES",
+   null,
+   "실행 메모"
+  ],
+  [
+   "card_ai_run",
+   13,
+   "create_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "생성 일시"
+  ],
+  [
+   "card_ai_run",
+   14,
+   "create_user_id",
+   "character varying",
+   "NO",
+   null,
+   "생성 사용자 아이디"
+  ],
+  [
+   "card_ai_run",
+   15,
+   "update_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "수정 일시"
+  ],
+  [
+   "card_ai_run",
+   16,
+   "update_user_id",
+   "character varying",
+   "NO",
+   null,
+   "수정 사용자 아이디"
+  ],
+  [
+   "card_bnft",
+   1,
+   "card_id",
+   "bigint",
+   "NO",
+   null,
+   "카드 아이디"
+  ],
+  [
+   "card_bnft",
+   3,
+   "card_bnft_id",
+   "character varying",
+   "NO",
+   "db_pipeline.fn_get_biz_id('card_bnft'::text)",
+   "혜택 아이디"
+  ],
+  [
+   "card_bnft",
+   4,
+   "bnft_cd",
+   "character varying",
+   "NO",
+   null,
+   "혜택 코드"
+  ],
+  [
+   "card_bnft",
+   5,
+   "bnft_nm",
+   "text",
+   "NO",
+   null,
+   "혜택명"
+  ],
+  [
+   "card_bnft",
+   6,
+   "bnft_type_cd",
+   "character varying",
+   "NO",
+   null,
+   "혜택 유형"
+  ],
+  [
+   "card_bnft",
+   7,
+   "bnft_origin_cd",
+   "character varying",
+   "NO",
+   null,
+   "혜택 출처"
+  ],
+  [
+   "card_bnft",
+   8,
+   "bnft_scope_cd",
+   "character varying",
+   "NO",
+   null,
+   "혜택 적용 범위"
+  ],
+  [
+   "card_bnft",
+   9,
+   "bnft_brand_opt_cds",
+   "ARRAY",
+   "YES",
+   null,
+   "적용 브랜드 선택지"
+  ],
+  [
+   "card_bnft",
+   10,
+   "bnft_cond_expr",
+   "jsonb",
+   "YES",
+   null,
+   "혜택 적용 조건"
+  ],
+  [
+   "card_bnft",
+   11,
+   "rule_select_cd",
+   "character varying",
+   "YES",
+   null,
+   "규칙 선택 방식"
+  ],
+  [
+   "card_bnft",
+   12,
+   "rule_list",
+   "jsonb",
+   "NO",
+   "'[]'::jsonb",
+   "계산 규칙 목록"
+  ],
+  [
+   "card_bnft",
+   13,
+   "relation_list",
+   "jsonb",
+   "NO",
+   "'[]'::jsonb",
+   "혜택 관계 목록"
+  ],
+  [
+   "card_bnft",
+   14,
+   "verification_status_cd",
+   "character varying",
+   "NO",
+   null,
+   "혜택 검증 상태"
+  ],
+  [
+   "card_bnft",
+   15,
+   "bnft_valid_from",
+   "date",
+   "YES",
+   null,
+   "혜택 제공 시작일"
+  ],
+  [
+   "card_bnft",
+   16,
+   "bnft_valid_to_excl",
+   "date",
+   "YES",
+   null,
+   "혜택 제공 종료일(미포함)"
+  ],
+  [
+   "card_bnft",
+   17,
+   "bnft_rule_txt",
+   "text",
+   "YES",
+   null,
+   "공식 원문 근거에서 모은 혜택 계산 규칙 안내. 계산 확정값이 아니라 검토 대상 텍스트"
+  ],
+  [
+   "card_bnft",
+   18,
+   "bnft_limit_txt",
+   "text",
+   "YES",
+   null,
+   "원문 근거에서 모은 혜택별 이용/금액 한도. 여러 풀의 근거를 혜택별로 중복 제거한 텍스트"
+  ],
+  [
+   "card_bnft",
+   19,
+   "bnft_search_txt",
+   "text",
+   "YES",
+   null,
+   "혜택 검색 텍스트. 임베딩 모델에 전달한 입력과 동일. 카드명 미포함"
+  ],
+  [
+   "card_bnft",
+   20,
+   "bnft_embedding",
+   "USER-DEFINED",
+   "YES",
+   null,
+   "혜택 검색 텍스트 임베딩. 실제 적용 여부 판단에는 사용하지 않음"
+  ],
+  [
+   "card_common",
+   1,
+   "card_common_id",
+   "bigint",
+   "NO",
+   "nextval('db_pipeline.seq_card_common'::regclass)",
+   "공통서비스 아이디"
+  ],
+  [
+   "card_common",
+   2,
+   "common_cd",
+   "character varying",
+   "NO",
+   null,
+   "공통서비스 업무 코드"
+  ],
+  [
+   "card_common",
+   3,
+   "common_nm",
+   "text",
+   "NO",
+   null,
+   "공통서비스명"
+  ],
+  [
+   "card_common",
+   4,
+   "brand_cd",
+   "character varying",
+   "YES",
+   null,
+   "국제 브랜드 코드"
+  ],
+  [
+   "card_common",
+   5,
+   "service_grade_cd",
+   "character varying",
+   "YES",
+   null,
+   "서비스 등급 코드"
+  ],
+  [
+   "card_common",
+   6,
+   "common_note",
+   "text",
+   "YES",
+   null,
+   null
+  ],
+  [
+   "card_common",
+   7,
+   "create_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   null
+  ],
+  [
+   "card_common",
+   8,
+   "create_user_id",
+   "character varying",
+   "NO",
+   null,
+   null
+  ],
+  [
+   "card_common",
+   9,
+   "update_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   null
+  ],
+  [
+   "card_common",
+   10,
+   "update_user_id",
+   "character varying",
+   "NO",
+   null,
+   null
+  ],
+  [
+   "card_common_bnft",
+   1,
+   "card_common_id",
+   "bigint",
+   "NO",
+   null,
+   "공통서비스 아이디 (논리 참조)"
+  ],
+  [
+   "card_common_bnft",
+   2,
+   "card_common_bnft_id",
+   "character varying",
+   "NO",
+   "db_pipeline.fn_get_biz_id('card_common_bnft'::text)",
+   "공통 혜택 아이디"
+  ],
+  [
+   "card_common_bnft",
+   3,
+   "bnft_cd",
+   "character varying",
+   "NO",
+   null,
+   "공통 혜택 업무 코드"
+  ],
+  [
+   "card_common_bnft",
+   4,
+   "bnft_nm",
+   "text",
+   "NO",
+   null,
+   "공통 혜택명"
+  ],
+  [
+   "card_common_bnft",
+   5,
+   "bnft_type_cd",
+   "character varying",
+   "YES",
+   null,
+   null
+  ],
+  [
+   "card_common_bnft",
+   6,
+   "service_type_cd",
+   "character varying",
+   "YES",
+   null,
+   "공통서비스 내 유형 (COMMON/선택서비스 등)"
+  ],
+  [
+   "card_common_bnft",
+   7,
+   "bnft_rule_txt",
+   "text",
+   "YES",
+   null,
+   null
+  ],
+  [
+   "card_common_bnft",
+   8,
+   "bnft_limit_txt",
+   "text",
+   "YES",
+   null,
+   null
+  ],
+  [
+   "card_common_bnft",
+   9,
+   "bnft_valid_from",
+   "date",
+   "YES",
+   null,
+   null
+  ],
+  [
+   "card_common_bnft",
+   10,
+   "bnft_valid_to_excl",
+   "date",
+   "YES",
+   null,
+   null
+  ],
+  [
+   "card_common_bnft",
+   11,
+   "create_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   null
+  ],
+  [
+   "card_common_bnft",
+   12,
+   "create_user_id",
+   "character varying",
+   "NO",
+   null,
+   null
+  ],
+  [
+   "card_common_bnft",
+   13,
+   "update_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   null
+  ],
+  [
+   "card_common_bnft",
+   14,
+   "update_user_id",
+   "character varying",
+   "NO",
+   null,
+   null
+  ],
+  [
+   "card_common_bnft",
+   15,
+   "bnft_search_txt",
+   "text",
+   "YES",
+   null,
+   "공통 혜택 검색 텍스트. 임베딩 모델에 전달한 입력과 동일. 카드명 미포함"
+  ],
+  [
+   "card_common_bnft",
+   16,
+   "bnft_embedding",
+   "USER-DEFINED",
+   "YES",
+   null,
+   "공통 혜택 검색 텍스트 임베딩. 카드 적용 관계는 card_common_bnft_apply로 확인"
+  ],
+  [
+   "card_common_bnft_apply",
+   1,
+   "card_common_id",
+   "bigint",
+   "NO",
+   null,
+   "공통서비스 아이디 (논리 참조)"
+  ],
+  [
+   "card_common_bnft_apply",
+   2,
+   "card_common_bnft_id",
+   "character varying",
+   "NO",
+   null,
+   "공통 혜택 아이디 (논리 참조)"
+  ],
+  [
+   "card_common_bnft_apply",
+   3,
+   "card_id",
+   "bigint",
+   "NO",
+   null,
+   "실제 카드 상품 아이디 (논리 참조 CARD_PRODUCT)"
+  ],
+  [
+   "card_common_doc",
+   1,
+   "card_common_id",
+   "bigint",
+   "NO",
+   null,
+   "공통서비스 아이디 (논리 참조)"
+  ],
+  [
+   "card_common_doc",
+   2,
+   "card_doc_id",
+   "character varying",
+   "NO",
+   null,
+   "원천 문서 아이디 (논리 참조 CARD_DOC)"
+  ],
+  [
+   "card_doc",
+   1,
+   "card_doc_id",
+   "character varying",
+   "NO",
+   "db_pipeline.fn_get_biz_id('card_doc'::text)",
+   "문서 아이디"
+  ],
+  [
+   "card_doc",
+   3,
+   "doc_cd",
+   "character varying",
+   "NO",
+   null,
+   "문서 코드"
+  ],
+  [
+   "card_doc",
+   4,
+   "doc_family_cd",
+   "character varying",
+   "YES",
+   null,
+   "문서 계열 코드"
+  ],
+  [
+   "card_doc",
+   5,
+   "doc_type_cd",
+   "character varying",
+   "NO",
+   "'PRODUCT_GUIDE'::character varying",
+   "문서 유형"
+  ],
+  [
+   "card_doc",
+   6,
+   "doc_title",
+   "text",
+   "NO",
+   null,
+   "문서 제목"
+  ],
+  [
+   "card_doc",
+   7,
+   "doc_source_url",
+   "text",
+   "YES",
+   null,
+   "문서 출처 URL"
+  ],
+  [
+   "card_doc",
+   8,
+   "doc_file_nm",
+   "text",
+   "NO",
+   null,
+   "파일명"
+  ],
+  [
+   "card_doc",
+   9,
+   "doc_file_size",
+   "bigint",
+   "YES",
+   null,
+   "파일 크기"
+  ],
+  [
+   "card_doc",
+   10,
+   "doc_sha256",
+   "character varying",
+   "NO",
+   null,
+   "파일 해시"
+  ],
+  [
+   "card_doc",
+   11,
+   "doc_page_cnt",
+   "smallint",
+   "YES",
+   null,
+   "페이지 수"
+  ],
+  [
+   "card_doc",
+   12,
+   "doc_review_no",
+   "text",
+   "YES",
+   null,
+   "심의 번호"
+  ],
+  [
+   "card_doc",
+   13,
+   "doc_review_date",
+   "date",
+   "YES",
+   null,
+   "심의일"
+  ],
+  [
+   "card_doc",
+   14,
+   "doc_release_date",
+   "date",
+   "YES",
+   null,
+   "문서 발행일"
+  ],
+  [
+   "card_doc",
+   15,
+   "doc_collect_date",
+   "timestamp with time zone",
+   "NO",
+   null,
+   "수집 일시"
+  ],
+  [
+   "card_doc",
+   16,
+   "doc_version_no",
+   "smallint",
+   "NO",
+   "1",
+   "문서 버전 번호"
+  ],
+  [
+   "card_doc",
+   17,
+   "doc_status",
+   "character varying",
+   "NO",
+   "'ACTIVE'::character varying",
+   "문서 상태"
+  ],
+  [
+   "card_doc",
+   18,
+   "doc_note",
+   "text",
+   "YES",
+   null,
+   "문서 메모"
+  ],
+  [
+   "card_doc",
+   19,
+   "create_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "생성 일시"
+  ],
+  [
+   "card_doc",
+   20,
+   "create_user_id",
+   "character varying",
+   "NO",
+   null,
+   "생성 사용자 아이디"
+  ],
+  [
+   "card_doc",
+   21,
+   "update_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "수정 일시"
+  ],
+  [
+   "card_doc",
+   22,
+   "update_user_id",
+   "character varying",
+   "NO",
+   null,
+   "수정 사용자 아이디"
+  ],
+  [
+   "card_doc_chunk",
+   1,
+   "card_doc_id",
+   "character varying",
+   "NO",
+   null,
+   "문서 아이디"
+  ],
+  [
+   "card_doc_chunk",
+   2,
+   "page_no",
+   "smallint",
+   "NO",
+   null,
+   "페이지 번호"
+  ],
+  [
+   "card_doc_chunk",
+   3,
+   "card_doc_chunk_id",
+   "character varying",
+   "NO",
+   "db_pipeline.fn_get_biz_id('card_doc_chunk'::text)",
+   "청크 아이디"
+  ],
+  [
+   "card_doc_chunk",
+   4,
+   "chunk_seq",
+   "integer",
+   "NO",
+   null,
+   "청크 순번"
+  ],
+  [
+   "card_doc_chunk",
+   5,
+   "chunk_section_nm",
+   "text",
+   "YES",
+   null,
+   "절 제목"
+  ],
+  [
+   "card_doc_chunk",
+   6,
+   "chunk_type_cd",
+   "character varying",
+   "NO",
+   "'BODY'::character varying",
+   "청크 유형"
+  ],
+  [
+   "card_doc_chunk",
+   7,
+   "chunk_start_pos",
+   "integer",
+   "NO",
+   null,
+   "청크 시작 위치"
+  ],
+  [
+   "card_doc_chunk",
+   8,
+   "chunk_end_pos",
+   "integer",
+   "NO",
+   null,
+   "청크 종료 위치"
+  ],
+  [
+   "card_doc_chunk",
+   9,
+   "chunk_raw_txt",
+   "text",
+   "NO",
+   null,
+   "청크 원문"
+  ],
+  [
+   "card_doc_chunk",
+   10,
+   "chunk_clean_txt",
+   "text",
+   "YES",
+   null,
+   "청크 정제문"
+  ],
+  [
+   "card_doc_chunk",
+   11,
+   "chunk_status",
+   "character varying",
+   "NO",
+   "'RAW'::character varying",
+   "청크 상태"
+  ],
+  [
+   "card_doc_chunk",
+   12,
+   "chunk_split_rule_ver",
+   "character varying",
+   "NO",
+   null,
+   "청크 분리 규칙 버전"
+  ],
+  [
+   "card_doc_chunk",
+   13,
+   "chunk_clean_rule_ver",
+   "character varying",
+   "YES",
+   null,
+   "청크 정제 규칙 버전"
+  ],
+  [
+   "card_doc_chunk",
+   14,
+   "create_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "생성 일시"
+  ],
+  [
+   "card_doc_chunk",
+   15,
+   "create_user_id",
+   "character varying",
+   "NO",
+   null,
+   "생성 사용자 아이디"
+  ],
+  [
+   "card_doc_chunk",
+   16,
+   "update_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "수정 일시"
+  ],
+  [
+   "card_doc_chunk",
+   17,
+   "update_user_id",
+   "character varying",
+   "NO",
+   null,
+   "수정 사용자 아이디"
+  ],
+  [
+   "card_doc_page",
+   1,
+   "card_doc_id",
+   "character varying",
+   "NO",
+   null,
+   "문서 아이디"
+  ],
+  [
+   "card_doc_page",
+   2,
+   "page_no",
+   "smallint",
+   "NO",
+   null,
+   "페이지 번호"
+  ],
+  [
+   "card_doc_page",
+   3,
+   "page_raw_txt",
+   "text",
+   "NO",
+   null,
+   "페이지 원문"
+  ],
+  [
+   "card_doc_page",
+   4,
+   "page_char_cnt",
+   "integer",
+   "NO",
+   null,
+   "페이지 문자 수"
+  ],
+  [
+   "card_doc_page",
+   5,
+   "page_txt_sha256",
+   "character varying",
+   "NO",
+   null,
+   "페이지 원문 해시"
+  ],
+  [
+   "card_doc_page",
+   6,
+   "page_layer_cd",
+   "character varying",
+   "NO",
+   "'UNKNOWN'::character varying",
+   "텍스트 레이어 유형"
+  ],
+  [
+   "card_doc_page",
+   7,
+   "page_extractor_nm",
+   "character varying",
+   "NO",
+   null,
+   "추출기명"
+  ],
+  [
+   "card_doc_page",
+   8,
+   "page_extractor_ver",
+   "character varying",
+   "YES",
+   null,
+   "추출기 버전"
+  ],
+  [
+   "card_doc_page",
+   9,
+   "page_note",
+   "text",
+   "YES",
+   null,
+   "페이지 메모"
+  ],
+  [
+   "card_doc_page",
+   10,
+   "create_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "생성 일시"
+  ],
+  [
+   "card_doc_page",
+   11,
+   "create_user_id",
+   "character varying",
+   "NO",
+   null,
+   "생성 사용자 아이디"
+  ],
+  [
+   "card_doc_page",
+   12,
+   "update_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "수정 일시"
+  ],
+  [
+   "card_doc_page",
+   13,
+   "update_user_id",
+   "character varying",
+   "NO",
+   null,
+   "수정 사용자 아이디"
+  ],
+  [
+   "card_evidence_link",
+   1,
+   "card_doc_id",
+   "character varying",
+   "NO",
+   null,
+   "문서 아이디"
+  ],
+  [
+   "card_evidence_link",
+   2,
+   "page_no",
+   "smallint",
+   "NO",
+   null,
+   "페이지 번호"
+  ],
+  [
+   "card_evidence_link",
+   3,
+   "card_doc_chunk_id",
+   "character varying",
+   "NO",
+   null,
+   "청크 아이디"
+  ],
+  [
+   "card_evidence_link",
+   4,
+   "evidence_id",
+   "character varying",
+   "NO",
+   null,
+   "원문 근거 아이디"
+  ],
+  [
+   "card_evidence_link",
+   5,
+   "card_id",
+   "bigint",
+   "NO",
+   null,
+   "카드 아이디"
+  ],
+  [
+   "card_evidence_link",
+   6,
+   "evidence_link_id",
+   "character varying",
+   "NO",
+   "db_pipeline.fn_get_biz_id('card_evidence_link'::text)",
+   "근거 연결 아이디"
+  ],
+  [
+   "card_evidence_link",
+   7,
+   "card_bnft_id",
+   "character varying",
+   "YES",
+   null,
+   "혜택 아이디"
+  ],
+  [
+   "card_evidence_link",
+   8,
+   "ev_subject_cd",
+   "character varying",
+   "NO",
+   null,
+   "근거 대상 유형"
+  ],
+  [
+   "card_evidence_link",
+   9,
+   "rule_key",
+   "character varying",
+   "YES",
+   null,
+   "규칙 키"
+  ],
+  [
+   "card_evidence_link",
+   10,
+   "relation_key",
+   "character varying",
+   "YES",
+   null,
+   "혜택 관계 키"
+  ],
+  [
+   "card_evidence_link",
+   11,
+   "ev_item_cd",
+   "character varying",
+   "NO",
+   "'SELF'::character varying",
+   "근거 항목 유형"
+  ],
+  [
+   "card_evidence_link",
+   12,
+   "ev_item_key",
+   "character varying",
+   "NO",
+   "'-'::character varying",
+   "근거 항목 키"
+  ],
+  [
+   "card_excl_item",
+   1,
+   "card_excl_item_id",
+   "character varying",
+   "NO",
+   "db_pipeline.fn_get_biz_id('card_excl_item'::text)",
+   "제외 항목 아이디"
+  ],
+  [
+   "card_excl_item",
+   2,
+   "issuer",
+   "text",
+   "NO",
+   null,
+   "카드사"
+  ],
+  [
+   "card_excl_item",
+   3,
+   "excl_item_nm",
+   "text",
+   "NO",
+   null,
+   "제외 항목명"
+  ],
+  [
+   "card_excl_item",
+   4,
+   "excl_concept_cd",
+   "character varying",
+   "YES",
+   null,
+   "제외 분류 개념"
+  ],
+  [
+   "card_excl_item",
+   5,
+   "excl_item_desc",
+   "text",
+   "YES",
+   null,
+   "제외 항목 설명"
+  ],
+  [
+   "card_excl_item",
+   6,
+   "excl_alias_nms",
+   "ARRAY",
+   "NO",
+   "'{}'::text[]",
+   "제외 항목 별칭"
+  ],
+  [
+   "card_excl_item",
+   7,
+   "create_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "생성 일시"
+  ],
+  [
+   "card_excl_item",
+   8,
+   "create_user_id",
+   "character varying",
+   "NO",
+   null,
+   "생성 사용자 아이디"
+  ],
+  [
+   "card_excl_item",
+   9,
+   "update_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "수정 일시"
+  ],
+  [
+   "card_excl_item",
+   10,
+   "update_user_id",
+   "character varying",
+   "NO",
+   null,
+   "수정 사용자 아이디"
+  ],
+  [
+   "card_extr_stg",
+   1,
+   "card_ai_run_id",
+   "character varying",
+   "NO",
+   null,
+   "AI 실행 아이디"
+  ],
+  [
+   "card_extr_stg",
+   2,
+   "card_doc_id",
+   "character varying",
+   "NO",
+   null,
+   "문서 아이디"
+  ],
+  [
+   "card_extr_stg",
+   3,
+   "page_no",
+   "smallint",
+   "NO",
+   null,
+   "페이지 번호"
+  ],
+  [
+   "card_extr_stg",
+   4,
+   "card_doc_chunk_id",
+   "character varying",
+   "NO",
+   null,
+   "청크 아이디"
+  ],
+  [
+   "card_extr_stg",
+   5,
+   "call_seq",
+   "smallint",
+   "NO",
+   null,
+   "호출 순번"
+  ],
+  [
+   "card_extr_stg",
+   6,
+   "card_extr_stg_id",
+   "character varying",
+   "NO",
+   "db_pipeline.fn_get_biz_id('card_extr_stg'::text)",
+   "추출 항목 아이디"
+  ],
+  [
+   "card_extr_stg",
+   7,
+   "stg_item_seq",
+   "smallint",
+   "NO",
+   null,
+   "추출 항목 순번"
+  ],
+  [
+   "card_extr_stg",
+   8,
+   "card_id",
+   "bigint",
+   "YES",
+   null,
+   "카드 아이디(NULL이면 특정 카드에 연결되지 않은 후보)"
+  ],
+  [
+   "card_extr_stg",
+   9,
+   "stg_kind_cd",
+   "character varying",
+   "NO",
+   null,
+   "추출 항목 종류"
+  ],
+  [
+   "card_extr_stg",
+   10,
+   "stg_parent_card_extr_stg_id",
+   "character varying",
+   "YES",
+   null,
+   "상위 추출 항목 아이디"
+  ],
+  [
+   "card_extr_stg",
+   11,
+   "stg_raw_item",
+   "jsonb",
+   "NO",
+   null,
+   "추출 원본"
+  ],
+  [
+   "card_extr_stg",
+   12,
+   "stg_normalized_item",
+   "jsonb",
+   "YES",
+   null,
+   "정제 항목"
+  ],
+  [
+   "card_extr_stg",
+   13,
+   "stg_evidence_txt",
+   "text",
+   "NO",
+   null,
+   "추출 근거 문장"
+  ],
+  [
+   "card_extr_stg",
+   14,
+   "stg_evidence_start_pos",
+   "integer",
+   "YES",
+   null,
+   "근거 시작 위치"
+  ],
+  [
+   "card_extr_stg",
+   15,
+   "stg_evidence_end_pos",
+   "integer",
+   "YES",
+   null,
+   "근거 종료 위치"
+  ],
+  [
+   "card_extr_stg",
+   16,
+   "card_excl_item_id",
+   "character varying",
+   "YES",
+   null,
+   "제외 항목 아이디"
+  ],
+  [
+   "card_extr_stg",
+   17,
+   "stg_sql_check_cd",
+   "character varying",
+   "YES",
+   null,
+   "SQL 검증 결과"
+  ],
+  [
+   "card_extr_stg",
+   18,
+   "stg_ai_vrfy_cd",
+   "character varying",
+   "YES",
+   null,
+   "AI 검증 결과"
+  ],
+  [
+   "card_extr_stg",
+   19,
+   "stg_ai_vrfy_card_ai_run_id",
+   "character varying",
+   "YES",
+   null,
+   "AI 검증 실행 아이디"
+  ],
+  [
+   "card_extr_stg",
+   20,
+   "stg_status",
+   "character varying",
+   "NO",
+   "'PENDING_REVIEW'::character varying",
+   "검토 상태"
+  ],
+  [
+   "card_extr_stg",
+   21,
+   "stg_review_note",
+   "text",
+   "YES",
+   null,
+   "검토 메모"
+  ],
+  [
+   "card_extr_stg",
+   22,
+   "stg_approved_date",
+   "timestamp with time zone",
+   "YES",
+   null,
+   "승인 일시"
+  ],
+  [
+   "card_extr_stg",
+   23,
+   "stg_approved_user_id",
+   "character varying",
+   "YES",
+   null,
+   "승인 사용자 아이디"
+  ],
+  [
+   "card_extr_stg",
+   24,
+   "create_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "생성 일시"
+  ],
+  [
+   "card_extr_stg",
+   25,
+   "create_user_id",
+   "character varying",
+   "NO",
+   null,
+   "생성 사용자 아이디"
+  ],
+  [
+   "card_extr_stg",
+   26,
+   "update_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "수정 일시"
+  ],
+  [
+   "card_extr_stg",
+   27,
+   "update_user_id",
+   "character varying",
+   "NO",
+   null,
+   "수정 사용자 아이디"
+  ],
+  [
+   "card_product",
+   1,
+   "card_id",
+   "bigint",
+   "NO",
+   "nextval('db_pipeline.seq_card_product'::regclass)",
+   "카드 아이디"
+  ],
+  [
+   "card_product",
+   2,
+   "product_cd",
+   "character varying",
+   "NO",
+   null,
+   "상품 코드"
+  ],
+  [
+   "card_product",
+   3,
+   "product_nm",
+   "text",
+   "NO",
+   null,
+   "상품명"
+  ],
+  [
+   "card_product",
+   4,
+   "issuer",
+   "character varying",
+   "NO",
+   null,
+   "카드사"
+  ],
+  [
+   "card_product",
+   5,
+   "card_kind_cd",
+   "character varying",
+   "NO",
+   null,
+   "카드 구분"
+  ],
+  [
+   "card_product",
+   6,
+   "product_status_cd",
+   "character varying",
+   "NO",
+   "'ACTIVE'::character varying",
+   "상품 상태"
+  ],
+  [
+   "card_product",
+   7,
+   "launched_on",
+   "date",
+   "YES",
+   null,
+   "출시일"
+  ],
+  [
+   "card_product",
+   8,
+   "discontinued_on",
+   "date",
+   "YES",
+   null,
+   "판매 중단일"
+  ],
+  [
+   "card_product",
+   9,
+   "brand_opt_list",
+   "jsonb",
+   "NO",
+   "'[]'::jsonb",
+   "브랜드 선택지 목록"
+  ],
+  [
+   "card_product",
+   10,
+   "create_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "생성 일시"
+  ],
+  [
+   "card_product",
+   11,
+   "create_user_id",
+   "character varying",
+   "NO",
+   null,
+   "생성 사용자 아이디"
+  ],
+  [
+   "card_product",
+   12,
+   "update_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "수정 일시"
+  ],
+  [
+   "card_product",
+   13,
+   "update_user_id",
+   "character varying",
+   "NO",
+   null,
+   "수정 사용자 아이디"
+  ],
+  [
+   "card_product",
+   14,
+   "card_cond_expr",
+   "jsonb",
+   "YES",
+   null,
+   "카드 공통 조건"
+  ],
+  [
+   "card_product",
+   15,
+   "card_cond_status_cd",
+   "character varying",
+   "NO",
+   "'DRAFT'::character varying",
+   "카드 공통 조건 상태"
+  ],
+  [
+   "card_product_doc",
+   1,
+   "card_id",
+   "bigint",
+   "NO",
+   null,
+   "카드 아이디"
+  ],
+  [
+   "card_product_doc",
+   2,
+   "card_doc_id",
+   "character varying",
+   "NO",
+   null,
+   "문서 아이디"
+  ],
+  [
+   "card_product_doc",
+   3,
+   "doc_role_cd",
+   "character varying",
+   "NO",
+   null,
+   "문서 역할"
+  ],
+  [
+   "card_product_doc",
+   4,
+   "brand_opt_cds",
+   "ARRAY",
+   "YES",
+   null,
+   "적용 브랜드 선택지"
+  ],
+  [
+   "card_product_doc",
+   7,
+   "approval_status_cd",
+   "character varying",
+   "NO",
+   "'PENDING'::character varying",
+   "승인 상태"
+  ],
+  [
+   "card_product_doc",
+   8,
+   "applicability_basis_txt",
+   "text",
+   "NO",
+   null,
+   "적용 근거"
+  ],
+  [
+   "card_product_doc",
+   9,
+   "approval_note",
+   "text",
+   "YES",
+   null,
+   "승인 메모"
+  ],
+  [
+   "card_product_doc",
+   10,
+   "create_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "생성 일시"
+  ],
+  [
+   "card_product_doc",
+   11,
+   "create_user_id",
+   "character varying",
+   "NO",
+   null,
+   "생성 사용자 아이디"
+  ],
+  [
+   "card_product_doc",
+   12,
+   "update_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "수정 일시"
+  ],
+  [
+   "card_product_doc",
+   13,
+   "update_user_id",
+   "character varying",
+   "NO",
+   null,
+   "수정 사용자 아이디"
+  ],
+  [
+   "card_source_evidence",
+   1,
+   "card_doc_id",
+   "character varying",
+   "NO",
+   null,
+   "문서 아이디"
+  ],
+  [
+   "card_source_evidence",
+   2,
+   "page_no",
+   "smallint",
+   "NO",
+   null,
+   "페이지 번호"
+  ],
+  [
+   "card_source_evidence",
+   3,
+   "card_doc_chunk_id",
+   "character varying",
+   "NO",
+   null,
+   "청크 아이디"
+  ],
+  [
+   "card_source_evidence",
+   4,
+   "evidence_id",
+   "character varying",
+   "NO",
+   "db_pipeline.fn_get_biz_id('card_source_evidence'::text)",
+   "원문 근거 아이디"
+  ],
+  [
+   "card_source_evidence",
+   5,
+   "card_extr_stg_id",
+   "character varying",
+   "YES",
+   null,
+   "추출 항목 아이디"
+  ],
+  [
+   "card_source_evidence",
+   6,
+   "quote_txt",
+   "text",
+   "NO",
+   null,
+   "원문 인용 문장"
+  ],
+  [
+   "card_source_evidence",
+   7,
+   "start_pos",
+   "integer",
+   "YES",
+   null,
+   "인용 시작 위치"
+  ],
+  [
+   "card_source_evidence",
+   8,
+   "end_pos",
+   "integer",
+   "YES",
+   null,
+   "인용 종료 위치"
+  ],
+  [
+   "card_source_evidence",
+   9,
+   "approval_status_cd",
+   "character varying",
+   "NO",
+   null,
+   "승인 상태"
+  ],
+  [
+   "common_cd",
+   1,
+   "common_code_grp_id",
+   "character varying",
+   "NO",
+   null,
+   "공통코드 그룹 아이디"
+  ],
+  [
+   "common_cd",
+   2,
+   "common_cd",
+   "character varying",
+   "NO",
+   null,
+   "공통코드"
+  ],
+  [
+   "common_cd",
+   3,
+   "common_cd_nm",
+   "text",
+   "NO",
+   null,
+   "공통코드명"
+  ],
+  [
+   "common_cd",
+   4,
+   "create_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "생성 일시"
+  ],
+  [
+   "common_cd",
+   5,
+   "create_user_id",
+   "character varying",
+   "NO",
+   null,
+   "생성 사용자 아이디"
+  ],
+  [
+   "common_cd",
+   6,
+   "update_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "수정 일시"
+  ],
+  [
+   "common_cd",
+   7,
+   "update_user_id",
+   "character varying",
+   "NO",
+   null,
+   "수정 사용자 아이디"
+  ],
+  [
+   "common_cd",
+   8,
+   "common_cd_desc",
+   "text",
+   "YES",
+   null,
+   "공통코드 상세 설명(업무 의미, 적용 기준)"
+  ],
+  [
+   "common_code_grp",
+   1,
+   "common_code_grp_id",
+   "character varying",
+   "NO",
+   null,
+   "공통코드 그룹 아이디"
+  ],
+  [
+   "common_code_grp",
+   2,
+   "common_code_grp_nm",
+   "text",
+   "NO",
+   null,
+   "공통코드 그룹명"
+  ],
+  [
+   "common_code_grp",
+   3,
+   "create_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "생성 일시"
+  ],
+  [
+   "common_code_grp",
+   4,
+   "create_user_id",
+   "character varying",
+   "NO",
+   null,
+   "생성 사용자 아이디"
+  ],
+  [
+   "common_code_grp",
+   5,
+   "update_date",
+   "timestamp with time zone",
+   "NO",
+   "now()",
+   "수정 일시"
+  ],
+  [
+   "common_code_grp",
+   6,
+   "update_user_id",
+   "character varying",
+   "NO",
+   null,
+   "수정 사용자 아이디"
+  ],
+  [
+   "common_code_grp",
+   7,
+   "common_code_grp_desc",
+   "text",
+   "YES",
+   null,
+   "공통코드 그룹 상세 설명(목적, 사용 범위, 업무 의미)"
+  ]
+ ],
+ "code_groups": [
+  [
+   "APPROVAL_STATUS",
+   "관계·근거 승인 상태",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "문서 연결과 원문 근거처럼 검토·승인이 필요한 관계·근거 데이터의 처리 상태를 구분하는 공통코드. card_product_doc.approval_status_cd, card_source_evidence.approval_status_cd에서 사용하며 실제 승인 대상은 사용하는 테이블에 따라 달라진다. 규칙·조건을 다루는 ITEM_STATUS, AI 추출 항목을 다루는 STG_STATUS와 관리 대상이 다르다."
+  ],
+  [
+   "BNFT_ORIGIN",
+   "혜택 출처",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "혜택의 원천을 구분하는 공통코드. card_bnft.bnft_origin_cd에서 사용한다. 출처와 관계없이 계산 규칙은 모두 card_bnft.rule_list에 있으며, 혜택이 어느 브랜드 선택지에 적용되는지를 나타내는 BNFT_SCOPE와는 별개의 축이다."
+  ],
+  [
+   "BNFT_SCOPE",
+   "혜택 적용 범위",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "혜택이 상품 전체에 적용되는지 일부 브랜드 선택지에만 적용되는지를 구분하는 공통코드. card_bnft.bnft_scope_cd에서 사용하며 bnft_brand_opt_cds의 필수 여부를 결정한다. 규칙의 출처를 나타내는 BNFT_ORIGIN과 달리 혜택을 받을 수 있는 상품 선택지의 범위를 나타낸다."
+  ],
+  [
+   "BNFT_TYPE",
+   "혜택 유형",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "혜택이 고객에게 제공되는 형태를 분류하는 공통코드. card_bnft.bnft_type_cd에서 사용하며 AI 추출 스키마의 혜택 유형 값도 이 그룹을 따른다. 보상 계산법을 나타내는 CALC_METHOD나 지급 단위를 나타내는 PAYOUT_UNIT과 달리 혜택의 업무상 종류를 나타낸다."
+  ],
+  [
+   "BRAND",
+   "국제 브랜드",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "카드 상품의 브랜드 선택지를 구분하는 공통코드. card_product.brand_opt_list[].brand_cd에서 사용한다. 그룹명은 국제 브랜드이지만 국내전용 선택지를 함께 포함하며, 브랜드 안의 등급은 SERVICE_GRADE, 선택서비스 유형은 SERVICE_TYPE이 구분한다."
+  ],
+  [
+   "CALC_METHOD",
+   "계산 방법",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "규칙이 한 거래의 후보 보상을 어떤 방식으로 산출하는지 구분하는 공통코드. rule_list[].calc_method_cd에서 사용하고, 코드별 value_num의 의미가 정해져 있다. 조건 판정 방법인 PREDICATE_METHOD와 구분된다. 규칙의 method_ver는 표현 계약 버전으로 현재 1이며 계산 실행 엔진의 버전을 뜻하지 않는다."
+  ],
+  [
+   "CALL_STATUS",
+   "AI 호출 상태",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "AI 호출 1건의 결과를 구분하는 공통코드. card_ai_call.call_status에서 사용한다. 실행 회차 전체의 결과인 RUN_STATUS보다 작은 단위이며, 추출 내용이 맞는지가 아니라 응답을 받아 구조화하는 데 성공했는지만 나타낸다."
+  ],
+  [
+   "CARD_KIND",
+   "카드 구분",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "카드 상품의 결제 성격을 신용카드와 체크카드로 구분하는 공통코드. card_product.card_kind_cd에서 사용하며 상품 조회와 필터의 기준이 된다. 상품의 판매 상태를 나타내는 PRODUCT_STATUS, 국제 브랜드를 나타내는 BRAND와는 별개의 축이다."
+  ],
+  [
+   "CHUNK_STATUS",
+   "청크 상태",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "문서 청크의 처리 단계와 AI 입력 가능 여부를 구분하는 공통코드. card_doc_chunk.chunk_status에서 사용하며 RAW와 CLEANED만 AI 입력 대상이 된다. 내용 형식을 나타내는 CHUNK_TYPE, 문서 전체 사용 여부를 나타내는 DOC_STATUS와 구분된다."
+  ],
+  [
+   "CHUNK_TYPE",
+   "청크 유형",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "문서 청크의 내용 형식을 구분하는 공통코드. card_doc_chunk.chunk_type_cd에서 사용한다. 처리 단계를 나타내는 CHUNK_STATUS와 구분되며, 현재 프로그램은 페이지 전체를 청크 1건으로 나누므로 기본값 BODY로 등록한다."
+  ],
+  [
+   "COND_BASIS",
+   "조건 금액 기준",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "조건의 금액 구간이 어떤 금액을 기준으로 비교되는지 구분하는 공통코드. 조건식 atom의 cond_basis_cd에서 사용하며, 실적 요건 SPEND_REQ에서는 필수다. 조건의 유형을 나타내는 COND_TYPE과 달리 비교 대상 금액의 정의만 나타낸다."
+  ],
+  [
+   "COND_TYPE",
+   "조건 유형",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "조건식 atom의 업무 유형을 분류하는 공통코드. 조건식 atom의 cond_type_cd에서 사용하고 카드 공통, 혜택, 규칙, 한도 구간의 조건에 모두 적용된다. 금액을 어떤 기준으로 비교하는지는 COND_BASIS가, 금액 구간으로 표현되지 않는 판정법은 PREDICATE_METHOD가 맡는다."
+  ],
+  [
+   "DOC_ROLE",
+   "상품·정책에서 문서 역할",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "원천 문서가 특정 상품에서 어떤 역할을 하는지 구분하는 공통코드. card_product_doc.doc_role_cd에서 사용한다. 문서 자체의 종류를 나타내는 DOC_TYPE과 달리 상품과의 관계에 붙는 값이므로 같은 문서라도 연결 상품에 따라 역할을 따로 기록한다."
+  ],
+  [
+   "DOC_STATUS",
+   "원천 문서 상태",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "수집된 원천 문서를 파이프라인에서 사용할지 구분하는 공통코드. card_doc.doc_status에서 사용하며 AI 입력 대상은 ACTIVE 문서로 제한된다. 상품별 적용 여부는 이 값이 아니라 승인된 문서 관계로 판정하며, 판매 상태를 나타내는 PRODUCT_STATUS와도 구분된다."
+  ],
+  [
+   "DOC_TYPE",
+   "원천 문서 유형",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "원천 문서 자체의 종류를 구분하는 공통코드. card_doc.doc_type_cd에서 사용한다. 상품·정책과의 관계에서 부여되는 DOC_ROLE과 달리 문서 파일의 성격을 나타내며, 현재 문서 등록 프로그램은 상품설명서를 등록한다."
+  ],
+  [
+   "EV_ITEM",
+   "근거 대상 내 항목",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "근거가 대상 전체를 가리키는지 대상 안의 JSONB 항목을 가리키는지 구분하는 공통코드. card_evidence_link.ev_item_cd에서 사용하고 ev_item_key와 짝을 이룬다. 대상의 종류를 나타내는 EV_SUBJECT보다 한 단계 아래를 가리킨다."
+  ],
+  [
+   "EV_SUBJECT",
+   "근거 대상 유형",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "원문 근거가 어떤 카드 대상을 뒷받침하는지 구분하는 공통코드. card_evidence_link.ev_subject_cd에서 사용하며 값에 따라 card_bnft_id, rule_key, relation_key, pool_id 중 채워야 할 컬럼이 CHECK로 고정된다. 대상 안의 세부 항목은 EV_ITEM이 구분한다."
+  ],
+  [
+   "ITEM_STATUS",
+   "규칙·조건 상태",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "계산 규칙, 조건식, 카드 공통 조건이 작성 중인지 확정되었는지를 구분하는 공통코드. JSONB 안의 rule_status_cd, cond_status_cd, expr_status_cd와 card_product.card_cond_status_cd에서 사용한다. 혜택 단위 검증을 나타내는 VERIFY_STATUS보다 작은 규칙·조건 단위의 상태다."
+  ],
+  [
+   "LIMIT_AGG",
+   "한도 집계 기준",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "한도 사용액을 어떤 주체 단위로 합산할지 구분하는 공통코드. card_limit_pool.aggregation_key_cd에서 사용한다. 어떤 혜택을 묶는지를 나타내는 LIMIT_SCOPE와 달리 누구의 사용분을 합칠지를 나타낸다."
+  ],
+  [
+   "LIMIT_PERIOD",
+   "한도 기간",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "한도가 누적되는 시간 단위를 구분하는 공통코드. card_limit_pool.period_cd에서 사용한다. 한도를 묶는 혜택 범위인 LIMIT_SCOPE, 한도의 단위인 LIMIT_UNIT과 함께 한도 하나를 정의한다."
+  ],
+  [
+   "LIMIT_SCOPE",
+   "한도 범위",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "한도 풀이 어느 범위의 혜택을 묶어 누적하는지 구분하는 공통코드. card_limit_pool.pool_scope_cd에서 사용한다. 한도의 시간 범위인 LIMIT_PERIOD, 누적 주체인 LIMIT_AGG와 구분되며, 같은 금액의 한도라도 범위가 다르면 다른 풀이다."
+  ],
+  [
+   "LIMIT_UNIT",
+   "한도 단위",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "한도 수치 limit_num이 어떤 단위인지 구분하는 공통코드. card_limit_pool.cap_unit_cd에서 사용한다. 보상 지급 단위인 PAYOUT_UNIT과 달리 금액뿐 아니라 이용 횟수도 포함한다."
+  ],
+  [
+   "PAGE_LAYER",
+   "페이지 텍스트 레이어",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "PDF 페이지의 텍스트 레이어 상태를 구분하는 공통코드. card_doc_page.page_layer_cd에서 사용하며 문서 등록 프로그램이 텍스트와 시각 요소의 존재 여부로 판정한다. 페이지 추출 결과의 신뢰도를 판단하는 정보이고, 청크의 내용 분류인 CHUNK_TYPE과 구분된다."
+  ],
+  [
+   "PAYOUT_UNIT",
+   "보상 단위",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "고객이 혜택으로 실제 받는 보상의 단위를 구분하는 공통코드. rule_list[].payout_unit_cd에서 사용한다. 계산 입력값의 단위인 VALUE_UNIT, 누적 한도의 단위인 LIMIT_UNIT과 구분된다."
+  ],
+  [
+   "POOL_ROLE",
+   "규칙에서 한도 역할",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "계산 규칙이 연결된 한도 풀을 어떤 역할로 소비하는지 구분하는 공통코드. card_bnft_rule_pool.pool_role_cd에서 사용한다. 한 규칙이 영역 한도와 카드 통합 한도를 동시에 소비하는 구조를 표현하기 위한 값이며, 풀 자체의 범위는 LIMIT_SCOPE가 정한다."
+  ],
+  [
+   "PREDICATE_METHOD",
+   "술어 방법",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "금액 구간만으로 표현되지 않는 조건을 판정하는 방법을 구분하는 공통코드. 조건 atom의 predicate_method_cd에서 사용하며 세부 값은 cond_params에 둔다. 보상 금액을 산출하는 CALC_METHOD와 달리 조건의 참·거짓만 판정한다. predicate_method_ver는 표현 계약 버전으로 현재 1이며 실행 엔진의 버전을 뜻하지 않는다."
+  ],
+  [
+   "PREDICATE_STATE",
+   "조건 판정 상태",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "규칙이나 한도 구간의 적용 여부를 조건식으로 어떻게 판정할지 구분하는 공통코드. card_bnft.rule_list[].predicate_state_cd와 card_limit_pool.tier_list[].predicate_state_cd에서 사용한다. 조건식이 없다는 사실만으로 무조건 적용으로 해석하지 않도록, 원문으로 확인된 무조건과 미검토를 구분한다."
+  ],
+  [
+   "PRODUCT_STATUS",
+   "상품·브랜드 선택지 상태",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "카드 상품과 상품 안의 브랜드 선택지가 현재 판매되는지를 구분하는 공통코드. card_product.product_status_cd와 card_product.brand_opt_list[].brand_opt_status_cd에서 사용한다. 데이터 처리 상태가 아니라 판매 사실을 나타낸다는 점에서 문서 상태 DOC_STATUS의 같은 값 ACTIVE와 구분된다."
+  ],
+  [
+   "REL_TYPE",
+   "혜택 간 관계",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "서로 다른 혜택 사이의 적용 관계를 구분하는 공통코드. card_bnft.relation_list[].rel_type_cd에서 사용하며 v_card_bnft_rel로 조회한다. 한 혜택 내부의 규칙 선택을 다루는 RULE_SELECT와 달리 혜택 간 배타, 우선, 대체를 다룬다."
+  ],
+  [
+   "RULE_SELECT",
+   "혜택 내 규칙 선택 방식",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "한 혜택 안에서 같은 거래에 여러 계산 규칙이 해당할 때 어떤 규칙을 적용할지 정하는 공통코드. card_bnft.rule_select_cd에서 사용하고, 값이 NULL이면 선택 방식이 아직 확정되지 않은 상태다. 혜택과 혜택 사이의 관계를 다루는 REL_TYPE과 달리 한 혜택 내부의 규칙 선택만 다룬다."
+  ],
+  [
+   "RUN_CALL_METHOD",
+   "AI 호출 방식",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "AI 모델을 어떤 기술 경로로 호출했는지 구분하는 공통코드. card_ai_run.run_call_mthd_cd에서 사용한다. 호출 방식이 설계 단계에서 확정되지 않아 후보를 값으로 기록하도록 만들어졌으며, 실행 단계를 나타내는 RUN_STAGE와 구분된다."
+  ],
+  [
+   "RUN_STAGE",
+   "AI 실행 단계",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "AI 실행 회차가 어느 처리 단계인지 구분하는 공통코드. card_ai_run.run_stage_cd에서 사용한다. 실행 결과를 나타내는 RUN_STATUS와 구분되며, 추출과 의미 검증을 서로 다른 실행 이력으로 남기기 위한 값이다."
+  ],
+  [
+   "RUN_STATUS",
+   "AI 실행 상태",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "AI 실행 회차 전체의 진행과 결과를 구분하는 공통코드. card_ai_run.run_status에서 사용한다. 페이지·청크 1건의 호출 결과를 나타내는 CALL_STATUS를 모은 실행 단위 상태이며, 문서 통합 저장 여부와 AI 입력 제외 페이지까지 반영한다."
+  ],
+  [
+   "SERVICE_GRADE",
+   "브랜드 서비스 등급",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "국제 브랜드 서비스의 등급을 구분하는 공통코드. card_product.brand_opt_list[].service_grade_cd에서 사용한다. BRAND와 조합해야 의미가 정해지며, 등급 안의 공통·선택서비스 구분은 SERVICE_TYPE이 맡는다."
+  ],
+  [
+   "SERVICE_TYPE",
+   "브랜드 서비스 유형",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-11-02 07:58:57.468697+00:00",
+   "V7_MIGRATION",
+   "같은 브랜드와 등급 안에서 제공되는 서비스 묶음의 유형을 구분하는 공통코드. card_product.brand_opt_list[].service_type_cd에서 사용한다. 번호 코드는 BRAND, SERVICE_GRADE와 조합할 때만 의미가 정해지며 어떤 상품이 어떤 유형인지는 브랜드 서비스 안내서의 대상카드 표를 따른다."
+  ],
+  [
+   "STG_AI_VRFY",
+   "AI 의미 검증 결과",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "AI가 추출 항목의 의미를 원문과 대조해 판정한 결과를 구분하는 공통코드. card_extr_stg.stg_ai_vrfy_cd에서 사용하며 NULL이면 의미 검증을 실행하지 않은 상태다. 형식·근거 위치를 확인하는 stg_sql_check_cd와 분리해 기록하고, 최종 승인 여부인 STG_STATUS를 대신하지 않는다."
+  ],
+  [
+   "STG_KIND",
+   "추출 항목 종류",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "AI 추출 staging 항목의 종류를 구분하는 공통코드. card_extr_stg.stg_kind_cd에서 사용한다. 추출 단계의 항목 구분이며, 확정 혜택의 종류를 나타내는 BNFT_TYPE이나 조건 유형 COND_TYPE과 구분된다."
+  ],
+  [
+   "STG_STATUS",
+   "추출 항목 검토 상태",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "AI 추출 항목의 검토·승인 결과를 구분하는 공통코드. card_extr_stg.stg_status에서 사용한다. 항목의 최종 처리 상태이며 원문 검증 결과 stg_sql_check_cd, AI 의미 검증 결과 STG_AI_VRFY와 분리해서 기록한다. 관계·근거의 승인을 다루는 APPROVAL_STATUS와도 구분된다."
+  ],
+  [
+   "TARGET_TYPE",
+   "혜택 대상 유형",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "계산 규칙의 혜택 대상이 어떤 종류인지 구분하는 공통코드. rule_list[].target_list[].target_type_cd에서 사용하고 AI 추출 스키마의 대상 유형도 이 그룹을 따른다. 대상별 비율은 두지 않으며, 비율이 다르면 규칙을 나눈다."
+  ],
+  [
+   "VALUE_UNIT",
+   "계산값 단위",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "계산 규칙의 입력값 value_num이 어떤 단위인지 구분하는 공통코드. rule_list[].value_unit_cd에서 사용한다. 고객이 실제로 받는 단위를 나타내는 PAYOUT_UNIT, 한도의 단위를 나타내는 LIMIT_UNIT과 구분되며, 예를 들어 값은 PERCENT이고 보상은 KRW일 수 있다."
+  ],
+  [
+   "VERIFY_STATUS",
+   "혜택 검증 상태",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "2026-10-31 07:48:44.634115+00:00",
+   "SEED_TEST",
+   "혜택 내용이 원문과 대조되어 검증되었는지를 구분하는 공통코드. card_bnft.verification_status_cd에서 사용한다. 혜택 1건 단위의 검증 여부만 나타내며, 그 안의 규칙·조건 확정은 ITEM_STATUS, AI 추출 단계의 승인은 STG_STATUS가 맡는다."
+  ]
+ ],
+ "acl": [
+  [
+   "v_card_bnft_rel",
+   null,
+   "postgres"
+  ],
+  [
+   "v_card_cond_atom",
+   null,
+   "postgres"
+  ],
+  [
+   "v_card_rule",
+   null,
+   "postgres"
+  ],
+  [
+   "v_card_rule_target",
+   null,
+   "postgres"
+  ],
+  [
+   "v_card_bnft_rule_effective",
+   null,
+   "postgres"
+  ],
+  [
+   "card_common",
+   null,
+   "postgres"
+  ],
+  [
+   "card_common_doc",
+   null,
+   "postgres"
+  ],
+  [
+   "card_common_bnft",
+   null,
+   "postgres"
+  ],
+  [
+   "common_code_grp",
+   null,
+   "postgres"
+  ],
+  [
+   "card_common_bnft_apply",
+   null,
+   "postgres"
+  ],
+  [
+   "common_cd",
+   null,
+   "postgres"
+  ],
+  [
+   "card_product",
+   null,
+   "postgres"
+  ],
+  [
+   "card_doc",
+   null,
+   "postgres"
+  ],
+  [
+   "card_doc_chunk",
+   null,
+   "postgres"
+  ],
+  [
+   "card_ai_call",
+   null,
+   "postgres"
+  ],
+  [
+   "card_bnft",
+   null,
+   "postgres"
+  ],
+  [
+   "card_source_evidence",
+   null,
+   "postgres"
+  ],
+  [
+   "card_ai_run",
+   null,
+   "postgres"
+  ],
+  [
+   "card_evidence_link",
+   null,
+   "postgres"
+  ],
+  [
+   "v_common_cd_usage",
+   null,
+   "postgres"
+  ],
+  [
+   "v_card_brand_opt",
+   null,
+   "postgres"
+  ],
+  [
+   "v_card_integrity_issue",
+   null,
+   "postgres"
+  ],
+  [
+   "card_doc_page",
+   null,
+   "postgres"
+  ],
+  [
+   "card_excl_item",
+   null,
+   "postgres"
+  ],
+  [
+   "card_extr_stg",
+   null,
+   "postgres"
+  ],
+  [
+   "card_product_doc",
+   null,
+   "postgres"
+  ]
+ ]
+}

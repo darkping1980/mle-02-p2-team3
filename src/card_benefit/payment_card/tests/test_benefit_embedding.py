@@ -22,7 +22,8 @@ def rule(key, value, unit, method, minimum=None, targets=("CU", "GS25"), target_
         atoms.append({"cond_type_cd": "SPEND_REQ", "cond_basis_cd": "TXN_AMT", "negate_yn": False, "cond_min_amt": minimum})
     if excl:
         atoms.append({"cond_type_cd": "BNFT_EXCL", "negate_yn": True, "excl_raw_txt": excl})
-    return {"rule_key": key, "value_num": value, "value_unit_cd": unit, "calc_method_cd": method, "rule_status_cd": "DRAFT",
+    # method는 이전 호출 형식을 위해 받지만 저장하지 않는다(계산 방법 코드는 2026-11-03 정리에서 제거).
+    return {"rule_key": key, "value_num": value, "value_unit_cd": unit, "rule_status_cd": "DRAFT",
             "cond_expr": {"branches": [{"atoms": atoms}]} if atoms else None,
             "target_list": [{"target_nm": name, "target_type_cd": target_type} for name in targets]}
 
@@ -35,6 +36,17 @@ def test_card_text_matches_confirmed_format_and_dedupes_targets():
     assert build_card_bnft_text(ONE_PICK).text == (
         "혜택명: ONE PICK 편의점·카페 캐시백\n혜택 유형: 캐시백\n이용처: CU, GS25\n"
         "혜택 내용: 결제 건당 3천원 이상 시 100원, 1만원 이상 시 500원 캐시백")
+
+
+def test_value_text_uses_unit_and_falls_back_to_source_text():
+    """계산 방법 없이 값의 단위로 표기한다. 수치로 표기할 수 없는 규칙(무상 서비스 등)은 혜택 원문을 쓴다."""
+    old_shape = {**ONE_PICK, "rule_list": [{**r, "calc_method_cd": "FIXED_PER_TXN", "payout_unit_cd": "KRW", "basis_amt": None}
+                                           for r in ONE_PICK["rule_list"]]}
+    assert build_card_bnft_text(old_shape).text == build_card_bnft_text(ONE_PICK).text      # 이전 형식과 같은 텍스트
+    free = {"bnft_nm": "특급호텔 발렛파킹", "bnft_type_cd": "SERVICE", "bnft_rule_txt": "국내 주요 특급호텔 무료 발렛파킹 서비스 제공",
+            "rule_list": [rule("v", None, None, "FREE_SERVICE", targets=("특급호텔",), target_type="SERVICE")]}
+    built = build_card_bnft_text(free)
+    assert "혜택 내용: 국내 주요 특급호텔 무료 발렛파킹 서비스 제공" in built.text
 
 
 def test_transit_exclusion_is_not_positive_target_or_content():

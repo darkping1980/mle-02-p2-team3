@@ -23,7 +23,7 @@ REQUEST_ID: ContextVar[str] = ContextVar("card_request_id", default="-")  # Cyph
 DETAIL_LOG: ContextVar[bool] = ContextVar("card_detail_log", default=False)  # 검증 모드에서 Cypher 전문과 레코드를 남긴다.
 # 레코드 표시에서 뺄 내부 속성과, source_json에서 꺼내 보여 줄 값.
 HIDDEN_PROPERTIES = frozenset({"source_json", "key", "card_source", "card_sources"})
-SOURCE_FIELDS = ("cond_basis_cd", "excl_raw_txt", "cond_status_cd", "value_unit_cd", "calc_method_cd", "rule_select_cd",
+SOURCE_FIELDS = ("cond_basis_cd", "excl_raw_txt", "cond_status_cd", "value_unit_cd",
                  "rule_status_cd", "quote_txt", "card_cond_status_cd")
 
 # 공통 세션의 ``// name:`` mapper만 재사용한다. 실행은 READ_ACCESS를 보장하는 Neo4jSearch._query가 맡는다.

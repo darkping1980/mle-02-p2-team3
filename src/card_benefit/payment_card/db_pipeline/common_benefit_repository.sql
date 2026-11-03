@@ -4,7 +4,7 @@ FROM db_pipeline.card_product WHERE card_id = :CARD_ID FOR UPDATE;
 
 -- name: integrity_errors
 SELECT gate_cd,issue_key FROM db_pipeline.v_card_integrity_issue
-WHERE gate_cd NOT IN ('evidence_not_approved','rule_method_value_pending','predicate_params_pending');
+WHERE gate_cd <> 'evidence_not_approved';   -- 계산 완결성 게이트(rule_method_value_*, predicate_params_*)는 2026-11-03 정리에서 제거
 
 -- name: common_integrity_errors
 -- v_card_integrity_issue와 v_common_cd_usage가 공통서비스 테이블을 보지 않아 등록 시 별도로 검사한다.

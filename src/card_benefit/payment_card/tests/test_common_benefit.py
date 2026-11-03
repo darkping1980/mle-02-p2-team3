@@ -73,7 +73,7 @@ def fixture():
     candidate = {'card_extr_stg_id':'S1','card_doc_id':'D1','doc_family_cd':'VISA_SIG', 'doc_version_no':1, 'stg_raw_item':raw,
                  'stg_status':'PENDING_REVIEW','stg_sql_check_cd':'LINK_REVIEW',
                  'stg_normalized_item':{'bnft_nm':'발레','bnft_type_cd':'SERVICE','bnft_cond_expr':None,
-                   'rule_list':[],'relation_list':[],'limit_list':[],
+                   'rule_list':[],'relation_list':[],
                    'checks':{'value_check_cd':'OK'},'merge':{'source_refs':[{'page_no':1}]}}}
     evidence = [dict(evidence_id='E1',quote_txt=quote,source_txt=quote,start_pos=1,end_pos=len(quote),approval_status_cd='PENDING')]
     service = CommonBenefitService(Session())
@@ -172,7 +172,7 @@ def test_register_uses_default_period_without_own_period():
 def test_same_span_stored_twice_is_one_source_but_other_position_stays_ambiguous():
     raw = {'evidence': [{'supports': 'RULE', 'support_key': 'r1', 'quote_txt': '그린피 본인 면제'},
                         {'supports': 'APPLICABILITY', 'quote_txt': '등급 카드 소지자에게 공통으로 제공'}]}
-    norm = {'rule_list': [{'rule_key': 'r1'}], 'limit_list': []}
+    norm = {'rule_list': [{'rule_key': 'r1'}]}
     def row(evidence_id, quote, start, chunk='C1'):
         return dict(evidence_id=evidence_id, quote_txt=quote, card_doc_chunk_id=chunk, start_pos=start, end_pos=start + len(quote) - 1)
     base = [row('E1', '그린피 본인 면제', 10), row('E3', '등급 카드 소지자에게 공통으로 제공', 100, 'N1')]
@@ -216,8 +216,9 @@ def with_limit(service):
         'start_pos':1,'end_pos':4,'approval_status_cd':'PENDING'})
     service.repo.evidence.append({'evidence_id':'E3','quote_txt':'발레 무료 제공','source_txt':'발레 무료 제공',
         'start_pos':1,'end_pos':8,'approval_status_cd':'PENDING'})
-    norm['limit_list'] = [{'pool_key':'L1','pool_scope_cd':'BENEFIT','period_cd':'MONTH','cap_unit_cd':'COUNT','limit_num':2}]
-    norm['rule_list'] = [{'rule_key':'R','rule_status_cd':'DRAFT','pool_refs':[{'pool_id':'L1','pool_role_cd':'CONSUME'}]}]
+    # 한도는 추출 원본(limits[].limit_key)으로 근거를 확인한다. 한도 풀 정규화는 2026-11-03에 제거했다.
+    raw['limits'] = [{'limit_key':'L1','period_cd':'MONTH','cap_unit_cd':'COUNT','limit_num':2,'limit_raw_txt':'월 2회'}]
+    norm['rule_list'] = [{'rule_key':'R','rule_status_cd':'DRAFT'}]
     return raw, norm
 
 
@@ -260,7 +261,7 @@ def test_same_quote_for_different_targets_is_reviewed():
     service = fixture()
     raw = service.repo.candidate['stg_raw_item']
     norm = service.repo.candidate['stg_normalized_item']
-    norm['rule_list'] = [{'rule_key':'R','rule_status_cd':'DRAFT','pool_refs':[]}]
+    norm['rule_list'] = [{'rule_key':'R','rule_status_cd':'DRAFT'}]
     raw['evidence'].append({'supports':'RULE','support_key':'R','quote_txt':raw['evidence'][0]['quote_txt']})
     assert service.register_run('R1', IDS)[0].status == 'REVIEW'
     assert not service.repo.common_bnft

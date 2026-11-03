@@ -414,9 +414,7 @@ def benefit_context(detail: dict) -> dict:
     for item in detail["rules"]:
         rule = source(item["rule"])
         rules.append({"rule_key": rule.get("rule_key"), "value": rule.get("value_num"), "unit": rule.get("value_unit_cd"),
-                      "calc_method": rule.get("calc_method_cd"), "basis_amt": rule.get("basis_amt"),
-                      "calc_params": rule.get("calc_params"), "status": rule.get("rule_status_cd"),
-                      "targets": item["targets"]})
+                      "status": rule.get("rule_status_cd"), "targets": item["targets"]})
     limits = [{"text": item["limit_text"]} for item in detail["limits"]]
     common = detail["context"].get("common")
     extra = {} if not common else {
@@ -425,7 +423,7 @@ def benefit_context(detail: dict) -> dict:
         "valid_from": benefit.get("bnft_valid_from"), "valid_to_excl": benefit.get("bnft_valid_to_excl")}
     return {**extra, "benefit_id": benefit.get("card_bnft_id") or benefit.get("card_common_bnft_id"), "name": benefit.get("bnft_nm"),
             "card": source(detail["context"]["card"]).get("product_nm"), "type": benefit.get("bnft_type_cd"),
-            "verification_status": benefit.get("verification_status_cd"), "rule_select": benefit.get("rule_select_cd"),
+            "verification_status": benefit.get("verification_status_cd"),
             "rule_text": benefit.get("bnft_rule_txt"), "rules": rules,
             "conditions": condition_groups(detail["conditions"]), "limits": limits}
 
@@ -444,7 +442,7 @@ def unresolved_items(details: list[dict]) -> list[dict]:
         if detail["context"].get("common"):
             found.append({"kind": "DATA", "text": f"{name}: 공통 혜택에는 근거 직접 연결이 없어 동일성이 확인된 기존 행의 근거만 표시합니다."})
         keys = [item["rule"].get("rule_key") for item in detail["rules"]]
-        if len(keys) > 1 and not benefit.get("rule_select_cd"):
+        if len(keys) > 1:      # 여러 규칙의 적용 방식(중첩·택일)은 원문에 없으면 미확정으로 알린다
             found.append({"kind": "CONDITION", "text": f"{name}: {TIER_OPEN}", "topic": TIER_NAME, "benefit": name, "open": TIER_OPEN,
                           "confirmed": benefit.get("bnft_rule_txt"), "intents": TIER_INTENTS, "words": TIER_WORDS,
                           "evidence_ids": _evidence_ids(detail, lambda row, keys=keys: row.get("rule_key") in keys)})
@@ -543,10 +541,10 @@ def filter_by_payment(chosen: list[str], by_id: dict, amount: int | None, intent
 
 
 def rule_conflicts(benefits: list[dict], amount: int | None) -> list[dict]:
-    """규칙이 둘 이상인데 선택 방식이 없는 혜택의 금액 구간과, 결제 금액에 함께 해당하는 규칙을 계산한다."""
+    """규칙이 둘 이상인 혜택의 금액 구간과, 결제 금액에 함께 해당하는 규칙을 찾는다(보상액은 계산하지 않는다)."""
     conflicts = []
     for benefit in benefits:
-        if len(benefit["rules"]) < 2 or benefit["rule_select"]:
+        if len(benefit["rules"]) < 2:
             continue
         spends = {group["scope"]: atom for group in benefit["conditions"] for branch in group["branches"]
                   for atom in branch["atoms"] if atom["type"] == "SPEND_REQ" and atom["min_amt"] is not None}

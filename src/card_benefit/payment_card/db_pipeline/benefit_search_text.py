@@ -41,21 +41,19 @@ def number(value) -> str:
 
 
 def rule_value(rule: dict) -> str | None:
-    """규칙의 수치를 표기한다. 의미를 확정할 수 없는 조합은 ``None`` 이다."""
-    method, value, unit = rule.get("calc_method_cd"), rule.get("value_num"), rule.get("value_unit_cd")
-    if method == "FREE_SERVICE":
-        return "무상 서비스 제공"
+    """규칙의 수치를 값의 단위로 표기한다. 단위가 없거나 표기할 수 없으면 ``None`` 이다(이때는 혜택 원문을 쓴다).
+
+    계산 방법 코드는 2026-11-03 정리에서 저장하지 않게 되어 단위만 본다.
+    """
+    value, unit = rule.get("value_num"), rule.get("value_unit_cd")
     if value is None:
         return None
-    if method == "FIXED_PER_TXN" and unit == "KRW":
+    if unit == "KRW":
         return money(value)
-    if method == "PERCENT_OF_TXN" and unit == "PERCENT":
+    if unit == "PERCENT":
         return f"{number(value)}%"
-    if method == "MULTIPLY_EXTERNAL_POINTS" and unit == "MULTIPLIER":
+    if unit == "MULTIPLIER":
         return f"{number(value)}배"
-    if method == "UNITS_PER_AMOUNT" and rule.get("basis_amt") and unit in ("KRW", "UNIMILE"):
-        unit_nm = "원" if unit == "KRW" else " UniMile"
-        return f"{money(rule['basis_amt'])}당 {number(value)}{unit_nm}"
     return None
 
 
@@ -151,7 +149,7 @@ def build_card_bnft_text(benefit: dict) -> SearchText:
         lines.append(f"혜택 유형: {benefit['bnft_type_nm']}")
     lines.extend(target_lines(benefit, review))
     content = rules_content(benefit, review)
-    if content is None and not active_rules(benefit):
+    if content is None:      # 규칙이 없거나 수치로 표기할 수 없으면(무상 서비스, 1+1 등) 혜택 원문을 쓴다
         content = source_text_content(benefit.get("bnft_rule_txt"), review)
     if content:
         lines.append(f"혜택 내용: {content}")
