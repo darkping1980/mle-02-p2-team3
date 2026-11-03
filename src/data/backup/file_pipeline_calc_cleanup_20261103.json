@@ -1,0 +1,1263 @@
+{
+  "db_pipeline": {
+    "columns": [
+      [
+        "card_bnft",
+        "card_id",
+        1,
+        "bigint",
+        "NO",
+        null
+      ],
+      [
+        "card_bnft",
+        "card_bnft_id",
+        3,
+        "character varying",
+        "NO",
+        "db_pipeline.fn_get_biz_id('card_bnft'::text)"
+      ],
+      [
+        "card_bnft",
+        "bnft_cd",
+        4,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_nm",
+        5,
+        "text",
+        "NO",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_type_cd",
+        6,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_origin_cd",
+        7,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_scope_cd",
+        8,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_brand_opt_cds",
+        9,
+        "ARRAY",
+        "YES",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_cond_expr",
+        10,
+        "jsonb",
+        "YES",
+        null
+      ],
+      [
+        "card_bnft",
+        "rule_list",
+        12,
+        "jsonb",
+        "NO",
+        "'[]'::jsonb"
+      ],
+      [
+        "card_bnft",
+        "relation_list",
+        13,
+        "jsonb",
+        "NO",
+        "'[]'::jsonb"
+      ],
+      [
+        "card_bnft",
+        "verification_status_cd",
+        14,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_valid_from",
+        15,
+        "date",
+        "YES",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_valid_to_excl",
+        16,
+        "date",
+        "YES",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_rule_txt",
+        17,
+        "text",
+        "YES",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_limit_txt",
+        18,
+        "text",
+        "YES",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_search_txt",
+        19,
+        "text",
+        "YES",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_embedding",
+        20,
+        "USER-DEFINED",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "card_ai_run_id",
+        1,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "card_doc_id",
+        2,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "page_no",
+        3,
+        "smallint",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "card_doc_chunk_id",
+        4,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "call_seq",
+        5,
+        "smallint",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_id",
+        6,
+        "character varying",
+        "NO",
+        "db_pipeline.fn_get_biz_id('card_extr_stg'::text)"
+      ],
+      [
+        "card_extr_stg",
+        "stg_item_seq",
+        7,
+        "smallint",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "card_id",
+        8,
+        "bigint",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_kind_cd",
+        9,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_parent_card_extr_stg_id",
+        10,
+        "character varying",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_raw_item",
+        11,
+        "jsonb",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_evidence_txt",
+        13,
+        "text",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_evidence_start_pos",
+        14,
+        "integer",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_evidence_end_pos",
+        15,
+        "integer",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_sql_check_cd",
+        17,
+        "character varying",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_ai_vrfy_cd",
+        18,
+        "character varying",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_ai_vrfy_card_ai_run_id",
+        19,
+        "character varying",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_status",
+        20,
+        "character varying",
+        "NO",
+        "'PENDING_REVIEW'::character varying"
+      ],
+      [
+        "card_extr_stg",
+        "stg_review_note",
+        21,
+        "text",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_approved_date",
+        22,
+        "timestamp with time zone",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_approved_user_id",
+        23,
+        "character varying",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "create_date",
+        24,
+        "timestamp with time zone",
+        "NO",
+        "now()"
+      ],
+      [
+        "card_extr_stg",
+        "create_user_id",
+        25,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "update_date",
+        26,
+        "timestamp with time zone",
+        "NO",
+        "now()"
+      ],
+      [
+        "card_extr_stg",
+        "update_user_id",
+        27,
+        "character varying",
+        "NO",
+        null
+      ]
+    ],
+    "constraints": [
+      [
+        "card_bnft",
+        "card_bnft_card_id_bnft_cd_key",
+        "u",
+        "UNIQUE (card_id, bnft_cd)"
+      ],
+      [
+        "card_bnft",
+        "card_bnft_ck_1",
+        "c",
+        "CHECK (bnft_scope_cd::text = 'PRODUCT'::text AND bnft_brand_opt_cds IS NULL OR bnft_scope_cd::text <> 'PRODUCT'::text AND COALESCE(cardinality(bnft_brand_opt_cds), 0) > 0)"
+      ],
+      [
+        "card_bnft",
+        "card_bnft_ck_2",
+        "c",
+        "CHECK (db_pipeline.fn_valid_cond_expr(bnft_cond_expr))"
+      ],
+      [
+        "card_bnft",
+        "card_bnft_ck_3",
+        "c",
+        "CHECK (db_pipeline.fn_valid_rule_list(rule_list, 'LOCAL'::text))"
+      ],
+      [
+        "card_bnft",
+        "card_bnft_ck_4",
+        "c",
+        "CHECK (db_pipeline.fn_valid_relation_list(relation_list, card_bnft_id::text))"
+      ],
+      [
+        "card_bnft",
+        "card_bnft_ck_5",
+        "c",
+        "CHECK (bnft_origin_cd::text <> 'BRAND_SERVICE'::text OR bnft_scope_cd::text = 'BRAND'::text)"
+      ],
+      [
+        "card_bnft",
+        "card_bnft_ck_6",
+        "c",
+        "CHECK (bnft_valid_to_excl IS NULL OR bnft_valid_from IS NULL OR bnft_valid_to_excl > bnft_valid_from)"
+      ],
+      [
+        "card_bnft",
+        "card_bnft_pkey",
+        "p",
+        "PRIMARY KEY (card_id, card_bnft_id)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key",
+        "u",
+        "UNIQUE (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, stg_item_seq)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_card_extr_stg_id_key",
+        "u",
+        "UNIQUE (card_extr_stg_id)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_check",
+        "c",
+        "CHECK (stg_evidence_start_pos IS NULL AND stg_evidence_end_pos IS NULL OR stg_evidence_start_pos >= 1 AND stg_evidence_end_pos >= stg_evidence_start_pos)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_check1",
+        "c",
+        "CHECK ((stg_status::text <> ALL (ARRAY['AUTO_APPROVED'::character varying::text, 'MANUAL_APPROVED'::character varying::text])) OR NOT stg_sql_check_cd::text IS DISTINCT FROM 'OK'::text AND stg_evidence_start_pos IS NOT NULL AND stg_evidence_end_pos IS NOT NULL AND btrim(stg_evidence_txt) <> ''::text)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_pkey",
+        "p",
+        "PRIMARY KEY (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, card_extr_stg_id)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_stg_item_seq_check",
+        "c",
+        "CHECK (stg_item_seq > 0)"
+      ]
+    ],
+    "indexes": [
+      [
+        "card_extr_stg",
+        "card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key",
+        "CREATE UNIQUE INDEX card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key ON db_pipeline.card_extr_stg USING btree (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, stg_item_seq)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_card_extr_stg_id_key",
+        "CREATE UNIQUE INDEX card_extr_stg_card_extr_stg_id_key ON db_pipeline.card_extr_stg USING btree (card_extr_stg_id)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_pkey",
+        "CREATE UNIQUE INDEX card_extr_stg_pkey ON db_pipeline.card_extr_stg USING btree (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, card_extr_stg_id)"
+      ],
+      [
+        "card_extr_stg",
+        "ix_card_extr_stg_chunk_key",
+        "CREATE INDEX ix_card_extr_stg_chunk_key ON db_pipeline.card_extr_stg USING btree (card_doc_chunk_id)"
+      ],
+      [
+        "card_extr_stg",
+        "ix_card_extr_stg_status_key",
+        "CREATE INDEX ix_card_extr_stg_status_key ON db_pipeline.card_extr_stg USING btree (stg_status, stg_kind_cd)"
+      ]
+    ],
+    "seqs": [],
+    "views": [
+      [
+        "v_card_integrity_issue",
+        " WITH atoms AS (\n         SELECT v_card_cond_atom.owner_cd,\n            v_card_cond_atom.card_id,\n            v_card_cond_atom.card_bnft_id,\n            v_card_cond_atom.rule_key,\n            v_card_cond_atom.expr_status_cd,\n            v_card_cond_atom.branch_no,\n            v_card_cond_atom.atom_seq,\n            v_card_cond_atom.atom_key,\n            v_card_cond_atom.negate_yn,\n            v_card_cond_atom.cond_type_cd,\n            v_card_cond_atom.cond_basis_cd,\n            v_card_cond_atom.cond_min_amt,\n            v_card_cond_atom.cond_max_amt_excl,\n            v_card_cond_atom.excl_raw_txt,\n            v_card_cond_atom.cond_raw_txt,\n            v_card_cond_atom.cond_status_cd\n           FROM db_pipeline.v_card_cond_atom\n        ), fallback AS (\n         SELECT v_card_bnft_rel.card_id,\n            v_card_bnft_rel.from_bnft_id,\n            v_card_bnft_rel.to_bnft_id\n           FROM db_pipeline.v_card_bnft_rel\n          WHERE v_card_bnft_rel.rel_type_cd = 'FALLBACK_AFTER_CAP'::text AND NOT v_card_bnft_rel.reverse_yn\n        ), cycle AS (\n         WITH RECURSIVE walk(card_id, start_id, cur_id, path) AS (\n                 SELECT fallback.card_id,\n                    fallback.from_bnft_id,\n                    fallback.to_bnft_id,\n                    ARRAY[fallback.from_bnft_id, fallback.to_bnft_id::character varying] AS \"array\"\n                   FROM fallback\n                UNION ALL\n                 SELECT w.card_id,\n                    w.start_id,\n                    f.to_bnft_id,\n                    w.path || f.to_bnft_id::character varying\n                   FROM walk w\n                     JOIN fallback f ON f.card_id = w.card_id AND f.from_bnft_id::text = w.cur_id\n                  WHERE NOT (f.to_bnft_id = ANY (w.path[2:]::text[]))\n                )\n         SELECT DISTINCT walk.card_id,\n            walk.start_id\n           FROM walk\n          WHERE walk.cur_id = walk.start_id::text\n        )\n SELECT 'bnft_without_product'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_bnft_id::text AS issue_key\n   FROM db_pipeline.card_bnft x\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_product p\n          WHERE p.card_id = x.card_id))\nUNION ALL\n SELECT 'local_confirmed_without_rule'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_bnft_id::text AS issue_key\n   FROM db_pipeline.card_bnft x\n  WHERE x.verification_status_cd::text = 'CONFIRMED'::text AND jsonb_array_length(x.rule_list) = 0\nUNION ALL\n SELECT 'bnft_txt_without_evidence'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_bnft_id::text AS issue_key\n   FROM db_pipeline.card_bnft x\n  WHERE (x.bnft_rule_txt IS NOT NULL OR x.bnft_limit_txt IS NOT NULL) AND NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_evidence_link l\n          WHERE l.card_id = x.card_id AND l.card_bnft_id::text = x.card_bnft_id::text AND l.ev_subject_cd::text = 'BNFT'::text AND l.ev_item_cd::text = 'SELF'::text))\nUNION ALL\n SELECT 'rel_to_bnft_orphan'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.relation_key AS issue_key\n   FROM db_pipeline.v_card_bnft_rel x\n  WHERE NOT x.reverse_yn AND NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_bnft b\n          WHERE b.card_id = x.card_id AND b.card_bnft_id::text = x.to_bnft_id))\nUNION ALL\n SELECT 'rel_mutual_stored_twice'::text AS gate_cd,\n    (((a.card_id || '/'::text) || a.from_bnft_id::text) || '/'::text) || a.to_bnft_id AS issue_key\n   FROM db_pipeline.v_card_bnft_rel a\n     JOIN db_pipeline.v_card_bnft_rel b ON a.card_id = b.card_id AND a.from_bnft_id::text = b.to_bnft_id AND a.to_bnft_id = b.from_bnft_id::text AND a.rel_type_cd = b.rel_type_cd\n  WHERE NOT a.reverse_yn AND NOT b.reverse_yn AND a.rel_type_cd = 'MUTUALLY_EXCLUSIVE'::text AND a.from_bnft_id::text < a.to_bnft_id\nUNION ALL\n SELECT 'rel_fallback_cycle'::text AS gate_cd,\n    (c.card_id || '/'::text) || c.start_id::text AS issue_key\n   FROM cycle c\nUNION ALL\n SELECT 'product_doc_without_product'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_doc_id::text AS issue_key\n   FROM db_pipeline.card_product_doc x\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_product p\n          WHERE p.card_id = x.card_id))\nUNION ALL\n SELECT 'product_doc_orphan'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_doc_id::text AS issue_key\n   FROM db_pipeline.card_product_doc x\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_doc d\n          WHERE d.card_doc_id::text = x.card_doc_id::text))\nUNION ALL\n SELECT 'bnft_brand_opt_unknown'::text AS gate_cd,\n    (((b.card_id || '/'::text) || b.card_bnft_id::text) || '/'::text) || o.cd AS issue_key\n   FROM db_pipeline.card_bnft b\n     CROSS JOIN LATERAL unnest(b.bnft_brand_opt_cds) o(cd)\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.v_card_brand_opt v\n          WHERE v.card_id = b.card_id AND v.brand_opt_cd = o.cd))\nUNION ALL\n SELECT 'doc_brand_opt_unknown'::text AS gate_cd,\n    (((d.card_id || '/'::text) || d.card_doc_id::text) || '/'::text) || o.cd AS issue_key\n   FROM db_pipeline.card_product_doc d\n     CROSS JOIN LATERAL unnest(d.brand_opt_cds) o(cd)\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.v_card_brand_opt v\n          WHERE v.card_id = d.card_id AND v.brand_opt_cd = o.cd))\nUNION ALL\n SELECT 'evidence_source_orphan'::text AS gate_cd,\n    e.evidence_id AS issue_key\n   FROM db_pipeline.card_source_evidence e\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_doc_chunk c\n          WHERE c.card_doc_id::text = e.card_doc_id::text AND c.page_no = e.page_no AND c.card_doc_chunk_id::text = e.card_doc_chunk_id::text))\nUNION ALL\n SELECT 'evidence_doc_not_linked'::text AS gate_cd,\n    (l.card_id || '/'::text) || l.evidence_link_id::text AS issue_key\n   FROM db_pipeline.card_evidence_link l\n     JOIN db_pipeline.card_source_evidence e USING (evidence_id)\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_product_doc d\n          WHERE d.card_id = l.card_id AND d.card_doc_id::text = e.card_doc_id::text))\nUNION ALL\n SELECT 'evidence_not_approved'::text AS gate_cd,\n    l.evidence_id AS issue_key\n   FROM ( SELECT DISTINCT card_evidence_link.evidence_id\n           FROM db_pipeline.card_evidence_link) l\n     LEFT JOIN db_pipeline.card_source_evidence e USING (evidence_id)\n  WHERE e.evidence_id IS NULL OR e.approval_status_cd::text <> 'APPROVED'::text\nUNION ALL\n SELECT 'evidence_subject_orphan'::text AS gate_cd,\n    (l.card_id || '/'::text) || l.evidence_link_id::text AS issue_key\n   FROM db_pipeline.card_evidence_link l\n  WHERE NOT\n        CASE l.ev_subject_cd\n            WHEN 'CARD'::text THEN (EXISTS ( SELECT 1\n               FROM db_pipeline.card_product p\n              WHERE p.card_id = l.card_id))\n            WHEN 'BNFT'::text THEN (EXISTS ( SELECT 1\n               FROM db_pipeline.card_bnft b\n              WHERE b.card_id = l.card_id AND b.card_bnft_id::text = l.card_bnft_id::text))\n            WHEN 'RULE'::text THEN (EXISTS ( SELECT 1\n               FROM db_pipeline.v_card_rule r\n              WHERE r.card_id = l.card_id AND r.card_bnft_id::text = l.card_bnft_id::text AND r.rule_key = l.rule_key::text))\n            WHEN 'REL'::text THEN (EXISTS ( SELECT 1\n               FROM db_pipeline.v_card_bnft_rel r\n              WHERE NOT r.reverse_yn AND r.card_id = l.card_id AND r.from_bnft_id::text = l.card_bnft_id::text AND r.relation_key = l.relation_key::text))\n            ELSE false\n        END\nUNION ALL\n SELECT 'evidence_item_key_missing'::text AS gate_cd,\n    (l.card_id || '/'::text) || l.evidence_link_id::text AS issue_key\n   FROM db_pipeline.card_evidence_link l\n  WHERE l.ev_item_cd::text <> 'SELF'::text AND NOT\n        CASE l.ev_item_cd\n            WHEN 'COND'::text THEN (EXISTS ( SELECT 1\n               FROM atoms a\n              WHERE a.card_id = l.card_id AND a.atom_key = l.ev_item_key::text AND NOT a.card_bnft_id::text IS DISTINCT FROM l.card_bnft_id::text AND NOT a.rule_key IS DISTINCT FROM l.rule_key::text))\n            WHEN 'TARGET'::text THEN (EXISTS ( SELECT 1\n               FROM db_pipeline.v_card_rule_target t\n              WHERE t.card_id = l.card_id AND t.card_bnft_id::text = l.card_bnft_id::text AND t.rule_key = l.rule_key::text AND t.target_key = l.ev_item_key::text))\n            ELSE false\n        END\nUNION ALL\n SELECT 'product_doc_role_type_mismatch'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_doc_id::text AS issue_key\n   FROM db_pipeline.card_product_doc x\n     JOIN db_pipeline.card_doc d ON d.card_doc_id::text = x.card_doc_id::text\n  WHERE x.doc_role_cd::text = 'BRAND_SERVICE'::text AND d.doc_type_cd::text <> 'BRAND_SERVICE'::text\nUNION ALL\n SELECT 'brand_doc_option_conflict'::text AS gate_cd,\n    z.card_doc_id AS issue_key\n   FROM ( SELECT x.card_doc_id\n           FROM db_pipeline.card_product_doc x\n             CROSS JOIN LATERAL unnest(x.brand_opt_cds) o(cd)\n             JOIN db_pipeline.v_card_brand_opt v ON v.card_id = x.card_id AND v.brand_opt_cd = o.cd\n          WHERE x.doc_role_cd::text = 'BRAND_SERVICE'::text\n          GROUP BY x.card_doc_id\n         HAVING count(DISTINCT ROW(v.brand_cd, v.service_grade_cd, v.service_type_cd)) > 1) z\nUNION ALL\n SELECT 'brand_bnft_doc_not_linked'::text AS gate_cd,\n    (((b.card_id || '/'::text) || b.card_bnft_id::text) || '/'::text) || o.cd AS issue_key\n   FROM db_pipeline.card_bnft b\n     CROSS JOIN LATERAL unnest(b.bnft_brand_opt_cds) o(cd)\n  WHERE b.bnft_origin_cd::text = 'BRAND_SERVICE'::text AND NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_product_doc x\n          WHERE x.card_id = b.card_id AND x.doc_role_cd::text = 'BRAND_SERVICE'::text AND (o.cd = ANY (x.brand_opt_cds))))\nUNION ALL\n SELECT 'brand_bnft_confirmed_without_evidence'::text AS gate_cd,\n    (b.card_id || '/'::text) || b.card_bnft_id::text AS issue_key\n   FROM db_pipeline.card_bnft b\n  WHERE b.bnft_origin_cd::text = 'BRAND_SERVICE'::text AND b.verification_status_cd::text = 'CONFIRMED'::text AND NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_evidence_link l\n          WHERE l.card_id = b.card_id AND l.card_bnft_id::text = b.card_bnft_id::text))\nUNION ALL\n SELECT 'evidence_brand_opt_mismatch'::text AS gate_cd,\n    (l.card_id || '/'::text) || l.evidence_link_id::text AS issue_key\n   FROM db_pipeline.card_evidence_link l\n     JOIN db_pipeline.card_source_evidence e USING (evidence_id)\n     JOIN db_pipeline.card_bnft b ON b.card_id = l.card_id AND b.card_bnft_id::text = l.card_bnft_id::text\n     JOIN db_pipeline.card_product_doc x ON x.card_id = l.card_id AND x.card_doc_id::text = e.card_doc_id::text\n  WHERE x.doc_role_cd::text = 'BRAND_SERVICE'::text AND NOT COALESCE(b.bnft_brand_opt_cds, '{}'::text[]) && x.brand_opt_cds\nUNION ALL\n SELECT 'stg_card_not_linked'::text AS gate_cd,\n    s.card_extr_stg_id AS issue_key\n   FROM db_pipeline.card_extr_stg s\n  WHERE s.card_id IS NOT NULL AND NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.card_product_doc x\n          WHERE x.card_id = s.card_id AND x.card_doc_id::text = s.card_doc_id::text))\nUNION ALL\n SELECT 'common_cd_invalid'::text AS gate_cd,\n    (u.source_nm || '='::text) || u.cd_value AS issue_key\n   FROM db_pipeline.v_common_cd_usage u\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.common_cd c\n          WHERE c.common_code_grp_id::text = u.common_code_grp_id::text AND c.common_cd::text = u.cd_value))\nUNION ALL\n SELECT 'common_cd_group_orphan'::text AS gate_cd,\n    (c.common_code_grp_id::text || '/'::text) || c.common_cd::text AS issue_key\n   FROM db_pipeline.common_cd c\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.common_code_grp g\n          WHERE g.common_code_grp_id::text = c.common_code_grp_id::text))\nUNION ALL\n SELECT 'common_code_grp_empty'::text AS gate_cd,\n    g.common_code_grp_id AS issue_key\n   FROM db_pipeline.common_code_grp g\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM db_pipeline.common_cd c\n          WHERE c.common_code_grp_id::text = g.common_code_grp_id::text));"
+      ],
+      [
+        "v_common_cd_usage",
+        " SELECT 'card_product.card_kind_cd'::text AS source_nm,\n    'CARD_KIND'::character varying(20) AS common_code_grp_id,\n    card_product.card_kind_cd::text AS cd_value\n   FROM db_pipeline.card_product\n  WHERE card_product.card_kind_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.product_status_cd'::text AS source_nm,\n    'PRODUCT_STATUS'::character varying(20) AS common_code_grp_id,\n    card_product.product_status_cd::text AS cd_value\n   FROM db_pipeline.card_product\n  WHERE card_product.product_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.card_cond_status_cd'::text AS source_nm,\n    'ITEM_STATUS'::character varying(20) AS common_code_grp_id,\n    card_product.card_cond_status_cd::text AS cd_value\n   FROM db_pipeline.card_product\n  WHERE card_product.card_cond_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product_doc.doc_role_cd'::text AS source_nm,\n    'DOC_ROLE'::character varying(20) AS common_code_grp_id,\n    card_product_doc.doc_role_cd::text AS cd_value\n   FROM db_pipeline.card_product_doc\n  WHERE card_product_doc.doc_role_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product_doc.approval_status_cd'::text AS source_nm,\n    'APPROVAL_STATUS'::character varying(20) AS common_code_grp_id,\n    card_product_doc.approval_status_cd::text AS cd_value\n   FROM db_pipeline.card_product_doc\n  WHERE card_product_doc.approval_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.bnft_type_cd'::text AS source_nm,\n    'BNFT_TYPE'::character varying(20) AS common_code_grp_id,\n    card_bnft.bnft_type_cd::text AS cd_value\n   FROM db_pipeline.card_bnft\n  WHERE card_bnft.bnft_type_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.bnft_origin_cd'::text AS source_nm,\n    'BNFT_ORIGIN'::character varying(20) AS common_code_grp_id,\n    card_bnft.bnft_origin_cd::text AS cd_value\n   FROM db_pipeline.card_bnft\n  WHERE card_bnft.bnft_origin_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.bnft_scope_cd'::text AS source_nm,\n    'BNFT_SCOPE'::character varying(20) AS common_code_grp_id,\n    card_bnft.bnft_scope_cd::text AS cd_value\n   FROM db_pipeline.card_bnft\n  WHERE card_bnft.bnft_scope_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.verification_status_cd'::text AS source_nm,\n    'VERIFY_STATUS'::character varying(20) AS common_code_grp_id,\n    card_bnft.verification_status_cd::text AS cd_value\n   FROM db_pipeline.card_bnft\n  WHERE card_bnft.verification_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_source_evidence.approval_status_cd'::text AS source_nm,\n    'APPROVAL_STATUS'::character varying(20) AS common_code_grp_id,\n    card_source_evidence.approval_status_cd::text AS cd_value\n   FROM db_pipeline.card_source_evidence\n  WHERE card_source_evidence.approval_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_evidence_link.ev_subject_cd'::text AS source_nm,\n    'EV_SUBJECT'::character varying(20) AS common_code_grp_id,\n    card_evidence_link.ev_subject_cd::text AS cd_value\n   FROM db_pipeline.card_evidence_link\n  WHERE card_evidence_link.ev_subject_cd IS NOT NULL\nUNION ALL\n SELECT 'card_evidence_link.ev_item_cd'::text AS source_nm,\n    'EV_ITEM'::character varying(20) AS common_code_grp_id,\n    card_evidence_link.ev_item_cd::text AS cd_value\n   FROM db_pipeline.card_evidence_link\n  WHERE card_evidence_link.ev_item_cd IS NOT NULL\nUNION ALL\n SELECT 'card_doc.doc_type_cd'::text AS source_nm,\n    'DOC_TYPE'::character varying(20) AS common_code_grp_id,\n    card_doc.doc_type_cd::text AS cd_value\n   FROM db_pipeline.card_doc\n  WHERE card_doc.doc_type_cd IS NOT NULL\nUNION ALL\n SELECT 'card_doc.doc_status'::text AS source_nm,\n    'DOC_STATUS'::character varying(20) AS common_code_grp_id,\n    card_doc.doc_status::text AS cd_value\n   FROM db_pipeline.card_doc\n  WHERE card_doc.doc_status IS NOT NULL\nUNION ALL\n SELECT 'card_doc_page.page_layer_cd'::text AS source_nm,\n    'PAGE_LAYER'::character varying(20) AS common_code_grp_id,\n    card_doc_page.page_layer_cd::text AS cd_value\n   FROM db_pipeline.card_doc_page\n  WHERE card_doc_page.page_layer_cd IS NOT NULL\nUNION ALL\n SELECT 'card_doc_chunk.chunk_type_cd'::text AS source_nm,\n    'CHUNK_TYPE'::character varying(20) AS common_code_grp_id,\n    card_doc_chunk.chunk_type_cd::text AS cd_value\n   FROM db_pipeline.card_doc_chunk\n  WHERE card_doc_chunk.chunk_type_cd IS NOT NULL\nUNION ALL\n SELECT 'card_doc_chunk.chunk_status'::text AS source_nm,\n    'CHUNK_STATUS'::character varying(20) AS common_code_grp_id,\n    card_doc_chunk.chunk_status::text AS cd_value\n   FROM db_pipeline.card_doc_chunk\n  WHERE card_doc_chunk.chunk_status IS NOT NULL\nUNION ALL\n SELECT 'card_ai_run.run_stage_cd'::text AS source_nm,\n    'RUN_STAGE'::character varying(20) AS common_code_grp_id,\n    card_ai_run.run_stage_cd::text AS cd_value\n   FROM db_pipeline.card_ai_run\n  WHERE card_ai_run.run_stage_cd IS NOT NULL\nUNION ALL\n SELECT 'card_ai_run.run_call_mthd_cd'::text AS source_nm,\n    'RUN_CALL_METHOD'::character varying(20) AS common_code_grp_id,\n    card_ai_run.run_call_mthd_cd::text AS cd_value\n   FROM db_pipeline.card_ai_run\n  WHERE card_ai_run.run_call_mthd_cd IS NOT NULL\nUNION ALL\n SELECT 'card_ai_run.run_status'::text AS source_nm,\n    'RUN_STATUS'::character varying(20) AS common_code_grp_id,\n    card_ai_run.run_status::text AS cd_value\n   FROM db_pipeline.card_ai_run\n  WHERE card_ai_run.run_status IS NOT NULL\nUNION ALL\n SELECT 'card_ai_call.call_status'::text AS source_nm,\n    'CALL_STATUS'::character varying(20) AS common_code_grp_id,\n    card_ai_call.call_status::text AS cd_value\n   FROM db_pipeline.card_ai_call\n  WHERE card_ai_call.call_status IS NOT NULL\nUNION ALL\n SELECT 'card_extr_stg.stg_kind_cd'::text AS source_nm,\n    'STG_KIND'::character varying(20) AS common_code_grp_id,\n    card_extr_stg.stg_kind_cd::text AS cd_value\n   FROM db_pipeline.card_extr_stg\n  WHERE card_extr_stg.stg_kind_cd IS NOT NULL\nUNION ALL\n SELECT 'card_extr_stg.stg_status'::text AS source_nm,\n    'STG_STATUS'::character varying(20) AS common_code_grp_id,\n    card_extr_stg.stg_status::text AS cd_value\n   FROM db_pipeline.card_extr_stg\n  WHERE card_extr_stg.stg_status IS NOT NULL\nUNION ALL\n SELECT 'card_extr_stg.stg_ai_vrfy_cd'::text AS source_nm,\n    'STG_AI_VRFY'::character varying(20) AS common_code_grp_id,\n    card_extr_stg.stg_ai_vrfy_cd::text AS cd_value\n   FROM db_pipeline.card_extr_stg\n  WHERE card_extr_stg.stg_ai_vrfy_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.brand_opt_list[].brand_cd'::text AS source_nm,\n    'BRAND'::character varying AS common_code_grp_id,\n    v_card_brand_opt.brand_cd AS cd_value\n   FROM db_pipeline.v_card_brand_opt\n  WHERE v_card_brand_opt.brand_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.brand_opt_list[].service_grade_cd'::text AS source_nm,\n    'SERVICE_GRADE'::character varying AS common_code_grp_id,\n    v_card_brand_opt.service_grade_cd AS cd_value\n   FROM db_pipeline.v_card_brand_opt\n  WHERE v_card_brand_opt.service_grade_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.brand_opt_list[].service_type_cd'::text AS source_nm,\n    'SERVICE_TYPE'::character varying AS common_code_grp_id,\n    v_card_brand_opt.service_type_cd AS cd_value\n   FROM db_pipeline.v_card_brand_opt\n  WHERE v_card_brand_opt.service_type_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.brand_opt_list[].brand_opt_status_cd'::text AS source_nm,\n    'PRODUCT_STATUS'::character varying AS common_code_grp_id,\n    v_card_brand_opt.brand_opt_status_cd AS cd_value\n   FROM db_pipeline.v_card_brand_opt\n  WHERE v_card_brand_opt.brand_opt_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.rule_list[].value_unit_cd'::text AS source_nm,\n    'VALUE_UNIT'::character varying AS common_code_grp_id,\n    v_card_rule.value_unit_cd AS cd_value\n   FROM db_pipeline.v_card_rule\n  WHERE v_card_rule.value_unit_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.rule_list[].rule_status_cd'::text AS source_nm,\n    'ITEM_STATUS'::character varying AS common_code_grp_id,\n    v_card_rule.rule_status_cd AS cd_value\n   FROM db_pipeline.v_card_rule\n  WHERE v_card_rule.rule_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.relation_list[].rel_type_cd'::text AS source_nm,\n    'REL_TYPE'::character varying AS common_code_grp_id,\n    v_card_bnft_rel.rel_type_cd AS cd_value\n   FROM db_pipeline.v_card_bnft_rel\n  WHERE v_card_bnft_rel.rel_type_cd IS NOT NULL AND NOT v_card_bnft_rel.reverse_yn\nUNION ALL\n SELECT 'rule_list[].target_list[].target_type_cd'::text AS source_nm,\n    'TARGET_TYPE'::character varying AS common_code_grp_id,\n    v_card_rule_target.target_type_cd AS cd_value\n   FROM db_pipeline.v_card_rule_target\n  WHERE v_card_rule_target.target_type_cd IS NOT NULL\nUNION ALL\n SELECT 'cond_expr atom cond_type_cd'::text AS source_nm,\n    'COND_TYPE'::character varying AS common_code_grp_id,\n    v_card_cond_atom.cond_type_cd AS cd_value\n   FROM db_pipeline.v_card_cond_atom\n  WHERE v_card_cond_atom.cond_type_cd IS NOT NULL\nUNION ALL\n SELECT 'cond_expr atom cond_basis_cd'::text AS source_nm,\n    'COND_BASIS'::character varying AS common_code_grp_id,\n    v_card_cond_atom.cond_basis_cd AS cd_value\n   FROM db_pipeline.v_card_cond_atom\n  WHERE v_card_cond_atom.cond_basis_cd IS NOT NULL\nUNION ALL\n SELECT 'cond_expr atom cond_status_cd'::text AS source_nm,\n    'ITEM_STATUS'::character varying AS common_code_grp_id,\n    v_card_cond_atom.cond_status_cd AS cd_value\n   FROM db_pipeline.v_card_cond_atom\n  WHERE v_card_cond_atom.cond_status_cd IS NOT NULL\nUNION ALL\n SELECT 'cond_expr.expr_status_cd'::text AS source_nm,\n    'ITEM_STATUS'::character varying AS common_code_grp_id,\n    v_card_cond_atom.expr_status_cd AS cd_value\n   FROM db_pipeline.v_card_cond_atom\n  WHERE v_card_cond_atom.expr_status_cd IS NOT NULL;"
+      ]
+    ],
+    "rows": {
+      "card_extr_stg": 375,
+      "card_bnft": 5
+    }
+  },
+  "file_pipeline": {
+    "columns": [
+      [
+        "card_bnft",
+        "card_id",
+        1,
+        "bigint",
+        "NO",
+        null
+      ],
+      [
+        "card_bnft",
+        "card_bnft_id",
+        2,
+        "character varying",
+        "NO",
+        "file_pipeline.fn_get_biz_id('card_bnft'::text)"
+      ],
+      [
+        "card_bnft",
+        "bnft_cd",
+        3,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_nm",
+        4,
+        "text",
+        "NO",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_type_cd",
+        5,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_origin_cd",
+        6,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_scope_cd",
+        7,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_brand_opt_cds",
+        8,
+        "ARRAY",
+        "YES",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_cond_expr",
+        9,
+        "jsonb",
+        "YES",
+        null
+      ],
+      [
+        "card_bnft",
+        "rule_select_cd",
+        10,
+        "character varying",
+        "YES",
+        null
+      ],
+      [
+        "card_bnft",
+        "rule_list",
+        11,
+        "jsonb",
+        "NO",
+        "'[]'::jsonb"
+      ],
+      [
+        "card_bnft",
+        "relation_list",
+        12,
+        "jsonb",
+        "NO",
+        "'[]'::jsonb"
+      ],
+      [
+        "card_bnft",
+        "verification_status_cd",
+        13,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_valid_from",
+        14,
+        "date",
+        "YES",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_valid_to_excl",
+        15,
+        "date",
+        "YES",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_rule_txt",
+        16,
+        "text",
+        "YES",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_limit_txt",
+        17,
+        "text",
+        "YES",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_search_txt",
+        18,
+        "text",
+        "YES",
+        null
+      ],
+      [
+        "card_bnft",
+        "bnft_embedding",
+        19,
+        "USER-DEFINED",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "card_ai_run_id",
+        1,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "card_doc_id",
+        2,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "page_no",
+        3,
+        "smallint",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "card_doc_chunk_id",
+        4,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "call_seq",
+        5,
+        "smallint",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_id",
+        6,
+        "character varying",
+        "NO",
+        "file_pipeline.fn_get_biz_id('card_extr_stg'::text)"
+      ],
+      [
+        "card_extr_stg",
+        "stg_item_seq",
+        7,
+        "smallint",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "card_id",
+        8,
+        "bigint",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_kind_cd",
+        9,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_parent_card_extr_stg_id",
+        10,
+        "character varying",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_raw_item",
+        11,
+        "jsonb",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_normalized_item",
+        12,
+        "jsonb",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_evidence_txt",
+        13,
+        "text",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_evidence_start_pos",
+        14,
+        "integer",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_evidence_end_pos",
+        15,
+        "integer",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "card_excl_item_id",
+        16,
+        "character varying",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_sql_check_cd",
+        17,
+        "character varying",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_ai_vrfy_cd",
+        18,
+        "character varying",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_ai_vrfy_card_ai_run_id",
+        19,
+        "character varying",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_status",
+        20,
+        "character varying",
+        "NO",
+        "'PENDING_REVIEW'::character varying"
+      ],
+      [
+        "card_extr_stg",
+        "stg_review_note",
+        21,
+        "text",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_approved_date",
+        22,
+        "timestamp with time zone",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "stg_approved_user_id",
+        23,
+        "character varying",
+        "YES",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "create_date",
+        24,
+        "timestamp with time zone",
+        "NO",
+        "now()"
+      ],
+      [
+        "card_extr_stg",
+        "create_user_id",
+        25,
+        "character varying",
+        "NO",
+        null
+      ],
+      [
+        "card_extr_stg",
+        "update_date",
+        26,
+        "timestamp with time zone",
+        "NO",
+        "now()"
+      ],
+      [
+        "card_extr_stg",
+        "update_user_id",
+        27,
+        "character varying",
+        "NO",
+        null
+      ]
+    ],
+    "constraints": [
+      [
+        "card_bnft",
+        "card_bnft_card_id_bnft_cd_key",
+        "u",
+        "UNIQUE (card_id, bnft_cd)"
+      ],
+      [
+        "card_bnft",
+        "card_bnft_ck_1",
+        "c",
+        "CHECK (bnft_scope_cd::text = 'PRODUCT'::text AND bnft_brand_opt_cds IS NULL OR bnft_scope_cd::text <> 'PRODUCT'::text AND COALESCE(cardinality(bnft_brand_opt_cds), 0) > 0)"
+      ],
+      [
+        "card_bnft",
+        "card_bnft_ck_2",
+        "c",
+        "CHECK (file_pipeline.fn_valid_cond_expr(bnft_cond_expr))"
+      ],
+      [
+        "card_bnft",
+        "card_bnft_ck_3",
+        "c",
+        "CHECK (file_pipeline.fn_valid_rule_list(rule_list, 'LOCAL'::text))"
+      ],
+      [
+        "card_bnft",
+        "card_bnft_ck_4",
+        "c",
+        "CHECK (file_pipeline.fn_valid_relation_list(relation_list, card_bnft_id::text))"
+      ],
+      [
+        "card_bnft",
+        "card_bnft_ck_5",
+        "c",
+        "CHECK (bnft_origin_cd::text <> 'BRAND_SERVICE'::text OR bnft_scope_cd::text = 'BRAND'::text)"
+      ],
+      [
+        "card_bnft",
+        "card_bnft_ck_6",
+        "c",
+        "CHECK (bnft_valid_to_excl IS NULL OR bnft_valid_from IS NULL OR bnft_valid_to_excl > bnft_valid_from)"
+      ],
+      [
+        "card_bnft",
+        "card_bnft_pkey",
+        "p",
+        "PRIMARY KEY (card_id, card_bnft_id)"
+      ],
+      [
+        "card_excl_item",
+        "card_excl_item_issuer_excl_item_nm_key",
+        "u",
+        "UNIQUE (issuer, excl_item_nm)"
+      ],
+      [
+        "card_excl_item",
+        "card_excl_item_pkey",
+        "p",
+        "PRIMARY KEY (card_excl_item_id)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key",
+        "u",
+        "UNIQUE (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, stg_item_seq)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_card_extr_stg_id_key",
+        "u",
+        "UNIQUE (card_extr_stg_id)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_check",
+        "c",
+        "CHECK (stg_evidence_start_pos IS NULL AND stg_evidence_end_pos IS NULL OR stg_evidence_start_pos >= 1 AND stg_evidence_end_pos >= stg_evidence_start_pos)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_check1",
+        "c",
+        "CHECK ((stg_status::text <> ALL (ARRAY['AUTO_APPROVED'::character varying::text, 'MANUAL_APPROVED'::character varying::text])) OR stg_normalized_item IS NOT NULL AND NOT stg_sql_check_cd::text IS DISTINCT FROM 'OK'::text AND stg_evidence_start_pos IS NOT NULL AND stg_evidence_end_pos IS NOT NULL AND btrim(stg_evidence_txt) <> ''::text)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_pkey",
+        "p",
+        "PRIMARY KEY (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, card_extr_stg_id)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_stg_item_seq_check",
+        "c",
+        "CHECK (stg_item_seq > 0)"
+      ]
+    ],
+    "indexes": [
+      [
+        "card_excl_item",
+        "card_excl_item_issuer_excl_item_nm_key",
+        "CREATE UNIQUE INDEX card_excl_item_issuer_excl_item_nm_key ON file_pipeline.card_excl_item USING btree (issuer, excl_item_nm)"
+      ],
+      [
+        "card_excl_item",
+        "card_excl_item_pkey",
+        "CREATE UNIQUE INDEX card_excl_item_pkey ON file_pipeline.card_excl_item USING btree (card_excl_item_id)"
+      ],
+      [
+        "card_excl_item",
+        "ix_card_excl_item_alias_gin",
+        "CREATE INDEX ix_card_excl_item_alias_gin ON file_pipeline.card_excl_item USING gin (excl_alias_nms)"
+      ],
+      [
+        "card_excl_item",
+        "ix_card_excl_item_concept_key",
+        "CREATE INDEX ix_card_excl_item_concept_key ON file_pipeline.card_excl_item USING btree (excl_concept_cd)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key",
+        "CREATE UNIQUE INDEX card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key ON file_pipeline.card_extr_stg USING btree (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, stg_item_seq)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_card_extr_stg_id_key",
+        "CREATE UNIQUE INDEX card_extr_stg_card_extr_stg_id_key ON file_pipeline.card_extr_stg USING btree (card_extr_stg_id)"
+      ],
+      [
+        "card_extr_stg",
+        "card_extr_stg_pkey",
+        "CREATE UNIQUE INDEX card_extr_stg_pkey ON file_pipeline.card_extr_stg USING btree (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, card_extr_stg_id)"
+      ],
+      [
+        "card_extr_stg",
+        "ix_card_extr_stg_chunk_key",
+        "CREATE INDEX ix_card_extr_stg_chunk_key ON file_pipeline.card_extr_stg USING btree (card_doc_chunk_id)"
+      ],
+      [
+        "card_extr_stg",
+        "ix_card_extr_stg_excl_item_key",
+        "CREATE INDEX ix_card_extr_stg_excl_item_key ON file_pipeline.card_extr_stg USING btree (card_excl_item_id)"
+      ],
+      [
+        "card_extr_stg",
+        "ix_card_extr_stg_status_key",
+        "CREATE INDEX ix_card_extr_stg_status_key ON file_pipeline.card_extr_stg USING btree (stg_status, stg_kind_cd)"
+      ]
+    ],
+    "seqs": [
+      [
+        "seq_card_excl_item",
+        null
+      ]
+    ],
+    "views": [
+      [
+        "v_card_bnft_rule_effective",
+        " SELECT b.card_id,\n    b.card_bnft_id,\n    b.bnft_nm,\n    b.bnft_origin_cd,\n    b.bnft_scope_cd,\n    b.bnft_brand_opt_cds,\n    b.bnft_valid_from,\n    b.bnft_valid_to_excl,\n    r.rule_key,\n    r.calc_method_cd,\n    r.method_ver,\n    r.value_num,\n    r.value_unit_cd,\n    r.payout_unit_cd,\n    r.basis_amt,\n    r.calc_params,\n    r.predicate_state_cd,\n    r.target_list,\n    b.bnft_cond_expr,\n    r.cond_expr AS rule_cond_expr,\n    r.rule_status_cd\n   FROM file_pipeline.card_bnft b\n     JOIN file_pipeline.v_card_rule r ON r.card_id = b.card_id AND r.card_bnft_id::text = b.card_bnft_id::text;"
+      ],
+      [
+        "v_card_integrity_issue",
+        " WITH atoms AS (\n         SELECT v_card_cond_atom.owner_cd,\n            v_card_cond_atom.card_id,\n            v_card_cond_atom.card_bnft_id,\n            v_card_cond_atom.rule_key,\n            v_card_cond_atom.expr_status_cd,\n            v_card_cond_atom.branch_no,\n            v_card_cond_atom.atom_seq,\n            v_card_cond_atom.atom_key,\n            v_card_cond_atom.negate_yn,\n            v_card_cond_atom.cond_type_cd,\n            v_card_cond_atom.cond_basis_cd,\n            v_card_cond_atom.cond_min_amt,\n            v_card_cond_atom.cond_max_amt_excl,\n            v_card_cond_atom.predicate_method_cd,\n            v_card_cond_atom.predicate_method_ver,\n            v_card_cond_atom.cond_params,\n            v_card_cond_atom.card_excl_item_id,\n            v_card_cond_atom.excl_raw_txt,\n            v_card_cond_atom.cond_raw_txt,\n            v_card_cond_atom.link_role_cd,\n            v_card_cond_atom.cond_status_cd\n           FROM file_pipeline.v_card_cond_atom\n        ), rule_value_gap AS (\n         SELECT r.card_id,\n            r.card_bnft_id,\n            r.rule_key,\n            r.rule_status_cd = 'CONFIRMED'::text OR b.verification_status_cd::text = 'CONFIRMED'::text AS final_yn\n           FROM file_pipeline.v_card_rule r\n             JOIN file_pipeline.card_bnft b ON b.card_id = r.card_id AND b.card_bnft_id::text = r.card_bnft_id::text\n          WHERE r.rule_status_cd <> 'RETIRED'::text AND ((r.calc_method_cd = ANY (ARRAY['PERCENT_OF_TXN'::text, 'FIXED_PER_TXN'::text, 'UNITS_PER_AMOUNT'::text, 'MULTIPLY_EXTERNAL_POINTS'::text])) AND r.value_num IS NULL OR r.calc_method_cd = 'UNITS_PER_AMOUNT'::text AND r.basis_amt IS NULL OR r.calc_method_cd = 'PERCENT_OF_TXN'::text AND r.value_unit_cd IS DISTINCT FROM 'PERCENT'::text OR r.calc_method_cd = 'MULTIPLY_EXTERNAL_POINTS'::text AND r.value_unit_cd IS DISTINCT FROM 'MULTIPLIER'::text OR (r.calc_method_cd = ANY (ARRAY['FIXED_PER_TXN'::text, 'UNITS_PER_AMOUNT'::text])) AND (r.value_unit_cd = ANY (ARRAY['PERCENT'::text, 'MULTIPLIER'::text])))\n        ), predicate_param_gap AS (\n         SELECT a.owner_cd,\n            a.card_id,\n            a.atom_key,\n            a.cond_status_cd = 'CONFIRMED'::text OR a.expr_status_cd = 'CONFIRMED'::text AS final_yn\n           FROM atoms a\n          WHERE a.cond_status_cd <> 'RETIRED'::text AND (a.predicate_method_cd = 'EVERY_MONTH_MIN_SPEND'::text AND (a.cond_min_amt IS NULL OR jsonb_typeof(a.cond_params -> 'window_months'::text) IS DISTINCT FROM 'number'::text) OR a.predicate_method_cd = 'MONTH_IN'::text AND\n                CASE\n                    WHEN jsonb_typeof(a.cond_params -> 'months'::text) = 'array'::text THEN jsonb_array_length(a.cond_params -> 'months'::text) = 0\n                    ELSE true\n                END)\n        ), fallback AS (\n         SELECT v_card_bnft_rel.card_id,\n            v_card_bnft_rel.from_bnft_id,\n            v_card_bnft_rel.to_bnft_id\n           FROM file_pipeline.v_card_bnft_rel\n          WHERE v_card_bnft_rel.rel_type_cd = 'FALLBACK_AFTER_CAP'::text AND NOT v_card_bnft_rel.reverse_yn\n        ), cycle AS (\n         WITH RECURSIVE walk(card_id, start_id, cur_id, path) AS (\n                 SELECT fallback.card_id,\n                    fallback.from_bnft_id,\n                    fallback.to_bnft_id,\n                    ARRAY[fallback.from_bnft_id, fallback.to_bnft_id::character varying] AS \"array\"\n                   FROM fallback\n                UNION ALL\n                 SELECT w.card_id,\n                    w.start_id,\n                    f.to_bnft_id,\n                    w.path || f.to_bnft_id::character varying\n                   FROM walk w\n                     JOIN fallback f ON f.card_id = w.card_id AND f.from_bnft_id::text = w.cur_id\n                  WHERE NOT (f.to_bnft_id = ANY (w.path[2:]::text[]))\n                )\n         SELECT DISTINCT walk.card_id,\n            walk.start_id\n           FROM walk\n          WHERE walk.cur_id = walk.start_id::text\n        )\n SELECT 'bnft_without_product'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_bnft_id::text AS issue_key\n   FROM file_pipeline.card_bnft x\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM file_pipeline.card_product p\n          WHERE p.card_id = x.card_id))\nUNION ALL\n SELECT 'local_confirmed_without_rule'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_bnft_id::text AS issue_key\n   FROM file_pipeline.card_bnft x\n  WHERE x.verification_status_cd::text = 'CONFIRMED'::text AND jsonb_array_length(x.rule_list) = 0\nUNION ALL\n SELECT 'bnft_txt_without_evidence'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_bnft_id::text AS issue_key\n   FROM file_pipeline.card_bnft x\n  WHERE (x.bnft_rule_txt IS NOT NULL OR x.bnft_limit_txt IS NOT NULL) AND NOT (EXISTS ( SELECT 1\n           FROM file_pipeline.card_evidence_link l\n          WHERE l.card_id = x.card_id AND l.card_bnft_id::text = x.card_bnft_id::text AND l.ev_subject_cd::text = 'BNFT'::text AND l.ev_item_cd::text = 'SELF'::text))\nUNION ALL\n SELECT 'rel_to_bnft_orphan'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.relation_key AS issue_key\n   FROM file_pipeline.v_card_bnft_rel x\n  WHERE NOT x.reverse_yn AND NOT (EXISTS ( SELECT 1\n           FROM file_pipeline.card_bnft b\n          WHERE b.card_id = x.card_id AND b.card_bnft_id::text = x.to_bnft_id))\nUNION ALL\n SELECT 'rel_mutual_stored_twice'::text AS gate_cd,\n    (((a.card_id || '/'::text) || a.from_bnft_id::text) || '/'::text) || a.to_bnft_id AS issue_key\n   FROM file_pipeline.v_card_bnft_rel a\n     JOIN file_pipeline.v_card_bnft_rel b ON a.card_id = b.card_id AND a.from_bnft_id::text = b.to_bnft_id AND a.to_bnft_id = b.from_bnft_id::text AND a.rel_type_cd = b.rel_type_cd\n  WHERE NOT a.reverse_yn AND NOT b.reverse_yn AND a.rel_type_cd = 'MUTUALLY_EXCLUSIVE'::text AND a.from_bnft_id::text < a.to_bnft_id\nUNION ALL\n SELECT 'rel_fallback_cycle'::text AS gate_cd,\n    (c.card_id || '/'::text) || c.start_id::text AS issue_key\n   FROM cycle c\nUNION ALL\n SELECT 'product_doc_without_product'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_doc_id::text AS issue_key\n   FROM file_pipeline.card_product_doc x\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM file_pipeline.card_product p\n          WHERE p.card_id = x.card_id))\nUNION ALL\n SELECT 'product_doc_orphan'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_doc_id::text AS issue_key\n   FROM file_pipeline.card_product_doc x\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM file_pipeline.card_doc d\n          WHERE d.card_doc_id::text = x.card_doc_id::text))\nUNION ALL\n SELECT 'bnft_brand_opt_unknown'::text AS gate_cd,\n    (((b.card_id || '/'::text) || b.card_bnft_id::text) || '/'::text) || o.cd AS issue_key\n   FROM file_pipeline.card_bnft b\n     CROSS JOIN LATERAL unnest(b.bnft_brand_opt_cds) o(cd)\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM file_pipeline.v_card_brand_opt v\n          WHERE v.card_id = b.card_id AND v.brand_opt_cd = o.cd))\nUNION ALL\n SELECT 'doc_brand_opt_unknown'::text AS gate_cd,\n    (((d.card_id || '/'::text) || d.card_doc_id::text) || '/'::text) || o.cd AS issue_key\n   FROM file_pipeline.card_product_doc d\n     CROSS JOIN LATERAL unnest(d.brand_opt_cds) o(cd)\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM file_pipeline.v_card_brand_opt v\n          WHERE v.card_id = d.card_id AND v.brand_opt_cd = o.cd))\nUNION ALL\n SELECT\n        CASE\n            WHEN g.final_yn THEN 'rule_method_value_missing'::text\n            ELSE 'rule_method_value_pending'::text\n        END AS gate_cd,\n    (((g.card_id || '/'::text) || g.card_bnft_id::text) || '/'::text) || g.rule_key AS issue_key\n   FROM rule_value_gap g\nUNION ALL\n SELECT\n        CASE\n            WHEN g.final_yn THEN 'predicate_params_missing'::text\n            ELSE 'predicate_params_pending'::text\n        END AS gate_cd,\n    (((g.owner_cd || '/'::text) || g.card_id) || '/'::text) || g.atom_key AS issue_key\n   FROM predicate_param_gap g\nUNION ALL\n SELECT 'excl_item_unknown'::text AS gate_cd,\n    (a.owner_cd || '/'::text) || a.atom_key AS issue_key\n   FROM atoms a\n  WHERE a.card_excl_item_id IS NOT NULL AND NOT (EXISTS ( SELECT 1\n           FROM file_pipeline.card_excl_item i\n          WHERE i.card_excl_item_id::text = a.card_excl_item_id))\nUNION ALL\n SELECT 'evidence_source_orphan'::text AS gate_cd,\n    e.evidence_id AS issue_key\n   FROM file_pipeline.card_source_evidence e\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM file_pipeline.card_doc_chunk c\n          WHERE c.card_doc_id::text = e.card_doc_id::text AND c.page_no = e.page_no AND c.card_doc_chunk_id::text = e.card_doc_chunk_id::text))\nUNION ALL\n SELECT 'evidence_doc_not_linked'::text AS gate_cd,\n    (l.card_id || '/'::text) || l.evidence_link_id::text AS issue_key\n   FROM file_pipeline.card_evidence_link l\n     JOIN file_pipeline.card_source_evidence e USING (evidence_id)\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM file_pipeline.card_product_doc d\n          WHERE d.card_id = l.card_id AND d.card_doc_id::text = e.card_doc_id::text))\nUNION ALL\n SELECT 'evidence_not_approved'::text AS gate_cd,\n    l.evidence_id AS issue_key\n   FROM ( SELECT DISTINCT card_evidence_link.evidence_id\n           FROM file_pipeline.card_evidence_link) l\n     LEFT JOIN file_pipeline.card_source_evidence e USING (evidence_id)\n  WHERE e.evidence_id IS NULL OR e.approval_status_cd::text <> 'APPROVED'::text\nUNION ALL\n SELECT 'evidence_subject_orphan'::text AS gate_cd,\n    (l.card_id || '/'::text) || l.evidence_link_id::text AS issue_key\n   FROM file_pipeline.card_evidence_link l\n  WHERE NOT\n        CASE l.ev_subject_cd\n            WHEN 'CARD'::text THEN (EXISTS ( SELECT 1\n               FROM file_pipeline.card_product p\n              WHERE p.card_id = l.card_id))\n            WHEN 'BNFT'::text THEN (EXISTS ( SELECT 1\n               FROM file_pipeline.card_bnft b\n              WHERE b.card_id = l.card_id AND b.card_bnft_id::text = l.card_bnft_id::text))\n            WHEN 'RULE'::text THEN (EXISTS ( SELECT 1\n               FROM file_pipeline.v_card_rule r\n              WHERE r.card_id = l.card_id AND r.card_bnft_id::text = l.card_bnft_id::text AND r.rule_key = l.rule_key::text))\n            WHEN 'REL'::text THEN (EXISTS ( SELECT 1\n               FROM file_pipeline.v_card_bnft_rel r\n              WHERE NOT r.reverse_yn AND r.card_id = l.card_id AND r.from_bnft_id::text = l.card_bnft_id::text AND r.relation_key = l.relation_key::text))\n            ELSE false\n        END\nUNION ALL\n SELECT 'evidence_item_key_missing'::text AS gate_cd,\n    (l.card_id || '/'::text) || l.evidence_link_id::text AS issue_key\n   FROM file_pipeline.card_evidence_link l\n  WHERE l.ev_item_cd::text <> 'SELF'::text AND NOT\n        CASE l.ev_item_cd\n            WHEN 'COND'::text THEN (EXISTS ( SELECT 1\n               FROM atoms a\n              WHERE a.card_id = l.card_id AND a.atom_key = l.ev_item_key::text AND NOT a.card_bnft_id::text IS DISTINCT FROM l.card_bnft_id::text AND NOT a.rule_key IS DISTINCT FROM l.rule_key::text))\n            WHEN 'TARGET'::text THEN (EXISTS ( SELECT 1\n               FROM file_pipeline.v_card_rule_target t\n              WHERE t.card_id = l.card_id AND t.card_bnft_id::text = l.card_bnft_id::text AND t.rule_key = l.rule_key::text AND t.target_key = l.ev_item_key::text))\n            ELSE false\n        END\nUNION ALL\n SELECT 'product_doc_role_type_mismatch'::text AS gate_cd,\n    (x.card_id || '/'::text) || x.card_doc_id::text AS issue_key\n   FROM file_pipeline.card_product_doc x\n     JOIN file_pipeline.card_doc d ON d.card_doc_id::text = x.card_doc_id::text\n  WHERE x.doc_role_cd::text = 'BRAND_SERVICE'::text AND d.doc_type_cd::text <> 'BRAND_SERVICE'::text\nUNION ALL\n SELECT 'brand_doc_option_conflict'::text AS gate_cd,\n    z.card_doc_id AS issue_key\n   FROM ( SELECT x.card_doc_id\n           FROM file_pipeline.card_product_doc x\n             CROSS JOIN LATERAL unnest(x.brand_opt_cds) o(cd)\n             JOIN file_pipeline.v_card_brand_opt v ON v.card_id = x.card_id AND v.brand_opt_cd = o.cd\n          WHERE x.doc_role_cd::text = 'BRAND_SERVICE'::text\n          GROUP BY x.card_doc_id\n         HAVING count(DISTINCT ROW(v.brand_cd, v.service_grade_cd, v.service_type_cd)) > 1) z\nUNION ALL\n SELECT 'brand_bnft_doc_not_linked'::text AS gate_cd,\n    (((b.card_id || '/'::text) || b.card_bnft_id::text) || '/'::text) || o.cd AS issue_key\n   FROM file_pipeline.card_bnft b\n     CROSS JOIN LATERAL unnest(b.bnft_brand_opt_cds) o(cd)\n  WHERE b.bnft_origin_cd::text = 'BRAND_SERVICE'::text AND NOT (EXISTS ( SELECT 1\n           FROM file_pipeline.card_product_doc x\n          WHERE x.card_id = b.card_id AND x.doc_role_cd::text = 'BRAND_SERVICE'::text AND (o.cd = ANY (x.brand_opt_cds))))\nUNION ALL\n SELECT 'brand_bnft_confirmed_without_evidence'::text AS gate_cd,\n    (b.card_id || '/'::text) || b.card_bnft_id::text AS issue_key\n   FROM file_pipeline.card_bnft b\n  WHERE b.bnft_origin_cd::text = 'BRAND_SERVICE'::text AND b.verification_status_cd::text = 'CONFIRMED'::text AND NOT (EXISTS ( SELECT 1\n           FROM file_pipeline.card_evidence_link l\n          WHERE l.card_id = b.card_id AND l.card_bnft_id::text = b.card_bnft_id::text))\nUNION ALL\n SELECT 'evidence_brand_opt_mismatch'::text AS gate_cd,\n    (l.card_id || '/'::text) || l.evidence_link_id::text AS issue_key\n   FROM file_pipeline.card_evidence_link l\n     JOIN file_pipeline.card_source_evidence e USING (evidence_id)\n     JOIN file_pipeline.card_bnft b ON b.card_id = l.card_id AND b.card_bnft_id::text = l.card_bnft_id::text\n     JOIN file_pipeline.card_product_doc x ON x.card_id = l.card_id AND x.card_doc_id::text = e.card_doc_id::text\n  WHERE x.doc_role_cd::text = 'BRAND_SERVICE'::text AND NOT COALESCE(b.bnft_brand_opt_cds, '{}'::text[]) && x.brand_opt_cds\nUNION ALL\n SELECT 'stg_card_not_linked'::text AS gate_cd,\n    s.card_extr_stg_id AS issue_key\n   FROM file_pipeline.card_extr_stg s\n  WHERE s.card_id IS NOT NULL AND NOT (EXISTS ( SELECT 1\n           FROM file_pipeline.card_product_doc x\n          WHERE x.card_id = s.card_id AND x.card_doc_id::text = s.card_doc_id::text))\nUNION ALL\n SELECT 'common_cd_invalid'::text AS gate_cd,\n    (u.source_nm || '='::text) || u.cd_value AS issue_key\n   FROM file_pipeline.v_common_cd_usage u\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM file_pipeline.common_cd c\n          WHERE c.common_code_grp_id::text = u.common_code_grp_id::text AND c.common_cd::text = u.cd_value))\nUNION ALL\n SELECT 'common_cd_group_orphan'::text AS gate_cd,\n    (c.common_code_grp_id::text || '/'::text) || c.common_cd::text AS issue_key\n   FROM file_pipeline.common_cd c\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM file_pipeline.common_code_grp g\n          WHERE g.common_code_grp_id::text = c.common_code_grp_id::text))\nUNION ALL\n SELECT 'common_code_grp_empty'::text AS gate_cd,\n    g.common_code_grp_id AS issue_key\n   FROM file_pipeline.common_code_grp g\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM file_pipeline.common_cd c\n          WHERE c.common_code_grp_id::text = g.common_code_grp_id::text));"
+      ],
+      [
+        "v_common_cd_usage",
+        " SELECT 'card_product.card_kind_cd'::text AS source_nm,\n    'CARD_KIND'::character varying(20) AS common_code_grp_id,\n    card_product.card_kind_cd::text AS cd_value\n   FROM file_pipeline.card_product\n  WHERE card_product.card_kind_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.product_status_cd'::text AS source_nm,\n    'PRODUCT_STATUS'::character varying(20) AS common_code_grp_id,\n    card_product.product_status_cd::text AS cd_value\n   FROM file_pipeline.card_product\n  WHERE card_product.product_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.card_cond_status_cd'::text AS source_nm,\n    'ITEM_STATUS'::character varying(20) AS common_code_grp_id,\n    card_product.card_cond_status_cd::text AS cd_value\n   FROM file_pipeline.card_product\n  WHERE card_product.card_cond_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product_doc.doc_role_cd'::text AS source_nm,\n    'DOC_ROLE'::character varying(20) AS common_code_grp_id,\n    card_product_doc.doc_role_cd::text AS cd_value\n   FROM file_pipeline.card_product_doc\n  WHERE card_product_doc.doc_role_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product_doc.approval_status_cd'::text AS source_nm,\n    'APPROVAL_STATUS'::character varying(20) AS common_code_grp_id,\n    card_product_doc.approval_status_cd::text AS cd_value\n   FROM file_pipeline.card_product_doc\n  WHERE card_product_doc.approval_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.bnft_type_cd'::text AS source_nm,\n    'BNFT_TYPE'::character varying(20) AS common_code_grp_id,\n    card_bnft.bnft_type_cd::text AS cd_value\n   FROM file_pipeline.card_bnft\n  WHERE card_bnft.bnft_type_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.bnft_origin_cd'::text AS source_nm,\n    'BNFT_ORIGIN'::character varying(20) AS common_code_grp_id,\n    card_bnft.bnft_origin_cd::text AS cd_value\n   FROM file_pipeline.card_bnft\n  WHERE card_bnft.bnft_origin_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.bnft_scope_cd'::text AS source_nm,\n    'BNFT_SCOPE'::character varying(20) AS common_code_grp_id,\n    card_bnft.bnft_scope_cd::text AS cd_value\n   FROM file_pipeline.card_bnft\n  WHERE card_bnft.bnft_scope_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.rule_select_cd'::text AS source_nm,\n    'RULE_SELECT'::character varying(20) AS common_code_grp_id,\n    card_bnft.rule_select_cd::text AS cd_value\n   FROM file_pipeline.card_bnft\n  WHERE card_bnft.rule_select_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.verification_status_cd'::text AS source_nm,\n    'VERIFY_STATUS'::character varying(20) AS common_code_grp_id,\n    card_bnft.verification_status_cd::text AS cd_value\n   FROM file_pipeline.card_bnft\n  WHERE card_bnft.verification_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_source_evidence.approval_status_cd'::text AS source_nm,\n    'APPROVAL_STATUS'::character varying(20) AS common_code_grp_id,\n    card_source_evidence.approval_status_cd::text AS cd_value\n   FROM file_pipeline.card_source_evidence\n  WHERE card_source_evidence.approval_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_evidence_link.ev_subject_cd'::text AS source_nm,\n    'EV_SUBJECT'::character varying(20) AS common_code_grp_id,\n    card_evidence_link.ev_subject_cd::text AS cd_value\n   FROM file_pipeline.card_evidence_link\n  WHERE card_evidence_link.ev_subject_cd IS NOT NULL\nUNION ALL\n SELECT 'card_evidence_link.ev_item_cd'::text AS source_nm,\n    'EV_ITEM'::character varying(20) AS common_code_grp_id,\n    card_evidence_link.ev_item_cd::text AS cd_value\n   FROM file_pipeline.card_evidence_link\n  WHERE card_evidence_link.ev_item_cd IS NOT NULL\nUNION ALL\n SELECT 'card_doc.doc_type_cd'::text AS source_nm,\n    'DOC_TYPE'::character varying(20) AS common_code_grp_id,\n    card_doc.doc_type_cd::text AS cd_value\n   FROM file_pipeline.card_doc\n  WHERE card_doc.doc_type_cd IS NOT NULL\nUNION ALL\n SELECT 'card_doc.doc_status'::text AS source_nm,\n    'DOC_STATUS'::character varying(20) AS common_code_grp_id,\n    card_doc.doc_status::text AS cd_value\n   FROM file_pipeline.card_doc\n  WHERE card_doc.doc_status IS NOT NULL\nUNION ALL\n SELECT 'card_doc_page.page_layer_cd'::text AS source_nm,\n    'PAGE_LAYER'::character varying(20) AS common_code_grp_id,\n    card_doc_page.page_layer_cd::text AS cd_value\n   FROM file_pipeline.card_doc_page\n  WHERE card_doc_page.page_layer_cd IS NOT NULL\nUNION ALL\n SELECT 'card_doc_chunk.chunk_type_cd'::text AS source_nm,\n    'CHUNK_TYPE'::character varying(20) AS common_code_grp_id,\n    card_doc_chunk.chunk_type_cd::text AS cd_value\n   FROM file_pipeline.card_doc_chunk\n  WHERE card_doc_chunk.chunk_type_cd IS NOT NULL\nUNION ALL\n SELECT 'card_doc_chunk.chunk_status'::text AS source_nm,\n    'CHUNK_STATUS'::character varying(20) AS common_code_grp_id,\n    card_doc_chunk.chunk_status::text AS cd_value\n   FROM file_pipeline.card_doc_chunk\n  WHERE card_doc_chunk.chunk_status IS NOT NULL\nUNION ALL\n SELECT 'card_ai_run.run_stage_cd'::text AS source_nm,\n    'RUN_STAGE'::character varying(20) AS common_code_grp_id,\n    card_ai_run.run_stage_cd::text AS cd_value\n   FROM file_pipeline.card_ai_run\n  WHERE card_ai_run.run_stage_cd IS NOT NULL\nUNION ALL\n SELECT 'card_ai_run.run_call_mthd_cd'::text AS source_nm,\n    'RUN_CALL_METHOD'::character varying(20) AS common_code_grp_id,\n    card_ai_run.run_call_mthd_cd::text AS cd_value\n   FROM file_pipeline.card_ai_run\n  WHERE card_ai_run.run_call_mthd_cd IS NOT NULL\nUNION ALL\n SELECT 'card_ai_run.run_status'::text AS source_nm,\n    'RUN_STATUS'::character varying(20) AS common_code_grp_id,\n    card_ai_run.run_status::text AS cd_value\n   FROM file_pipeline.card_ai_run\n  WHERE card_ai_run.run_status IS NOT NULL\nUNION ALL\n SELECT 'card_ai_call.call_status'::text AS source_nm,\n    'CALL_STATUS'::character varying(20) AS common_code_grp_id,\n    card_ai_call.call_status::text AS cd_value\n   FROM file_pipeline.card_ai_call\n  WHERE card_ai_call.call_status IS NOT NULL\nUNION ALL\n SELECT 'card_extr_stg.stg_kind_cd'::text AS source_nm,\n    'STG_KIND'::character varying(20) AS common_code_grp_id,\n    card_extr_stg.stg_kind_cd::text AS cd_value\n   FROM file_pipeline.card_extr_stg\n  WHERE card_extr_stg.stg_kind_cd IS NOT NULL\nUNION ALL\n SELECT 'card_extr_stg.stg_status'::text AS source_nm,\n    'STG_STATUS'::character varying(20) AS common_code_grp_id,\n    card_extr_stg.stg_status::text AS cd_value\n   FROM file_pipeline.card_extr_stg\n  WHERE card_extr_stg.stg_status IS NOT NULL\nUNION ALL\n SELECT 'card_extr_stg.stg_ai_vrfy_cd'::text AS source_nm,\n    'STG_AI_VRFY'::character varying(20) AS common_code_grp_id,\n    card_extr_stg.stg_ai_vrfy_cd::text AS cd_value\n   FROM file_pipeline.card_extr_stg\n  WHERE card_extr_stg.stg_ai_vrfy_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.brand_opt_list[].brand_cd'::text AS source_nm,\n    'BRAND'::character varying AS common_code_grp_id,\n    v_card_brand_opt.brand_cd AS cd_value\n   FROM file_pipeline.v_card_brand_opt\n  WHERE v_card_brand_opt.brand_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.brand_opt_list[].service_grade_cd'::text AS source_nm,\n    'SERVICE_GRADE'::character varying AS common_code_grp_id,\n    v_card_brand_opt.service_grade_cd AS cd_value\n   FROM file_pipeline.v_card_brand_opt\n  WHERE v_card_brand_opt.service_grade_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.brand_opt_list[].service_type_cd'::text AS source_nm,\n    'SERVICE_TYPE'::character varying AS common_code_grp_id,\n    v_card_brand_opt.service_type_cd AS cd_value\n   FROM file_pipeline.v_card_brand_opt\n  WHERE v_card_brand_opt.service_type_cd IS NOT NULL\nUNION ALL\n SELECT 'card_product.brand_opt_list[].brand_opt_status_cd'::text AS source_nm,\n    'PRODUCT_STATUS'::character varying AS common_code_grp_id,\n    v_card_brand_opt.brand_opt_status_cd AS cd_value\n   FROM file_pipeline.v_card_brand_opt\n  WHERE v_card_brand_opt.brand_opt_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.rule_list[].predicate_state_cd'::text AS source_nm,\n    'PREDICATE_STATE'::character varying AS common_code_grp_id,\n    v_card_rule.predicate_state_cd AS cd_value\n   FROM file_pipeline.v_card_rule\n  WHERE v_card_rule.predicate_state_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.rule_list[].calc_method_cd'::text AS source_nm,\n    'CALC_METHOD'::character varying AS common_code_grp_id,\n    v_card_rule.calc_method_cd AS cd_value\n   FROM file_pipeline.v_card_rule\n  WHERE v_card_rule.calc_method_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.rule_list[].value_unit_cd'::text AS source_nm,\n    'VALUE_UNIT'::character varying AS common_code_grp_id,\n    v_card_rule.value_unit_cd AS cd_value\n   FROM file_pipeline.v_card_rule\n  WHERE v_card_rule.value_unit_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.rule_list[].payout_unit_cd'::text AS source_nm,\n    'PAYOUT_UNIT'::character varying AS common_code_grp_id,\n    v_card_rule.payout_unit_cd AS cd_value\n   FROM file_pipeline.v_card_rule\n  WHERE v_card_rule.payout_unit_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.rule_list[].rule_status_cd'::text AS source_nm,\n    'ITEM_STATUS'::character varying AS common_code_grp_id,\n    v_card_rule.rule_status_cd AS cd_value\n   FROM file_pipeline.v_card_rule\n  WHERE v_card_rule.rule_status_cd IS NOT NULL\nUNION ALL\n SELECT 'card_bnft.relation_list[].rel_type_cd'::text AS source_nm,\n    'REL_TYPE'::character varying AS common_code_grp_id,\n    v_card_bnft_rel.rel_type_cd AS cd_value\n   FROM file_pipeline.v_card_bnft_rel\n  WHERE v_card_bnft_rel.rel_type_cd IS NOT NULL AND NOT v_card_bnft_rel.reverse_yn\nUNION ALL\n SELECT 'rule_list[].target_list[].target_type_cd'::text AS source_nm,\n    'TARGET_TYPE'::character varying AS common_code_grp_id,\n    v_card_rule_target.target_type_cd AS cd_value\n   FROM file_pipeline.v_card_rule_target\n  WHERE v_card_rule_target.target_type_cd IS NOT NULL\nUNION ALL\n SELECT 'cond_expr atom cond_type_cd'::text AS source_nm,\n    'COND_TYPE'::character varying AS common_code_grp_id,\n    v_card_cond_atom.cond_type_cd AS cd_value\n   FROM file_pipeline.v_card_cond_atom\n  WHERE v_card_cond_atom.cond_type_cd IS NOT NULL\nUNION ALL\n SELECT 'cond_expr atom cond_basis_cd'::text AS source_nm,\n    'COND_BASIS'::character varying AS common_code_grp_id,\n    v_card_cond_atom.cond_basis_cd AS cd_value\n   FROM file_pipeline.v_card_cond_atom\n  WHERE v_card_cond_atom.cond_basis_cd IS NOT NULL\nUNION ALL\n SELECT 'cond_expr atom predicate_method_cd'::text AS source_nm,\n    'PREDICATE_METHOD'::character varying AS common_code_grp_id,\n    v_card_cond_atom.predicate_method_cd AS cd_value\n   FROM file_pipeline.v_card_cond_atom\n  WHERE v_card_cond_atom.predicate_method_cd IS NOT NULL\nUNION ALL\n SELECT 'cond_expr atom cond_status_cd'::text AS source_nm,\n    'ITEM_STATUS'::character varying AS common_code_grp_id,\n    v_card_cond_atom.cond_status_cd AS cd_value\n   FROM file_pipeline.v_card_cond_atom\n  WHERE v_card_cond_atom.cond_status_cd IS NOT NULL\nUNION ALL\n SELECT 'cond_expr.expr_status_cd'::text AS source_nm,\n    'ITEM_STATUS'::character varying AS common_code_grp_id,\n    v_card_cond_atom.expr_status_cd AS cd_value\n   FROM file_pipeline.v_card_cond_atom\n  WHERE v_card_cond_atom.expr_status_cd IS NOT NULL;"
+      ]
+    ],
+    "rows": {
+      "card_extr_stg": 0,
+      "card_bnft": 0,
+      "card_excl_item": 0
+    },
+    "dependents": [
+      [
+        "constraint card_excl_item_issuer_excl_item_nm_key on table file_pipeline.card_excl_item",
+        "a"
+      ],
+      [
+        "constraint card_excl_item_issuer_excl_item_nm_key on table file_pipeline.card_excl_item",
+        "a"
+      ],
+      [
+        "constraint card_excl_item_pkey on table file_pipeline.card_excl_item",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_card_extr_stg_id_key on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_check on table file_pipeline.card_extr_stg",
+        "n"
+      ],
+      [
+        "constraint card_extr_stg_check on table file_pipeline.card_extr_stg",
+        "n"
+      ],
+      [
+        "constraint card_extr_stg_check on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_check on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_check1 on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_check1 on table file_pipeline.card_extr_stg",
+        "n"
+      ],
+      [
+        "constraint card_extr_stg_check1 on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_check1 on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_check1 on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_check1 on table file_pipeline.card_extr_stg",
+        "n"
+      ],
+      [
+        "constraint card_extr_stg_check1 on table file_pipeline.card_extr_stg",
+        "n"
+      ],
+      [
+        "constraint card_extr_stg_check1 on table file_pipeline.card_extr_stg",
+        "n"
+      ],
+      [
+        "constraint card_extr_stg_check1 on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_check1 on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_check1 on table file_pipeline.card_extr_stg",
+        "n"
+      ],
+      [
+        "constraint card_extr_stg_check1 on table file_pipeline.card_extr_stg",
+        "n"
+      ],
+      [
+        "constraint card_extr_stg_pkey on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_pkey on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_pkey on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_pkey on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_pkey on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_pkey on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "constraint card_extr_stg_stg_item_seq_check on table file_pipeline.card_extr_stg",
+        "n"
+      ],
+      [
+        "constraint card_extr_stg_stg_item_seq_check on table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "default value for column card_excl_item_id of table file_pipeline.card_excl_item",
+        "a"
+      ],
+      [
+        "default value for column card_extr_stg_id of table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "default value for column create_date of table file_pipeline.card_excl_item",
+        "a"
+      ],
+      [
+        "default value for column create_date of table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "default value for column excl_alias_nms of table file_pipeline.card_excl_item",
+        "a"
+      ],
+      [
+        "default value for column stg_status of table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "default value for column update_date of table file_pipeline.card_excl_item",
+        "a"
+      ],
+      [
+        "default value for column update_date of table file_pipeline.card_extr_stg",
+        "a"
+      ],
+      [
+        "index file_pipeline.ix_card_excl_item_alias_gin",
+        "a"
+      ],
+      [
+        "index file_pipeline.ix_card_excl_item_concept_key",
+        "a"
+      ],
+      [
+        "index file_pipeline.ix_card_extr_stg_chunk_key",
+        "a"
+      ],
+      [
+        "index file_pipeline.ix_card_extr_stg_excl_item_key",
+        "a"
+      ],
+      [
+        "index file_pipeline.ix_card_extr_stg_status_key",
+        "a"
+      ],
+      [
+        "index file_pipeline.ix_card_extr_stg_status_key",
+        "a"
+      ],
+      [
+        "rule _RETURN on view file_pipeline.v_card_integrity_issue",
+        "n"
+      ],
+      [
+        "rule _RETURN on view file_pipeline.v_card_integrity_issue",
+        "n"
+      ],
+      [
+        "rule _RETURN on view file_pipeline.v_card_integrity_issue",
+        "n"
+      ],
+      [
+        "rule _RETURN on view file_pipeline.v_card_integrity_issue",
+        "n"
+      ],
+      [
+        "rule _RETURN on view file_pipeline.v_common_cd_usage",
+        "n"
+      ],
+      [
+        "rule _RETURN on view file_pipeline.v_common_cd_usage",
+        "n"
+      ],
+      [
+        "rule _RETURN on view file_pipeline.v_common_cd_usage",
+        "n"
+      ],
+      [
+        "toast table pg_toast.pg_toast_22241",
+        "i"
+      ],
+      [
+        "toast table pg_toast.pg_toast_22250",
+        "i"
+      ],
+      [
+        "type file_pipeline.card_excl_item",
+        "i"
+      ],
+      [
+        "type file_pipeline.card_extr_stg",
+        "i"
+      ]
+    ]
+  }
+}
