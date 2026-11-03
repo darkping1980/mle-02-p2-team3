@@ -151,6 +151,16 @@ def expressions_of(snapshot):
     return [item for item in found if item[1] is not None]
 
 
+def linked_evidence(snapshot):
+    """등록된 카드·혜택·규칙에 연결(card_evidence_link)된 원문 근거만 그래프에 올린다.
+
+    연결이 없는 근거는 아직 등록되지 않은 추출 후보(card_extr_stg, 검토 대기)의 인용이다. 그래프에 올리면 주체 없는
+    근거 노드가 되고(orphan_nodes 규칙 위반), 검토 전 후보를 확정 데이터처럼 보이게 한다. 건수만 보고한다.
+    """
+    linked = {link["evidence_id"] for link in snapshot["links"]}
+    return [row for row in snapshot["evidence"] if row["evidence_id"] in linked]
+
+
 def expected_counts(snapshot) -> tuple[dict, dict]:
     """그래프를 만들지 않고 원천 행만으로 예상 건수를 계산한다."""
     rules = [rule for row in snapshot["benefits"] for rule in row.get("rule_list") or []]
@@ -159,7 +169,7 @@ def expected_counts(snapshot) -> tuple[dict, dict]:
     branches = [branch for expression in expressions for branch in expression.get("branches", [])]
     atoms = [atom for branch in branches for atom in branch.get("atoms", [])]
     nodes = {"card_product": len(snapshot["products"]), "card_doc": len(snapshot["documents"]), "card_doc_page": len(snapshot["pages"]),
-             "card_doc_chunk": len(snapshot["chunks"]), "card_source_evidence": len(snapshot["evidence"]),
+             "card_doc_chunk": len(snapshot["chunks"]), "card_source_evidence": len(linked_evidence(snapshot)),
              "card_bnft": len(snapshot["benefits"]), "bnft_rule": len(rules),
              "rule_target": len({(t.get("target_type_cd"), t.get("target_key")) for t in targets}),
              "cond_expr": len(expressions), "cond_branch": len(branches), "cond_atom": len(atoms),
@@ -167,7 +177,7 @@ def expected_counts(snapshot) -> tuple[dict, dict]:
     relationships = {"has_document": len(snapshot["product_docs"]) + len(snapshot["common_docs"]),
                      "has_benefit": len(snapshot["benefits"]), "has_rule": len(rules), "targets": len(targets),
                      "has_expr": len(expressions), "has_branch": len(branches), "has_atom": len(atoms),
-                     "supported_by": len(snapshot["links"]), "in_chunk": len(snapshot["evidence"]),
+                     "supported_by": len(snapshot["links"]), "in_chunk": len(linked_evidence(snapshot)),
                      "on_page": len(snapshot["chunks"]), "in_document": len(snapshot["pages"]),
                      "has_common_benefit": len(snapshot["common_applies"]), "belongs_to": len(snapshot["common_benefits"]),
                      "same_as": sum(row["status"] == "SAME" for row in snapshot["brand_compare"])}
@@ -223,7 +233,7 @@ def build(snapshot):
         chunk = (*page, row["card_doc_chunk_id"])
         chunks[chunk] = g.node("card_doc_chunk", [*chunk], row)
         g.edge("on_page", chunks[chunk], pages[page], {})
-    for row in snapshot["evidence"]:
+    for row in linked_evidence(snapshot):
         chunk = (row["card_doc_id"], row["page_no"], row["card_doc_chunk_id"])
         if chunk not in chunks:
             errors.append(f"근거의 청크 없음: {row['evidence_id']}")
@@ -317,9 +327,9 @@ def build(snapshot):
                 errors.append(f"조건식 JSON 불일치: {owner_key}")
     if errors:
         raise GraphValidationError(errors)
-    linked = {link["evidence_id"] for link in snapshot["links"]}
     stats["expected"] = {"nodes": node_counts, "relationships": relationship_counts}
-    stats["unlinked_evidence"] = sorted(set(evidence) - linked)
+    # 그래프에 올리지 않은 근거(등록 전 추출 후보의 인용). 건수와 ID만 보고한다.
+    stats["unlinked_evidence"] = sorted({row["evidence_id"] for row in snapshot["evidence"]} - set(evidence))
     stats["common_benefits_without_direct_evidence"] = [row["card_common_bnft_id"] for row in snapshot["common_benefits"]]
     stats["brand_compare"] = [{name: row[name] for name in ("card_bnft_id", "card_common_bnft_id", "status", "issues")}
                               for row in snapshot["brand_compare"]]

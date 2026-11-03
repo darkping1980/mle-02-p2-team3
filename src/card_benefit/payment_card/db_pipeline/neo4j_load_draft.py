@@ -127,7 +127,7 @@ def main():
     nodes, edges = prepare(graph)
     print(json.dumps({"mode": "APPLY" if args.apply else "PREVIEW", "nodes": len(nodes), "relationships": len(edges),
                       "target_database": EXPECTED_DB, "by_label": stats["nodes"], "by_type": stats["relationships"],
-                      "isolated_nodes": stats["isolated_nodes"], "unlinked_evidence": stats["unlinked_evidence"],
+                      "isolated_nodes": stats["isolated_nodes"], "unlinked_evidence": len(stats["unlinked_evidence"]),
                       "brand_compare": stats["brand_compare"]}, ensure_ascii=False))
     if not args.apply:
         return

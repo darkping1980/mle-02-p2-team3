@@ -200,9 +200,15 @@ class LiveNeo4jTests(unittest.TestCase):
             self.assertEqual(manual, bound, item["statement_id"])
 
     def test_catalog_has_card_and_common_benefits_without_same_duplicate(self):
-        self.assertEqual(len(self.catalog), 5)
+        # 카드 혜택 4건 + 동일성(SAME)으로 공통 혜택 1건만 남는 Visa 컨시어지 = 카드에 연결된 항목 5건
+        applied = {name: row for name, row in self.catalog.items() if row["card"] != "적용 카드 미확인"}
+        self.assertEqual(len(applied), 5)
         self.assertEqual(self.catalog["Visa 컨시어지"]["card"], "JADE Classic")
-        self.assertEqual({row["status"] for name, row in self.catalog.items() if name != "Visa 컨시어지"}, {"PENDING_REVIEW"})
+        self.assertEqual({row["status"] for name, row in applied.items() if name != "Visa 컨시어지"}, {"PENDING_REVIEW"})
+        # 적용 관계(card_common_bnft_apply)가 없는 공통 혜택(UPI_PLATINUM 5건, 2026-11-03 등록)은 카드를 임의로 붙이지 않는다
+        unapplied = {name: row for name, row in self.catalog.items() if row["card"] == "적용 카드 미확인"}
+        self.assertEqual(len(unapplied), 5)
+        self.assertEqual({row["common_nm"] for row in unapplied.values()}, {"UnionPay Platinum"})
 
     def test_hops_move_real_relationships(self):
         hop1 = self.search.hop("hop1_card_benefits", card_nm="ONE PICK STYLE")

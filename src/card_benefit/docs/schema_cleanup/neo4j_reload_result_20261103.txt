@@ -1,0 +1,30 @@
+Neo4j dp_ 그래프 1차 반영 기록 — 2026-11-03 (집 PC, EXTRACT_V8 재추출 이전)
+대상 DB: NEO4J_DATABASE 6ac1f0f8 (dp_ 노드만 존재, 다른 그래프 fp_ 0건)
+백업: src/data/backup/neo4j_dp_pre_reload_20261103/neo4j_dp_graph.json (Git 제외, 노드 200·관계 263)
+적재: python -m card_benefit.payment_card.db_pipeline.neo4j_load_draft --apply --confirm APPROVED_DP_HANA_CARD
+      (전용 라벨·PK MERGE, 삭제 구문 없음, 한 트랜잭션, 키 집합 사후 조건 불일치 시 롤백)
+
+[적재 전 neo4j_validate]
+Neo4j 200 노드 / 263 관계. extra 0, changed 44(계산 키 제거로 바뀐 혜택 5·규칙 6·조건식 8·분기 9·atom 15·카드 1의 source_json)
+missing: card_source_evidence 1640, card_doc_chunk 9, card_common_bnft 5. SQL↔Cypher 4종 일치. 고아 노드 1(card_doc 20261103_000012)
+
+[매핑 수정] neo4j_dry_run.build: 원문 근거는 card_evidence_link로 연결된 것만 노드로 만든다(linked_evidence).
+  연결 없는 근거 1640건은 모두 card_extr_stg 추출 후보(등록 전, 검토 대기)의 인용이다. 올리면 주체 없는 근거 노드가 되어
+  orphan_nodes 규칙(근거는 dp_supported_by 필요)을 어기고 검토 전 후보를 확정 데이터처럼 보이게 한다. 건수만 보고한다.
+
+[적재 결과] committed (214, 277). 같은 명령 재실행 → (214, 277), 차이 0 (멱등)
+노드: card_product 2, card_bnft 5, bnft_rule 6, rule_target 19, cond_expr 8, cond_branch 9, cond_atom 15,
+      card_common 9, card_common_bnft 6, card_doc 17, card_doc_page 37, card_doc_chunk 46, card_source_evidence 35
+관계: has_document 17, has_benefit 5, has_rule 6, targets 34, has_expr 8, has_branch 9, has_atom 15, supported_by 57,
+      in_chunk 35, on_page 46, in_document 37, belongs_to 6, has_common_benefit 1, same_as 1
+
+[적재 후 neo4j_validate] 노드·관계 missing/extra/changed 모두 0, 범위 밖 0, SQL↔Cypher 4종 일치(조건 15, 근거 연결 57, 공통 적용 1, 규칙 대상 34)
+  ok=false 원인은 적재 전부터 있던 고아 1건뿐: card_doc 20261103_000012(공통_JCB브랜드서비스_JP002). PostgreSQL에서도 상품·공통서비스
+  연결이 없다(JCB Platinum/Prestige 등급 미확정). 삭제하지 않았다.
+추가 확인(읽기 전용): 계산 키 잔존 0, 중복 key 0, 근거 35건 모두 청크→페이지→문서 경로 완전,
+  카드 2(ONE PICK STYLE) 혜택 4 / 카드 5(JADE Classic) 혜택 1 + 공통 1, 상태는 모두 PENDING_REVIEW 그대로,
+  CU 역검색 → ONE PICK 규칙 2건(100, 500), UPI_PLATINUM 공통 혜택 5건은 카드 적용 없음(적용 행 없음 → 연결 안 함)
+
+[회귀] RUN_NEO4J_INTEGRATION=1 test_card_graphrag + test_neo4j_origin_search: 179 passed
+  (카탈로그 건수 고정값 5 → 카드 연결 5 + 미적용 공통 5로 검사 구체화)
+  pytest payment_card/tests: 421 passed, 1 failed(기존 test_answer_text), 18 skipped / db_pipeline neo4j 단위: 43 passed

@@ -47,6 +47,7 @@ Thumbs.db
 /src/data/backup/a72_pre_reset_20261101/card_extr_stg.csv
 /src/data/backup/a72_pre_reset_20261101/card_source_evidence.csv
 /src/data/backup/pre_calc_cleanup_*/
+/src/data/backup/neo4j_dp_pre_reload_*/
 /src/data/backup/pre_product_reset_20261103/
 /src/data/backup/pre_card_evidence_link_pk_inheritance_20261103/
 /src/data/backup/pre_card_source_evidence_*_20261103/

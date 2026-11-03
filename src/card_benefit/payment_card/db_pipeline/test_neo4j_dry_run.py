@@ -93,6 +93,18 @@ class PreviewTests(unittest.TestCase):
         self.assertEqual((nodes, relationships), (stats["nodes"], stats["relationships"]))
         self.assertEqual(relationships["dp_has_document"], 2)
 
+    def test_unlinked_candidate_evidence_is_reported_not_loaded(self):
+        """등록 전 추출 후보의 인용(연결 없음)은 노드로 만들지 않고 보고만 한다. 연결된 근거는 그대로 올린다."""
+        data = fixture()
+        data["evidence"].append({"card_doc_id": DOC, "page_no": 1, "card_doc_chunk_id": "chunk", "evidence_id": "candidate",
+                                 "card_extr_stg_id": "S1", "approval_status_cd": "PENDING"})
+        graph, stats = build(data)
+        self.assertNotIn(key("card_source_evidence", "candidate"), graph.nodes)
+        self.assertIn(key("card_source_evidence", "ev"), graph.nodes)
+        self.assertEqual(stats["unlinked_evidence"], ["candidate"])
+        self.assertEqual(stats["nodes"]["dp_card_source_evidence"], 1)
+        self.assertEqual(expected_counts(data), (stats["nodes"], stats["relationships"]))
+
     def test_all_errors_are_reported_instead_of_skipped(self):
         data = fixture()
         data["common_applies"].append({"card_common_id": 9, "card_common_bnft_id": "X", "card_id": 5})

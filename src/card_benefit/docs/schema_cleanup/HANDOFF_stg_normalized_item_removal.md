@@ -10,7 +10,7 @@
 | 정리 SQL에 `stg_normalized_item` 삭제·CHECK 교체·`seq_card_excl_item` 삭제 추가, 복구 SQL 확장 | **완료**(집 PC) |
 | **Supabase `db_pipeline` 실DB 적용** | **완료·COMMIT**(집 PC, 사용자 승인). 23/23 검증 통과, `live_apply_result_20261103.txt` |
 | V7 설계 DDL·DBML·공통코드 seed/설명 SQL 동기화 | **완료**(집 PC) |
-| Neo4j 재적재 | **미실행**. card_bnft JSON이 바뀌었으므로 필요 |
+| Neo4j 재적재(1차, 재추출 전) | **완료**(집 PC). 214 노드·277 관계, PostgreSQL과 차이 0, `neo4j_reload_result_20261103.txt` |
 | Stage 5(데이터 초기화·재등록) | **미실행**(사용자 승인 필요) |
 
 ## 2. 설계 결정(검증 근거)
@@ -74,7 +74,8 @@
 ## 8. 내일(학원 PC) 남은 작업
 
 1. `git pull` 후 `pytest payment_card/tests` 실행(기대: 기존 실패 1건).
-2. Neo4j 재적재(`dp_card_bnft`·`dp_bnft_rule`·조건 노드 source_json이 바뀜) 후 `RUN_NEO4J_INTEGRATION=1` 회귀.
+2. Neo4j 1차 반영은 완료했다(재추출 전 데이터). Stage 5 재등록 후 같은 명령으로 다시 적재한다.
+   고아 문서 `card_doc 20261103_000012`(JCB JP002)는 PostgreSQL에서 공통서비스 연결을 정한 뒤 해소된다(Neo4j에서 지우지 않음).
 3. (승인 후) EXTRACT_V8 실제 추출은 별도 실행 ID로 한 문서(MP004, doc 20261103_000014)만 실행해 USD 한도 OK를 확인한다.
 4. (승인 후) Stage 4~6 데이터 초기화·재등록. 공통 등록은 `register_run` → `apply_run`.
 5. `test_live_registration.py`의 시험 원본을 추출 스키마 형식으로 바꾼 뒤 실행(유료 임베딩 포함).
