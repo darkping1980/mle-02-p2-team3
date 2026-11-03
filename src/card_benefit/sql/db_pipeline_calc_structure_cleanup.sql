@@ -3,12 +3,14 @@
 -- 기록: src/card_benefit/docs/schema_cleanup/  /  복구: db_pipeline_calc_structure_cleanup_rollback.sql
 -- [승인 전 공유 DB 실행 금지] 격리된 로컬 테스트 DB에서 검증했다. DROP ... CASCADE를 쓰지 않는다.
 --
--- 제거: v_card_bnft_rule_effective, fn_cond_spend_bound, card_excl_item(+인덱스), card_extr_stg.card_excl_item_id,
+-- 제거: v_card_bnft_rule_effective, fn_cond_spend_bound, card_excl_item(+인덱스·시퀀스), card_extr_stg.card_excl_item_id,
 --       card_bnft.rule_select_cd, 정합성 게이트 rule_method_value_*·predicate_params_*·excl_item_unknown,
 --       rule_list 키 predicate_state_cd, method_ver, calc_params, rule_priority, calc_method_cd, payout_unit_cd, basis_amt, 조건 atom 키 predicate_method_cd, predicate_method_ver, cond_params, card_excl_item_id, link_role_cd,
---       공통코드 그룹 PREDICATE_STATE, PREDICATE_METHOD, RULE_SELECT, LIMIT_PERIOD, LIMIT_UNIT, LIMIT_SCOPE, LIMIT_AGG, POOL_ROLE, CALC_METHOD, PAYOUT_UNIT
+--       공통코드 그룹 PREDICATE_STATE, PREDICATE_METHOD, RULE_SELECT, LIMIT_PERIOD, LIMIT_UNIT, LIMIT_SCOPE, LIMIT_AGG, POOL_ROLE, CALC_METHOD, PAYOUT_UNIT,
+--       card_extr_stg.stg_normalized_item(정제본. 등록 시 stg_raw_item에서 다시 만든다) — CHECK card_extr_stg_check1은 정제본 조건만 뺀 정의로 교체
 -- 대체: v_card_rule·v_card_cond_atom(열 제거), v_common_cd_usage·v_card_integrity_issue(가지 제거),
 --       fn_valid_rule_list·fn_valid_cond_expr(계산 필수 조건 제거)
+-- 정제본 값 복구: 백업 폴더(backup_db_pipeline.py)의 restore_stg_normalized_item.sql. 생성 시점 지문 350건 / 4c49d051ffaa164e4d66d13632ae16ff
 -- 유지: value_num·value_unit_cd(답변 수치 검증·검색 텍스트·Neo4j), target_list, 조건 원문·유형·금액,
 --       relation_list, bnft_rule_txt·bnft_limit_txt, 원문 근거·청크·임베딩, 공통서비스 데이터, 추출 이력(card_extr_stg)
 -- =====================================================================================================
@@ -22,10 +24,31 @@ LOCK TABLE db_pipeline.card_bnft, db_pipeline.card_product, db_pipeline.card_ext
 
 -- 0. 사전 조건: 지울 컬럼·테이블에 값이 없어야 한다. 정리 전 건수를 임시 테이블에 둔다.
 DO $pre$
+DECLARE v_n int; v_f text;
 BEGIN
     IF EXISTS (SELECT 1 FROM db_pipeline.card_bnft WHERE rule_select_cd IS NOT NULL) THEN RAISE EXCEPTION 'rule_select_cd에 값이 있어 중단'; END IF;
     IF EXISTS (SELECT 1 FROM db_pipeline.card_extr_stg WHERE card_excl_item_id IS NOT NULL) THEN RAISE EXCEPTION 'card_extr_stg.card_excl_item_id에 값이 있어 중단'; END IF;
     IF EXISTS (SELECT 1 FROM db_pipeline.card_excl_item) THEN RAISE EXCEPTION 'card_excl_item에 행이 있어 중단'; END IF;
+    IF (SELECT last_value FROM pg_sequences WHERE schemaname = 'db_pipeline' AND sequencename = 'seq_card_excl_item') IS NOT NULL THEN
+        RAISE EXCEPTION 'seq_card_excl_item이 사용된 적이 있어 중단';
+    END IF;
+    -- 정제본: 백업 시점과 값이 같아야 백업 파일로 복구할 수 있다
+    SELECT * INTO v_n, v_f FROM (SELECT count(*)::int, md5(coalesce(string_agg(card_extr_stg_id || ':' || stg_normalized_item::text, ',' ORDER BY card_extr_stg_id COLLATE "C"), '')) FROM db_pipeline.card_extr_stg WHERE stg_normalized_item IS NOT NULL) x;
+    IF v_n <> 350 OR v_f <> '4c49d051ffaa164e4d66d13632ae16ff' THEN
+        RAISE EXCEPTION '정제본 지문이 백업과 다름(% / %). 백업을 다시 만들고 SQL을 재생성하세요', v_n, v_f;
+    END IF;
+    -- 정제본 컬럼을 참조하는 객체는 CHECK card_extr_stg_check1 하나뿐이어야 한다(뷰·함수·인덱스·트리거 없음)
+    IF EXISTS (SELECT 1 FROM pg_depend d
+               WHERE d.refobjid = 'db_pipeline.card_extr_stg'::regclass
+                 AND d.refobjsubid = (SELECT attnum FROM pg_attribute WHERE attrelid = 'db_pipeline.card_extr_stg'::regclass AND attname = 'stg_normalized_item')
+                 AND NOT (d.classid = 'pg_constraint'::regclass
+                          AND d.objid = (SELECT oid FROM pg_constraint WHERE conrelid = 'db_pipeline.card_extr_stg'::regclass AND conname = 'card_extr_stg_check1'))) THEN
+        RAISE EXCEPTION 'stg_normalized_item에 다른 의존 객체가 있어 중단';
+    END IF;
+    IF (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'db_pipeline.card_extr_stg'::regclass AND conname = 'card_extr_stg_check1')
+       IS DISTINCT FROM 'CHECK ((((stg_status)::text <> ALL (ARRAY[(''AUTO_APPROVED''::character varying)::text, (''MANUAL_APPROVED''::character varying)::text])) OR ((stg_normalized_item IS NOT NULL) AND (NOT ((stg_sql_check_cd)::text IS DISTINCT FROM ''OK''::text)) AND (stg_evidence_start_pos IS NOT NULL) AND (stg_evidence_end_pos IS NOT NULL) AND (btrim(stg_evidence_txt) <> ''''::text))))' THEN
+        RAISE EXCEPTION 'card_extr_stg_check1 정의가 예상과 다름';
+    END IF;
     -- 다시 만들 뷰 묶음 밖의 객체가 이 뷰들에 의존하면 중단한다(CASCADE 없이 지우기 위해).
     IF EXISTS (SELECT 1 FROM pg_depend d JOIN pg_rewrite w ON w.oid = d.objid JOIN pg_class v ON v.oid = w.ev_class
                WHERE d.refobjid IN ('db_pipeline.v_card_integrity_issue'::regclass, 'db_pipeline.v_common_cd_usage'::regclass, 'db_pipeline.v_card_bnft_rule_effective'::regclass, 'db_pipeline.v_card_rule_target'::regclass, 'db_pipeline.v_card_cond_atom'::regclass, 'db_pipeline.v_card_rule'::regclass)
@@ -36,6 +59,23 @@ BEGIN
 END
 $pre$;
 CREATE TEMP TABLE cleanup_before ON COMMIT DROP AS SELECT 'card_ai_call', count(*) FROM db_pipeline.card_ai_call UNION ALL SELECT 'card_ai_run', count(*) FROM db_pipeline.card_ai_run UNION ALL SELECT 'card_bnft', count(*) FROM db_pipeline.card_bnft UNION ALL SELECT 'card_common', count(*) FROM db_pipeline.card_common UNION ALL SELECT 'card_common_bnft', count(*) FROM db_pipeline.card_common_bnft UNION ALL SELECT 'card_common_bnft_apply', count(*) FROM db_pipeline.card_common_bnft_apply UNION ALL SELECT 'card_common_doc', count(*) FROM db_pipeline.card_common_doc UNION ALL SELECT 'card_doc', count(*) FROM db_pipeline.card_doc UNION ALL SELECT 'card_doc_chunk', count(*) FROM db_pipeline.card_doc_chunk UNION ALL SELECT 'card_doc_page', count(*) FROM db_pipeline.card_doc_page UNION ALL SELECT 'card_evidence_link', count(*) FROM db_pipeline.card_evidence_link UNION ALL SELECT 'card_extr_stg', count(*) FROM db_pipeline.card_extr_stg UNION ALL SELECT 'card_product', count(*) FROM db_pipeline.card_product UNION ALL SELECT 'card_product_doc', count(*) FROM db_pipeline.card_product_doc UNION ALL SELECT 'card_source_evidence', count(*) FROM db_pipeline.card_source_evidence;
+-- 보존 지문: 정리로 바뀌지 않는 모든 컬럼(원문·청크·근거·추출 원본·병합 정보·검증 코드·실행 이력·공통서비스)
+CREATE TEMP TABLE cleanup_keep ON COMMIT DROP AS
+SELECT 'card_ai_call' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, call_input_sha256, call_status, call_resp_raw, call_resp_json, call_error_msg, call_input_token_cnt, call_output_token_cnt, call_latency_ms, call_req_date, create_date, create_user_id, update_date, update_user_id)::text), ',' ORDER BY md5(row(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, call_input_sha256, call_status, call_resp_raw, call_resp_json, call_error_msg, call_input_token_cnt, call_output_token_cnt, call_latency_ms, call_req_date, create_date, create_user_id, update_date, update_user_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_ai_call
+UNION ALL SELECT 'card_ai_run' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_ai_run_id, run_stage_cd, run_call_mthd_cd, run_model_nm, run_prompt_ver, run_prompt_txt, run_param, run_target_card_doc_id, run_status, run_start_date, run_end_date, run_note, create_date, create_user_id, update_date, update_user_id)::text), ',' ORDER BY md5(row(card_ai_run_id, run_stage_cd, run_call_mthd_cd, run_model_nm, run_prompt_ver, run_prompt_txt, run_param, run_target_card_doc_id, run_status, run_start_date, run_end_date, run_note, create_date, create_user_id, update_date, update_user_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_ai_run
+UNION ALL SELECT 'card_bnft' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_id, card_bnft_id, bnft_cd, bnft_nm, bnft_type_cd, bnft_origin_cd, bnft_scope_cd, bnft_brand_opt_cds, relation_list, verification_status_cd, bnft_valid_from, bnft_valid_to_excl, bnft_rule_txt, bnft_limit_txt, bnft_search_txt, bnft_embedding)::text), ',' ORDER BY md5(row(card_id, card_bnft_id, bnft_cd, bnft_nm, bnft_type_cd, bnft_origin_cd, bnft_scope_cd, bnft_brand_opt_cds, relation_list, verification_status_cd, bnft_valid_from, bnft_valid_to_excl, bnft_rule_txt, bnft_limit_txt, bnft_search_txt, bnft_embedding)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_bnft
+UNION ALL SELECT 'card_common' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_common_id, common_cd, common_nm, brand_cd, service_grade_cd, common_note, create_date, create_user_id, update_date, update_user_id)::text), ',' ORDER BY md5(row(card_common_id, common_cd, common_nm, brand_cd, service_grade_cd, common_note, create_date, create_user_id, update_date, update_user_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_common
+UNION ALL SELECT 'card_common_bnft' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_common_id, card_common_bnft_id, bnft_cd, bnft_nm, bnft_type_cd, service_type_cd, bnft_rule_txt, bnft_limit_txt, bnft_valid_from, bnft_valid_to_excl, create_date, create_user_id, update_date, update_user_id, bnft_search_txt, bnft_embedding)::text), ',' ORDER BY md5(row(card_common_id, card_common_bnft_id, bnft_cd, bnft_nm, bnft_type_cd, service_type_cd, bnft_rule_txt, bnft_limit_txt, bnft_valid_from, bnft_valid_to_excl, create_date, create_user_id, update_date, update_user_id, bnft_search_txt, bnft_embedding)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_common_bnft
+UNION ALL SELECT 'card_common_bnft_apply' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_common_id, card_common_bnft_id, card_id)::text), ',' ORDER BY md5(row(card_common_id, card_common_bnft_id, card_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_common_bnft_apply
+UNION ALL SELECT 'card_common_doc' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_common_id, card_doc_id)::text), ',' ORDER BY md5(row(card_common_id, card_doc_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_common_doc
+UNION ALL SELECT 'card_doc' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_doc_id, doc_cd, doc_family_cd, doc_type_cd, doc_title, doc_source_url, doc_file_nm, doc_file_size, doc_sha256, doc_page_cnt, doc_review_no, doc_review_date, doc_release_date, doc_collect_date, doc_version_no, doc_status, doc_note, create_date, create_user_id, update_date, update_user_id)::text), ',' ORDER BY md5(row(card_doc_id, doc_cd, doc_family_cd, doc_type_cd, doc_title, doc_source_url, doc_file_nm, doc_file_size, doc_sha256, doc_page_cnt, doc_review_no, doc_review_date, doc_release_date, doc_collect_date, doc_version_no, doc_status, doc_note, create_date, create_user_id, update_date, update_user_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_doc
+UNION ALL SELECT 'card_doc_chunk' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_doc_id, page_no, card_doc_chunk_id, chunk_seq, chunk_section_nm, chunk_type_cd, chunk_start_pos, chunk_end_pos, chunk_raw_txt, chunk_clean_txt, chunk_status, chunk_split_rule_ver, chunk_clean_rule_ver, create_date, create_user_id, update_date, update_user_id)::text), ',' ORDER BY md5(row(card_doc_id, page_no, card_doc_chunk_id, chunk_seq, chunk_section_nm, chunk_type_cd, chunk_start_pos, chunk_end_pos, chunk_raw_txt, chunk_clean_txt, chunk_status, chunk_split_rule_ver, chunk_clean_rule_ver, create_date, create_user_id, update_date, update_user_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_doc_chunk
+UNION ALL SELECT 'card_doc_page' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_doc_id, page_no, page_raw_txt, page_char_cnt, page_txt_sha256, page_layer_cd, page_extractor_nm, page_extractor_ver, page_note, create_date, create_user_id, update_date, update_user_id)::text), ',' ORDER BY md5(row(card_doc_id, page_no, page_raw_txt, page_char_cnt, page_txt_sha256, page_layer_cd, page_extractor_nm, page_extractor_ver, page_note, create_date, create_user_id, update_date, update_user_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_doc_page
+UNION ALL SELECT 'card_evidence_link' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_doc_id, page_no, card_doc_chunk_id, evidence_id, card_id, evidence_link_id, card_bnft_id, ev_subject_cd, rule_key, relation_key, ev_item_cd, ev_item_key)::text), ',' ORDER BY md5(row(card_doc_id, page_no, card_doc_chunk_id, evidence_id, card_id, evidence_link_id, card_bnft_id, ev_subject_cd, rule_key, relation_key, ev_item_cd, ev_item_key)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_evidence_link
+UNION ALL SELECT 'card_extr_stg' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, card_extr_stg_id, stg_item_seq, card_id, stg_kind_cd, stg_parent_card_extr_stg_id, stg_raw_item, stg_evidence_txt, stg_evidence_start_pos, stg_evidence_end_pos, stg_sql_check_cd, stg_ai_vrfy_cd, stg_ai_vrfy_card_ai_run_id, stg_status, stg_review_note, stg_approved_date, stg_approved_user_id, create_date, create_user_id, update_date, update_user_id)::text), ',' ORDER BY md5(row(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, card_extr_stg_id, stg_item_seq, card_id, stg_kind_cd, stg_parent_card_extr_stg_id, stg_raw_item, stg_evidence_txt, stg_evidence_start_pos, stg_evidence_end_pos, stg_sql_check_cd, stg_ai_vrfy_cd, stg_ai_vrfy_card_ai_run_id, stg_status, stg_review_note, stg_approved_date, stg_approved_user_id, create_date, create_user_id, update_date, update_user_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_extr_stg
+UNION ALL SELECT 'card_product' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_id, product_cd, product_nm, issuer, card_kind_cd, product_status_cd, launched_on, discontinued_on, brand_opt_list, create_date, create_user_id, update_date, update_user_id, card_cond_status_cd)::text), ',' ORDER BY md5(row(card_id, product_cd, product_nm, issuer, card_kind_cd, product_status_cd, launched_on, discontinued_on, brand_opt_list, create_date, create_user_id, update_date, update_user_id, card_cond_status_cd)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_product
+UNION ALL SELECT 'card_product_doc' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_id, card_doc_id, doc_role_cd, brand_opt_cds, approval_status_cd, applicability_basis_txt, approval_note, create_date, create_user_id, update_date, update_user_id)::text), ',' ORDER BY md5(row(card_id, card_doc_id, doc_role_cd, brand_opt_cds, approval_status_cd, applicability_basis_txt, approval_note, create_date, create_user_id, update_date, update_user_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_product_doc
+UNION ALL SELECT 'card_source_evidence' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_doc_id, page_no, card_doc_chunk_id, evidence_id, card_extr_stg_id, quote_txt, start_pos, end_pos, approval_status_cd)::text), ',' ORDER BY md5(row(card_doc_id, page_no, card_doc_chunk_id, evidence_id, card_extr_stg_id, quote_txt, start_pos, end_pos, approval_status_cd)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_source_evidence;
 
 -- 1. 뷰 제거(의존 순서, CASCADE 없음)
 DROP VIEW db_pipeline.v_card_integrity_issue;
@@ -153,9 +193,7 @@ BEGIN
         END IF;
         v_keys := v_keys || (v_rule->>'rule_key');
 
-        IF coalesce(jsonb_typeof(v_rule->'value_num'), 'null') NOT IN ('number','null')
-           OR coalesce(jsonb_typeof(v_rule->'rule_priority'), 'null') NOT IN ('number','null')
-           OR coalesce(jsonb_typeof(v_rule->'calc_params'), 'null') NOT IN ('object','null') THEN
+        IF coalesce(jsonb_typeof(v_rule->'value_num'), 'null') NOT IN ('number','null') THEN
             RETURN false;
         END IF;
         IF coalesce((v_rule->>'value_num')::numeric, 0) < 0 THEN
@@ -181,7 +219,7 @@ BEGIN
     RETURN true;
 END;
 $function$;
-COMMENT ON FUNCTION db_pipeline.fn_valid_rule_list(jsonb, text) IS '혜택 규칙 목록 JSONB 계약 검증. 계산 방법·지급 단위·기준 금액·방법 버전·판정 상태는 저장하지 않는다(2026-11-03 정리). pool_refs 불허, p_owner는 LOCAL만 허용';
+COMMENT ON FUNCTION db_pipeline.fn_valid_rule_list(jsonb, text) IS '혜택 규칙 목록 JSONB 계약 검증. 계산 방법·지급 단위·기준 금액·방법 버전·판정 상태·우선순위·계산 파라미터는 저장하지 않는다(2026-11-03 정리). pool_refs 불허, p_owner는 LOCAL만 허용';
 COMMENT ON FUNCTION db_pipeline.fn_valid_cond_expr(jsonb) IS '조건식 JSONB 계약 검증. branch 사이 OR, branch 안 atom AND, negate_yn=NOT. 제외 조건은 excl_raw_txt 원문이 필요하다';
 
 -- 3. 저장된 JSON에서 계산 전용 키 제거(값은 모두 비었거나 고정값). 추출 이력 card_extr_stg는 바꾸지 않는다.
@@ -208,6 +246,12 @@ ALTER TABLE db_pipeline.card_extr_stg DROP COLUMN card_excl_item_id;
 DROP INDEX db_pipeline.ix_card_excl_item_alias_gin;
 DROP INDEX db_pipeline.ix_card_excl_item_concept_key;
 DROP TABLE db_pipeline.card_excl_item;
+DROP SEQUENCE db_pipeline.seq_card_excl_item;   -- 한 번도 발급하지 않음(last_value NULL)
+
+-- 4-2. 정제본 컬럼 제거. 승인 조건에서 정제본 존재만 빼고 검증 코드 OK·근거 위치·근거 문장 조건은 유지한다.
+ALTER TABLE db_pipeline.card_extr_stg DROP CONSTRAINT card_extr_stg_check1;
+ALTER TABLE db_pipeline.card_extr_stg ADD CONSTRAINT card_extr_stg_check1 CHECK ((((stg_status)::text <> ALL (ARRAY[('AUTO_APPROVED'::character varying)::text, ('MANUAL_APPROVED'::character varying)::text])) OR ((NOT ((stg_sql_check_cd)::text IS DISTINCT FROM 'OK'::text)) AND (stg_evidence_start_pos IS NOT NULL) AND (stg_evidence_end_pos IS NOT NULL) AND (btrim(stg_evidence_txt) <> ''::text))));
+ALTER TABLE db_pipeline.card_extr_stg DROP COLUMN stg_normalized_item;
 
 -- 5. 뷰 재생성
 CREATE VIEW db_pipeline.v_card_rule AS
@@ -232,15 +276,15 @@ CREATE VIEW db_pipeline.v_card_cond_atom AS
            FROM db_pipeline.card_product p
           WHERE p.card_cond_expr IS NOT NULL
         UNION ALL
-         SELECT 'BNFT'::text,
+         SELECT 'BNFT',
             b_1.card_id,
             b_1.card_bnft_id,
-            NULL::text,
+            NULL,
             b_1.bnft_cond_expr
            FROM db_pipeline.card_bnft b_1
           WHERE b_1.bnft_cond_expr IS NOT NULL
         UNION ALL
-         SELECT 'RULE'::text,
+         SELECT 'RULE',
             r.card_id,
             r.card_bnft_id,
             r.rule_key,
@@ -747,6 +791,29 @@ DECLARE v_diff int; v_left int;
 BEGIN
     SELECT count(*) INTO v_diff FROM (SELECT * FROM cleanup_before EXCEPT (SELECT 'card_ai_call', count(*) FROM db_pipeline.card_ai_call UNION ALL SELECT 'card_ai_run', count(*) FROM db_pipeline.card_ai_run UNION ALL SELECT 'card_bnft', count(*) FROM db_pipeline.card_bnft UNION ALL SELECT 'card_common', count(*) FROM db_pipeline.card_common UNION ALL SELECT 'card_common_bnft', count(*) FROM db_pipeline.card_common_bnft UNION ALL SELECT 'card_common_bnft_apply', count(*) FROM db_pipeline.card_common_bnft_apply UNION ALL SELECT 'card_common_doc', count(*) FROM db_pipeline.card_common_doc UNION ALL SELECT 'card_doc', count(*) FROM db_pipeline.card_doc UNION ALL SELECT 'card_doc_chunk', count(*) FROM db_pipeline.card_doc_chunk UNION ALL SELECT 'card_doc_page', count(*) FROM db_pipeline.card_doc_page UNION ALL SELECT 'card_evidence_link', count(*) FROM db_pipeline.card_evidence_link UNION ALL SELECT 'card_extr_stg', count(*) FROM db_pipeline.card_extr_stg UNION ALL SELECT 'card_product', count(*) FROM db_pipeline.card_product UNION ALL SELECT 'card_product_doc', count(*) FROM db_pipeline.card_product_doc UNION ALL SELECT 'card_source_evidence', count(*) FROM db_pipeline.card_source_evidence)) x;
     IF v_diff > 0 THEN RAISE EXCEPTION '데이터 건수가 달라졌습니다'; END IF;
+    SELECT count(*) INTO v_diff FROM (SELECT * FROM cleanup_keep EXCEPT (SELECT 'card_ai_call' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, call_input_sha256, call_status, call_resp_raw, call_resp_json, call_error_msg, call_input_token_cnt, call_output_token_cnt, call_latency_ms, call_req_date, create_date, create_user_id, update_date, update_user_id)::text), ',' ORDER BY md5(row(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, call_input_sha256, call_status, call_resp_raw, call_resp_json, call_error_msg, call_input_token_cnt, call_output_token_cnt, call_latency_ms, call_req_date, create_date, create_user_id, update_date, update_user_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_ai_call
+UNION ALL SELECT 'card_ai_run' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_ai_run_id, run_stage_cd, run_call_mthd_cd, run_model_nm, run_prompt_ver, run_prompt_txt, run_param, run_target_card_doc_id, run_status, run_start_date, run_end_date, run_note, create_date, create_user_id, update_date, update_user_id)::text), ',' ORDER BY md5(row(card_ai_run_id, run_stage_cd, run_call_mthd_cd, run_model_nm, run_prompt_ver, run_prompt_txt, run_param, run_target_card_doc_id, run_status, run_start_date, run_end_date, run_note, create_date, create_user_id, update_date, update_user_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_ai_run
+UNION ALL SELECT 'card_bnft' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_id, card_bnft_id, bnft_cd, bnft_nm, bnft_type_cd, bnft_origin_cd, bnft_scope_cd, bnft_brand_opt_cds, relation_list, verification_status_cd, bnft_valid_from, bnft_valid_to_excl, bnft_rule_txt, bnft_limit_txt, bnft_search_txt, bnft_embedding)::text), ',' ORDER BY md5(row(card_id, card_bnft_id, bnft_cd, bnft_nm, bnft_type_cd, bnft_origin_cd, bnft_scope_cd, bnft_brand_opt_cds, relation_list, verification_status_cd, bnft_valid_from, bnft_valid_to_excl, bnft_rule_txt, bnft_limit_txt, bnft_search_txt, bnft_embedding)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_bnft
+UNION ALL SELECT 'card_common' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_common_id, common_cd, common_nm, brand_cd, service_grade_cd, common_note, create_date, create_user_id, update_date, update_user_id)::text), ',' ORDER BY md5(row(card_common_id, common_cd, common_nm, brand_cd, service_grade_cd, common_note, create_date, create_user_id, update_date, update_user_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_common
+UNION ALL SELECT 'card_common_bnft' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_common_id, card_common_bnft_id, bnft_cd, bnft_nm, bnft_type_cd, service_type_cd, bnft_rule_txt, bnft_limit_txt, bnft_valid_from, bnft_valid_to_excl, create_date, create_user_id, update_date, update_user_id, bnft_search_txt, bnft_embedding)::text), ',' ORDER BY md5(row(card_common_id, card_common_bnft_id, bnft_cd, bnft_nm, bnft_type_cd, service_type_cd, bnft_rule_txt, bnft_limit_txt, bnft_valid_from, bnft_valid_to_excl, create_date, create_user_id, update_date, update_user_id, bnft_search_txt, bnft_embedding)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_common_bnft
+UNION ALL SELECT 'card_common_bnft_apply' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_common_id, card_common_bnft_id, card_id)::text), ',' ORDER BY md5(row(card_common_id, card_common_bnft_id, card_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_common_bnft_apply
+UNION ALL SELECT 'card_common_doc' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_common_id, card_doc_id)::text), ',' ORDER BY md5(row(card_common_id, card_doc_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_common_doc
+UNION ALL SELECT 'card_doc' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_doc_id, doc_cd, doc_family_cd, doc_type_cd, doc_title, doc_source_url, doc_file_nm, doc_file_size, doc_sha256, doc_page_cnt, doc_review_no, doc_review_date, doc_release_date, doc_collect_date, doc_version_no, doc_status, doc_note, create_date, create_user_id, update_date, update_user_id)::text), ',' ORDER BY md5(row(card_doc_id, doc_cd, doc_family_cd, doc_type_cd, doc_title, doc_source_url, doc_file_nm, doc_file_size, doc_sha256, doc_page_cnt, doc_review_no, doc_review_date, doc_release_date, doc_collect_date, doc_version_no, doc_status, doc_note, create_date, create_user_id, update_date, update_user_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_doc
+UNION ALL SELECT 'card_doc_chunk' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_doc_id, page_no, card_doc_chunk_id, chunk_seq, chunk_section_nm, chunk_type_cd, chunk_start_pos, chunk_end_pos, chunk_raw_txt, chunk_clean_txt, chunk_status, chunk_split_rule_ver, chunk_clean_rule_ver, create_date, create_user_id, update_date, update_user_id)::text), ',' ORDER BY md5(row(card_doc_id, page_no, card_doc_chunk_id, chunk_seq, chunk_section_nm, chunk_type_cd, chunk_start_pos, chunk_end_pos, chunk_raw_txt, chunk_clean_txt, chunk_status, chunk_split_rule_ver, chunk_clean_rule_ver, create_date, create_user_id, update_date, update_user_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_doc_chunk
+UNION ALL SELECT 'card_doc_page' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_doc_id, page_no, page_raw_txt, page_char_cnt, page_txt_sha256, page_layer_cd, page_extractor_nm, page_extractor_ver, page_note, create_date, create_user_id, update_date, update_user_id)::text), ',' ORDER BY md5(row(card_doc_id, page_no, page_raw_txt, page_char_cnt, page_txt_sha256, page_layer_cd, page_extractor_nm, page_extractor_ver, page_note, create_date, create_user_id, update_date, update_user_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_doc_page
+UNION ALL SELECT 'card_evidence_link' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_doc_id, page_no, card_doc_chunk_id, evidence_id, card_id, evidence_link_id, card_bnft_id, ev_subject_cd, rule_key, relation_key, ev_item_cd, ev_item_key)::text), ',' ORDER BY md5(row(card_doc_id, page_no, card_doc_chunk_id, evidence_id, card_id, evidence_link_id, card_bnft_id, ev_subject_cd, rule_key, relation_key, ev_item_cd, ev_item_key)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_evidence_link
+UNION ALL SELECT 'card_extr_stg' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, card_extr_stg_id, stg_item_seq, card_id, stg_kind_cd, stg_parent_card_extr_stg_id, stg_raw_item, stg_evidence_txt, stg_evidence_start_pos, stg_evidence_end_pos, stg_sql_check_cd, stg_ai_vrfy_cd, stg_ai_vrfy_card_ai_run_id, stg_status, stg_review_note, stg_approved_date, stg_approved_user_id, create_date, create_user_id, update_date, update_user_id)::text), ',' ORDER BY md5(row(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, card_extr_stg_id, stg_item_seq, card_id, stg_kind_cd, stg_parent_card_extr_stg_id, stg_raw_item, stg_evidence_txt, stg_evidence_start_pos, stg_evidence_end_pos, stg_sql_check_cd, stg_ai_vrfy_cd, stg_ai_vrfy_card_ai_run_id, stg_status, stg_review_note, stg_approved_date, stg_approved_user_id, create_date, create_user_id, update_date, update_user_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_extr_stg
+UNION ALL SELECT 'card_product' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_id, product_cd, product_nm, issuer, card_kind_cd, product_status_cd, launched_on, discontinued_on, brand_opt_list, create_date, create_user_id, update_date, update_user_id, card_cond_status_cd)::text), ',' ORDER BY md5(row(card_id, product_cd, product_nm, issuer, card_kind_cd, product_status_cd, launched_on, discontinued_on, brand_opt_list, create_date, create_user_id, update_date, update_user_id, card_cond_status_cd)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_product
+UNION ALL SELECT 'card_product_doc' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_id, card_doc_id, doc_role_cd, brand_opt_cds, approval_status_cd, applicability_basis_txt, approval_note, create_date, create_user_id, update_date, update_user_id)::text), ',' ORDER BY md5(row(card_id, card_doc_id, doc_role_cd, brand_opt_cds, approval_status_cd, applicability_basis_txt, approval_note, create_date, create_user_id, update_date, update_user_id)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_product_doc
+UNION ALL SELECT 'card_source_evidence' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5(row(card_doc_id, page_no, card_doc_chunk_id, evidence_id, card_extr_stg_id, quote_txt, start_pos, end_pos, approval_status_cd)::text), ',' ORDER BY md5(row(card_doc_id, page_no, card_doc_chunk_id, evidence_id, card_extr_stg_id, quote_txt, start_pos, end_pos, approval_status_cd)::text) COLLATE "C"), '')) AS f FROM db_pipeline.card_source_evidence)) x;
+    IF v_diff > 0 THEN RAISE EXCEPTION '보존 컬럼 값이 달라진 테이블이 % 개 있습니다', v_diff; END IF;
+    IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'db_pipeline.card_extr_stg'::regclass AND attname = 'stg_normalized_item' AND NOT attisdropped) THEN
+        RAISE EXCEPTION 'stg_normalized_item이 남았습니다';
+    END IF;
+    IF (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'db_pipeline.card_extr_stg'::regclass AND conname = 'card_extr_stg_check1')
+       IS DISTINCT FROM 'CHECK ((((stg_status)::text <> ALL (ARRAY[(''AUTO_APPROVED''::character varying)::text, (''MANUAL_APPROVED''::character varying)::text])) OR ((NOT ((stg_sql_check_cd)::text IS DISTINCT FROM ''OK''::text)) AND (stg_evidence_start_pos IS NOT NULL) AND (stg_evidence_end_pos IS NOT NULL) AND (btrim(stg_evidence_txt) <> ''''::text))))' THEN
+        RAISE EXCEPTION '새 card_extr_stg_check1 정의가 예상과 다름';
+    END IF;
     SELECT count(*) INTO v_left FROM db_pipeline.card_bnft b, jsonb_array_elements(b.rule_list) r
     WHERE r.value ?| ARRAY['predicate_state_cd', 'method_ver', 'calc_params', 'rule_priority', 'calc_method_cd', 'payout_unit_cd', 'basis_amt']::text[];
     IF v_left > 0 THEN RAISE EXCEPTION '규칙 계산 키가 남았습니다: %', v_left; END IF;

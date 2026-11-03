@@ -109,7 +109,7 @@ LLM 클라이언트는 `ExtractionService`에 주입합니다. Terra 연결 및 
 - 호출 전에 `card_product` 가 있어야 합니다. `card_extr_stg.card_id` 가 NOT NULL입니다.
 - `chunk_status` 가 RAW·CLEANED가 아니거나 `OCR_REVIEW` 인 페이지는 입력에서 뺍니다.
 - 항목마다 값 존재(`checks.value_check_cd`)와 혜택 연결(`checks.link_check_cd`)을 따로 판단합니다. 표에서 읽은 연결은 `LINK_REVIEW` 로 남아 사람이 확인합니다.
-- 페이지 원본은 `call_resp_json`, `stg_raw_item` 에 그대로 두고, 문서 통합 결과는 대표 행의 `stg_normalized_item` 에 씁니다. 중복 행은 `MERGED_DUP` 이고 상위 ID가 대표 행입니다.
+- 페이지 원본은 `call_resp_json`, `stg_raw_item` 에 그대로 둡니다. 문서 통합 결과(정제본)는 저장하지 않고, 대표 행의 `stg_sql_check_cd` 와 중복 행의 상위 ID(`stg_parent_card_extr_stg_id`, `MERGED_DUP`)만 남깁니다. 등록할 때 `normalize_stored_run` 이 원본에서 같은 규칙으로 다시 만듭니다(2026-11-03 `stg_normalized_item` 제거).
 - 재실행은 새 `card_ai_run_id` 로 저장하고 이전 결과를 바꾸지 않습니다. `select_run_compare` 로 비교합니다.
 - `stg_sql_check_cd`: `OK`, `NO_EVIDENCE`, `QUOTE_NOT_FOUND`, `VALUE_NOT_IN_QUOTE`, `VALUE_PARSE_DIFF`, `CONTRACT_INVALID`, `MERGE_CONFLICT`, `SCOPE_UNRESOLVED`, `LINK_REVIEW`, `MERGED_DUP`.
 

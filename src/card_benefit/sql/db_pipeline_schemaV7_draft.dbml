@@ -4,8 +4,9 @@
 //   card_bnft.relation_list[].to_bnft_id             -> card_bnft.card_bnft_id
 //   card_evidence_link.rule_key                    -> card_bnft.rule_list[].rule_key
 //   card_evidence_link.relation_key                -> card_bnft.relation_list[].relation_key
-//   rule_list[].calc_method_cd                       -> common_cd (CALC_METHOD)
-// method_ver and predicate_method_ver are representation contract versions, currently 1. Nothing checks them against an engine.
+//   rule_list[].value_unit_cd                        -> common_cd (VALUE_UNIT)
+// 계산 방법·지급 단위·기준 금액·방법 버전·판정 상태는 저장하지 않는다(2026-11-03 계산 구조 정리).
+// card_extr_stg는 추출 원본(stg_raw_item)만 저장하고 통합 정제본은 등록 때 다시 만든다.
 // Code columns reference common_cd. The group of each column is defined by the view v_common_cd_usage.
 
 Table db_pipeline.common_code_grp [note: '공통코드 그룹'] {
@@ -77,8 +78,7 @@ Table db_pipeline.card_bnft [note: '카드 혜택'] {
   bnft_scope_cd varchar(20) [not null, note: '혜택 적용 범위']
   bnft_brand_opt_cds "text[]" [note: '적용 브랜드 선택지']
   bnft_cond_expr jsonb [note: '혜택 적용 조건']
-  rule_select_cd varchar(30) [note: '규칙 선택 방식']
-  rule_list jsonb [not null, note: '계산 규칙 목록']
+  rule_list jsonb [not null, note: '혜택 규칙 목록(값·단위·대상·조건)']
   relation_list jsonb [not null, note: '혜택 관계 목록']
   verification_status_cd varchar(25) [not null, note: '혜택 검증 상태']
   bnft_valid_from date [note: '혜택 제공 시작일']
@@ -249,11 +249,9 @@ Table db_pipeline.card_extr_stg [note: 'AI 추출 항목'] {
   stg_kind_cd varchar(20) [not null, note: '추출 항목 종류']
   stg_parent_card_extr_stg_id varchar(20) [note: '상위 추출 항목 아이디']
   stg_raw_item jsonb [not null, note: '추출 원본']
-  stg_normalized_item jsonb [note: '정제 항목']
   stg_evidence_txt text [not null, note: '추출 근거 문장']
   stg_evidence_start_pos integer [note: '근거 시작 위치']
   stg_evidence_end_pos integer [note: '근거 종료 위치']
-  card_excl_item_id varchar(20) [note: '제외 항목 아이디']
   stg_sql_check_cd varchar(30) [note: 'SQL 검증 결과']
   stg_ai_vrfy_cd varchar(20) [note: 'AI 검증 결과']
   stg_ai_vrfy_card_ai_run_id varchar(20) [note: 'AI 검증 실행 아이디']
@@ -268,22 +266,6 @@ Table db_pipeline.card_extr_stg [note: 'AI 추출 항목'] {
   Indexes {
     (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, card_extr_stg_id) [pk]
     (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, stg_item_seq) [unique]
-  }
-}
-
-Table db_pipeline.card_excl_item [note: '제외 항목 사전'] {
-  card_excl_item_id varchar(20) [not null, pk, note: '제외 항목 아이디']
-  issuer text [not null, note: '카드사']
-  excl_item_nm text [not null, note: '제외 항목명']
-  excl_concept_cd varchar(50) [note: '제외 분류 개념']
-  excl_item_desc text [note: '제외 항목 설명']
-  excl_alias_nms "text[]" [not null, note: '제외 항목 별칭']
-  create_date timestamptz [not null, note: '생성 일시']
-  create_user_id varchar(50) [not null, note: '생성 사용자 아이디']
-  update_date timestamptz [not null, note: '수정 일시']
-  update_user_id varchar(50) [not null, note: '수정 사용자 아이디']
-  Indexes {
-    (issuer, excl_item_nm) [unique]
   }
 }
 
@@ -303,7 +285,6 @@ Ref: db_pipeline.card_ai_run.card_ai_run_id < db_pipeline.card_ai_call.card_ai_r
 Ref: db_pipeline.card_doc_chunk.(card_doc_id, page_no, card_doc_chunk_id) < db_pipeline.card_ai_call.(card_doc_id, page_no, card_doc_chunk_id)
 Ref: db_pipeline.card_ai_call.(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq) < db_pipeline.card_extr_stg.(card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq)
 Ref: db_pipeline.card_product.card_id < db_pipeline.card_extr_stg.card_id
-Ref: db_pipeline.card_excl_item.card_excl_item_id < db_pipeline.card_extr_stg.card_excl_item_id
 Ref: db_pipeline.card_ai_run.card_ai_run_id < db_pipeline.card_extr_stg.stg_ai_vrfy_card_ai_run_id
 Ref: db_pipeline.card_extr_stg.card_extr_stg_id < db_pipeline.card_extr_stg.stg_parent_card_extr_stg_id
 
@@ -336,5 +317,4 @@ TableGroup ai_parsing {
   db_pipeline.card_ai_run
   db_pipeline.card_ai_call
   db_pipeline.card_extr_stg
-  db_pipeline.card_excl_item
 }

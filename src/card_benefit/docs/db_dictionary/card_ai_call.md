@@ -43,7 +43,7 @@
 | API 호출 예외 | `FAILED` | NULL | NULL | 예외 클래스명 |
 | JSON 또는 스키마 오류, 페이지 불일치 | `PARSE_ERROR` | 수신 텍스트 | NULL | 오류 클래스명 또는 페이지 불일치 |
 
-형식 성공은 **업무 검증 성공이 아니다**. 이후 `check_benefit`/`check_condition`이 인용 위치와 수치·연결을 검증한다. `_store_item`은 각 혜택 또는 조건의 Pydantic 객체를 `card_extr_stg.stg_raw_item`으로 저장하고 `card_source_evidence`를 생성한다. 모든 대상 처리 성공 후 `merge_pages`의 결과가 대표 staging 행의 `stg_normalized_item`과 `stg_sql_check_cd`로 갱신된다. 따라서 호출 JSON은 페이지 전체 응답, staging raw는 항목별 응답, normalized는 문서 통합·계약 형태다.
+형식 성공은 **업무 검증 성공이 아니다**. 이후 `check_benefit`/`check_condition`이 인용 위치와 수치·연결을 검증한다. `_store_item`은 각 혜택 또는 조건의 Pydantic 객체를 `card_extr_stg.stg_raw_item`으로 저장하고 `card_source_evidence`를 생성한다. 모든 대상 처리 성공 후 `merge_pages`의 결과는 대표 staging 행의 `stg_sql_check_cd`와 중복 행의 상위 ID(`stg_parent_card_extr_stg_id`)로만 남는다. 따라서 호출 JSON은 페이지 전체 응답, staging raw는 항목별 응답이다. 문서 통합·계약 형태(정제본)는 저장하지 않고 등록할 때 `normalize_stored_run`이 staging raw에서 다시 만든다(2026-11-03 `stg_normalized_item` 컬럼 제거).
 
 ## 저장 순서와 실패 경계
 

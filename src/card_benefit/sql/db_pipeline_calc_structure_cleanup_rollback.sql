@@ -1,7 +1,10 @@
 -- =====================================================================================================
 -- 계산 구조 정리 복구. db_pipeline_calc_structure_cleanup.sql 실행 전 상태로 되돌린다.
 -- 정의와 값은 정리 전 실제 DB에서 추출했다(docs/schema_cleanup/pre_cleanup_catalog.json, pre_cleanup_data.json).
--- 복구한 컬럼(card_bnft.rule_select_cd, card_extr_stg.card_excl_item_id)은 테이블 맨 뒤에 추가된다(값은 정리 전에도 모두 NULL).
+-- 복구한 컬럼(card_bnft.rule_select_cd, card_extr_stg.stg_normalized_item, card_extr_stg.card_excl_item_id)은 테이블 맨 뒤에 추가된다.
+-- rule_select_cd·card_excl_item_id는 정리 전에도 모두 NULL이었다.
+-- stg_normalized_item 값은 이 파일 다음에 백업 폴더의 restore_stg_normalized_item.sql로 되살린다(추출 데이터라 Git에 두지 않음).
+--   이 파일은 원래 CHECK card_extr_stg_check1을 NOT VALID로 붙이고, 값 복구 파일이 지문 확인 후 VALIDATE한다.
 -- =====================================================================================================
 
 BEGIN;
@@ -199,6 +202,9 @@ COMMENT ON FUNCTION db_pipeline.fn_cond_spend_bound(jsonb, text) IS '단일 bran
 ALTER FUNCTION db_pipeline.fn_cond_spend_bound(jsonb, text) OWNER TO postgres;
 
 -- 2. 테이블·컬럼
+CREATE SEQUENCE db_pipeline.seq_card_excl_item START WITH 1 INCREMENT BY 1 NO MINVALUE MAXVALUE 999999 CACHE 1 CYCLE;
+COMMENT ON SEQUENCE db_pipeline.seq_card_excl_item IS '표준 제외 항목 ID 발급';
+ALTER SEQUENCE db_pipeline.seq_card_excl_item OWNER TO postgres;
 CREATE TABLE db_pipeline.card_excl_item (
     card_excl_item_id character varying(20) NOT NULL DEFAULT db_pipeline.fn_get_biz_id('card_excl_item'::text),
     issuer text NOT NULL,
@@ -229,6 +235,10 @@ COMMENT ON COLUMN db_pipeline.card_excl_item.update_user_id IS '수정 사용자
 ALTER TABLE db_pipeline.card_excl_item OWNER TO postgres;
 ALTER TABLE db_pipeline.card_bnft ADD COLUMN rule_select_cd character varying(30);
 COMMENT ON COLUMN db_pipeline.card_bnft.rule_select_cd IS '규칙 선택 방식';
+ALTER TABLE db_pipeline.card_extr_stg ADD COLUMN stg_normalized_item jsonb;
+COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_normalized_item IS '정제 항목';
+ALTER TABLE db_pipeline.card_extr_stg DROP CONSTRAINT card_extr_stg_check1;
+ALTER TABLE db_pipeline.card_extr_stg ADD CONSTRAINT card_extr_stg_check1 CHECK ((((stg_status)::text <> ALL (ARRAY[('AUTO_APPROVED'::character varying)::text, ('MANUAL_APPROVED'::character varying)::text])) OR ((stg_normalized_item IS NOT NULL) AND (NOT ((stg_sql_check_cd)::text IS DISTINCT FROM 'OK'::text)) AND (stg_evidence_start_pos IS NOT NULL) AND (stg_evidence_end_pos IS NOT NULL) AND (btrim(stg_evidence_txt) <> ''::text)))) NOT VALID;
 ALTER TABLE db_pipeline.card_extr_stg ADD COLUMN card_excl_item_id character varying(20);
 COMMENT ON COLUMN db_pipeline.card_extr_stg.card_excl_item_id IS '제외 항목 아이디';
 CREATE INDEX ix_card_extr_stg_excl_item_key ON db_pipeline.card_extr_stg USING btree (card_excl_item_id);
@@ -297,15 +307,15 @@ CREATE VIEW db_pipeline.v_card_cond_atom AS
            FROM db_pipeline.card_product p
           WHERE p.card_cond_expr IS NOT NULL
         UNION ALL
-         SELECT 'BNFT'::text,
+         SELECT 'BNFT',
             b_1.card_id,
             b_1.card_bnft_id,
-            NULL::text,
+            NULL,
             b_1.bnft_cond_expr
            FROM db_pipeline.card_bnft b_1
           WHERE b_1.bnft_cond_expr IS NOT NULL
         UNION ALL
-         SELECT 'RULE'::text,
+         SELECT 'RULE',
             r.card_id,
             r.card_bnft_id,
             r.rule_key,

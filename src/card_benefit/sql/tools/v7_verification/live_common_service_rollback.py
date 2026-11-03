@@ -93,9 +93,9 @@ def fixture(conn, token, family, version, card_names, *, with_limit, benefit_nam
         VALUES(%s,'EXTRACT','PYTHON_RELAY','mock','test','synthetic',%s,'SUCCEEDED',now(),'V7_TEST','V7_TEST')""",(run,doc))
     conn.execute("""INSERT INTO db_pipeline.card_ai_call(card_ai_run_id,card_doc_id,page_no,card_doc_chunk_id,call_seq,call_input_sha256,call_status,call_resp_json,create_user_id,update_user_id)
         VALUES(%s,%s,1,%s,1,%s,'SUCCEEDED','{}','V7_TEST','V7_TEST')""",(run,doc,chunk,digest))
-    conn.execute("""INSERT INTO db_pipeline.card_extr_stg(card_ai_run_id,card_doc_id,page_no,card_doc_chunk_id,call_seq,card_extr_stg_id,stg_item_seq,card_id,stg_kind_cd,stg_raw_item,stg_normalized_item,stg_evidence_txt,stg_evidence_start_pos,stg_evidence_end_pos,stg_sql_check_cd,create_user_id,update_user_id)
-        VALUES(%s,%s,1,%s,1,%s,1,NULL,'BENEFIT',%s,%s,%s,1,%s,'LINK_REVIEW','V7_TEST','V7_TEST')""",
-        (run,doc,chunk,stg,Jsonb(raw),Jsonb(normalized),applicability,len(applicability)))
+    conn.execute("""INSERT INTO db_pipeline.card_extr_stg(card_ai_run_id,card_doc_id,page_no,card_doc_chunk_id,call_seq,card_extr_stg_id,stg_item_seq,card_id,stg_kind_cd,stg_raw_item,stg_evidence_txt,stg_evidence_start_pos,stg_evidence_end_pos,stg_sql_check_cd,create_user_id,update_user_id)
+        VALUES(%s,%s,1,%s,1,%s,1,NULL,'BENEFIT',%s,%s,1,%s,'LINK_REVIEW','V7_TEST','V7_TEST')""",
+        (run,doc,chunk,stg,Jsonb(raw),applicability,len(applicability)))   # 정제본은 저장하지 않는다(stg_raw_item에서 재생성)
     evidence_ids = {}
     for index,(kind,key,quote) in enumerate(items):
         eid=f'E{suffix}{index}'

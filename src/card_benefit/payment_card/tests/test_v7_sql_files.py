@@ -4,6 +4,8 @@ import unittest
 from pathlib import Path
 
 SQL_DIR = Path(__file__).resolve().parents[2] / "sql"
+CALC_GROUPS = {"PREDICATE_STATE", "PREDICATE_METHOD", "RULE_SELECT", "LIMIT_PERIOD", "LIMIT_UNIT", "LIMIT_SCOPE", "LIMIT_AGG",
+               "POOL_ROLE", "CALC_METHOD", "PAYOUT_UNIT"}      # 2026-11-03 계산 구조 정리로 삭제한 공통코드 그룹
 
 
 def read(name: str) -> str:
@@ -44,25 +46,30 @@ class SchemaV7Tests(unittest.TestCase):
         self.assertIn("DROP COLUMN IF EXISTS card_id", migration)
         self.assertNotRegex(migration, r"(?i)DROP\s+COLUMN\s+card_id\s+CASCADE")
 
-    def test_method_catalog_is_gone_and_versions_stay_as_representation_contract(self):
+    def test_method_catalog_is_gone(self):
         for token in ("card_method_catalog", "method_not_in_catalog", "catalog_method_not_in_code", "handler_key", "param_schema"):
             self.assertNotIn(token, self.ddl, token)
-        self.assertIn("method_ver and predicate_method_ver are representation contract versions, currently 1.", self.ddl)
-        self.assertIn("(v_rule->>'method_ver')::integer < 1", self.ddl)
 
-    def test_method_gates_do_not_force_a_payout_unit_or_params_on_every_method(self):
-        rule_gap = self.ddl.split("rule_value_gap AS (", 1)[1].split("predicate_param_gap AS (", 1)[0]
-        param_gap = self.ddl.split("predicate_param_gap AS (", 1)[1].split("fallback AS (", 1)[0]
-        self.assertNotIn("'KRW'", rule_gap)
-        self.assertNotIn("payout_unit_cd", rule_gap)
-        self.assertIn("r.value_unit_cd IN ('PERCENT', 'MULTIPLIER')", rule_gap)
-        self.assertIn("a.predicate_method_cd = 'EVERY_MONTH_MIN_SPEND'", param_gap)
-        self.assertIn("a.predicate_method_cd = 'MONTH_IN'", param_gap)
-        self.assertNotIn("a.predicate_method_cd IS NOT NULL", param_gap)
+    def test_calc_structure_is_gone_and_value_unit_stays(self):
+        """2026-11-03 계산 구조 정리: 계산 실행용 키·열·게이트·함수·제외 사전·정제본이 없다(주석 제외)."""
+        code = re.sub(r"--[^\n]*", "", self.ddl)
+        for token in ("calc_method_cd", "payout_unit_cd", "method_ver", "basis_amt", "calc_params", "rule_priority",
+                      "predicate_state_cd", "predicate_method", "cond_params", "link_role_cd", "rule_select_cd",
+                      "card_excl_item", "fn_cond_spend_bound", "spend_min_amt", "v_card_bnft_rule_effective",
+                      "rule_value_gap", "predicate_param_gap", "rule_method_value_", "predicate_params_", "excl_item_unknown",
+                      "stg_normalized_item"):
+            self.assertNotIn(token, code, token)
+        rule_view = code.split("CREATE VIEW db_pipeline.v_card_rule AS", 1)[1].split(";", 1)[0]
+        for col in ("value_num", "value_unit_cd", "target_list", "cond_expr", "rule_status_cd"):
+            self.assertIn(f"AS {col}", rule_view, col)
+        self.assertIn("'card_bnft.rule_list[].value_unit_cd', 'VALUE_UNIT'", code)
 
-    def test_pending_and_final_gaps_have_different_gate_codes(self):
-        for gate in ("rule_method_value_missing", "rule_method_value_pending", "predicate_params_missing", "predicate_params_pending"):
-            self.assertIn(gate, self.ddl)
+    def test_extraction_stage_keeps_raw_item_and_approval_check_without_normalized_copy(self):
+        stg = self.ddl.split("CREATE TABLE db_pipeline.card_extr_stg (", 1)[1].split("\n);", 1)[0]
+        self.assertIn("stg_raw_item jsonb NOT NULL,", stg)
+        self.assertIn("stg_parent_card_extr_stg_id character varying(20),", stg)
+        self.assertIn("CONSTRAINT card_extr_stg_check1 CHECK ((((stg_status)::text <> ALL ((ARRAY['AUTO_APPROVED'::character varying, "
+                      "'MANUAL_APPROVED'::character varying])::text[])) OR ((NOT ((stg_sql_check_cd)::text IS DISTINCT FROM 'OK'::text))", stg)
 
     def test_rule_validator_keeps_signature_used_by_the_extraction_mapper(self):
         self.assertIn("CREATE FUNCTION db_pipeline.fn_valid_rule_list(p_list jsonb, p_owner text)", self.ddl)
@@ -137,28 +144,35 @@ class CommonCodeV7Tests(unittest.TestCase):
         v6 = rows_of(read("db_pipeline_common_code_seedV6.sql"), "db_pipeline.common_cd")
         v7 = rows_of(read("db_pipeline_common_code_seedV7.sql"), "db_pipeline.common_cd")
         groups = rows_of(read("db_pipeline_common_code_seedV7.sql"), "db_pipeline.common_code_grp")
-        self.assertEqual((len(v6), len(v7), len(groups)), (162, 154, 41))
+        # 2026-11-03 계산 구조 정리로 10그룹·32코드를 더 뺐다(V7 41그룹·154코드 → 31그룹·122코드).
+        self.assertEqual((len(v6), len(v7), len(groups)), (162, 122, 31))
         removed = {tuple(re.findall(r"'([^']*)'", row)[:2]) for row in set(v6) - set(v7)}
         added = {tuple(re.findall(r"'([^']*)'", row)[:2]) for row in set(v7) - set(v6)}
-        self.assertEqual(removed, {("EV_SUBJECT", "POLICY"), ("BNFT_ORIGIN", "LOCAL"), ("BNFT_ORIGIN", "COMMON_LINK"),
-                                   ("POLICY_STATUS", "DRAFT"), ("POLICY_STATUS", "APPROVED"), ("POLICY_STATUS", "RETIRED"),
-                                   ("EV_ITEM", "LIMIT"), ("METHOD_KIND", "CALC"), ("METHOD_KIND", "PREDICATE"),
-                                   ("METHOD_STATUS", "ACTIVE"), ("METHOD_STATUS", "UNEXECUTABLE")})
+        calc = {key for key in removed if key[0] in CALC_GROUPS}
+        self.assertEqual(len(calc), 32)
+        self.assertEqual(removed - calc, {("EV_SUBJECT", "POLICY"), ("BNFT_ORIGIN", "LOCAL"), ("BNFT_ORIGIN", "COMMON_LINK"),
+                                          ("POLICY_STATUS", "DRAFT"), ("POLICY_STATUS", "APPROVED"), ("POLICY_STATUS", "RETIRED"),
+                                          ("EV_ITEM", "LIMIT"), ("METHOD_KIND", "CALC"), ("METHOD_KIND", "PREDICATE"),
+                                          ("METHOD_STATUS", "ACTIVE"), ("METHOD_STATUS", "UNEXECUTABLE")})
+        self.assertFalse({re.findall(r"'([^']*)'", row)[0] for row in groups} & CALC_GROUPS)
         self.assertEqual(added, {("EV_SUBJECT", "CARD"), ("BNFT_ORIGIN", "LOCAL"), ("BNFT_ORIGIN", "BRAND_SERVICE")})
 
     def test_descriptions_match_the_codes_and_two_codes_stay_held(self):
         text = read("db_pipeline_common_code_descV7.sql")
         groups = rows_of(text, "tmp_common_code_grp_desc")
         codes = rows_of(text, "tmp_common_cd_desc")
-        self.assertEqual((len(groups), len(codes)), (41, 152))
+        self.assertEqual((len(groups), len(codes)), (31, 120))
         keys = {tuple(re.findall(r"'([^']*)'", row)[:2]) for row in codes}
         self.assertNotIn(("REL_TYPE", "OVERRIDES"), keys)
         self.assertNotIn(("SERVICE_GRADE", "PRESTIGE"), keys)
         self.assertLessEqual({("EV_SUBJECT", "CARD"), ("BNFT_ORIGIN", "BRAND_SERVICE")}, keys)
         self.assertNotIn("POLICY_STATUS", text.split("BEGIN;", 1)[1])
         self.assertNotIn("card_method_catalog", text)
-        self.assertIn("표현 계약 버전", text)
-        self.assertLessEqual({("CALC_METHOD", "FIXED_PER_TXN"), ("PREDICATE_METHOD", "MONTH_IN")}, keys)
+        body = text.split("BEGIN;", 1)[1]
+        self.assertFalse({key[0] for key in keys} & CALC_GROUPS)
+        for token in sorted(CALC_GROUPS) + ["card_excl_item_id", "stg_normalized_item", "predicate_method_cd"]:
+            self.assertNotIn(token, body, token)
+        self.assertLessEqual({("VALUE_UNIT", "PERCENT"), ("VALUE_UNIT", "KRW")}, keys)
 
 
 class MigrationTests(unittest.TestCase):
@@ -220,9 +234,14 @@ class BnftTextMigrationTests(unittest.TestCase):
 
     def test_views_are_the_ddl_definitions(self):
         ddl = read("db_pipeline_schemaV7_draft.sql")
+        removed = ("predicate_", "cond_params", "card_excl_item_id", "link_role_cd", "rule_select_cd", "calc_method_cd", "payout_unit_cd")
         for name in ("v_card_bnft_rel", "v_card_cond_atom", "v_common_cd_usage"):
             pattern = rf"CREATE VIEW db_pipeline\.{name} AS\n.*?;\n\nCOMMENT ON VIEW"
-            self.assertEqual(re.search(pattern, ddl, re.S).group(0), re.search(pattern, self.forward, re.S).group(0))
+            expected = re.search(pattern, self.forward, re.S).group(0)
+            # 이후 계산 구조 정리(2026-11-03)가 지운 열·코드 사용처 가지만 빼면 같아야 한다
+            expected = "\nUNION ALL\n".join(b for b in expected.split("\nUNION ALL\n") if name != "v_common_cd_usage" or not any(t in b for t in removed))
+            expected = "\n".join(line for line in expected.split("\n") if name != "v_card_cond_atom" or not any(t in line for t in removed))
+            self.assertEqual(re.search(pattern, ddl, re.S).group(0), expected, name)
         self.assertIn("shared_doc_bound_to_card", self.forward)
         self.assertNotIn("shared_doc_bound_to_card", ddl)
 

@@ -1,0 +1,49 @@
+실DB(Supabase db_pipeline) 적용 기록 — 2026-11-03 (집 PC)
+도구: docs/schema_cleanup/tools/apply_cleanup.py apply --yes   (한 트랜잭션: 정리 → 검증 → SAVEPOINT 복구 실증 → 되돌림 → 재확인 → COMMIT)
+백업: src/data/backup/pre_calc_cleanup_20261103_224545/ (Git 제외. 적용 직전 VERIFY OK: 18테이블 2,528행, 정제본 350건 md5 4c49d051ffaa164e4d66d13632ae16ff)
+
+[적용 전 리허설 2차의 FAIL 2건과 원인]
+1) "복구 후 뷰 정의 동일" FAIL — 복구 SQL 문제(정리 SQL 아님). 출력된 뷰 정의를 다시 만들면 v_card_cond_atom의 UNION 2·3번째 가지
+   상수 열('BNFT'::text, NULL::text, 'RULE'::text)이 "AS text" 별칭을 얻는다. PGlite 재현으로 확인, 원래 V7 표기(캐스트 없는 상수)로
+   생성기를 고쳐 8개 뷰 정의가 실DB와 문자열까지 같아짐을 확인했다. 아래 적용에서 복구 실증 PASS.
+2) "다른 스키마 변경 없음" FAIL — 검사 방법 문제. 정리 SQL의 SET LOCAL search_path = pg_catalog 이후 format_type 출력이
+   vector → extensions.vector로 바뀌어 지문이 달라졌다. DB를 바꾸지 않는 READ ONLY 트랜잭션에서도 search_path만 바꾸면 같은 차이가
+   재현된다. 검사를 같은 search_path 기준으로 고정하고, 이 트랜잭션이 잠근 다른 스키마 객체(pg_locks) 검사를 추가했다(기준 완화 없음).
+
+[적용 출력]
+PASS  사전 조건(정제본 지문·의존 객체·CHECK 정의·삭제 대상 값 없음·뷰 의존)
+PASS  정리 전 mapper SQL EXPLAIN  :: 84개 중 오류 0 {}
+  NOTICE: 계산 구조 정리 완료
+PASS  정리 SQL 실행(SQL 내부 사전·사후 검증 포함)
+PASS  정리 후 카탈로그 차이 = 계획한 변경만(제약·인덱스·뷰·함수·컬럼·시퀀스)
+PASS  미대상 뷰 v_card_bnft_rel 정의 불변
+PASS  미대상 뷰 v_card_brand_opt 정의 불변
+PASS  교체 뷰에 계산 열 없음
+PASS  v_card_rule 값·단위·대상·조건·상태 열 유지
+PASS  정리 후 mapper SQL 84개 EXPLAIN 오류 없음
+PASS  보존 데이터 백업과 동일(원문·페이지·청크·근거·추출 원본·병합·실행 이력·공통서비스·상품)
+PASS  공통코드 10그룹·32코드만 삭제  :: {'cd': 123, 'grp': 31}
+PASS  card_extr_stg 375행·stg_raw_item 누락 0
+PASS  card_bnft 5행 전부 새 계약 통과
+PASS  등록 mapper insert_local_benefit: 계산 방법 없는 규칙 저장 가능(SAVEPOINT 되돌림)
+PASS  새 CHECK: 검증 OK가 아닌 행 승인 거부
+PASS  다른 스키마: 이 트랜잭션이 잠근 객체 없음
+PASS  다른 스키마: 객체 정의 지문 불변(같은 search_path 기준)
+  NOTICE: 정제본 350 건 복구, 지문 일치
+PASS  복구 SQL + 정제본 350건 복구 실행(지문 확인·CHECK VALIDATE)
+PASS  복구 실증: 전체 데이터 백업과 동일(정제본 350건 포함)
+PASS  복구 실증: 제약·인덱스·뷰·함수·컬럼·시퀀스·주석 정의 정리 전과 동일
+PASS  복구 실증: mapper SQL EXPLAIN 정리 전과 동일
+PASS  복구 실증 되돌림 후 정리 상태 그대로
+PASS  최종: 다른 스키마 잠금 없음·지문 불변
+>>> 모든 검증 통과 → COMMIT 완료
+시퀀스 소비(등록 시험 ID 발급): {'seq_card_bnft': (11, 12)}     ← 시험 INSERT는 되돌렸고 시퀀스 번호 1개만 소비
+TOTAL 23 PASS 23
+
+[COMMIT 후 읽기 전용 확인]
+apply_cleanup.py postcheck: 6/6 PASS (컬럼·객체 제거, 보존 데이터 백업과 동일, 새 check1, mapper EXPLAIN 오류 0, card_bnft 새 계약 통과)
+건수: card_doc 17, card_doc_page 37, card_doc_chunk 46, card_source_evidence 1675, card_evidence_link 57, card_ai_run 24,
+      card_ai_call 61, card_extr_stg 375, card_bnft 5, card_common_bnft 6, v_card_integrity_issue 35행(정리 전 남는 게이트와 같음)
+등록 시뮬레이션(renormalize_run.py 20261103_000031, READ ONLY): 후보 53 → INSERTED 45 / REVIEW 8 (값 불일치 5, 기간 해석 불가 3) — 적용 전과 같음
+pytest payment_card/tests: 421 passed, 1 failed(기존 test_answer_text 실패), 18 skipped
+RUN_NEO4J_INTEGRATION=1 test_card_graphrag + test_neo4j_origin_search: 179 passed (Neo4j는 아직 재적재 전 그래프)

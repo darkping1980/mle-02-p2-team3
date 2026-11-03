@@ -1,11 +1,41 @@
-"""실제 DB 정의(pre_cleanup_catalog.json)와 데이터(pre_cleanup_data.json)에서 정리 SQL과 복구 SQL을 만든다."""
+"""실제 DB 정의(pre_cleanup_catalog.json)와 데이터(pre_cleanup_data.json)에서 정리 SQL과 복구 SQL을 만든다.
+
+사용법: python gen_cleanup_sql.py [백업 폴더]
+  백업 폴더(backup_db_pipeline.py 결과)를 생략하면 src/data/backup/pre_calc_cleanup_* 중 최신을 쓴다.
+  백업의 실제 값이 pre_cleanup_data.json과 같은지 확인하고, 보존 테이블 지문·정제본 지문을 SQL 사전 조건에 넣는다.
+"""
 import json, re, sys
 from pathlib import Path
 
-ROOT = Path(r'C:\myproject\workspace\mle-02-p2-team3\src\card_benefit')
+ROOT = Path(__file__).resolve().parents[3]                      # src/card_benefit (PC마다 경로가 달라도 동작)
 cat = json.loads((ROOT / 'docs/schema_cleanup/pre_cleanup_catalog.json').read_text(encoding='utf-8'))
 data = json.loads((ROOT / 'docs/schema_cleanup/pre_cleanup_data.json').read_text(encoding='utf-8'))
+BACKUP_DIR = Path(sys.argv[1]) if len(sys.argv) > 1 else max((ROOT.parent / 'data/backup').glob('pre_calc_cleanup_*/postgres_db_pipeline.json')).parent
+backup = json.loads((BACKUP_DIR / 'postgres_db_pipeline.json').read_text(encoding='utf-8'))
+
+# 백업(현재 실DB)이 생성기 입력과 같아야 한다. 다르면 정리 전 값이 바뀐 것이므로 입력을 다시 만들어야 한다.
+def _bnft_key(r):
+    return (r['card_id'], r['card_bnft_id'])
+_live_bnft = {_bnft_key(r): (r['rule_list'], r['bnft_cond_expr']) for r in backup['tables']['card_bnft']['rows']}
+if _live_bnft != {_bnft_key(r): (r['rule_list'], r['bnft_cond_expr']) for r in data['card_bnft']}:
+    raise SystemExit('card_bnft 규칙 JSON이 pre_cleanup_data.json과 다름')
+if {r['card_id']: r['card_cond_expr'] for r in backup['tables']['card_product']['rows'] if r['card_cond_expr'] is not None} !=         {r['card_id']: r['card_cond_expr'] for r in data['card_product'] if r['card_cond_expr'] is not None}:
+    raise SystemExit('card_product 조건식이 pre_cleanup_data.json과 다름')
+if any(r['rule_select_cd'] is not None for r in backup['tables']['card_bnft']['rows']) or         any(r['card_excl_item_id'] is not None for r in backup['tables']['card_extr_stg']['rows']) or backup['tables']['card_excl_item']['rows']:
+    raise SystemExit('삭제할 계산 컬럼·테이블에 값이 있음')
+STG_FP = backup['fingerprints']['card_extr_stg.stg_normalized_item']
 V, F = cat['views'], cat['functions']
+# 출력된 뷰 정의를 그대로 다시 만들면 UNION 두 번째 이후 가지의 이름 없는 상수 열('BNFT'::text 등)이 "AS text" 별칭을 얻어
+# 정의 문자열이 원래와 달라진다(열 이름·타입·결과는 같음). 원래 V7 표기(캐스트 없는 상수)로 되돌려 정의까지 같게 복구한다.
+# 근거: 2026-11-03 실DB 리허설 불일치 → PGlite 재현에서 이 3곳만 바꾸면 8개 뷰 정의가 실DB와 문자열까지 같음.
+_atom = V['v_card_cond_atom']
+for _old, _new in (("SELECT 'BNFT'::text,\n", "SELECT 'BNFT',\n"),
+                   ("            NULL::text,\n            b_1.bnft_cond_expr", "            NULL,\n            b_1.bnft_cond_expr"),
+                   ("SELECT 'RULE'::text,\n", "SELECT 'RULE',\n")):
+    if _atom.count(_old) != 1:
+        raise SystemExit('v_card_cond_atom 형식이 다름: ' + _old)
+    _atom = _atom.replace(_old, _new)
+V = {**V, 'v_card_cond_atom': _atom}
 VC, FC = cat['view_comments'], cat['function_comments']
 
 RULE_KEYS = ('predicate_state_cd', 'method_ver', 'calc_params', 'rule_priority', 'calc_method_cd', 'payout_unit_cd', 'basis_amt')
@@ -76,14 +106,19 @@ fr = fr.replace(state_block, "        IF NOT db_pipeline.fn_valid_cond_expr(null
 fr = fr.replace("    v_state text;\n", '')
 for old, new in (("           OR coalesce(jsonb_typeof(v_rule->'basis_amt'), 'null') NOT IN ('number','null')\n", ''),
                  ("        IF coalesce((v_rule->>'value_num')::numeric, 0) < 0\n           OR coalesce((v_rule->>'basis_amt')::numeric, 0) < 0 THEN",
-                  "        IF coalesce((v_rule->>'value_num')::numeric, 0) < 0 THEN")):
+                  "        IF coalesce((v_rule->>'value_num')::numeric, 0) < 0 THEN"),
+                 # 저장하지 않는 계산 키(rule_priority·calc_params)의 형식 검사도 제거한다(2026-11-03 3차)
+                 ("        IF coalesce(jsonb_typeof(v_rule->'value_num'), 'null') NOT IN ('number','null')\n"
+                  "           OR coalesce(jsonb_typeof(v_rule->'rule_priority'), 'null') NOT IN ('number','null')\n"
+                  "           OR coalesce(jsonb_typeof(v_rule->'calc_params'), 'null') NOT IN ('object','null') THEN",
+                  "        IF coalesce(jsonb_typeof(v_rule->'value_num'), 'null') NOT IN ('number','null') THEN")):
     if old not in fr:
         raise SystemExit('fn_valid_rule_list basis_amt 형식이 다름: ' + old)
     fr = fr.replace(old, new)
 fc = F['fn_valid_cond_expr']
 fc = fc.replace("coalesce(v_atom->>'card_excl_item_id', v_atom->>'excl_raw_txt', '') = ''", "coalesce(v_atom->>'excl_raw_txt', '') = ''")
 fc = fc[:fc.index('            -- 술어 방법 코드와 버전은 짝으로 저장')] + fc[fc.index('        END LOOP;\n    END LOOP;'):]
-for word in ('predicate', 'method_ver', 'calc_method_cd', 'payout_unit_cd', 'basis_amt', 'card_excl_item_id', 'cond_params'):
+for word in ('predicate', 'method_ver', 'calc_method_cd', 'payout_unit_cd', 'basis_amt', 'card_excl_item_id', 'cond_params', 'rule_priority', 'calc_params'):
     if word in fr or word in fc:
         raise SystemExit(f'함수에 {word}가 남음')
 
@@ -113,7 +148,7 @@ new_comments = {
     'v_card_cond_atom': '모든 조건식의 atom을 소유자와 함께 행으로 복원. 술어 방법·파라미터·제외 사전·연결 역할 열은 2026-11-03 정리에서 제거',
 }
 fn_comments = {
-    'fn_valid_rule_list': '혜택 규칙 목록 JSONB 계약 검증. 계산 방법·지급 단위·기준 금액·방법 버전·판정 상태는 저장하지 않는다(2026-11-03 정리). pool_refs 불허, p_owner는 LOCAL만 허용',
+    'fn_valid_rule_list': '혜택 규칙 목록 JSONB 계약 검증. 계산 방법·지급 단위·기준 금액·방법 버전·판정 상태·우선순위·계산 파라미터는 저장하지 않는다(2026-11-03 정리). pool_refs 불허, p_owner는 LOCAL만 허용',
     'fn_valid_cond_expr': '조건식 JSONB 계약 검증. branch 사이 OR, branch 안 atom AND, negate_yn=NOT. 제외 조건은 excl_raw_txt 원문이 필요하다',
 }
 
@@ -122,17 +157,34 @@ counts_tables = ['card_ai_call', 'card_ai_run', 'card_bnft', 'card_common', 'car
                  'card_doc_chunk', 'card_doc_page', 'card_evidence_link', 'card_extr_stg', 'card_product', 'card_product_doc', 'card_source_evidence']
 count_sql = ' UNION ALL '.join(f"SELECT '{t}', count(*) FROM db_pipeline.{t}" for t in counts_tables)
 
+CHANGED_COLS = {'card_bnft': {'rule_list', 'bnft_cond_expr', 'rule_select_cd'}, 'card_product': {'card_cond_expr'},
+                'card_extr_stg': {'stg_normalized_item', 'card_excl_item_id'}}
+def keep_cols(t):
+    return [c for c in backup['tables'][t]['columns'] if c not in CHANGED_COLS.get(t, set())]
+def fp_sql(t):
+    row = f"row({', '.join(keep_cols(t))})::text"
+    return f"SELECT '{t}' AS t, count(*)::int AS n, md5(coalesce(string_agg(md5({row}), ',' ORDER BY md5({row}) COLLATE \"C\"), '')) AS f FROM db_pipeline.{t}"
+keep_sql = '\nUNION ALL '.join(fp_sql(t) for t in counts_tables)
+STG_FP_SQL = ("SELECT count(*)::int, md5(coalesce(string_agg(card_extr_stg_id || ':' || stg_normalized_item::text, ',' "
+              "ORDER BY card_extr_stg_id COLLATE \"C\"), '')) FROM db_pipeline.card_extr_stg WHERE stg_normalized_item IS NOT NULL")
+NEW_STG_CHECK = ("CHECK ((((stg_status)::text <> ALL (ARRAY[('AUTO_APPROVED'::character varying)::text, ('MANUAL_APPROVED'::character varying)::text])) "
+                 "OR ((NOT ((stg_sql_check_cd)::text IS DISTINCT FROM 'OK'::text)) AND (stg_evidence_start_pos IS NOT NULL) "
+                 "AND (stg_evidence_end_pos IS NOT NULL) AND (btrim(stg_evidence_txt) <> ''::text))))")
+OLD_STG_CHECK = next(c[2] for c in cat['constraints'] if c[1] == 'card_extr_stg_check1')
+
 cleanup = f"""-- =====================================================================================================
 -- 계산 구조 정리(2026-11-03). 고객 실적 계산·보상액 산출용 구조를 제거하고 검색·답변용 혜택 정보는 유지한다.
 -- 기록: src/card_benefit/docs/schema_cleanup/  /  복구: db_pipeline_calc_structure_cleanup_rollback.sql
 -- [승인 전 공유 DB 실행 금지] 격리된 로컬 테스트 DB에서 검증했다. DROP ... CASCADE를 쓰지 않는다.
 --
--- 제거: v_card_bnft_rule_effective, fn_cond_spend_bound, card_excl_item(+인덱스), card_extr_stg.card_excl_item_id,
+-- 제거: v_card_bnft_rule_effective, fn_cond_spend_bound, card_excl_item(+인덱스·시퀀스), card_extr_stg.card_excl_item_id,
 --       card_bnft.rule_select_cd, 정합성 게이트 rule_method_value_*·predicate_params_*·excl_item_unknown,
 --       rule_list 키 {', '.join(RULE_KEYS)}, 조건 atom 키 {', '.join(ATOM_KEYS)},
---       공통코드 그룹 {', '.join(CODE_GROUPS)}
+--       공통코드 그룹 {', '.join(CODE_GROUPS)},
+--       card_extr_stg.stg_normalized_item(정제본. 등록 시 stg_raw_item에서 다시 만든다) — CHECK card_extr_stg_check1은 정제본 조건만 뺀 정의로 교체
 -- 대체: v_card_rule·v_card_cond_atom(열 제거), v_common_cd_usage·v_card_integrity_issue(가지 제거),
 --       fn_valid_rule_list·fn_valid_cond_expr(계산 필수 조건 제거)
+-- 정제본 값 복구: 백업 폴더(backup_db_pipeline.py)의 restore_stg_normalized_item.sql. 생성 시점 지문 {STG_FP['n']}건 / {STG_FP['f']}
 -- 유지: value_num·value_unit_cd(답변 수치 검증·검색 텍스트·Neo4j), target_list, 조건 원문·유형·금액,
 --       relation_list, bnft_rule_txt·bnft_limit_txt, 원문 근거·청크·임베딩, 공통서비스 데이터, 추출 이력(card_extr_stg)
 -- =====================================================================================================
@@ -146,10 +198,31 @@ LOCK TABLE db_pipeline.card_bnft, db_pipeline.card_product, db_pipeline.card_ext
 
 -- 0. 사전 조건: 지울 컬럼·테이블에 값이 없어야 한다. 정리 전 건수를 임시 테이블에 둔다.
 DO $pre$
+DECLARE v_n int; v_f text;
 BEGIN
     IF EXISTS (SELECT 1 FROM db_pipeline.card_bnft WHERE rule_select_cd IS NOT NULL) THEN RAISE EXCEPTION 'rule_select_cd에 값이 있어 중단'; END IF;
     IF EXISTS (SELECT 1 FROM db_pipeline.card_extr_stg WHERE card_excl_item_id IS NOT NULL) THEN RAISE EXCEPTION 'card_extr_stg.card_excl_item_id에 값이 있어 중단'; END IF;
     IF EXISTS (SELECT 1 FROM db_pipeline.card_excl_item) THEN RAISE EXCEPTION 'card_excl_item에 행이 있어 중단'; END IF;
+    IF (SELECT last_value FROM pg_sequences WHERE schemaname = 'db_pipeline' AND sequencename = 'seq_card_excl_item') IS NOT NULL THEN
+        RAISE EXCEPTION 'seq_card_excl_item이 사용된 적이 있어 중단';
+    END IF;
+    -- 정제본: 백업 시점과 값이 같아야 백업 파일로 복구할 수 있다
+    SELECT * INTO v_n, v_f FROM ({STG_FP_SQL}) x;
+    IF v_n <> {STG_FP['n']} OR v_f <> {lit(STG_FP['f'])} THEN
+        RAISE EXCEPTION '정제본 지문이 백업과 다름(% / %). 백업을 다시 만들고 SQL을 재생성하세요', v_n, v_f;
+    END IF;
+    -- 정제본 컬럼을 참조하는 객체는 CHECK card_extr_stg_check1 하나뿐이어야 한다(뷰·함수·인덱스·트리거 없음)
+    IF EXISTS (SELECT 1 FROM pg_depend d
+               WHERE d.refobjid = 'db_pipeline.card_extr_stg'::regclass
+                 AND d.refobjsubid = (SELECT attnum FROM pg_attribute WHERE attrelid = 'db_pipeline.card_extr_stg'::regclass AND attname = 'stg_normalized_item')
+                 AND NOT (d.classid = 'pg_constraint'::regclass
+                          AND d.objid = (SELECT oid FROM pg_constraint WHERE conrelid = 'db_pipeline.card_extr_stg'::regclass AND conname = 'card_extr_stg_check1'))) THEN
+        RAISE EXCEPTION 'stg_normalized_item에 다른 의존 객체가 있어 중단';
+    END IF;
+    IF (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'db_pipeline.card_extr_stg'::regclass AND conname = 'card_extr_stg_check1')
+       IS DISTINCT FROM {lit(OLD_STG_CHECK)} THEN
+        RAISE EXCEPTION 'card_extr_stg_check1 정의가 예상과 다름';
+    END IF;
     -- 다시 만들 뷰 묶음 밖의 객체가 이 뷰들에 의존하면 중단한다(CASCADE 없이 지우기 위해).
     IF EXISTS (SELECT 1 FROM pg_depend d JOIN pg_rewrite w ON w.oid = d.objid JOIN pg_class v ON v.oid = w.ev_class
                WHERE d.refobjid IN ({', '.join(f"'db_pipeline.{v}'::regclass" for v in view_drop_order)})
@@ -160,6 +233,9 @@ BEGIN
 END
 $pre$;
 CREATE TEMP TABLE cleanup_before ON COMMIT DROP AS {count_sql};
+-- 보존 지문: 정리로 바뀌지 않는 모든 컬럼(원문·청크·근거·추출 원본·병합 정보·검증 코드·실행 이력·공통서비스)
+CREATE TEMP TABLE cleanup_keep ON COMMIT DROP AS
+{keep_sql};
 
 -- 1. 뷰 제거(의존 순서, CASCADE 없음)
 {chr(10).join(f'DROP VIEW db_pipeline.{v};' for v in view_drop_order)}
@@ -185,6 +261,12 @@ ALTER TABLE db_pipeline.card_extr_stg DROP COLUMN card_excl_item_id;
 DROP INDEX db_pipeline.ix_card_excl_item_alias_gin;
 DROP INDEX db_pipeline.ix_card_excl_item_concept_key;
 DROP TABLE db_pipeline.card_excl_item;
+DROP SEQUENCE db_pipeline.seq_card_excl_item;   -- 한 번도 발급하지 않음(last_value NULL)
+
+-- 4-2. 정제본 컬럼 제거. 승인 조건에서 정제본 존재만 빼고 검증 코드 OK·근거 위치·근거 문장 조건은 유지한다.
+ALTER TABLE db_pipeline.card_extr_stg DROP CONSTRAINT card_extr_stg_check1;
+ALTER TABLE db_pipeline.card_extr_stg ADD CONSTRAINT card_extr_stg_check1 {NEW_STG_CHECK};
+ALTER TABLE db_pipeline.card_extr_stg DROP COLUMN stg_normalized_item;
 
 -- 5. 뷰 재생성
 CREATE VIEW db_pipeline.v_card_rule AS
@@ -214,6 +296,15 @@ DECLARE v_diff int; v_left int;
 BEGIN
     SELECT count(*) INTO v_diff FROM (SELECT * FROM cleanup_before EXCEPT ({count_sql})) x;
     IF v_diff > 0 THEN RAISE EXCEPTION '데이터 건수가 달라졌습니다'; END IF;
+    SELECT count(*) INTO v_diff FROM (SELECT * FROM cleanup_keep EXCEPT ({keep_sql})) x;
+    IF v_diff > 0 THEN RAISE EXCEPTION '보존 컬럼 값이 달라진 테이블이 % 개 있습니다', v_diff; END IF;
+    IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'db_pipeline.card_extr_stg'::regclass AND attname = 'stg_normalized_item' AND NOT attisdropped) THEN
+        RAISE EXCEPTION 'stg_normalized_item이 남았습니다';
+    END IF;
+    IF (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'db_pipeline.card_extr_stg'::regclass AND conname = 'card_extr_stg_check1')
+       IS DISTINCT FROM {lit(NEW_STG_CHECK)} THEN
+        RAISE EXCEPTION '새 card_extr_stg_check1 정의가 예상과 다름';
+    END IF;
     SELECT count(*) INTO v_left FROM db_pipeline.card_bnft b, jsonb_array_elements(b.rule_list) r
     WHERE r.value ?| ARRAY{list(RULE_KEYS)}::text[];
     IF v_left > 0 THEN RAISE EXCEPTION '규칙 계산 키가 남았습니다: %', v_left; END IF;
@@ -268,7 +359,10 @@ restore_codes = (f"INSERT INTO db_pipeline.common_code_grp ({', '.join(grp_cols)
 rollback = f"""-- =====================================================================================================
 -- 계산 구조 정리 복구. db_pipeline_calc_structure_cleanup.sql 실행 전 상태로 되돌린다.
 -- 정의와 값은 정리 전 실제 DB에서 추출했다(docs/schema_cleanup/pre_cleanup_catalog.json, pre_cleanup_data.json).
--- 복구한 컬럼(card_bnft.rule_select_cd, card_extr_stg.card_excl_item_id)은 테이블 맨 뒤에 추가된다(값은 정리 전에도 모두 NULL).
+-- 복구한 컬럼(card_bnft.rule_select_cd, card_extr_stg.stg_normalized_item, card_extr_stg.card_excl_item_id)은 테이블 맨 뒤에 추가된다.
+-- rule_select_cd·card_excl_item_id는 정리 전에도 모두 NULL이었다.
+-- stg_normalized_item 값은 이 파일 다음에 백업 폴더의 restore_stg_normalized_item.sql로 되살린다(추출 데이터라 Git에 두지 않음).
+--   이 파일은 원래 CHECK card_extr_stg_check1을 NOT VALID로 붙이고, 값 복구 파일이 지문 확인 후 VALIDATE한다.
 -- =====================================================================================================
 
 BEGIN;
@@ -291,6 +385,9 @@ COMMENT ON FUNCTION db_pipeline.fn_cond_spend_bound(jsonb, text) IS {lit(FC['fn_
 ALTER FUNCTION db_pipeline.fn_cond_spend_bound(jsonb, text) OWNER TO postgres;
 
 -- 2. 테이블·컬럼
+CREATE SEQUENCE db_pipeline.seq_card_excl_item START WITH 1 INCREMENT BY 1 NO MINVALUE MAXVALUE 999999 CACHE 1 CYCLE;
+COMMENT ON SEQUENCE db_pipeline.seq_card_excl_item IS '표준 제외 항목 ID 발급';
+ALTER SEQUENCE db_pipeline.seq_card_excl_item OWNER TO postgres;
 CREATE TABLE db_pipeline.card_excl_item (
     {excl_ddl}
 );
@@ -301,6 +398,10 @@ COMMENT ON TABLE db_pipeline.card_excl_item IS {lit(data['excl_table_comment'])}
 ALTER TABLE db_pipeline.card_excl_item OWNER TO postgres;
 ALTER TABLE db_pipeline.card_bnft ADD COLUMN rule_select_cd character varying(30);
 COMMENT ON COLUMN db_pipeline.card_bnft.rule_select_cd IS '규칙 선택 방식';
+ALTER TABLE db_pipeline.card_extr_stg ADD COLUMN stg_normalized_item jsonb;
+COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_normalized_item IS '정제 항목';
+ALTER TABLE db_pipeline.card_extr_stg DROP CONSTRAINT card_extr_stg_check1;
+ALTER TABLE db_pipeline.card_extr_stg ADD CONSTRAINT card_extr_stg_check1 {OLD_STG_CHECK} NOT VALID;
 ALTER TABLE db_pipeline.card_extr_stg ADD COLUMN card_excl_item_id character varying(20);
 COMMENT ON COLUMN db_pipeline.card_extr_stg.card_excl_item_id IS '제외 항목 아이디';
 {stg_excl_idx}

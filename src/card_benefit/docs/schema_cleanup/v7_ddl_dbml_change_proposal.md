@@ -1,4 +1,6 @@
-# V7 DDL·DBML 변경안 (계산 구조 정리, 미적용)
+# V7 DDL·DBML 변경안 (계산 구조 정리) — 2026-11-03 반영 완료
+
+**반영 상태(2026-11-03)**: 아래 편집을 모두 설계 파일에 반영했다. 추가로 `stg_normalized_item` 컬럼·CHECK 조건, `seq_card_excl_item`, `fn_valid_rule_list`의 `rule_priority`·`calc_params` 검사, 공통코드 seed 10그룹·32코드도 뺐다. 검증: `test_v7_sql_files.py`, PGlite로 V7 DDL+seed+설명 SQL 실행, DBML 파싱(13테이블).
 
 공유 DB에 `sql/db_pipeline_calc_structure_cleanup.sql`을 적용할 때 함께 반영할 설계 파일 변경이다.
 실제 실행 정의는 정리 SQL이 기준이며(실제 DB 정의에서 생성), 아래는 설계 파일을 같은 상태로 맞추는 편집 목록이다.

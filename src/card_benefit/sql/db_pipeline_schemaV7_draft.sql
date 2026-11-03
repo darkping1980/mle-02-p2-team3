@@ -12,18 +12,17 @@
 -- JSONB contracts (validated by fn_valid_*):
 --   cond_expr        {"expr_status_cd", "branches":[{"branch_no","atoms":[{"atom_seq","atom_key",
 --                     "negate_yn","cond_type_cd","cond_basis_cd","cond_min_amt","cond_max_amt_excl",
---                     "predicate_method_cd","predicate_method_ver","cond_params","card_excl_item_id",
---                     "excl_raw_txt","cond_raw_txt","link_role_cd","cond_status_cd"}]}]}
+--                     "excl_raw_txt","cond_raw_txt","cond_status_cd"}]}]}
 --                     branches = OR, atoms in a branch = AND, negate_yn = NOT, [min,max) spend range.
---   rule_list        [{"rule_key","cond_expr","predicate_state_cd","target_list","calc_method_cd",
---                      "method_ver","value_num","value_unit_cd","payout_unit_cd","basis_amt",
---                      "calc_params","rule_priority","rule_status_cd"}]        card_bnft
+--   rule_list        [{"rule_key","cond_expr","target_list","value_num","value_unit_cd",
+--                      "rule_status_cd"}]                                       card_bnft
 --   relation_list    [{"relation_key","to_bnft_id","rel_type_cd","rel_priority"}]
 --   target_list      [{"target_type_cd","target_key","target_nm"}]
 --   brand_opt_list   [{"brand_opt_cd","brand_opt_nm","brand_cd","service_grade_cd","service_type_cd",
 --                      "brand_opt_status_cd"}]
--- method_ver and predicate_method_ver are representation contract versions, currently 1. V7 has no calculation
--- engine or method catalog, so nothing checks them against an executable handler.
+-- 계산 방법·지급 단위·기준 금액·방법 버전·판정 상태·우선순위·계산 파라미터는 저장하지 않는다(2026-11-03 계산 구조 정리).
+-- value_num·value_unit_cd는 답변 수치 확인·검색 텍스트용 설명 값이며 고객별 지급액 계산에 쓰지 않는다.
+-- 추출 정제본(card_extr_stg.stg_normalized_item)은 저장하지 않고 등록 때 stg_raw_item에서 다시 만든다.
 -- Effective condition: card_cond_expr AND bnft_cond_expr AND rule cond_expr.
 -- 혜택 설명과 한도는 card_bnft.bnft_rule_txt, bnft_limit_txt의 원문 기반 TEXT로 둔다. 고객별 지급액을 계산하지 않으므로
 -- 한도 풀과 규칙-한도 연결은 만들지 않는다. TEXT NULL은 한도 없음이 아니라 미확인이다.
@@ -142,20 +141,7 @@ BEGIN
                 RETURN false;
             END IF;
             IF v_type IN ('SPEND_EXCL','BNFT_EXCL')
-               AND coalesce(v_atom->>'card_excl_item_id', v_atom->>'excl_raw_txt', '') = '' THEN
-                RETURN false;
-            END IF;
-            -- 술어 방법 코드와 버전은 짝으로 저장
-            IF (v_atom->>'predicate_method_cd' IS NULL) <> (v_atom->>'predicate_method_ver' IS NULL) THEN
-                RETURN false;
-            END IF;
-            IF jsonb_typeof(v_atom->'predicate_method_ver') NOT IN ('number','null') THEN
-                RETURN false;
-            END IF;
-            IF (v_atom->>'predicate_method_ver')::integer < 1 THEN
-                RETURN false;
-            END IF;
-            IF jsonb_typeof(v_atom->'cond_params') NOT IN ('object','null') THEN
+               AND coalesce(v_atom->>'excl_raw_txt', '') = '' THEN
                 RETURN false;
             END IF;
         END LOOP;
@@ -164,22 +150,7 @@ BEGIN
 END;
 $_$;
 
-COMMENT ON FUNCTION db_pipeline.fn_valid_cond_expr(jsonb) IS '조건식 JSONB 계약 검증. branch 사이 OR, branch 안 atom AND, negate_yn=NOT';
-
-CREATE FUNCTION db_pipeline.fn_cond_spend_bound(p_expr jsonb, p_bound text) RETURNS numeric
-    LANGUAGE sql IMMUTABLE
-    SET search_path TO 'pg_catalog'
-    AS $_$
-    SELECT CASE WHEN count(*) = 1 THEN max((a.value->>p_bound)::numeric) END
-    FROM jsonb_array_elements(p_expr->'branches') AS b(value)
-    CROSS JOIN LATERAL jsonb_array_elements(b.value->'atoms') AS a(value)
-    WHERE jsonb_array_length(p_expr->'branches') = 1
-      AND a.value->>'cond_type_cd' = 'SPEND_REQ'
-      AND a.value->>'cond_basis_cd' = 'PREV_MONTH_SPEND'
-      AND (a.value->>'negate_yn')::boolean = false
-$_$;
-
-COMMENT ON FUNCTION db_pipeline.fn_cond_spend_bound(jsonb, text) IS '단일 branch의 전월 실적 구간 값 추출. OR식이나 구간 atom이 둘 이상이면 NULL을 반환하고 v_card_cond_atom으로 조회';
+COMMENT ON FUNCTION db_pipeline.fn_valid_cond_expr(jsonb) IS '조건식 JSONB 계약 검증. branch 사이 OR, branch 안 atom AND, negate_yn=NOT. 제외 조건은 excl_raw_txt 원문이 필요하다';
 
 CREATE FUNCTION db_pipeline.fn_valid_target_list(p_list jsonb) RETURNS boolean
     LANGUAGE sql IMMUTABLE
@@ -229,7 +200,6 @@ CREATE FUNCTION db_pipeline.fn_valid_rule_list(p_list jsonb, p_owner text) RETUR
 DECLARE
     v_rule jsonb;
     v_keys text[] := '{}';
-    v_state text;
 BEGIN
     IF jsonb_typeof(p_list) IS DISTINCT FROM 'array' THEN
         RETURN false;
@@ -238,37 +208,19 @@ BEGIN
         IF jsonb_typeof(v_rule) <> 'object'
            OR coalesce(v_rule->>'rule_key', '') !~ '^[A-Za-z0-9_.:-]{1,40}$'
            OR v_rule->>'rule_key' = ANY (v_keys)
-           OR coalesce(v_rule->>'calc_method_cd', '') = ''
-           OR coalesce(v_rule->>'payout_unit_cd', '') = ''
-           OR coalesce(v_rule->>'rule_status_cd', '') = ''
-           OR jsonb_typeof(v_rule->'method_ver') IS DISTINCT FROM 'number'
-           OR (v_rule->>'method_ver')::integer < 1 THEN
+           OR coalesce(v_rule->>'rule_status_cd', '') = '' THEN
             RETURN false;
         END IF;
         v_keys := v_keys || (v_rule->>'rule_key');
 
-        IF coalesce(jsonb_typeof(v_rule->'value_num'), 'null') NOT IN ('number','null')
-           OR coalesce(jsonb_typeof(v_rule->'basis_amt'), 'null') NOT IN ('number','null')
-           OR coalesce(jsonb_typeof(v_rule->'rule_priority'), 'null') NOT IN ('number','null')
-           OR coalesce(jsonb_typeof(v_rule->'calc_params'), 'null') NOT IN ('object','null') THEN
+        IF coalesce(jsonb_typeof(v_rule->'value_num'), 'null') NOT IN ('number','null') THEN
             RETURN false;
         END IF;
-        IF coalesce((v_rule->>'value_num')::numeric, 0) < 0
-           OR coalesce((v_rule->>'basis_amt')::numeric, 0) < 0 THEN
+        IF coalesce((v_rule->>'value_num')::numeric, 0) < 0 THEN
             RETURN false;
         END IF;
 
-        v_state := v_rule->>'predicate_state_cd';
         IF NOT db_pipeline.fn_valid_cond_expr(nullif(v_rule->'cond_expr', 'null'::jsonb)) THEN
-            RETURN false;
-        END IF;
-        IF v_state = 'CONDITIONAL' AND coalesce(jsonb_typeof(v_rule->'cond_expr'), 'null') = 'null' THEN
-            RETURN false;
-        END IF;
-        IF v_state = 'VERIFIED_UNCONDITIONAL' AND coalesce(jsonb_typeof(v_rule->'cond_expr'), 'null') <> 'null' THEN
-            RETURN false;
-        END IF;
-        IF coalesce(v_state, '') = '' THEN
             RETURN false;
         END IF;
 
@@ -288,7 +240,7 @@ BEGIN
 END;
 $_$;
 
-COMMENT ON FUNCTION db_pipeline.fn_valid_rule_list(jsonb, text) IS '계산 규칙 목록 JSONB 계약 검증. 최종 규칙에는 pool_refs를 허용하지 않는다. p_owner는 LOCAL만 허용';
+COMMENT ON FUNCTION db_pipeline.fn_valid_rule_list(jsonb, text) IS '혜택 규칙 목록 JSONB 계약 검증. 계산 방법·지급 단위·기준 금액·방법 버전·판정 상태·우선순위·계산 파라미터는 저장하지 않는다(2026-11-03 정리). pool_refs 불허, p_owner는 LOCAL만 허용';
 
 CREATE FUNCTION db_pipeline.fn_valid_relation_list(p_list jsonb, p_self_bnft_id text) RETURNS boolean
     LANGUAGE plpgsql IMMUTABLE
@@ -369,16 +321,6 @@ CREATE SEQUENCE db_pipeline.seq_card_doc_chunk
     CYCLE;
 
 COMMENT ON SEQUENCE db_pipeline.seq_card_doc_chunk IS '문서 청크 ID 발급';
-
-CREATE SEQUENCE db_pipeline.seq_card_excl_item
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    MAXVALUE 999999
-    CACHE 1
-    CYCLE;
-
-COMMENT ON SEQUENCE db_pipeline.seq_card_excl_item IS '표준 제외 항목 ID 발급';
 
 CREATE SEQUENCE db_pipeline.seq_card_extr_stg
     START WITH 1
@@ -539,7 +481,6 @@ CREATE TABLE db_pipeline.card_bnft (
     bnft_scope_cd varchar(20) NOT NULL,
     bnft_brand_opt_cds text[],
     bnft_cond_expr jsonb,
-    rule_select_cd varchar(30),
     rule_list jsonb NOT NULL DEFAULT '[]'::jsonb,
     relation_list jsonb NOT NULL DEFAULT '[]'::jsonb,
     verification_status_cd varchar(25) NOT NULL,
@@ -570,8 +511,7 @@ COMMENT ON COLUMN db_pipeline.card_bnft.bnft_origin_cd IS '혜택 출처';
 COMMENT ON COLUMN db_pipeline.card_bnft.bnft_scope_cd IS '혜택 적용 범위';
 COMMENT ON COLUMN db_pipeline.card_bnft.bnft_brand_opt_cds IS '적용 브랜드 선택지';
 COMMENT ON COLUMN db_pipeline.card_bnft.bnft_cond_expr IS '혜택 적용 조건';
-COMMENT ON COLUMN db_pipeline.card_bnft.rule_select_cd IS '규칙 선택 방식';
-COMMENT ON COLUMN db_pipeline.card_bnft.rule_list IS '계산 규칙 목록';
+COMMENT ON COLUMN db_pipeline.card_bnft.rule_list IS '혜택 규칙 목록(값·단위·대상·조건)';
 COMMENT ON COLUMN db_pipeline.card_bnft.relation_list IS '혜택 관계 목록';
 COMMENT ON COLUMN db_pipeline.card_bnft.verification_status_cd IS '혜택 검증 상태';
 COMMENT ON COLUMN db_pipeline.card_bnft.bnft_valid_from IS '혜택 제공 시작일';
@@ -851,11 +791,9 @@ CREATE TABLE db_pipeline.card_extr_stg (
     stg_kind_cd character varying(20) NOT NULL,
     stg_parent_card_extr_stg_id character varying(20),
     stg_raw_item jsonb NOT NULL,
-    stg_normalized_item jsonb,
     stg_evidence_txt text NOT NULL,
     stg_evidence_start_pos integer,
     stg_evidence_end_pos integer,
-    card_excl_item_id character varying(20),
     stg_sql_check_cd character varying(30),
     stg_ai_vrfy_cd character varying(20),
     stg_ai_vrfy_card_ai_run_id character varying(20),
@@ -868,7 +806,7 @@ CREATE TABLE db_pipeline.card_extr_stg (
     update_date timestamp with time zone DEFAULT now() NOT NULL,
     update_user_id character varying(50) NOT NULL,
     CONSTRAINT card_extr_stg_check CHECK ((((stg_evidence_start_pos IS NULL) AND (stg_evidence_end_pos IS NULL)) OR ((stg_evidence_start_pos >= 1) AND (stg_evidence_end_pos >= stg_evidence_start_pos)))),
-    CONSTRAINT card_extr_stg_check1 CHECK ((((stg_status)::text <> ALL ((ARRAY['AUTO_APPROVED'::character varying, 'MANUAL_APPROVED'::character varying])::text[])) OR ((stg_normalized_item IS NOT NULL) AND (NOT ((stg_sql_check_cd)::text IS DISTINCT FROM 'OK'::text)) AND (stg_evidence_start_pos IS NOT NULL) AND (stg_evidence_end_pos IS NOT NULL) AND (btrim(stg_evidence_txt) <> ''::text)))),
+    CONSTRAINT card_extr_stg_check1 CHECK ((((stg_status)::text <> ALL ((ARRAY['AUTO_APPROVED'::character varying, 'MANUAL_APPROVED'::character varying])::text[])) OR ((NOT ((stg_sql_check_cd)::text IS DISTINCT FROM 'OK'::text)) AND (stg_evidence_start_pos IS NOT NULL) AND (stg_evidence_end_pos IS NOT NULL) AND (btrim(stg_evidence_txt) <> ''::text)))),
     CONSTRAINT card_extr_stg_stg_item_seq_check CHECK ((stg_item_seq > 0))
 );
 
@@ -884,11 +822,10 @@ COMMENT ON COLUMN db_pipeline.card_extr_stg.card_id IS '카드 아이디(NULL이
 COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_kind_cd IS '추출 항목 종류';
 COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_parent_card_extr_stg_id IS '상위 추출 항목 아이디';
 COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_raw_item IS '추출 원본';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_normalized_item IS '정제 항목';
+-- 정제본은 저장하지 않는다. 문서 통합 결과는 stg_parent_card_extr_stg_id(중복 → 대표)와 stg_sql_check_cd로 남는다.
 COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_evidence_txt IS '추출 근거 문장';
 COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_evidence_start_pos IS '근거 시작 위치';
 COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_evidence_end_pos IS '근거 종료 위치';
-COMMENT ON COLUMN db_pipeline.card_extr_stg.card_excl_item_id IS '제외 항목 아이디';
 COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_sql_check_cd IS 'SQL 검증 결과';
 COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_ai_vrfy_cd IS 'AI 검증 결과';
 COMMENT ON COLUMN db_pipeline.card_extr_stg.stg_ai_vrfy_card_ai_run_id IS 'AI 검증 실행 아이디';
@@ -901,30 +838,6 @@ COMMENT ON COLUMN db_pipeline.card_extr_stg.create_user_id IS '생성 사용자 
 COMMENT ON COLUMN db_pipeline.card_extr_stg.update_date IS '수정 일시';
 COMMENT ON COLUMN db_pipeline.card_extr_stg.update_user_id IS '수정 사용자 아이디';
 
-CREATE TABLE db_pipeline.card_excl_item (
-    card_excl_item_id character varying(20) DEFAULT db_pipeline.fn_get_biz_id('card_excl_item'::text) NOT NULL,
-    issuer text NOT NULL,
-    excl_item_nm text NOT NULL,
-    excl_concept_cd character varying(50),
-    excl_item_desc text,
-    excl_alias_nms text[] NOT NULL DEFAULT '{}'::text[],
-    create_date timestamp with time zone DEFAULT now() NOT NULL,
-    create_user_id character varying(50) NOT NULL,
-    update_date timestamp with time zone DEFAULT now() NOT NULL,
-    update_user_id character varying(50) NOT NULL
-);
-
-COMMENT ON TABLE db_pipeline.card_excl_item IS '제외 항목 사전';
-COMMENT ON COLUMN db_pipeline.card_excl_item.card_excl_item_id IS '제외 항목 아이디';
-COMMENT ON COLUMN db_pipeline.card_excl_item.issuer IS '카드사';
-COMMENT ON COLUMN db_pipeline.card_excl_item.excl_item_nm IS '제외 항목명';
-COMMENT ON COLUMN db_pipeline.card_excl_item.excl_concept_cd IS '제외 분류 개념';
-COMMENT ON COLUMN db_pipeline.card_excl_item.excl_item_desc IS '제외 항목 설명';
-COMMENT ON COLUMN db_pipeline.card_excl_item.create_date IS '생성 일시';
-COMMENT ON COLUMN db_pipeline.card_excl_item.create_user_id IS '생성 사용자 아이디';
-COMMENT ON COLUMN db_pipeline.card_excl_item.update_date IS '수정 일시';
-COMMENT ON COLUMN db_pipeline.card_excl_item.update_user_id IS '수정 사용자 아이디';
-COMMENT ON COLUMN db_pipeline.card_excl_item.excl_alias_nms IS '제외 항목 별칭';
 
 CREATE TABLE db_pipeline.card_source_evidence (
     card_doc_id varchar(20) NOT NULL,
@@ -972,12 +885,6 @@ ALTER TABLE ONLY db_pipeline.card_doc_chunk
 ALTER TABLE ONLY db_pipeline.card_doc_page
     ADD CONSTRAINT card_doc_page_pkey PRIMARY KEY (card_doc_id, page_no);
 
-ALTER TABLE ONLY db_pipeline.card_excl_item
-    ADD CONSTRAINT card_excl_item_issuer_excl_item_nm_key UNIQUE (issuer, excl_item_nm);
-
-ALTER TABLE ONLY db_pipeline.card_excl_item
-    ADD CONSTRAINT card_excl_item_pkey PRIMARY KEY (card_excl_item_id);
-
 ALTER TABLE ONLY db_pipeline.card_extr_stg
     ADD CONSTRAINT card_extr_stg_card_ai_run_id_card_doc_id_page_no_card_doc_c_key UNIQUE (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq, stg_item_seq);
 
@@ -993,11 +900,8 @@ CREATE INDEX ix_card_ai_call_doc_chunk_key ON db_pipeline.card_ai_call USING btr
 
 CREATE INDEX ix_card_ai_run_doc_key ON db_pipeline.card_ai_run USING btree (run_target_card_doc_id);
 
-CREATE INDEX ix_card_excl_item_concept_key ON db_pipeline.card_excl_item USING btree (excl_concept_cd);
-
 CREATE INDEX ix_card_extr_stg_chunk_key ON db_pipeline.card_extr_stg USING btree (card_doc_chunk_id);
 
-CREATE INDEX ix_card_extr_stg_excl_item_key ON db_pipeline.card_extr_stg USING btree (card_excl_item_id);
 
 CREATE INDEX ix_card_extr_stg_status_key ON db_pipeline.card_extr_stg USING btree (stg_status, stg_kind_cd);
 
@@ -1020,8 +924,6 @@ CREATE INDEX ix_card_bnft_rule_list_gin ON db_pipeline.card_bnft USING gin (rule
 CREATE INDEX ix_card_bnft_relation_list_gin ON db_pipeline.card_bnft USING gin (relation_list jsonb_path_ops);
 
 CREATE INDEX ix_card_bnft_cond_gin ON db_pipeline.card_bnft USING gin (bnft_cond_expr jsonb_path_ops);
-
-CREATE INDEX ix_card_excl_item_alias_gin ON db_pipeline.card_excl_item USING gin (excl_alias_nms);
 
 CREATE INDEX ix_card_source_evidence_lookup ON db_pipeline.card_source_evidence (card_doc_id, page_no, card_doc_chunk_id);
 
@@ -1050,23 +952,14 @@ SELECT b.card_id, b.card_bnft_id,
        r.value->>'rule_key' AS rule_key,
        r.ord AS rule_seq,
        nullif(r.value->'cond_expr', 'null'::jsonb) AS cond_expr,
-       db_pipeline.fn_cond_spend_bound(nullif(r.value->'cond_expr', 'null'::jsonb), 'cond_min_amt')::numeric(18,2) AS spend_min_amt,
-       db_pipeline.fn_cond_spend_bound(nullif(r.value->'cond_expr', 'null'::jsonb), 'cond_max_amt_excl')::numeric(18,2) AS spend_max_amt_excl,
        coalesce(r.value->'target_list', '[]'::jsonb) AS target_list,
-       r.value->>'predicate_state_cd' AS predicate_state_cd,
-       r.value->>'calc_method_cd' AS calc_method_cd,
-       (r.value->>'method_ver')::integer AS method_ver,
        (r.value->>'value_num')::numeric(18,4) AS value_num,
        r.value->>'value_unit_cd' AS value_unit_cd,
-       r.value->>'payout_unit_cd' AS payout_unit_cd,
-       (r.value->>'basis_amt')::numeric(18,2) AS basis_amt,
-       nullif(r.value->'calc_params', 'null'::jsonb) AS calc_params,
-       (r.value->>'rule_priority')::integer AS rule_priority,
        r.value->>'rule_status_cd' AS rule_status_cd
 FROM db_pipeline.card_bnft b
 CROSS JOIN LATERAL jsonb_array_elements(b.rule_list) WITH ORDINALITY AS r(value, ord);
 
-COMMENT ON VIEW db_pipeline.v_card_rule IS '상품 계산 규칙을 행으로 복원. V5 card_bnft_rule 조회 대체';
+COMMENT ON VIEW db_pipeline.v_card_rule IS '혜택 규칙(값·단위·대상·조건)을 행으로 복원. 계산 실행용 열(계산 방법·지급 단위·기준 금액·방법 버전·우선순위·계산 파라미터·판정 상태·실적 구간)은 2026-11-03 정리에서 제거';
 
 CREATE VIEW db_pipeline.v_card_bnft_rel AS
 SELECT b.card_id, b.card_bnft_id AS from_bnft_id,
@@ -1123,31 +1016,14 @@ SELECT s.owner_cd, s.card_id, s.card_bnft_id, s.rule_key,
        a.value->>'cond_basis_cd' AS cond_basis_cd,
        (a.value->>'cond_min_amt')::numeric(18,2) AS cond_min_amt,
        (a.value->>'cond_max_amt_excl')::numeric(18,2) AS cond_max_amt_excl,
-       a.value->>'predicate_method_cd' AS predicate_method_cd,
-       (a.value->>'predicate_method_ver')::integer AS predicate_method_ver,
-       a.value->'cond_params' AS cond_params,
-       a.value->>'card_excl_item_id' AS card_excl_item_id,
        a.value->>'excl_raw_txt' AS excl_raw_txt,
        a.value->>'cond_raw_txt' AS cond_raw_txt,
-       a.value->>'link_role_cd' AS link_role_cd,
        a.value->>'cond_status_cd' AS cond_status_cd
 FROM src s
 CROSS JOIN LATERAL jsonb_array_elements(s.expr->'branches') AS b(value)
 CROSS JOIN LATERAL jsonb_array_elements(b.value->'atoms') AS a(value);
 
-COMMENT ON VIEW db_pipeline.v_card_cond_atom IS '모든 조건식의 atom을 소유자와 함께 행으로 복원';
-
-CREATE VIEW db_pipeline.v_card_bnft_rule_effective AS
-SELECT b.card_id, b.card_bnft_id, b.bnft_nm, b.bnft_origin_cd, b.bnft_scope_cd, b.bnft_brand_opt_cds,
-       b.bnft_valid_from, b.bnft_valid_to_excl, r.rule_key,
-       r.calc_method_cd, r.method_ver, r.value_num, r.value_unit_cd, r.payout_unit_cd, r.basis_amt,
-       r.calc_params, r.predicate_state_cd, r.target_list,
-       b.bnft_cond_expr, r.cond_expr AS rule_cond_expr, r.rule_status_cd
-FROM db_pipeline.card_bnft b
-JOIN db_pipeline.v_card_rule r
-  ON (r.card_id, r.card_bnft_id) = (b.card_id, b.card_bnft_id);
-
-COMMENT ON VIEW db_pipeline.v_card_bnft_rule_effective IS '혜택과 계산 규칙의 단일 출력. 제공 기간은 걸러내지 않으므로 조회 기준일로 판정. 값은 정책 후보이며 거래별 보상액이 아님';
+COMMENT ON VIEW db_pipeline.v_card_cond_atom IS '모든 조건식의 atom을 소유자와 함께 행으로 복원. 술어 방법·파라미터·제외 사전·연결 역할 열은 2026-11-03 정리에서 제거';
 
 CREATE VIEW db_pipeline.v_common_cd_usage AS
 SELECT 'card_product.card_kind_cd'::text AS source_nm, 'CARD_KIND'::varchar(20) AS common_code_grp_id, card_kind_cd::text AS cd_value
@@ -1173,9 +1049,6 @@ FROM db_pipeline.card_bnft WHERE bnft_origin_cd IS NOT NULL
 UNION ALL
 SELECT 'card_bnft.bnft_scope_cd'::text AS source_nm, 'BNFT_SCOPE'::varchar(20) AS common_code_grp_id, bnft_scope_cd::text AS cd_value
 FROM db_pipeline.card_bnft WHERE bnft_scope_cd IS NOT NULL
-UNION ALL
-SELECT 'card_bnft.rule_select_cd'::text AS source_nm, 'RULE_SELECT'::varchar(20) AS common_code_grp_id, rule_select_cd::text AS cd_value
-FROM db_pipeline.card_bnft WHERE rule_select_cd IS NOT NULL
 UNION ALL
 SELECT 'card_bnft.verification_status_cd'::text AS source_nm, 'VERIFY_STATUS'::varchar(20) AS common_code_grp_id, verification_status_cd::text AS cd_value
 FROM db_pipeline.card_bnft WHERE verification_status_cd IS NOT NULL
@@ -1237,17 +1110,8 @@ UNION ALL
 SELECT 'card_product.brand_opt_list[].brand_opt_status_cd', 'PRODUCT_STATUS', brand_opt_status_cd::text
 FROM db_pipeline.v_card_brand_opt WHERE brand_opt_status_cd IS NOT NULL
 UNION ALL
-SELECT 'card_bnft.rule_list[].predicate_state_cd', 'PREDICATE_STATE', predicate_state_cd::text
-FROM db_pipeline.v_card_rule WHERE predicate_state_cd IS NOT NULL
-UNION ALL
-SELECT 'card_bnft.rule_list[].calc_method_cd', 'CALC_METHOD', calc_method_cd::text
-FROM db_pipeline.v_card_rule WHERE calc_method_cd IS NOT NULL
-UNION ALL
 SELECT 'card_bnft.rule_list[].value_unit_cd', 'VALUE_UNIT', value_unit_cd::text
 FROM db_pipeline.v_card_rule WHERE value_unit_cd IS NOT NULL
-UNION ALL
-SELECT 'card_bnft.rule_list[].payout_unit_cd', 'PAYOUT_UNIT', payout_unit_cd::text
-FROM db_pipeline.v_card_rule WHERE payout_unit_cd IS NOT NULL
 UNION ALL
 SELECT 'card_bnft.rule_list[].rule_status_cd', 'ITEM_STATUS', rule_status_cd::text
 FROM db_pipeline.v_card_rule WHERE rule_status_cd IS NOT NULL
@@ -1264,9 +1128,6 @@ UNION ALL
 SELECT 'cond_expr atom cond_basis_cd', 'COND_BASIS', cond_basis_cd::text
 FROM db_pipeline.v_card_cond_atom WHERE cond_basis_cd IS NOT NULL
 UNION ALL
-SELECT 'cond_expr atom predicate_method_cd', 'PREDICATE_METHOD', predicate_method_cd::text
-FROM db_pipeline.v_card_cond_atom WHERE predicate_method_cd IS NOT NULL
-UNION ALL
 SELECT 'cond_expr atom cond_status_cd', 'ITEM_STATUS', cond_status_cd::text
 FROM db_pipeline.v_card_cond_atom WHERE cond_status_cd IS NOT NULL
 UNION ALL
@@ -1277,32 +1138,6 @@ COMMENT ON VIEW db_pipeline.v_common_cd_usage IS '모든 공통코드 사용처(
 
 CREATE VIEW db_pipeline.v_card_integrity_issue AS
 WITH atoms AS (SELECT * FROM db_pipeline.v_card_cond_atom),
--- 방식별 필수값. 지급 단위는 포인트·마일리지일 수 있어 정액·금액당 방식의 단위를 특정 값으로 제한하지 않는다.
--- final_yn이 true면 확정 데이터의 무결성 위반, false면 확정 전 값 누락이다. 값을 보완하지 않고 구분만 한다.
-rule_value_gap AS (
-    SELECT r.card_id, r.card_bnft_id, r.rule_key,
-           (r.rule_status_cd = 'CONFIRMED' OR b.verification_status_cd = 'CONFIRMED') AS final_yn
-    FROM db_pipeline.v_card_rule r
-    JOIN db_pipeline.card_bnft b ON (b.card_id, b.card_bnft_id) = (r.card_id, r.card_bnft_id)
-    WHERE r.rule_status_cd <> 'RETIRED'
-      AND ((r.calc_method_cd IN ('PERCENT_OF_TXN', 'FIXED_PER_TXN', 'UNITS_PER_AMOUNT', 'MULTIPLY_EXTERNAL_POINTS') AND r.value_num IS NULL)
-           OR (r.calc_method_cd = 'UNITS_PER_AMOUNT' AND r.basis_amt IS NULL)
-           OR (r.calc_method_cd = 'PERCENT_OF_TXN' AND r.value_unit_cd IS DISTINCT FROM 'PERCENT')
-           OR (r.calc_method_cd = 'MULTIPLY_EXTERNAL_POINTS' AND r.value_unit_cd IS DISTINCT FROM 'MULTIPLIER')
-           OR (r.calc_method_cd IN ('FIXED_PER_TXN', 'UNITS_PER_AMOUNT') AND r.value_unit_cd IN ('PERCENT', 'MULTIPLIER')))
-),
--- 필수 파라미터가 정해진 판정 방식만 검사한다. cond_params를 모든 조건에 강제하지 않는다.
-predicate_param_gap AS (
-    SELECT a.owner_cd, a.card_id, a.atom_key,
-           (a.cond_status_cd = 'CONFIRMED' OR a.expr_status_cd = 'CONFIRMED') AS final_yn
-    FROM atoms a
-    WHERE a.cond_status_cd <> 'RETIRED'
-      AND ((a.predicate_method_cd = 'EVERY_MONTH_MIN_SPEND'
-            AND (a.cond_min_amt IS NULL OR jsonb_typeof(a.cond_params->'window_months') IS DISTINCT FROM 'number'))
-           OR (a.predicate_method_cd = 'MONTH_IN'
-               AND CASE WHEN jsonb_typeof(a.cond_params->'months') = 'array'
-                        THEN jsonb_array_length(a.cond_params->'months') = 0 ELSE true END))
-),
 fallback AS (
     SELECT card_id, from_bnft_id, to_bnft_id
     FROM db_pipeline.v_card_bnft_rel
@@ -1365,19 +1200,6 @@ SELECT 'doc_brand_opt_unknown', d.card_id || '/' || d.card_doc_id || '/' || o.cd
 FROM db_pipeline.card_product_doc d
 CROSS JOIN LATERAL unnest(d.brand_opt_cds) AS o(cd)
 WHERE NOT EXISTS (SELECT 1 FROM db_pipeline.v_card_brand_opt v WHERE v.card_id = d.card_id AND v.brand_opt_cd = o.cd)
-UNION ALL
-SELECT CASE WHEN g.final_yn THEN 'rule_method_value_missing' ELSE 'rule_method_value_pending' END,
-       g.card_id || '/' || g.card_bnft_id || '/' || g.rule_key
-FROM rule_value_gap g
-UNION ALL
-SELECT CASE WHEN g.final_yn THEN 'predicate_params_missing' ELSE 'predicate_params_pending' END,
-       g.owner_cd || '/' || g.card_id || '/' || g.atom_key
-FROM predicate_param_gap g
-UNION ALL
-SELECT 'excl_item_unknown', a.owner_cd || '/' || a.atom_key
-FROM atoms a
-WHERE a.card_excl_item_id IS NOT NULL
-  AND NOT EXISTS (SELECT 1 FROM db_pipeline.card_excl_item i WHERE i.card_excl_item_id = a.card_excl_item_id)
 UNION ALL
 SELECT 'evidence_source_orphan', e.evidence_id
 FROM db_pipeline.card_source_evidence e

@@ -76,9 +76,9 @@ def sample_stg(session, card_doc_id, card_id, run_id, item, quote, seq):
                 on conflict do nothing returning call_seq""", run_id, card_doc_id, page_no, chunk_id, seq, "0" * 64)
     assert call
     stg = raw(session, """insert into db_pipeline.card_extr_stg (card_ai_run_id,card_doc_id,page_no,card_doc_chunk_id,call_seq,stg_item_seq,
-                card_id,stg_kind_cd,stg_raw_item,stg_normalized_item,stg_evidence_txt,stg_sql_check_cd,create_user_id,update_user_id)
-                values (%s,%s,%s,%s,%s,1,%s,'BENEFIT',%s,%s,%s,'OK','TEST','TEST') returning card_extr_stg_id""",
-              run_id, card_doc_id, page_no, chunk_id, seq, card_id, Jsonb(item["raw"]), Jsonb(item["norm"]), quote)[0]["card_extr_stg_id"]
+                card_id,stg_kind_cd,stg_raw_item,stg_evidence_txt,stg_sql_check_cd,create_user_id,update_user_id)
+                values (%s,%s,%s,%s,%s,1,%s,'BENEFIT',%s,%s,'OK','TEST','TEST') returning card_extr_stg_id""",
+              run_id, card_doc_id, page_no, chunk_id, seq, card_id, Jsonb(item["raw"]), quote)   # 정제본 컬럼 없음(원본에서 재생성)[0]["card_extr_stg_id"]
     raw(session, """insert into db_pipeline.card_source_evidence (card_doc_id,page_no,card_doc_chunk_id,card_extr_stg_id,quote_txt,
                     start_pos,end_pos,approval_status_cd) values (%s,%s,%s,%s,%s,%s,%s,'PENDING') returning evidence_id""",
         card_doc_id, page_no, chunk_id, stg, quote, start, start + len(quote) - 1)
@@ -140,8 +140,7 @@ def test_new_documents_benefits_and_embedding_roll_back(session):
             guide = "20261101_000002"
             text = raw(session, "select chunk_raw_txt from db_pipeline.card_doc_chunk where card_doc_id=%s order by chunk_seq limit 1", guide)[0]["chunk_raw_txt"]
             quote = "5%\n캐시백" if "5%\n캐시백" in text else re.search(r"\d+%", text).group(0)
-            rule = {"rule_key": "sample", "rule_status_cd": "DRAFT", "calc_method_cd": "PERCENT_OF_TXN", "method_ver": 1, "value_num": 5,
-                    "value_unit_cd": "PERCENT", "payout_unit_cd": "KRW", "predicate_state_cd": "PENDING_REVIEW", "cond_expr": None,
+            rule = {"rule_key": "sample", "rule_status_cd": "DRAFT", "value_num": 5, "value_unit_cd": "PERCENT", "cond_expr": None,
                     "target_list": [{"target_nm": "시험대상", "target_key": "시험대상", "target_type_cd": "SERVICE"}]}
             stg = sample_stg(session, guide, 2, run, {
                 "raw": {"evidence": [{"supports": "BNFT", "quote_txt": quote}, {"supports": "RULE", "support_key": "sample", "quote_txt": quote}]},

@@ -15,9 +15,9 @@ GraphRAG로 검색·답변한다. 따라서 **계산 실행을 위해 설계했�
 | 대상 | 상태 |
 |---|---|
 | 소스(Python·SQL mapper·프롬프트·테스트) | **반영함** |
-| DB DDL `sql/db_pipeline_calc_structure_cleanup.sql` | **격리 로컬 DB(PGlite)에서만 실행·검증.** 공유 Supabase DB에는 적용하지 않음 |
-| V7 설계 DDL(`db_pipeline_schemaV7_draft.sql`)·DBML | 미변경(공유 DB 적용 승인 후 동기화) |
-| Neo4j | 미변경(DDL 적용 후 재적재 필요) |
+| DB DDL `sql/db_pipeline_calc_structure_cleanup.sql`(3차: `stg_normalized_item` 삭제 포함) | **Supabase `db_pipeline`에 적용·COMMIT(2026-11-03 집 PC, 사용자 승인).** 기록 `live_apply_result_20261103.txt` |
+| V7 설계 DDL·DBML·공통코드 seed/설명 SQL | **적용 후 구조로 동기화함** |
+| Neo4j | 미변경. card_bnft JSON이 바뀌었으므로 **재적재 필요**(`dp_card_bnft`·`dp_bnft_rule`·조건 노드 source_json) |
 
 ## 3. 객체 분류 (유지 / 삭제 / 대체)
 
@@ -41,7 +41,8 @@ GraphRAG로 검색·답변한다. 따라서 **계산 실행을 위해 설계했�
 | 대체 | FUNCTION `fn_valid_cond_expr` | `card_bnft_ck_2`, `card_product` CHECK | 술어 방법 짝 검사 제거, 제외 조건은 `excl_raw_txt` 필수 |
 | 대체 | 추출 계약 검사 `contract_issues` | 추출 정규화 → `stg_sql_check_cd` | 계산 방법·지급 단위·한도 풀 검사 제거. 조건 구조·키 형식 검사 유지 |
 | 유지 | rule_list `value_num`, `value_unit_cd`, 코드 `VALUE_UNIT` | GraphRAG 금액 구간 답변·답변 수치 검증(`card_graphrag.py` 556·573·616행), 검색 텍스트, Neo4j `dp_bnft_rule.value_num`·hop2 조회 | 혜택 값을 설명·검증하는 정보 |
-| 유지 | 실제 컬럼 `card_extr_stg.stg_normalized_item` | 공통·개별 등록 입력(정제 혜택·검증 결과·통합 정보), 검토 SQL | 등록 파이프라인. 안의 이전 키(limit_list 등)는 추출 이력으로 보존 |
+| 삭제(3차) | 컬럼 `card_extr_stg.stg_normalized_item`(정제본), CHECK `card_extr_stg_check1`은 정제본 조건만 뺀 정의로 교체 | 없음(코드는 2026-11-03부터 `stg_raw_item`에서 재생성: `normalize_stored_run`) | 정제본에만 있는 업무 정보 없음(342/342 동등). 통합 정보는 `stg_parent_card_extr_stg_id`·`stg_sql_check_cd`로 보존. 값 350건은 백업 `restore_stg_normalized_item.sql`로 복구 가능 |
+| 삭제(3차) | 시퀀스 `seq_card_excl_item`(발급 이력 없음), `fn_valid_rule_list`의 `rule_priority`·`calc_params` 형식 검사 | 삭제한 테이블·키 전용 | 계산 구조 잔여물 |
 | 유지 | `rule_status_cd`, `target_list`, 조건 원문·유형·금액, `relation_list`, `bnft_rule_txt`, `bnft_limit_txt` | 검색·답변·등록 | 업무 의미 |
 | 유지 | 값·한도의 **숫자와 원문 대조** 검증 | 추출 검증 | 계산이 아니라 추출 오류 검출. USD 한도는 계속 검토 대상 |
 
@@ -49,12 +50,17 @@ GraphRAG로 검색·답변한다. 따라서 **계산 실행을 위해 설계했�
 
 | 파일 | 내용 |
 |---|---|
-| `sql/db_pipeline_calc_structure_cleanup.sql` | 정리 SQL(한 트랜잭션, CASCADE 없음, 사전 조건·사후 검증 포함) |
-| `sql/db_pipeline_calc_structure_cleanup_rollback.sql` | 복구 SQL(정리 전 정의·JSON 원본·공통코드 행 그대로) |
+| `sql/db_pipeline_calc_structure_cleanup.sql` | 정리 SQL(한 트랜잭션, CASCADE 없음, 사전 조건·보존 지문·사후 검증 포함) |
+| `sql/db_pipeline_calc_structure_cleanup_rollback.sql` | 복구 SQL(정리 전 정의·JSON 원본·공통코드 행 그대로). 정제본 컬럼은 CHECK를 NOT VALID로 붙인다 |
+| 백업 폴더 `restore_stg_normalized_item.sql` | 정제본 350건 값 복구(복구 SQL 다음에 실행. 지문 확인 후 CHECK VALIDATE). 추출 데이터라 Git 제외 |
+| `docs/schema_cleanup/live_apply_result_20261103.txt` | 실DB 적용 결과(23/23)와 리허설 불일치 2건의 원인 |
+| `tools/backup_db_pipeline.py` | 읽기 전용 전체 백업(데이터·카탈로그·재생성 DDL·정제본 복구 SQL)과 실DB 행 단위 대조 |
+| `tools/apply_cleanup.py` | precheck(읽기 전용) / rehearse(항상 ROLLBACK) / apply(검증 통과 시에만 COMMIT) / postcheck(읽기 전용) |
 | `docs/schema_cleanup/pre_cleanup_catalog.json` | 정리 전 실제 DB 뷰·함수·제약·인덱스·컬럼·코드 그룹·소유자 |
 | `docs/schema_cleanup/pre_cleanup_ddl.sql` | 정리·대체 대상의 정리 전 DDL(읽기용) |
 | `docs/schema_cleanup/pre_cleanup_data.json` | 정리로 바뀌는 값(card_bnft 5행 JSON, card_product 조건식 2행, 코드 그룹 8·코드 22) |
-| `src/data/backup/pre_calc_cleanup_20261103/` | 전체 백업(PostgreSQL 18개 테이블 + Neo4j dp_ 그래프) |
+| `src/data/backup/pre_calc_cleanup_20261103/` | 학원 PC 백업(PostgreSQL 18개 테이블 + Neo4j dp_ 그래프) |
+| `src/data/backup/pre_calc_cleanup_20261103_224545/` | 집 PC 적용 직전 백업(실DB 대조 VERIFY OK). 실제 복구에 쓰는 백업 |
 | `docs/schema_cleanup/isolated_test_result.txt` | 격리 시험 결과(20/20, 인덱스 정의 복구 포함) |
 | `docs/schema_cleanup/v7_ddl_dbml_change_proposal.md` | V7 DDL·DBML·코드 설명 SQL 변경안(미적용) |
 | `docs/schema_cleanup/registration_recheck_run31.txt` | 기존 추출(run 31) 재검증 결과 |
@@ -91,8 +97,9 @@ GraphRAG로 검색·답변한다. 따라서 **계산 실행을 위해 설계했�
 
 ## 7. 주의 사항
 
-- **공유 DB에 DDL을 적용하기 전에는 개별 카드 혜택 등록(card_bnft INSERT)이 실패한다.** 현재 공유 DB의 `fn_valid_rule_list`는 `method_ver`·`predicate_state_cd`를 요구하지만 새 코드는 저장하지 않는다. DDL과 소스를 함께 적용해야 한다(Stage 5 보류 중이라 현재 영향 없음).
+- DDL은 2026-11-03 실DB에 적용했다. 새 코드의 개별 카드 혜택 INSERT(계산 키 없음)가 실DB에서 저장 가능함을 확인했다(SAVEPOINT 되돌림). 이 커밋 이전 코드는 `stg_normalized_item`을 읽으므로 실행하지 않는다.
+- 복구 순서: `sql/db_pipeline_calc_structure_cleanup_rollback.sql` → 백업 폴더 `restore_stg_normalized_item.sql`. 이 순서는 적용 트랜잭션 안에서 실DB로 실증했다(데이터·정의 백업과 동일).
 - 이미 저장된 추출 이력의 `stg_sql_check_cd`(CONTRACT_INVALID)는 바뀌지 않는다. 29건을 실제로 등록하려면 저장된 응답을 새 코드로 다시 통합(LLM 재호출 없음)하거나 새로 추출해야 한다.
 - DDL 적용 후 card_bnft JSON이 바뀌므로 Neo4j는 재적재가 필요하다(`dp_card_bnft`·`dp_bnft_rule`·조건 노드의 source_json).
 - 복구 시 `card_bnft.rule_select_cd`, `card_extr_stg.card_excl_item_id`는 테이블 맨 뒤 열로 추가된다(값은 정리 전에도 모두 NULL). 시퀀스 `seq_card_excl_item`은 지우지 않았다.
-- `tests/test_live_registration.py`(실제 DB 시험, 기본 skip)는 현재 공유 DB 계약에 맞춰 두었다. DDL 적용 후 새 규칙 형식으로 바꿔야 한다.
+- `tests/test_live_registration.py`(실제 DB·유료 임베딩, 기본 skip)는 정제본 컬럼·계산 키를 뺐다. 다만 시험 원본(stg_raw_item)이 추출 스키마 형식이 아니어서 원본 재생성 방식에서는 후보가 REVIEW로 나올 수 있다. 실행 전에 시험 데이터를 추출 스키마 형식으로 바꿔야 한다(미실행).
