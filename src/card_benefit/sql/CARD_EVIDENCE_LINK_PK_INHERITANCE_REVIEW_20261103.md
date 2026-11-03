@@ -162,3 +162,47 @@ Python 서비스(`product_benefit_service.py:85-89`)는 `EVIDENCE_ID`만 넘기�
 - 패치한 등록 SQL(`insert_evidence_link`, `insert_rule_evidence_link`)은 격리 DB에서만 실행했다. 실제 DB에 시험 데이터를 남기지 않기 위해 실제 등록은 하지 않았다.
 - Neo4j 관계 속성은 `ev_link_id` 그대로다. 이름을 맞추려면 7절의 별도 작업과 재적재가 필요하다.
 - 정합성 뷰에 승계 키 불일치 게이트를 추가할지는 별도 결정 사항이다(6절).
+
+## 10. 적용 후 등록·조회 검증 (2026-11-03)
+
+모든 실제 DB 쓰기는 한 트랜잭션 안에서 하고 ROLLBACK했다(사용자 승인: 시퀀스 번호 공백 허용, `setval` 복원 없음). 임베딩·LLM은 호출하지 않았다.
+
+### 등록 실행 흐름
+
+`benefit_main.py` → `ProductBenefitService.register_run`(한 트랜잭션) → `lock_card` → `list_product_candidates` → `candidate_evidence` → `_register`
+- 이미 있는 혜택: `find_benefit` → **UNCHANGED**. 연결 INSERT를 호출하지 않는다.
+- 신규 혜택: `insert_local_benefit` → `_links` → `insert_evidence_link` / `insert_rule_evidence_link` (`product_benefit_service.py:85-89`)
+- 끝으로 `integrity_errors`가 새로 생기면 예외를 내 전체를 롤백한다. 단 `integrity_errors`는 `evidence_not_approved` 등 3개 게이트를 제외한다.
+
+### 결과
+
+| 범위 | 시험 | 결과 |
+|---|---|---|
+| ① `register_run` (실제 등록 함수) | card 2, run `20261101_000002` | 후보 4건 모두 UNCHANGED, 데이터 변화 없음. **신규 혜택 등록 경로(`insert_local_benefit`과 연결 INSERT)는 실행되지 않는다.** 미등록 후보가 없기 때문이다 |
+| ② 연결 INSERT (실제 저장소 SQL을 같은 Repository로 호출) | 신규 BNFT·RULE 연결 | `evidence_link_id` 반환(20261103_000111, _000112). 상위키가 원문 근거와 일치. 새 정합성 오류 0 |
+| | 같은 연결 재등록 | 반환 0행(`ON CONFLICT`), 건수 그대로 |
+| | 기존 자연키 충돌 | 반환 0행 |
+| | 없는 원문 근거 | **INSERT 단계에서 막힘**: 반환 0행, 오류 없이 행을 만들지 않음 |
+| ③ 프로그램을 거치지 않은 직접 INSERT | 원문은 있으나 청크가 다른 상위키 | **DB가 막지 않음.** 현재 정합성 뷰, `register_run` 점검 모두 **검출하지 못함.** 보강안 게이트만 검출 |
+| | 원문 근거 자체가 없음 | **DB가 막지 않음.** 현재 뷰는 `evidence_not_approved`로만 잡고, `register_run` 점검은 이 게이트를 제외해 **검출하지 못함.** 보강안 게이트는 검출 |
+| ④ 롤백 후 | 연결·원문 근거·시험 행 | 연결 57건 지문 `5d61e2d4…`, 원문 근거 35건 지문 `9ef45cf7…` 그대로, 시험 행 0, 상위키 불일치 0 |
+
+- **시퀀스:** `seq_card_evidence_link` 105 → 115로 10개를 소비했다. 그중 5개는 시험 스크립트 오류(SAVEPOINT 결과 읽기)로 중단된 첫 실행에서 소비됐다. 중단된 실행도 롤백돼 행은 남지 않았다. ③ 재시험은 연결 ID를 명시해 시퀀스를 쓰지 않았다.
+- **첫 ③ 시험의 오류:** 고른 원문 근거에 이미 CARD 연결이 있어, 상위키 때문이 아니라 자연키로 막혔다. 위 표는 CARD 연결이 없는 원문 근거로 다시 시험한 결과다.
+
+### 기존 데이터·Neo4j·GraphRAG
+
+- **3단계(읽기 전용):** 연결 57건(기존 9개 값)과 원문 근거 35건이 적용 전 백업과 행 단위로 같다. 승계 상위키 57/57이 원문 근거와 일치하고, 사후 검증 P01~P10이 통과했다.
+- **Neo4j:** PostgreSQL 데이터가 바뀌지 않아 재적재하지 않았다. `neo4j_validate` 읽기 전용 대조 `ok: true`(노드 124·관계 196 차이 0, 근거 연결 57=57, 고아 노드 0).
+- **GraphRAG:** 실제 Neo4j와 Mock LLM 통합 시험 7건 통과(질문 재생, 단계별 검증, 카탈로그). 관련 시험 174건 통과.
+- **미실행:** B·C 모드는 후보 검색에 임베딩 API가 필요해 실행하지 않았다.
+
+### 정합성 뷰 보강안 (제안, 미적용)
+
+- **파일:** `db_pipeline_v_card_integrity_issue_link_key_gate_proposal.sql`, `_rollback.sql`
+- **추가 게이트:** `evidence_link_key_mismatch` (issue_key `card_id/evidence_link_id`). 연결의 4컬럼 상위키가 원문 근거에 없으면 1행.
+- **방식:** 현재 뷰 정의를 그 자리에서 읽어 끝에 `UNION ALL`로 붙인다(`CREATE OR REPLACE VIEW`).
+- **검증 항목:** 기존 게이트 결과 동일, 새 게이트 건수 = 직접 계산 건수, 소유자·권한·주석 동일. 이미 있으면 변경 없음, 뷰에 의존하는 객체가 있으면 중단.
+- **효과:** 현재 해당 0건이라 적용해도 기존 결과와 등록 판정은 바뀌지 않는다. 이 게이트는 `integrity_errors`의 제외 목록에 없으므로, 적용 후에는 ③의 두 사례를 만드는 등록을 `register_run`이 롤백한다.
+- **격리 시험:** 9개 통과(적용, 기존 결과 동일, 재실행, 불일치 검출, 되돌리기, 의존 객체 차단).
+- **적용하려면:** 승인, `db_pipeline_schemaV7_draft.sql`의 뷰 정의 동기화, `test_v7_sql_files`의 게이트 목록 확인이 필요하다.
