@@ -308,13 +308,59 @@ class FakeBenefitSearch:
         return None if evidence is None else {**detail([]), "evidence": evidence}
 
 
+class BenefitIdCollisionTests(unittest.TestCase):
+    """카드 혜택과 공통 혜택의 ID 문자열이 같아도 종류·소유자로 따로 식별한다(2026-11-04 우리카드·MP004 11쌍)."""
+    CARD_KEY = json.dumps(["card_bnft", 6, "20261104_000013"])
+    COMMON_KEY = json.dumps(["card_common_bnft", 9, "20261104_000013"])
+
+    def run_with(self, chosen):
+        search = FakeSearch(detail([evidence_row("E1")]))
+        search.catalog = [
+            {"id": "20261104_000013", "key": self.CARD_KEY, "name": "온라인 쇼핑 10% 청구할인", "card": "카드의정석 SHOPPING",
+             "targets": [], "payment_min_amounts": []},
+            {"id": "20261104_000013", "key": self.COMMON_KEY, "name": "Qatar Airways 항공권 할인", "card": "적용 카드 미확인",
+             "targets": [], "payment_min_amounts": []}]
+        return CardGraphRAG(search, interpret_llm(ids=chosen), answer_llm("온라인 쇼핑 10% 할인입니다.", ("E1",))).run("온라인 쇼핑 할인?")
+
+    def test_entity_ref_keeps_kind_and_owner(self):
+        self.assertEqual(card_graphrag.entity_ref(self.CARD_KEY), "card_bnft:6:20261104_000013")
+        self.assertEqual(card_graphrag.entity_ref(self.COMMON_KEY), "card_common_bnft:9:20261104_000013")
+        self.assertEqual(card_graphrag.entity_ref("pg:CARD_BNFT:6:20261104_000013"), "card_bnft:6:20261104_000013")
+        self.assertEqual(card_graphrag.entity_ref("pg:CARD_COMMON_BNFT:9:20261104_000013"), "card_common_bnft:9:20261104_000013")
+        self.assertEqual(card_graphrag.entity_ref("not-a-key", "X"), "X")
+
+    def test_catalog_offers_distinct_ids_to_llm(self):
+        state = self.run_with(("card_bnft:6:20261104_000013",))
+        self.assertEqual([row["id"] for row in state["catalog"]],
+                         ["card_bnft:6:20261104_000013", "card_common_bnft:9:20261104_000013"])
+
+    def test_card_and_common_benefit_resolve_independently(self):
+        card = self.run_with(("card_bnft:6:20261104_000013",))
+        self.assertEqual(card["search_parameters"]["benefit_keys"], [self.CARD_KEY])
+        self.assertEqual(card["search_parameters"]["benefit_names"], ["온라인 쇼핑 10% 청구할인"])
+        common = self.run_with(("card_common_bnft:9:20261104_000013",))
+        self.assertEqual(common["search_parameters"]["benefit_keys"], [self.COMMON_KEY])
+        self.assertEqual(common["search_parameters"]["benefit_names"], ["Qatar Airways 항공권 할인"])
+
+    def test_bare_id_is_dropped_not_guessed(self):
+        state = self.run_with(("20261104_000013",))
+        self.assertEqual(state["search_parameters"]["benefit_keys"], [])
+        self.assertTrue(any("버렸습니다" in warning for warning in state["warnings"]))
+
+    def test_evidence_scope_uses_reference(self):
+        state = self.run_with(("card_bnft:6:20261104_000013",))
+        self.assertEqual(state["evidence"][0]["benefit_ids"], ["card_bnft:6:20261104_000013"])
+
+
 class CommonEvidenceFallbackTests(unittest.TestCase):
     def common_run(self, graph_evidence, benefit_search, key=COMMON_KEY):
         search = FakeSearch(detail(graph_evidence))
         search.catalog = [{"id": "C5", "key": key, "name": "트립닷컴 국내외 호텔 할인", "card": "적용 카드 미확인",
                            "targets": [], "payment_min_amounts": []}]
         second = answer_llm("호텔 15% 할인입니다.", ("PE1",))
-        state = CardGraphRAG(search, interpret_llm(ids=("C5",)), second, benefit_search=benefit_search).run("트립닷컴 호텔 할인?")
+        # 카탈로그는 공통 혜택을 종류·소유자 포함 참조로 내보낸다(카드 혜택과 ID 충돌 방지).
+        state = CardGraphRAG(search, interpret_llm(ids=(card_graphrag.entity_ref(key, "C5"),)), second,
+                             benefit_search=benefit_search).run("트립닷컴 호텔 할인?")
         return state, second
 
     def test_zero_graph_evidence_reads_same_common_benefit_from_postgresql(self):
@@ -1343,7 +1389,8 @@ class LiveAccuracyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.search = neo4j_search.connect()
-        cls.ids = {row["name"]: row["id"] for row in cls.search.list_catalog()}
+        # 질문 해석 LLM은 ID 단독이 아니라 종류·소유자 포함 참조를 고른다.
+        cls.ids = {row["name"]: card_graphrag.entity_ref(row["key"], row["id"]) for row in cls.search.list_catalog()}
 
     @classmethod
     def tearDownClass(cls):

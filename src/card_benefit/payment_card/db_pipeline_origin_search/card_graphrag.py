@@ -30,7 +30,7 @@ from common.query_logger import DEFAULT_SENSITIVE_KEYS
 
 from .benefit_search_service import BenefitSearchService, search_terms
 from .neo4j_search import (
-    ALL_SECTIONS, CARD_LOG, CARD_LOGGER_NAME, DETAIL_LOG, REQUEST_ID, detail_plan, detail_statements, is_common_key, source,
+    ALL_SECTIONS, CARD_LOG, CARD_LOGGER_NAME, DETAIL_LOG, REQUEST_ID, detail_plan, detail_statements, entity_ref, is_common_key, source,
     statement_plan,
 )
 
@@ -319,14 +319,21 @@ def postgresql_common_key(key: str) -> str | None:
     return f"pg:CARD_COMMON_BNFT:{int(common_id)}:{bnft_id}"
 
 
+def detail_ref(detail: dict) -> str | None:
+    """조회 결과의 혜택 참조. retrieve가 붙인 참조가 없으면 원본의 혜택 ID를 쓴다."""
+    if detail.get("entity_ref"):
+        return detail["entity_ref"]
+    stored = source(detail["context"]["benefit"])
+    return stored.get("card_bnft_id") or stored.get("card_common_bnft_id")
+
+
 def collect_evidence(details: list[dict], intent: str) -> list[dict]:
     """혜택별 근거를 evidence_id 하나로 합치고 질문 유형에 맞는 주체만 남긴다."""
     allowed = EVIDENCE_SUBJECTS_BY_INTENT.get(intent)
     merged: dict[str, dict] = {}
     for detail in details:
         benefit_name = detail["context"]["benefit"].get("name")
-        stored = source(detail["context"]["benefit"])
-        benefit_id = stored.get("card_bnft_id") or stored.get("card_common_bnft_id")
+        benefit_id = detail_ref(detail)
         for row in detail["evidence"]:
             subject = row["link"].get("ev_subject_cd")
             if allowed is not None and subject not in allowed:
@@ -362,7 +369,7 @@ def find_exclusions(question: str, details: list[dict], read_source=None) -> lis
         targets = {target.get("target_nm", "").casefold() for rule in row.get("rule_list") or [] for target in rule.get("target_list") or []}
         matched = [term for term in terms if term.casefold() in tokens and term.casefold() not in targets]
         if matched:
-            found.append({"benefit_id": benefit.get("card_bnft_id"), "name": benefit.get("bnft_nm"), "terms": matched, "verified_by": verified_by})
+            found.append({"benefit_id": detail_ref(detail), "name": benefit.get("bnft_nm"), "terms": matched, "verified_by": verified_by})
     return found
 
 
@@ -428,7 +435,7 @@ def benefit_context(detail: dict) -> dict:
         "common_service": {"name": common.get("common_nm"), "brand": common.get("brand_cd"), "grade": common.get("service_grade_cd")},
         "applied_cards": [source({"source_json": item}).get("product_nm") for item in detail["context"].get("card_sources", [])],
         "valid_from": benefit.get("bnft_valid_from"), "valid_to_excl": benefit.get("bnft_valid_to_excl")}
-    return {**extra, "benefit_id": benefit.get("card_bnft_id") or benefit.get("card_common_bnft_id"), "name": benefit.get("bnft_nm"),
+    return {**extra, "benefit_id": detail_ref(detail), "name": benefit.get("bnft_nm"),
             "card": source(detail["context"]["card"]).get("product_nm"), "type": benefit.get("bnft_type_cd"),
             "verification_status": benefit.get("verification_status_cd"),
             "rule_text": benefit.get("bnft_rule_txt"), "rules": rules,
@@ -1138,6 +1145,8 @@ class CardGraphRAG:
                          for hit in outcome.hits]}
             update["candidate_search"]["engines"] = outcome.engines
             update["warnings"] = outcome.warnings
+        # LLM과 서버가 같은 혜택을 가리키도록 ID 단독이 아닌 종류·소유자 포함 참조를 쓴다(카드·공통 혜택 ID 충돌 방지).
+        catalog = [{**row, "id": entity_ref(row["key"], row["id"])} for row in catalog]
         rows = [{"id": row["id"], "name": row["name"], "card": row["card"], "targets": row["targets"],
                  "payment_min_amounts": row.get("payment_min_amounts", [])} for row in catalog]
         update["catalog"] = rows
@@ -1202,6 +1211,8 @@ class CardGraphRAG:
                     detail["evidence"] = original["evidence"] if original else []
                     if detail["evidence"]:
                         detail["evidence_source"] = "postgresql_fallback"
+                if detail is not None:
+                    detail["entity_ref"] = entity_ref(key)
                 (details if detail is not None else missing).append(detail if detail is not None else key)
                 if detail is not None:
                     trace.append({"benefit": detail["context"]["benefit"].get("name"), "engine": "postgresql" if key.startswith("pg:") else "neo4j",

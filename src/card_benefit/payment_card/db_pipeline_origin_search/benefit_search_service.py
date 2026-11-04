@@ -14,6 +14,8 @@ from card_benefit.payment_card.db_pipeline.benefit_search_text import exclusion_
 from card_benefit.payment_card.db_pipeline.common_benefit_service import CommonBenefitService
 from card_benefit.payment_card.db_pipeline.embedding_service import EmbeddingRepository, vector_literal
 
+from .neo4j_search import entity_ref
+
 MODES = ("A", "B", "C")
 MODE_LABELS = {"A": "기존 검색", "B": "임베딩 검색", "C": "하이브리드"}
 FETCH_PER_TABLE = 20
@@ -78,11 +80,14 @@ def common_hit(row: dict) -> SearchHit:
 
 
 def merge_duplicates(hits: list[SearchHit], confirmed: set[tuple[str, str]]) -> tuple[list[SearchHit], list[str]]:
-    """동일성이 확인된 ``(card_bnft_id, card_common_bnft_id)`` 쌍만 합친다. 나머지는 둘 다 결과에 남긴다."""
-    commons = {hit.benefit_id for hit in hits if hit.source == "CARD_COMMON_BNFT"}
+    """동일성이 확인된 ``(카드 혜택 참조, 공통 혜택 참조)`` 쌍만 합친다. 나머지는 둘 다 결과에 남긴다.
+
+    참조는 ``entity_ref`` 형식(종류:소유자:ID)이다. ID 문자열만 같은 다른 혜택은 합치지 않는다.
+    """
+    commons = {entity_ref(hit.key) for hit in hits if hit.source == "CARD_COMMON_BNFT"}
     kept, merged = [], []
     for hit in hits:
-        if hit.source == "CARD_BNFT" and any(card == hit.benefit_id and common in commons for card, common in confirmed):
+        if hit.source == "CARD_BNFT" and any(card == entity_ref(hit.key) and common in commons for card, common in confirmed):
             merged.append(hit.key)
         else:
             kept.append(hit)
@@ -127,7 +132,7 @@ class BenefitSearchService:
             warnings.append(f"Neo4j 관계 조회 실패: {type(error).__name__}")
             return hits
         for hit in hits:
-            row = relations.get(hit.benefit_id)
+            row = relations.get(entity_ref(hit.key))      # ID만 같은 다른 혜택의 대상·제외 문구를 쓰지 않는다.
             if row is None:
                 continue
             hit.graph_targets = row["targets"]
@@ -143,8 +148,11 @@ class BenefitSearchService:
             return set()
         confirmed = set()
         for row in self.common_service.compare_brand_benefits():
-            if row["status"] == "SAME":
-                confirmed.add((row["card_bnft_id"], row["card_common_bnft_id"]))
+            if row["status"] == "SAME" and row.get("card_common_id") is not None:
+                confirmed.add((f"card_bnft:{row['card_id']}:{row['card_bnft_id']}",
+                               f"card_common_bnft:{row['card_common_id']}:{row['card_common_bnft_id']}"))
+            elif row["status"] == "SAME":
+                warnings.append(f"공통 혜택 소유자를 확인하지 못해 병합하지 않음: {row['card_bnft_id']}")
             else:
                 warnings.append(f"동일성 미확정, 병합하지 않음: {row['card_bnft_id']} {row['issues']}")
         return confirmed
@@ -155,17 +163,18 @@ class BenefitSearchService:
             return []
         rows = [card_hit(row) for row in self.repository.rows("keyword_card_bnft", TERMS=terms)]
         rows += [common_hit(row) for row in self.repository.rows("keyword_common_bnft", TERMS=terms)]
-        scores = {hit.benefit_id: hit.keyword_score for hit in rows}
+        scores = {entity_ref(hit.key): hit.keyword_score for hit in rows}      # 카드·공통 혜택 점수를 따로 센다.
         if self.neo4j_search is not None:
             try:
                 for term in terms:
                     for row in self.neo4j_search.list_benefits(term):
-                        if row["id"] in scores:
-                            scores[row["id"]] += 1
+                        ref = entity_ref(row["key"], row["id"])
+                        if ref in scores:
+                            scores[ref] += 1
             except Exception as error:      # 그래프 장애가 SQL 결과를 막지 않게 한다.
                 warnings.append(f"Neo4j 혜택명 검색 실패: {type(error).__name__}")
         for hit in rows:
-            hit.keyword_score = scores[hit.benefit_id]
+            hit.keyword_score = scores[entity_ref(hit.key)]
             hit.channels = ["keyword"]
         return sorted((hit for hit in rows if hit.keyword_score), key=lambda hit: (-hit.keyword_score, hit.bnft_nm))
 
@@ -199,11 +208,11 @@ class BenefitSearchService:
 
     def catalog_rows(self, question: str, mode: str, graph_catalog: list[dict], top_k: int = 8) -> tuple[list[dict], SearchOutcome]:
         """검색 결과를 질문 해석용 혜택 목록으로 바꾼다. 그래프에 있는 혜택은 그래프 상세를 쓴다."""
-        graph = {row["id"]: row for row in graph_catalog}
+        graph = {entity_ref(row["key"], row["id"]): row for row in graph_catalog}   # 종류·소유자 포함 참조로 그래프 항목을 찾는다.
         outcome = self.search(question, mode, top_k, use_graph=True)
         rows = []
         for hit in outcome.hits:
-            known = graph.get(hit.benefit_id)
+            known = graph.get(entity_ref(hit.key))
             target = (hit.search_txt or "").splitlines()
             rows.append(known if known else {
                 "key": hit.key, "id": hit.benefit_id, "name": hit.bnft_nm, "status": None,  # 그래프에 없으면 pg: 키로 상세를 읽는다.

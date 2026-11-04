@@ -98,6 +98,24 @@ def is_common_key(key: str) -> bool:
     return key.startswith('["card_common_bnft"')
 
 
+def entity_ref(key: str, fallback: str | None = None) -> str | None:
+    """혜택 key를 엔터티 종류·소유자·ID가 모두 들어간 참조로 바꾼다.
+
+    카드 혜택과 공통 혜택은 ID 문자열이 같을 수 있다(테이블별 시퀀스). 그래프 key ``["card_bnft",6,"ID"]`` 와
+    PostgreSQL key ``pg:CARD_BNFT:6:ID`` 는 같은 참조 ``card_bnft:6:ID`` 가 된다. 형식이 다른 key는 ``fallback`` 을 쓴다.
+    """
+    if key.startswith("pg:"):
+        parts = key.split(":", 3)
+        return f"{parts[1].lower()}:{parts[2]}:{parts[3]}" if len(parts) == 4 else fallback
+    try:
+        parts = json.loads(key)
+    except (TypeError, ValueError):
+        return fallback
+    if isinstance(parts, list) and len(parts) == 3 and parts[0] in ("card_bnft", "card_common_bnft"):
+        return ":".join(str(part) for part in parts)
+    return fallback
+
+
 def statement_plan(statement_id: str, **params) -> dict:
     """실행할 Cypher를 표시용으로 만든다. ``browser_cypher`` 는 값이 들어가 그대로 실행할 수 있다."""
     query, path = STATEMENTS[statement_id]
@@ -154,7 +172,8 @@ class Neo4jSearch:
 
     def candidate_relations(self, ids: list[str]) -> dict[str, dict]:
         """검색 후보별 카드·대상·제외 문구를 관계로 찾는다."""
-        return {row["id"]: row for row in self._query(RELATION_QUERY, ids=ids)} if ids else {}
+        # ID 문자열이 같은 카드·공통 혜택을 따로 돌려준다. 결과는 종류·소유자 포함 참조로 찾는다.
+        return {entity_ref(row["key"], row["id"]): row for row in self._query(RELATION_QUERY, ids=ids)} if ids else {}
 
     def hop(self, name: str, **params) -> list[dict]:
         """다중 홉 조회를 실행한다."""

@@ -286,7 +286,7 @@ COMMON_ROW = {"card_common_id": 1, "card_common_bnft_id": "C1", "bnft_cd": "BRAN
 
 
 def test_common_duplicate_is_merged_only_when_pair_is_confirmed():
-    kept, merged = merge_duplicates([card_hit(CARD_ROW), common_hit(COMMON_ROW)], {("B1", "C1")})
+    kept, merged = merge_duplicates([card_hit(CARD_ROW), common_hit(COMMON_ROW)], {("card_bnft:5:B1", "card_common_bnft:1:C1")})
     assert [hit.source for hit in kept] == ["CARD_COMMON_BNFT"] and len(merged) == 1
     kept, merged = merge_duplicates([card_hit(CARD_ROW), common_hit(COMMON_ROW)], set())
     assert len(kept) == 2 and not merged
@@ -303,10 +303,12 @@ class CompareService:
 def test_unconfirmed_pair_keeps_both_and_warns():
     item = BenefitSearchService(None, Embedder())
     item.repository = SearchRepo(COMMON_ROW)
-    item.common_service = CompareService([{"card_bnft_id": "B1", "card_common_bnft_id": "C1", "status": "REVIEW", "issues": ["유효기간"]}])
+    item.common_service = CompareService([{"card_id": 5, "card_bnft_id": "B1", "card_common_id": 1, "card_common_bnft_id": "C1",
+                                           "status": "REVIEW", "issues": ["유효기간"]}])
     outcome = item.search("컨시어지", "B")
     assert len(outcome.hits) == 2 and not outcome.merged_duplicates and "유효기간" in outcome.warnings[0]
-    item.common_service = CompareService([{"card_bnft_id": "B1", "card_common_bnft_id": "C1", "status": "SAME", "issues": []}])
+    item.common_service = CompareService([{"card_id": 5, "card_bnft_id": "B1", "card_common_id": 1, "card_common_bnft_id": "C1",
+                                           "status": "SAME", "issues": []}])
     assert [hit.source for hit in item.search("컨시어지", "B").hits] == ["CARD_COMMON_BNFT"]
 
 
@@ -371,7 +373,7 @@ def test_mode_a_does_not_call_embedding_and_model_mismatch_blocks_vector():
 
 class GraphStub:
     def candidate_relations(self, ids):
-        return {"T": {"id": "T", "cards": ["c"], "targets": ["버스", "지하철"], "common_nm": None,
+        return {"card_bnft:1:T": {"key": '["card_bnft",1,"T"]', "id": "T", "cards": ["c"], "targets": ["버스", "지하철"], "common_nm": None,
                       "exclusions": ["시외버스, 고속버스, 철도(KTX/SRT/ITX)는 제외"]}}
 
 
@@ -431,3 +433,98 @@ def test_enforced_conclusion_blocks_positive_answer():
 def test_search_terms_drop_stopwords_and_particles():
     assert search_terms("GS25 혜택이 있는 카드") == ["GS25"]
     assert "놀이공원" in search_terms("놀이공원을 가는")
+
+
+# region B/C 모드 ID 충돌(2026-11-04 우리카드 card_bnft 11건 ↔ MP004 card_common_bnft 11건, 같은 ID 문자열)
+SAME_ID = "20261104_000013"
+WOORI_ROW = {"card_id": 6, "card_bnft_id": SAME_ID, "bnft_cd": "BNFT_WOORI", "bnft_nm": "온라인 쇼핑 10% 청구할인",
+             "bnft_type_cd": "DISCOUNT", "product_nm": "카드의정석 SHOPPING", "similarity": 0.7, "bnft_origin_cd": "LOCAL",
+             "bnft_search_txt": "혜택명: 온라인 쇼핑 10% 청구할인\n이용처: 온라인 업종"}
+MP004_ROW = {"card_common_id": 9, "card_common_bnft_id": SAME_ID, "bnft_cd": "BNFT_QATAR", "bnft_nm": "Qatar Airways 항공권 할인",
+             "bnft_type_cd": "DISCOUNT", "apply_cards": [], "similarity": 0.6, "bnft_search_txt": "혜택명: Qatar Airways 항공권 할인"}
+WOORI_KEY = json.dumps(["card_bnft", 6, SAME_ID])
+MP004_KEY = json.dumps(["card_common_bnft", 9, SAME_ID])
+
+
+class CollisionRepo:
+    def one(self, name, **p):
+        return {"run_model_nm": "m"}
+
+    def rows(self, name, **p):
+        return {"search_card_bnft": [WOORI_ROW], "search_common_bnft": [MP004_ROW],
+                "keyword_card_bnft": [{**WOORI_ROW, "keyword_score": 1}],
+                "keyword_common_bnft": [{**MP004_ROW, "keyword_score": 0}]}[name]
+
+
+class CollisionGraph:
+    """실제 Neo4jSearch와 같은 계약: 관계는 참조별로, 목록·카탈로그 행은 key와 id를 함께 준다."""
+    def __init__(self):
+        self.list_calls = 0
+
+    def candidate_relations(self, ids):
+        return {"card_bnft:6:" + SAME_ID: {"key": WOORI_KEY, "id": SAME_ID, "cards": ["카드의정석 SHOPPING"],
+                                           "targets": ["온라인 업종"], "exclusions": [], "common_nm": None},
+                "card_common_bnft:9:" + SAME_ID: {"key": MP004_KEY, "id": SAME_ID, "cards": [], "targets": ["카타르항공"],
+                                                  "exclusions": ["온라인 쇼핑 제외"], "common_nm": "Mastercard"}}
+
+    def list_benefits(self, keyword):
+        self.list_calls += 1
+        return [{"key": MP004_KEY, "id": SAME_ID, "name": "Qatar Airways 항공권 할인", "status": None}]
+
+
+GRAPH_CATALOG = [
+    {"key": WOORI_KEY, "id": SAME_ID, "name": "온라인 쇼핑 10% 청구할인", "card": "카드의정석 SHOPPING", "status": "PENDING_REVIEW",
+     "targets": ["온라인 업종"], "payment_min_amounts": []},
+    {"key": MP004_KEY, "id": SAME_ID, "name": "Qatar Airways 항공권 할인", "card": "적용 카드 미확인", "status": None,
+     "targets": ["카타르항공"], "payment_min_amounts": []},
+]
+
+
+def collision_service():
+    item = BenefitSearchService(None, Embedder(), CollisionGraph())
+    item.repository = CollisionRepo()
+    item.common_service = CompareService([])
+    return item
+
+
+@pytest.mark.parametrize("mode", ["B", "C"])
+def test_same_id_card_and_common_hits_stay_separate(mode):
+    outcome = collision_service().search("온라인 쇼핑 할인", mode, top_k=5)
+    keys = sorted(hit.key for hit in outcome.hits)
+    assert keys == [f"pg:CARD_BNFT:6:{SAME_ID}", f"pg:CARD_COMMON_BNFT:9:{SAME_ID}"]
+    assert not outcome.merged_duplicates
+
+
+@pytest.mark.parametrize("mode", ["B", "C"])
+def test_catalog_rows_join_graph_by_reference_not_id(mode):
+    rows, _ = collision_service().catalog_rows("온라인 쇼핑 할인", mode, GRAPH_CATALOG)
+    by_key = {row["key"]: row for row in rows}
+    assert by_key[WOORI_KEY]["name"] == "온라인 쇼핑 10% 청구할인" and by_key[WOORI_KEY]["card"] == "카드의정석 SHOPPING"
+    assert by_key[MP004_KEY]["name"] == "Qatar Airways 항공권 할인" and by_key[MP004_KEY]["card"] == "적용 카드 미확인"
+    assert len(rows) == 2
+
+
+def test_graph_relations_do_not_cross_same_id():
+    hits = collision_service()._rank_with_graph("온라인 쇼핑", [card_hit(WOORI_ROW), common_hit(MP004_ROW)], [])
+    woori = next(hit for hit in hits if hit.source == "CARD_BNFT")
+    qatar = next(hit for hit in hits if hit.source == "CARD_COMMON_BNFT")
+    assert woori.graph_targets == ["온라인 업종"] and not woori.excluded_terms
+    assert qatar.graph_targets == ["카타르항공"]
+
+
+def test_neo4j_name_score_only_counts_matching_entity():
+    item = collision_service()
+    hits = item._keyword("Qatar 항공권", [])
+    scores = {hit.source: hit.keyword_score for hit in hits}
+    # 카드 혜택은 SQL 점수 1 그대로, 공통 혜택만 Neo4j 혜택명 일치로 점수를 받는다(같은 ID여도 섞이지 않음).
+    assert scores["CARD_BNFT"] == 1 and scores["CARD_COMMON_BNFT"] == item.neo4j_search.list_calls
+
+
+def test_confirmed_pair_needs_owner_reference():
+    hits = [card_hit(WOORI_ROW), common_hit(MP004_ROW)]
+    # 다른 카드(5)의 같은 ID 쌍이 확인돼도 우리카드(6) 혜택을 합치지 않는다.
+    kept, merged = merge_duplicates(hits, {(f"card_bnft:5:{SAME_ID}", f"card_common_bnft:9:{SAME_ID}")})
+    assert len(kept) == 2 and not merged
+    kept, merged = merge_duplicates(hits, {(f"card_bnft:6:{SAME_ID}", f"card_common_bnft:1:{SAME_ID}")})
+    assert len(kept) == 2 and not merged
+# endregion

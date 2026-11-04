@@ -52,7 +52,8 @@ OPTIONAL MATCH (b)-[:dp_has_rule]->(:dp_bnft_rule)-[:dp_targets]->(t:dp_rule_tar
 OPTIONAL MATCH (b)-[:dp_has_rule*0..1]->(owner)-[:dp_has_expr]->(:dp_cond_expr)-[:dp_has_branch]->(:dp_cond_branch)
       -[:dp_has_atom]->(a:dp_cond_atom {kind:'BNFT_EXCL'})
 OPTIONAL MATCH (b)-[:dp_belongs_to]->(s:dp_card_common)
-RETURN coalesce(b.card_bnft_id, b.card_common_bnft_id) AS id, collect(DISTINCT c.product_nm) AS cards,
+// 노드 key로 묶는다. ID 문자열만 같은 카드 혜택과 공통 혜택의 대상·제외 문구를 한 행으로 합치지 않는다.
+RETURN b.key AS key, coalesce(b.card_bnft_id, b.card_common_bnft_id) AS id, collect(DISTINCT c.product_nm) AS cards,
        collect(DISTINCT t.target_nm) AS targets, collect(DISTINCT a.excl_raw_txt) AS exclusions, s.common_nm AS common_nm
 
 // name: benefit_context

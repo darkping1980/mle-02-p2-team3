@@ -322,6 +322,7 @@ class CommonBenefitService:
         for row in self.repo.rows('brand_bnft_compare'):
             status, issues = compare_brand_bnft(row)
             results.append({'card_id': row['card_id'], 'card_bnft_id': row['card_bnft_id'], 'bnft_cd': row['bnft_cd'],
+                            'card_common_id': row.get('card_common_id'),   # 공통 혜택은 소유자까지 있어야 식별된다
                             'card_common_bnft_id': row.get('card_common_bnft_id'), 'status': status, 'issues': issues})
         return results
 
