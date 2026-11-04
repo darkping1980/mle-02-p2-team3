@@ -1,0 +1,2352 @@
+{
+ "ledger_version": 1,
+ "doc_family_cd": "HANA_MP004",
+ "card_doc_id": "20261103_000014",
+ "card_common_id": 9,
+ "common_cd": "MASTERCARD_PLATINUM",
+ "source_run_id": "20261103_000031",
+ "created_date": "2026-11-04",
+ "status": "DRAFT_PENDING_USER_REVIEW",
+ "identity_rules": {
+  "bnft_cd": "benefit_code(doc_family_cd, identity) = 'BRAND_' + sha256(doc_family_cd + '\\0' + identity)",
+  "NAME_V1_AUTO": "identity_for() 결과를 그대로 보존. 다시 계산하지 않는다.",
+  "BIZ_V1_MANUAL": "BIZ_V1:<영역>/<제휴사·대상>/<혜택 구분>. 혜택명·문서 판·stg_id를 쓰지 않는다. 한번 정한 값은 바꾸지 않는다.",
+  "anchor_norm": "NFKC → casefold → 공백 제거 → 앞쪽 글머리표(·•*-) 제거",
+  "matching": "후보의 위치 확인된 자기 근거(BNFT·RULE·TARGET·LIMIT) 중 anchor.line_sha256와 같은 줄이 있고 value_key가 같을 때만 대응. 0건 또는 2건 이상이면 식별자를 주지 않는다(REVIEW).",
+  "excluded": "reserved_identity는 충돌 검사용이며 등록 인자로 넘기지 않는다."
+ },
+ "register": [
+  {
+   "card_extr_stg_id": "20261103_000335",
+   "bnft_nm_run31": "LANE4 AIR 서비스 할인",
+   "identity": "BIZ_V1:AIRPORT/LANE4_AIR/DISCOUNT",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_BD914009693AAE39B2561606A511E5EF335F1C0FDFC1B97385C5E7497B286369",
+   "targets": [
+    "SERVICE:LANE4 AIR"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "b1_r1",
+     "value_raw_txt": "3만원 할인",
+     "value_num": "30000",
+     "value_unit_cd": "KRW"
+    },
+    {
+     "rule_key": "b1_r2",
+     "value_raw_txt": "총 6만원 할인",
+     "value_num": "60000",
+     "value_unit_cd": "KRW"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001465",
+    "20261103_001466",
+    "20261103_001467",
+    "20261103_001468",
+    "20261103_001469"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001465",
+    "card_doc_chunk_id": "20261103_000069",
+    "start_pos": 80,
+    "end_pos": 120,
+    "line_sha256": "c75c60b3418b7469088e63f70965ca16a44119699b8d4dac9bede59912209bae",
+    "value_key": [
+     "3만원할인",
+     "총6만원할인"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000009",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000336",
+   "bnft_nm_run31": "Trip.com 호텔 할인",
+   "identity": "BIZ_V1:TRAVEL/TRIP_COM/HOTEL",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_3AE7C465910955FAF5FE8EB192AE4A84FDC6DFD6986C803778676F538DF09BBD",
+   "targets": [
+    "MERCHANT:Trip.com",
+    "SERVICE:호텔"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "b2_r1",
+     "value_raw_txt": "6%",
+     "value_num": "6",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001471",
+    "20261103_001472",
+    "20261103_001473",
+    "20261103_001474"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001471",
+    "card_doc_chunk_id": "20261103_000069",
+    "start_pos": 136,
+    "end_pos": 170,
+    "line_sha256": "430057e2ea322e9d3e8587ffc07ea49e2f3a6a4b04ef8e5d9ac5446d74247108",
+    "value_key": [
+     "6%"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000010",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000337",
+   "bnft_nm_run31": "Trip.com 항공 할인",
+   "identity": "BIZ_V1:TRAVEL/TRIP_COM/AIR",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_986F026F4D79C0018342900AC0A94053FA8C5713BBC138516E3A5EB5EC85E980",
+   "targets": [
+    "MERCHANT:Trip.com",
+    "SERVICE:항공"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "b3_r1",
+     "value_raw_txt": "3%",
+     "value_num": "3",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001475",
+    "20261103_001476",
+    "20261103_001477",
+    "20261103_001478"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001475",
+    "card_doc_chunk_id": "20261103_000069",
+    "start_pos": 136,
+    "end_pos": 170,
+    "line_sha256": "430057e2ea322e9d3e8587ffc07ea49e2f3a6a4b04ef8e5d9ac5446d74247108",
+    "value_key": [
+     "3%"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000011",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000338",
+   "bnft_nm_run31": "Trip.com 액티비티 할인",
+   "identity": "BIZ_V1:TRAVEL/TRIP_COM/ACTIVITY",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_E4C9E843FA4E170FFC75F24733C58D3FA5778371CF3167F7BDF120F896580435",
+   "targets": [
+    "MERCHANT:Trip.com",
+    "SERVICE:액티비티"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "b4_r1",
+     "value_raw_txt": "5%",
+     "value_num": "5",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001479",
+    "20261103_001480",
+    "20261103_001481",
+    "20261103_001482"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001479",
+    "card_doc_chunk_id": "20261103_000069",
+    "start_pos": 136,
+    "end_pos": 170,
+    "line_sha256": "430057e2ea322e9d3e8587ffc07ea49e2f3a6a4b04ef8e5d9ac5446d74247108",
+    "value_key": [
+     "5%"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000012",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000343",
+   "bnft_nm_run31": "Qatar Airways 항공권 할인",
+   "identity": "BIZ_V1:TRAVEL/QATAR_AIRWAYS/AIR_TICKET",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_A3FB0CE5CDCB0AB7E5C31D0CDD5A7BD98FA5F8A2D6565DAF2C684A1835BB7ECA",
+   "targets": [
+    "MERCHANT:Qatar Airways",
+    "SERVICE:항공권"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "b9_r1",
+     "value_raw_txt": "최대 10% 할인",
+     "value_num": "10",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001503",
+    "20261103_001504",
+    "20261103_001505",
+    "20261103_001506"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001504",
+    "card_doc_chunk_id": "20261103_000069",
+    "start_pos": 485,
+    "end_pos": 511,
+    "line_sha256": "221966c112aab7efc2f429850fee5ee8008b7c2b6b70a0721146fe96c2254f02",
+    "value_key": [
+     "최대10%할인"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000013",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000344",
+   "bnft_nm_run31": "On Vacation 럭셔리호텔/크루즈 상품 할인",
+   "identity": "BIZ_V1:TRAVEL/ON_VACATION/LUXURY_HOTEL_CRUISE",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_A2F5B095EA8AF6E9392E3BBA882D67E5C53BB0AA517313C17D1EAE326752D0B2",
+   "targets": [
+    "MERCHANT:On Vacation",
+    "SERVICE:럭셔리호텔/크루즈 상품"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "b10_r1",
+     "value_raw_txt": "5% 할인",
+     "value_num": "5",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001507",
+    "20261103_001508",
+    "20261103_001509",
+    "20261103_001510"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001508",
+    "card_doc_chunk_id": "20261103_000069",
+    "start_pos": 515,
+    "end_pos": 544,
+    "line_sha256": "05fe89bb8d9e2bb2245b21e6120e08f802223553c4cbf408eeb52e3054d4011c",
+    "value_key": [
+     "5%할인"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000014",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000348",
+   "bnft_nm_run31": "Oh Show 공연 티켓 할인",
+   "identity": "BIZ_V1:TRAVEL/OH_SHOW/SHOW_TICKET",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_97B379CB31F248388A10859F9A4022AA83EF39F3CBB4D6C00CD75EB5297D34F3",
+   "targets": [
+    "MERCHANT:Oh Show"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r4",
+     "value_raw_txt": "3% 할인",
+     "value_num": "3",
+     "value_unit_cd": "PERCENT"
+    },
+    {
+     "rule_key": "r5",
+     "value_raw_txt": "3% 할인",
+     "value_num": "3",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001524",
+    "20261103_001525",
+    "20261103_001526",
+    "20261103_001527",
+    "20261103_001528"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001524",
+    "card_doc_chunk_id": "20261103_000070",
+    "start_pos": 141,
+    "end_pos": 195,
+    "line_sha256": "fa1586551c9931dfd8f93d1a13157f1aa7188d64127439644c05f9d6e3ccee61",
+    "value_key": [
+     "3%할인",
+     "3%할인"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000015",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000350",
+   "bnft_nm_run31": "제주도닷컴 국내선 항공권 발권대행수수료 무료",
+   "identity": "BIZ_V1:TRAVEL/JEJUDO_COM/DOMESTIC_AIR_TICKETING_FEE",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_B652AA4E86F6D548347D281C44CDC97424D077909D3A8F2BB476B7391DCE5160",
+   "targets": [
+    "MERCHANT:제주도닷컴"
+   ],
+   "bnft_type_cd": "FEE_WAIVER",
+   "values": [
+    {
+     "rule_key": "r8",
+     "value_raw_txt": "발권대행수수료 무료",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001534",
+    "20261103_001536",
+    "20261103_001537"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001535",
+    "card_doc_chunk_id": "20261103_000070",
+    "start_pos": 222,
+    "end_pos": 239,
+    "line_sha256": "e88f2e8e8a5ad99fc556f28e2854c4cab598cb05666009decf7cf2a119ee8b3d",
+    "value_key": [
+     "발권대행수수료무료"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000016",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000351",
+   "bnft_nm_run31": "Europcar 할인",
+   "identity": "BIZ_V1:TRAVEL/EUROPCAR/RENTAL",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_A35173E03EBC413309A5718A1B65CE973DD126C31A542424BF9B5EDE3E3F846C",
+   "targets": [
+    "MERCHANT:Europcar"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r9",
+     "value_raw_txt": "최대 15% 할인",
+     "value_num": "15",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001538",
+    "20261103_001540",
+    "20261103_001541"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001539",
+    "card_doc_chunk_id": "20261103_000070",
+    "start_pos": 243,
+    "end_pos": 260,
+    "line_sha256": "7d81408e90aab49c541074adedf996098ecb8661217f6f21b5274c6830530976",
+    "value_key": [
+     "최대15%할인"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000017",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000352",
+   "bnft_nm_run31": "롯데렌터카 할인",
+   "identity": "BIZ_V1:TRAVEL/LOTTE_RENTACAR/RENTAL",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_8234B82C6F46863A5F6DDDA21B70969518B8E4CE350A5C0FCDFA77F4A0767812",
+   "targets": [
+    "MERCHANT:롯데렌터카"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r10",
+     "value_raw_txt": "최대 제주 90%",
+     "value_num": "90",
+     "value_unit_cd": "PERCENT"
+    },
+    {
+     "rule_key": "r11",
+     "value_raw_txt": "내륙 65% 할인 제공",
+     "value_num": "65",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001542",
+    "20261103_001543",
+    "20261103_001544",
+    "20261103_001545",
+    "20261103_001546"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001542",
+    "card_doc_chunk_id": "20261103_000070",
+    "start_pos": 264,
+    "end_pos": 292,
+    "line_sha256": "a691ab8265b0fce431b8a6659d6bd9fe5b59b845b0982182c332e7dac73585e1",
+    "value_key": [
+     "내륙65%할인제공",
+     "최대제주90%"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000018",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000353",
+   "bnft_nm_run31": "Hertz 렌트 예약 할인",
+   "identity": "BIZ_V1:TRAVEL/HERTZ/RENTAL",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_E38E7EFC20420B5D8C3AB66CD5962441CC1C46722D2E90B451A2CC743ABF186E",
+   "targets": [
+    "MERCHANT:Hertz"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r12",
+     "value_raw_txt": "10% 할인",
+     "value_num": "10",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001547",
+    "20261103_001549",
+    "20261103_001550"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001548",
+    "card_doc_chunk_id": "20261103_000070",
+    "start_pos": 296,
+    "end_pos": 315,
+    "line_sha256": "02969541f7ead165d1837ab6ff81ee768a87546847c786721890b9d65b43fa12",
+    "value_key": [
+     "10%할인"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000019",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000354",
+   "bnft_nm_run31": "Hertz 멤버십 무료 가입",
+   "identity": "BIZ_V1:TRAVEL/HERTZ/MEMBERSHIP",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_726E6E0463C80652959F0847E7D399B7708A37413A45168269CFC3AE38C51513",
+   "targets": [
+    "MERCHANT:Hertz"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "r13",
+     "value_raw_txt": "멤버십 무료 가입",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001551",
+    "20261103_001552",
+    "20261103_001553",
+    "20261103_001554"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001551",
+    "card_doc_chunk_id": "20261103_000070",
+    "start_pos": 296,
+    "end_pos": 326,
+    "line_sha256": "894330474debaff8a6ffda35b1ad7ef33129c6b9f4f6bb9d2f949b431cbed634",
+    "value_key": [
+     "멤버십무료가입"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000020",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000355",
+   "bnft_nm_run31": "짐캐리 할인",
+   "identity": "BIZ_V1:TRAVEL/ZIMCARRY/DISCOUNT",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_A9E75A02C3A247D9C18FC475162745CC03CF150F20F9965AE7C95C1BED09D938",
+   "targets": [
+    "MERCHANT:짐캐리"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r14",
+     "value_raw_txt": "최대 20% 할인",
+     "value_num": "20",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001555",
+    "20261103_001557",
+    "20261103_001558"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001556",
+    "card_doc_chunk_id": "20261103_000070",
+    "start_pos": 330,
+    "end_pos": 342,
+    "line_sha256": "3cb04f9627e1d627921dd705a85585926e5463d61467ec899a09e9af78156816",
+    "value_key": [
+     "최대20%할인"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000021",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000357",
+   "bnft_nm_run31": "와이드모바일 와이파이도시락 할인",
+   "identity": "BIZ_V1:TRAVEL/WIDEMOBILE_WIFI_DOSIRAK/DISCOUNT",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_F9F4CC470336ED82225BAD32EFBC4825EB32D13437DB08D62AEDB7C31246F1C0",
+   "targets": [
+    "SERVICE:와이드모바일 와이파이도시락"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "rule_1",
+     "value_raw_txt": "15%",
+     "value_num": "15",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001564",
+    "20261103_001565",
+    "20261103_001566",
+    "20261103_001567"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001564",
+    "card_doc_chunk_id": "20261103_000071",
+    "start_pos": 1,
+    "end_pos": 42,
+    "line_sha256": "31d4cfe54b9e643641c52d15cf39e31c9e9517ba9395678a332f8593df58ced7",
+    "value_key": [
+     "15%"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000022",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000358",
+   "bnft_nm_run31": "도시락 eSIM/USIM 할인",
+   "identity": "BIZ_V1:TRAVEL/DOSIRAK_ESIM_USIM/DISCOUNT",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_8713FA8C51EE2DFC79D34FF68C463EB6798213D81AF4314C36A64E56E7903AD4",
+   "targets": [
+    "SERVICE:도시락 eSIM/USIM"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "rule_2",
+     "value_raw_txt": "10%",
+     "value_num": "10",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001568",
+    "20261103_001569",
+    "20261103_001570",
+    "20261103_001571"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001568",
+    "card_doc_chunk_id": "20261103_000071",
+    "start_pos": 1,
+    "end_pos": 42,
+    "line_sha256": "31d4cfe54b9e643641c52d15cf39e31c9e9517ba9395678a332f8593df58ced7",
+    "value_key": [
+     "10%"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000023",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000359",
+   "bnft_nm_run31": "유심사 해외 eSIM/USIM 할인",
+   "identity": "BIZ_V1:TRAVEL/USIMSA/OVERSEAS_ESIM_USIM",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_FA58F9D42F1B2BAF31C905C7A4D467B17947675290AD221916AC782511DE6D11",
+   "targets": [
+    "SERVICE:유심사 해외 eSIM/USIM"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "rule_3",
+     "value_raw_txt": "20%",
+     "value_num": "20",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001572",
+    "20261103_001573",
+    "20261103_001574",
+    "20261103_001575"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001573",
+    "card_doc_chunk_id": "20261103_000071",
+    "start_pos": 46,
+    "end_pos": 68,
+    "line_sha256": "ebd9b6c65e74919f5038880750fd5c22975b5a263d3857935dbbab75b3905aa7",
+    "value_key": [
+     "20%"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000024",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000360",
+   "bnft_nm_run31": "국내 특급호텔 F&B 할인",
+   "identity": "BIZ_V1:HOTEL/DOMESTIC_LUXURY_HOTEL/FNB",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_696A5E198EBE09A3F4CA177F9579CC5E2B23446D877DF692642922E7C80D4935",
+   "targets": [
+    "INDUSTRY:국내 특급호텔"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r1",
+     "value_raw_txt": "5~15% 할인",
+     "value_num": null,
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001576",
+    "20261103_001577",
+    "20261103_001578",
+    "20261103_001579"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001576",
+    "card_doc_chunk_id": "20261103_000073",
+    "start_pos": 1,
+    "end_pos": 30,
+    "line_sha256": "d7e280c9ab110e18721e1e4e3b5041afca6325f9b9dbd31e6ad65f3c457a48d4",
+    "value_key": [
+     "5~15%할인"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000025",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000361",
+   "bnft_nm_run31": "국내 특급호텔 객실/패키지 할인",
+   "identity": "BIZ_V1:HOTEL/DOMESTIC_LUXURY_HOTEL/ROOM_PACKAGE_DISCOUNT",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_877E99135CF8F96816EAA7F8ED0A29BBDE7F9A65B027AB7AD69B29B5E3905ACE",
+   "targets": [
+    "INDUSTRY:국내 특급호텔"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r2",
+     "value_raw_txt": "5~50% 할인",
+     "value_num": null,
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001580",
+    "20261103_001581",
+    "20261103_001582",
+    "20261103_001583"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001580",
+    "card_doc_chunk_id": "20261103_000073",
+    "start_pos": 32,
+    "end_pos": 76,
+    "line_sha256": "0cbfca6a3e67db190de41d933648f1f2522fe89267ca13ab108689831f46c5f0",
+    "value_key": [
+     "5~50%할인"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000026",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000363",
+   "bnft_nm_run31": "국내 특급호텔 스파 할인",
+   "identity": "BIZ_V1:HOTEL/DOMESTIC_LUXURY_HOTEL/SPA",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_F865A67B9A54F41210939E61F3ECAD5B6CB366A3FECC71E56D0469D2457F6CB8",
+   "targets": [
+    "INDUSTRY:국내 특급호텔"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r4",
+     "value_raw_txt": "10~20% 할인",
+     "value_num": null,
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001588",
+    "20261103_001589",
+    "20261103_001590",
+    "20261103_001591"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001588",
+    "card_doc_chunk_id": "20261103_000073",
+    "start_pos": 78,
+    "end_pos": 107,
+    "line_sha256": "e5ab8f084ea6d752f05e01d60eaedc693ad68a0c3e7726ad69cce8c36946f4eb",
+    "value_key": [
+     "10~20%할인"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000027",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000364",
+   "bnft_nm_run31": "Trump Hotels 할인",
+   "identity": "BIZ_V1:HOTEL/TRUMP_HOTELS/DISCOUNT",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_0AECF2409A1C6A5A8276EA3C1BEA49663F6E703E550431D0C4C6EF072D5E192E",
+   "targets": [
+    "MERCHANT:Trump Hotels"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r5",
+     "value_raw_txt": "10% 할인",
+     "value_num": "10",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001592",
+    "20261103_001593",
+    "20261103_001594",
+    "20261103_001595"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001592",
+    "card_doc_chunk_id": "20261103_000073",
+    "start_pos": 109,
+    "end_pos": 129,
+    "line_sha256": "5d766457f49ccc4133f5c385225db5f4553ee6525996a0e12aab739cde85b7c3",
+    "value_key": [
+     "10%할인"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000028",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000365",
+   "bnft_nm_run31": "Outrigger Hotels and Resorts 할인",
+   "identity": "BIZ_V1:HOTEL/OUTRIGGER/DISCOUNT",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_8E591437DB986AA9661004B9134C31AE4380D70351FF5F9B4F2155BAE1E4313E",
+   "targets": [
+    "MERCHANT:Outrigger Hotels and Resorts"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r6",
+     "value_raw_txt": "5% 할인",
+     "value_num": "5",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001596",
+    "20261103_001597",
+    "20261103_001598",
+    "20261103_001599"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001596",
+    "card_doc_chunk_id": "20261103_000073",
+    "start_pos": 132,
+    "end_pos": 167,
+    "line_sha256": "57e57311d4d9ff145a43fbbc46e95f2b443e6fe74c9da938e5c6ee7448471d97",
+    "value_key": [
+     "5%할인"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000029",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000366",
+   "bnft_nm_run31": "KA LA’I Waikiki Beach, LXR Hotels & Resorts 할인",
+   "identity": "BIZ_V1:HOTEL/KA_LAI_WAIKIKI_LXR/DISCOUNT",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_006B0FD1BEA226478B783A5919089A32F905CD4CB29E7EF680AA2D0C7505D49A",
+   "targets": [
+    "MERCHANT:KA LA’I Waikiki Beach, LXR Hotels & Resorts"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r7",
+     "value_raw_txt": "10% 할인",
+     "value_num": "10",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001600",
+    "20261103_001601",
+    "20261103_001602",
+    "20261103_001603"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001600",
+    "card_doc_chunk_id": "20261103_000073",
+    "start_pos": 169,
+    "end_pos": 228,
+    "line_sha256": "296e04144b3bbdb00a7168f158ce682585d65c94f8a9e753424284c1ab1ae242",
+    "value_key": [
+     "10%할인"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000030",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000367",
+   "bnft_nm_run31": "KA LA’I Waikiki Beach, LXR Hotels & Resorts 조식 제공",
+   "identity": "BIZ_V1:HOTEL/KA_LAI_WAIKIKI_LXR/BREAKFAST",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_B8373D120B55663BF5B0C8046B5D82E17D7C31F11139D6101E98500E210357FA",
+   "targets": [
+    "MERCHANT:KA LA’I Waikiki Beach, LXR Hotels & Resorts"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "r8",
+     "value_raw_txt": "조식 제공",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001604",
+    "20261103_001605",
+    "20261103_001606",
+    "20261103_001607"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001604",
+    "card_doc_chunk_id": "20261103_000073",
+    "start_pos": 169,
+    "end_pos": 228,
+    "line_sha256": "296e04144b3bbdb00a7168f158ce682585d65c94f8a9e753424284c1ab1ae242",
+    "value_key": [
+     "조식제공"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000031",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000368",
+   "bnft_nm_run31": "코타키나발루 수트라하버 리조트 클럽 및 스위트 객실 할인",
+   "identity": "BIZ_V1:HOTEL/SUTERA_HARBOUR/CLUB_SUITE_ROOM",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_C1CB5CD5F67F8B48DA8B4EC906E163A128FD899353341B921D4542DE515490AE",
+   "targets": [
+    "MERCHANT:코타키나발루 수트라하버 리조트"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r9",
+     "value_raw_txt": "25% 할인",
+     "value_num": "25",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001608",
+    "20261103_001609",
+    "20261103_001610",
+    "20261103_001611"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001608",
+    "card_doc_chunk_id": "20261103_000073",
+    "start_pos": 230,
+    "end_pos": 283,
+    "line_sha256": "c3bbb3543efabb311625f470b001bd05fb13ab8e7d3fd2f5a6d40909d0613b65",
+    "value_key": [
+     "25%할인"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000032",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000371",
+   "bnft_nm_run31": "신라면세점 골드플러스 멤버십 오프라인 할인",
+   "identity": "BIZ_V1:SHOPPING/SHILLA_DUTY_FREE/GOLD_PLUS_OFFLINE",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_829E5648099EE4DF42607E20C564E499E3C0D984B65E1DB93AFF64F525F45E67",
+   "targets": [
+    "MERCHANT:신라면세점",
+    "CHANNEL:오프라인"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r12",
+     "value_raw_txt": "최대 15%",
+     "value_num": "15",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001620",
+    "20261103_001621",
+    "20261103_001622",
+    "20261103_001623"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001620",
+    "card_doc_chunk_id": "20261103_000073",
+    "start_pos": 285,
+    "end_pos": 366,
+    "line_sha256": "13cb96ea29ea74e8a1468fb80a85425fd6f95c96b8557bb81a18adf358b6134b",
+    "value_key": [
+     "최대15%"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000033",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000372",
+   "bnft_nm_run31": "신라면세점 골드플러스 멤버십 온라인 할인",
+   "identity": "BIZ_V1:SHOPPING/SHILLA_DUTY_FREE/GOLD_PLUS_ONLINE",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_510E2AFE25A64D09FCA9F7815F4B8FD1A118723D8519639FA3DE794665AAAF33",
+   "targets": [
+    "MERCHANT:신라면세점",
+    "CHANNEL:온라인"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r13",
+     "value_raw_txt": "최대 20% 할인",
+     "value_num": "20",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001624",
+    "20261103_001625",
+    "20261103_001626",
+    "20261103_001627"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001624",
+    "card_doc_chunk_id": "20261103_000073",
+    "start_pos": 285,
+    "end_pos": 366,
+    "line_sha256": "13cb96ea29ea74e8a1468fb80a85425fd6f95c96b8557bb81a18adf358b6134b",
+    "value_key": [
+     "최대20%할인"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000034",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000375",
+   "bnft_nm_run31": "트래블메이트 캐리어/여행용품 12% 추가 할인",
+   "identity": "NAME_V1_8FC0325062FF824766859CC324107434B6B7CD503B9160B5BF2EE564EBF7DE1B",
+   "identity_kind": "NAME_V1_AUTO",
+   "bnft_cd": "BRAND_4E5B72B7F85C7A21CE047D4842BBE4C09E0CD9906B411C5F8E1EB9963900D4C8",
+   "targets": [
+    "MERCHANT:트래블메이트"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "b2_r1",
+     "value_raw_txt": "12% 추가 할인",
+     "value_num": "12",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001636",
+    "20261103_001637",
+    "20261103_001638",
+    "20261103_001639"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001636",
+    "card_doc_chunk_id": "20261103_000074",
+    "start_pos": 32,
+    "end_pos": 58,
+    "line_sha256": "8fc0325062ff824766859cc324107434b6b7cd503b9160b5bf2ee564ebf7de1b",
+    "value_key": [
+     "12%추가할인"
+    ]
+   },
+   "review_status": "AUTO_IDENTITY",
+   "registration": {
+    "card_common_bnft_id": "20261104_000035",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000381",
+   "bnft_nm_run31": "코타키나발루 수트라하버 리조트 골프&컨트리클럽 그린피 본인 면제",
+   "identity": "NAME_V1_670461810AD8508F8538E1E19A5933046DA5276B046BA0C3220100E56B92FE79",
+   "identity_kind": "NAME_V1_AUTO",
+   "bnft_cd": "BRAND_EED5E6E933E8AB338511C241E8422B180CE54EDCA475F3499EF42E74BC975B43",
+   "targets": [
+    "MERCHANT:코타키나발루 수트라하버 리조트 골프&컨트리클럽"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "b8_r1",
+     "value_raw_txt": "본인 면제",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001662",
+    "20261103_001663",
+    "20261103_001664",
+    "20261103_001665"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001662",
+    "card_doc_chunk_id": "20261103_000074",
+    "start_pos": 250,
+    "end_pos": 286,
+    "line_sha256": "670461810ad8508f8538e1e19a5933046da5276b046ba0c3220100e56b92fe79",
+    "value_key": [
+     "본인면제"
+    ]
+   },
+   "review_status": "AUTO_IDENTITY",
+   "registration": {
+    "card_common_bnft_id": "20261104_000036",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000382",
+   "bnft_nm_run31": "LANE4 Golf 골프장 이동 서비스 5만원 할인",
+   "identity": "NAME_V1_EBEB111C0BCDB5AF27858457B8F17A01FE85F92BABC1B44E1E055287F8CEA3FA",
+   "identity_kind": "NAME_V1_AUTO",
+   "bnft_cd": "BRAND_263624A955D499FEDF242647AB6CA1451C404C061DD4284B2A7DDB1E3969431C",
+   "targets": [
+    "SERVICE:LANE4 Golf 골프장 이동 서비스"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "b9_r1",
+     "value_raw_txt": "5만원 할인",
+     "value_num": "50000",
+     "value_unit_cd": "KRW"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001666",
+    "20261103_001667",
+    "20261103_001668",
+    "20261103_001669"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001666",
+    "card_doc_chunk_id": "20261103_000074",
+    "start_pos": 288,
+    "end_pos": 317,
+    "line_sha256": "ebeb111c0bcdb5af27858457b8f17a01fe85f92babc1b44e1e055287f8cea3fa",
+    "value_key": [
+     "5만원할인"
+    ]
+   },
+   "review_status": "AUTO_IDENTITY",
+   "registration": {
+    "card_common_bnft_id": "20261104_000037",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000383",
+   "bnft_nm_run31": "Car up 프리미엄 카 케어 서비스 20% 할인",
+   "identity": "NAME_V1_D9A460F77F909C29D062AF16DF9FA9E87CB8FAE4388EC84DBDDAD9E1731BC5CE",
+   "identity_kind": "NAME_V1_AUTO",
+   "bnft_cd": "BRAND_ECFBB766E774F409DE457A74E828E7BBE5C4A8DC293AB4F12D21C5A1CCCD5BDE",
+   "targets": [
+    "SERVICE:Car up 프리미엄 카 케어 서비스"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "b1_r1",
+     "value_raw_txt": "20% 할인",
+     "value_num": "20",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001670",
+    "20261103_001671",
+    "20261103_001672",
+    "20261103_001673"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001670",
+    "card_doc_chunk_id": "20261103_000075",
+    "start_pos": 1,
+    "end_pos": 29,
+    "line_sha256": "d9a460f77f909c29d062af16df9fa9e87cb8fae4388ec84dbddad9e1731bc5ce",
+    "value_key": [
+     "20%할인"
+    ]
+   },
+   "review_status": "AUTO_IDENTITY",
+   "registration": {
+    "card_common_bnft_id": "20261104_000038",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000384",
+   "bnft_nm_run31": "내셔널지오그래픽 트래블러 정기구독 결제 20% 할인",
+   "identity": "NAME_V1_8E7D37128F19DDA8BD9650C0468F8DAE123EB003CD5B076B20E7CFEDD6585ED2",
+   "identity_kind": "NAME_V1_AUTO",
+   "bnft_cd": "BRAND_898F47A02ADEDC86559C3B4B1A36E203AC71F004DCB3EB82A3AA11C71FE9B8AE",
+   "targets": [
+    "SERVICE:내셔널지오그래픽 트래블러 정기구독"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "b2_r1",
+     "value_raw_txt": "20% 할인",
+     "value_num": "20",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001674",
+    "20261103_001675",
+    "20261103_001676",
+    "20261103_001677"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001674",
+    "card_doc_chunk_id": "20261103_000075",
+    "start_pos": 31,
+    "end_pos": 60,
+    "line_sha256": "8e7d37128f19dda8bd9650c0468f8dae123eb003cd5b076b20e7cfedd6585ed2",
+    "value_key": [
+     "20%할인"
+    ]
+   },
+   "review_status": "AUTO_IDENTITY",
+   "registration": {
+    "card_common_bnft_id": "20261104_000039",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000385",
+   "bnft_nm_run31": "특급호텔 발렛파킹 서비스",
+   "identity": "BIZ_V1:VALET/LUXURY_HOTEL/VALET_PARKING",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_8C5B997324375F99B6E6AAE8C5733AD0618B0674A282B2E88A511BB06936322C",
+   "targets": [
+    "MERCHANT:그랜드 워커힐 서울",
+    "MERCHANT:그랜드 하얏트 서울",
+    "MERCHANT:스위스 그랜드 호텔",
+    "MERCHANT:메이필드 호텔",
+    "MERCHANT:비스타 워커힐 서울",
+    "MERCHANT:서울 드래곤 시티",
+    "MERCHANT:서울 호텔 신라",
+    "MERCHANT:레스케이프 호텔",
+    "MERCHANT:호텔 코리아나",
+    "MERCHANT:콘래드 서울",
+    "MERCHANT:더 플라자 호텔",
+    "MERCHANT:몬드리안 서울 이태원",
+    "MERCHANT:파크하얏트 서울",
+    "MERCHANT:JW메리어트 호텔 서울",
+    "MERCHANT:노보텔 앰배서더 서울 강남",
+    "MERCHANT:서울 가든 호텔",
+    "MERCHANT:앰배서더 서울 품만 호텔",
+    "MERCHANT:오크우드 프리미어 코엑스",
+    "MERCHANT:메리어트 이그제큐티브 아파트먼트",
+    "MERCHANT:반얀트리 클럽 앤 스파 서울",
+    "MERCHANT:그랜드 하얏트 인천",
+    "MERCHANT:파크 하얏트 부산",
+    "MERCHANT:호텔 오노마 대전",
+    "MERCHANT:그랜드 머큐어 앰배서더 창원"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "hotel_free",
+     "value_raw_txt": "무료 발렛파킹 서비스 제공",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [
+    "호텔 통합 월 3회 서비스 제공"
+   ],
+   "selection_service_txt": "Mastercard Platinum04 선택서비스",
+   "certainty": "HIGH",
+   "service_type_cd": "04",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001678",
+    "20261103_001679",
+    "20261103_001680",
+    "20261103_001681",
+    "20261103_001682",
+    "20261103_001683",
+    "20261103_001684",
+    "20261103_001685"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001678",
+    "card_doc_chunk_id": "20261103_000077",
+    "start_pos": 1071,
+    "end_pos": 1096,
+    "line_sha256": "6dbbe69ff5f5c8b74a1a12d82bae5ef812dcdb2c6fa8bb814ed999965d5ba6a7",
+    "value_key": [
+     "무료발렛파킹서비스제공"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000040",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  },
+  {
+   "card_extr_stg_id": "20261103_000386",
+   "bnft_nm_run31": "인천공항 발렛파킹 서비스",
+   "identity": "BIZ_V1:VALET/INCHEON_AIRPORT/VALET_PARKING",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_E1CF4CB4565A85DE4D01E2DB335CA3DF5AB7580D9A4678576F901BD03CDF94EC",
+   "targets": [
+    "SERVICE:인천공항"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "incheon_free",
+     "value_raw_txt": "무료 발렛파킹 서비스 제공",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [
+    "인천/김포공항 통합 월 7회 서비스 제공"
+   ],
+   "selection_service_txt": "Mastercard Platinum04 선택서비스",
+   "certainty": "HIGH",
+   "service_type_cd": "04",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261103_001692",
+    "20261103_001693",
+    "20261103_001694",
+    "20261103_001696",
+    "20261103_001697",
+    "20261103_001698"
+   ],
+   "anchor": {
+    "evidence_id": "20261103_001695",
+    "card_doc_chunk_id": "20261103_000077",
+    "start_pos": 1919,
+    "end_pos": 1951,
+    "line_sha256": "45c0494ab66f2113c066758830cca84468ff814083155178a91e8caa112ef050",
+    "value_key": [
+     "무료발렛파킹서비스제공"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "registration": {
+    "card_common_bnft_id": "20261104_000041",
+    "registered_at": "2026-11-04T00:34:47+00:00"
+   }
+  }
+ ],
+ "excluded": [
+  {
+   "card_extr_stg_id": "20261103_000339",
+   "bnft_nm_run31": "Agoda.com 할인",
+   "reserved_identity": "BIZ_V1:TRAVEL/AGODA/DISCOUNT",
+   "reserved_bnft_cd": "BRAND_5AABAD0C4A6096B91CFA53102ECF59D6B6602144CACA5178589EF7C70195DA9B",
+   "exclusion_group": "REVIEW_VALUE",
+   "exclusion_reason": "VALUE_PARSE_DIFF: USD 한도 파싱(EXTRACT_V8 재추출 대상)",
+   "stored_check_cd": "VALUE_PARSE_DIFF",
+   "uncertainty_note": null,
+   "targets": [
+    "MERCHANT:Agoda.com"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "b5_r1",
+     "value_raw_txt": "8% 할인",
+     "value_num": "8",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [
+    "최대 USD 30"
+   ],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001485",
+    "card_doc_chunk_id": "20261103_000069",
+    "start_pos": 172,
+    "end_pos": 201,
+    "line_sha256": "d038be30d8f7cbeac35857d85a37b5bd61eec4b8c9ebb5539bab67d9db7562cb",
+    "value_key": [
+     "8%할인"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000340",
+   "bnft_nm_run31": "Hotels.com 할인",
+   "reserved_identity": "BIZ_V1:TRAVEL/HOTELS_COM/DISCOUNT",
+   "reserved_bnft_cd": "BRAND_23A3EA6F81B93EA1FC7108245D187902C1A2A97643C89CEF38BAC568322DF618",
+   "exclusion_group": "REVIEW_VALUE",
+   "exclusion_reason": "VALUE_PARSE_DIFF: USD 한도 파싱(EXTRACT_V8 재추출 대상)",
+   "stored_check_cd": "VALUE_PARSE_DIFF",
+   "uncertainty_note": null,
+   "targets": [
+    "MERCHANT:Hotels.com"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "b6_r1",
+     "value_raw_txt": "8% 할인",
+     "value_num": "8",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [
+    "최대 USD 50"
+   ],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001490",
+    "card_doc_chunk_id": "20261103_000069",
+    "start_pos": 248,
+    "end_pos": 278,
+    "line_sha256": "a61a347a2ae8a670920dffcf1b7cc4acb36427996c1207861c9b350203ccb9a6",
+    "value_key": [
+     "8%할인"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000341",
+   "bnft_nm_run31": "Expedia.com 할인",
+   "reserved_identity": "BIZ_V1:TRAVEL/EXPEDIA/DISCOUNT",
+   "reserved_bnft_cd": "BRAND_40A8C84232B29F19EFB56BA43D9058684D51DAD508544A8E5897F2AFC54D4BE6",
+   "exclusion_group": "REVIEW_PERIOD",
+   "exclusion_reason": "예약·숙박 기간이 별도로 있어 제공 기간 해석 불가(사람 판단 필요)",
+   "stored_check_cd": "LINK_REVIEW",
+   "uncertainty_note": null,
+   "targets": [
+    "MERCHANT:Expedia.com"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "b7_r1",
+     "value_raw_txt": "8% 할인",
+     "value_num": "8",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [
+    "최대 10만원"
+   ],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001495",
+    "card_doc_chunk_id": "20261103_000069",
+    "start_pos": 325,
+    "end_pos": 354,
+    "line_sha256": "743bd9c233bef2cb57c2393a1e2b7e7b2e1f57ba64090aef3a2b89afda5c9c5c",
+    "value_key": [
+     "8%할인"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000342",
+   "bnft_nm_run31": "Rakuten Travel 할인",
+   "reserved_identity": "BIZ_V1:TRAVEL/RAKUTEN_TRAVEL/DISCOUNT",
+   "reserved_bnft_cd": "BRAND_42BDC47A60F7581166FCE51A9F81C0B2819D7DDB8CAE5810F0CC1ED0FC5D79F2",
+   "exclusion_group": "REVIEW_VALUE",
+   "exclusion_reason": "VALUE_PARSE_DIFF: USD 한도 파싱(EXTRACT_V8 재추출 대상)",
+   "stored_check_cd": "VALUE_PARSE_DIFF",
+   "uncertainty_note": null,
+   "targets": [
+    "MERCHANT:Rakuten Travel"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "b8_r1",
+     "value_raw_txt": "10% 할인",
+     "value_num": "10",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [
+    "최대 USD 30"
+   ],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001500",
+    "card_doc_chunk_id": "20261103_000069",
+    "start_pos": 401,
+    "end_pos": 436,
+    "line_sha256": "56cefa50f9d41fa648475beb847b6901e6076cbb373d2f5067e490f161785022",
+    "value_key": [
+     "10%할인"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000345",
+   "bnft_nm_run31": "Kkday 티켓/교통/액티비티 할인",
+   "reserved_identity": "BIZ_V1:TRAVEL/KKDAY/TICKET_TRANSPORT_ACTIVITY",
+   "reserved_bnft_cd": "BRAND_6D3928EFC3D8D22AEC51A823EE0DB23CA12172B190F9B476538B601018F7E8D1",
+   "exclusion_group": "REVIEW_PERIOD",
+   "exclusion_reason": "예약·여행 기간이 별도로 있어 제공 기간 해석 불가(사람 판단 필요)",
+   "stored_check_cd": "CONTRACT_INVALID",
+   "uncertainty_note": null,
+   "targets": [
+    "MERCHANT:Kkday"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r1",
+     "value_raw_txt": "5% 할인",
+     "value_num": "5",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001512",
+    "card_doc_chunk_id": "20261103_000070",
+    "start_pos": 3,
+    "end_pos": 24,
+    "line_sha256": "8a0889301a3ce38c280fd0fcf8beda381b495bff721358434a0f77f3c69144b5",
+    "value_key": [
+     "5%할인"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000346",
+   "bnft_nm_run31": "Kkday 해외투어/eSIM 할인",
+   "reserved_identity": "BIZ_V1:TRAVEL/KKDAY/OVERSEAS_TOUR_ESIM",
+   "reserved_bnft_cd": "BRAND_A1D406752FE467284C047CCA0BDC892AEDFB2785D793DDB056BC6E47DE4E5608",
+   "exclusion_group": "REVIEW_VALUE",
+   "exclusion_reason": "VALUE_PARSE_DIFF: USD 한도 파싱(EXTRACT_V8 재추출 대상)",
+   "stored_check_cd": "VALUE_PARSE_DIFF",
+   "uncertainty_note": null,
+   "targets": [
+    "MERCHANT:Kkday"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r2",
+     "value_raw_txt": "10% 할인",
+     "value_num": "10",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [
+    "최대 USD 10"
+   ],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001517",
+    "card_doc_chunk_id": "20261103_000070",
+    "start_pos": 30,
+    "end_pos": 57,
+    "line_sha256": "acee0f065ca9891a2b042be9f7823085df813f2e7ffb155e94e5326dc1d74a0f",
+    "value_key": [
+     "10%할인"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000347",
+   "bnft_nm_run31": "Oh Show 자유의 여신상 크루즈 티켓 1+1",
+   "reserved_identity": "BIZ_V1:TRAVEL/OH_SHOW/LIBERTY_CRUISE_1P1",
+   "reserved_bnft_cd": "BRAND_5F2001CD47AF871ED4B3901B52877BB7C8106D175DC03E974E44819AA593DD9B",
+   "exclusion_group": "UNCERTAIN_NOTE",
+   "exclusion_reason": "1+1을 현재 계산 방법 코드로 표현할 수 없음",
+   "stored_check_cd": "CONTRACT_INVALID",
+   "uncertainty_note": "1+1은 정의된 계산 방법으로 표현할 수 없습니다.",
+   "targets": [
+    "MERCHANT:Oh Show"
+   ],
+   "bnft_type_cd": "ETC",
+   "values": [
+    {
+     "rule_key": "r3",
+     "value_raw_txt": "1+1",
+     "value_num": null,
+     "value_unit_cd": "UNKNOWN"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001521",
+    "card_doc_chunk_id": "20261103_000070",
+    "start_pos": 107,
+    "end_pos": 136,
+    "line_sha256": "32d353038f0b4784cd66bb58c38d7ca5c78e8ae166c0121a8aa3dea2a00f65a1",
+    "value_key": [
+     "1+1"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000349",
+   "bnft_nm_run31": "제주도닷컴 패키지 및 렌터카 할인",
+   "reserved_identity": "BIZ_V1:TRAVEL/JEJUDO_COM/PACKAGE_RENTAL",
+   "reserved_bnft_cd": "BRAND_6157C42F449CD0AA98F816913CFD1AAFD493CB6CCB6A19F9D456A591DADB7372",
+   "exclusion_group": "UNCERTAIN_NOTE",
+   "exclusion_reason": "원문 비율에 '할인' 표현이 직접 붙어 있지 않음",
+   "stored_check_cd": "CONTRACT_INVALID",
+   "uncertainty_note": "원문에서 패키지와 렌터카의 비율에 할인이라는 표현이 직접 붙어 있지 않습니다.",
+   "targets": [
+    "MERCHANT:제주도닷컴"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r6",
+     "value_raw_txt": "5%",
+     "value_num": "5",
+     "value_unit_cd": "PERCENT"
+    },
+    {
+     "rule_key": "r7",
+     "value_raw_txt": "12%",
+     "value_num": "12",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001529",
+    "card_doc_chunk_id": "20261103_000070",
+    "start_pos": 199,
+    "end_pos": 219,
+    "line_sha256": "7094afe0040b0e0f60f810177cfa7bd2524d4d344e46d6de0b59fbd2285ec1cf",
+    "value_key": [
+     "12%",
+     "5%"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000356",
+   "bnft_nm_run31": "Airalo eSIM 할인",
+   "reserved_identity": "BIZ_V1:TRAVEL/AIRALO/ESIM",
+   "reserved_bnft_cd": "BRAND_3728C5B8B380A164D7E9890ADAFEA309098161C9E0D39767AA0D1BBEAB5A53A4",
+   "exclusion_group": "REVIEW_VALUE",
+   "exclusion_reason": "VALUE_PARSE_DIFF: USD 한도 파싱(EXTRACT_V8 재추출 대상)",
+   "stored_check_cd": "VALUE_PARSE_DIFF",
+   "uncertainty_note": null,
+   "targets": [
+    "MERCHANT:Airalo"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r15",
+     "value_raw_txt": "최대 20% 할인",
+     "value_num": "20",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [
+    "최대 USD 100"
+   ],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001561",
+    "card_doc_chunk_id": "20261103_000070",
+    "start_pos": 346,
+    "end_pos": 379,
+    "line_sha256": "a60c1a91c7529c8d6b89004f8a736d8689de5c85b738c5d372b7fedbc51575f3",
+    "value_key": [
+     "최대20%할인"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000362",
+   "bnft_nm_run31": "국내 특급호텔 객실/패키지 무료 업그레이드",
+   "reserved_identity": "BIZ_V1:HOTEL/DOMESTIC_LUXURY_HOTEL/ROOM_PACKAGE_UPGRADE",
+   "reserved_bnft_cd": "BRAND_32F12FE9B0AF797E5964A0E144E4CFF68CCC2DF38E3BEB013A651063B91ACD7E",
+   "exclusion_group": "UNCERTAIN_NOTE",
+   "exclusion_reason": "'할인 또는 무료 업그레이드' 적용 방식 미명시",
+   "stored_check_cd": "LINK_REVIEW",
+   "uncertainty_note": "할인 또는 무료 업그레이드로 기재되어 있으나 적용 방식은 명시되지 않았습니다.",
+   "targets": [
+    "INDUSTRY:국내 특급호텔"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "r3",
+     "value_raw_txt": "무료 업그레이드",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001584",
+    "card_doc_chunk_id": "20261103_000073",
+    "start_pos": 32,
+    "end_pos": 76,
+    "line_sha256": "0cbfca6a3e67db190de41d933648f1f2522fe89267ca13ab108689831f46c5f0",
+    "value_key": [
+     "무료업그레이드"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000369",
+   "bnft_nm_run31": "코타키나발루 수트라하버 리조트 골드 카드 할인",
+   "reserved_identity": "BIZ_V1:HOTEL/SUTERA_HARBOUR/GOLD_CARD",
+   "reserved_bnft_cd": "BRAND_EEDA1E93BD86FB6EE439D6D719913BFB3FA39AD7BB85AF7770C34142802CBD40",
+   "exclusion_group": "UNCERTAIN_NOTE",
+   "exclusion_reason": "certainty LOW, 골드 카드 의미·대상 미명시",
+   "stored_check_cd": "CONTRACT_INVALID",
+   "uncertainty_note": "골드 카드의 의미와 할인 대상이 구체적으로 명시되지 않았습니다.",
+   "targets": [
+    "MERCHANT:코타키나발루 수트라하버 리조트"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r10",
+     "value_raw_txt": "10% 할인",
+     "value_num": "10",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "LOW",
+   "anchor": {
+    "evidence_id": "20261103_001612",
+    "card_doc_chunk_id": "20261103_000073",
+    "start_pos": 230,
+    "end_pos": 283,
+    "line_sha256": "c3bbb3543efabb311625f470b001bd05fb13ab8e7d3fd2f5a6d40909d0613b65",
+    "value_key": [
+     "10%할인"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000370",
+   "bnft_nm_run31": "신라면세점 골드플러스 멤버십 제공",
+   "reserved_identity": "BIZ_V1:SHOPPING/SHILLA_DUTY_FREE/GOLD_PLUS_MEMBERSHIP",
+   "reserved_bnft_cd": "BRAND_6FD097A3545BA696F3AFB0B0B8B6C2F0C0502AF282C1893BB47E35126680D4FA",
+   "exclusion_group": "UNCERTAIN_NOTE",
+   "exclusion_reason": "멤버십 무료 여부 미명시",
+   "stored_check_cd": "CONTRACT_INVALID",
+   "uncertainty_note": "멤버십 제공으로 기재되어 있으나 무료 가입 여부는 명시되지 않았습니다.",
+   "targets": [
+    "MERCHANT:신라면세점"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "r11",
+     "value_raw_txt": "골드플러스 멤버십 제공",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001616",
+    "card_doc_chunk_id": "20261103_000073",
+    "start_pos": 285,
+    "end_pos": 304,
+    "line_sha256": "6f9bb9c6f5d09186bea78fd309fddbf83d0f6fa0fe7a90b7a62eec50410827fa",
+    "value_key": [
+     "골드플러스멤버십제공"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000373",
+   "bnft_nm_run31": "신라면세점 인터넷점 S.Rewards 제공",
+   "reserved_identity": "BIZ_V1:SHOPPING/SHILLA_DUTY_FREE/INTERNET_S_REWARDS",
+   "reserved_bnft_cd": "BRAND_95E7E26EF63CCC35835428B71F2E858C8268FB83AB81810749F7858875FC19C4",
+   "exclusion_group": "UNCERTAIN_NOTE",
+   "exclusion_reason": "S.Rewards 포인트 지급 단위 코드 없음",
+   "stored_check_cd": "CONTRACT_INVALID",
+   "uncertainty_note": "S.Rewards 포인트는 제공된 지급 단위 코드에 별도로 없습니다.",
+   "targets": [
+    "MERCHANT:신라면세점",
+    "CHANNEL:인터넷점"
+   ],
+   "bnft_type_cd": "POINT",
+   "values": [
+    {
+     "rule_key": "r14",
+     "value_raw_txt": "S.Rewards 7,000P 제공",
+     "value_num": "7000",
+     "value_unit_cd": "UNKNOWN"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001628",
+    "card_doc_chunk_id": "20261103_000073",
+    "start_pos": 285,
+    "end_pos": 366,
+    "line_sha256": "13cb96ea29ea74e8a1468fb80a85425fd6f95c96b8557bb81a18adf358b6134b",
+    "value_key": [
+     "s.rewards7,000p제공"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000374",
+   "bnft_nm_run31": "신세계면세점 골드 멤버십 제공",
+   "reserved_identity": "BIZ_V1:SHOPPING/SHINSEGAE_DUTY_FREE/GOLD_MEMBERSHIP",
+   "reserved_bnft_cd": "BRAND_70A11709EC9FC8267D27F4E5E11E35C2C578BA6AEA8EFCFEBF1074827E0B389E",
+   "exclusion_group": "UNCERTAIN_NOTE",
+   "exclusion_reason": "멤버십 무료 여부·최대 할인율 기준 미명시",
+   "stored_check_cd": "CONTRACT_INVALID",
+   "uncertainty_note": "멤버십 제공의 무료 여부와 최대 할인율의 적용 기준은 명시되지 않았습니다.",
+   "targets": [
+    "MERCHANT:신세계면세점"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "b1_r1",
+     "value_raw_txt": "최대 15% 할인",
+     "value_num": "15",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001632",
+    "card_doc_chunk_id": "20261103_000074",
+    "start_pos": 1,
+    "end_pos": 30,
+    "line_sha256": "3b445a1b5fa0488cda80a985fc3edeb164cb0240b6cde06ad9b57fac4a54a554",
+    "value_key": [
+     "최대15%할인"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000376",
+   "bnft_nm_run31": "해외 프리미엄 아울렛 VIP 패스 제공",
+   "reserved_identity": "BIZ_V1:SHOPPING/OVERSEAS_PREMIUM_OUTLET/VIP_PASS",
+   "reserved_bnft_cd": "BRAND_81BF08866C4C46B78324ECCA89AFEFB3841C890ED0948A15B8DAF90EE6221D78",
+   "exclusion_group": "UNCERTAIN_NOTE",
+   "exclusion_reason": "VIP 패스 무료 여부 미명시",
+   "stored_check_cd": "CONTRACT_INVALID",
+   "uncertainty_note": "VIP 패스 제공의 무료 여부는 명시되지 않았습니다.",
+   "targets": [
+    "INDUSTRY:해외 프리미엄 아울렛"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "b3_r1",
+     "value_raw_txt": "10% 할인",
+     "value_num": "10",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001640",
+    "card_doc_chunk_id": "20261103_000074",
+    "start_pos": 60,
+    "end_pos": 91,
+    "line_sha256": "16248a75c5f2adb7817614c80f4a5c0ef821363d0656b228636f028850b938c1",
+    "value_key": [
+     "10%할인"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000377",
+   "bnft_nm_run31": "몽쥬약국 구매 금액별 10~15% 할인",
+   "reserved_identity": "BIZ_V1:SHOPPING/MONGEU_PHARMACY/DISCOUNT",
+   "reserved_bnft_cd": "BRAND_01E895174C8AAF317167ED42AEE95B5417DAC57C1A14B956532FDAD290054D1A",
+   "exclusion_group": "UNCERTAIN_NOTE",
+   "exclusion_reason": "구매 금액별 할인 구간 미명시",
+   "stored_check_cd": "CONTRACT_INVALID",
+   "uncertainty_note": "구매 금액별 할인율 구간이 명시되지 않았습니다.",
+   "targets": [
+    "MERCHANT:몽쥬약국"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "b4_r1",
+     "value_raw_txt": "10~15% 할인",
+     "value_num": null,
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001648",
+    "card_doc_chunk_id": "20261103_000074",
+    "start_pos": 93,
+    "end_pos": 130,
+    "line_sha256": "b824484c1a680d0402e2c4d9d4edac2aee59c064e923499e86d77aa09ff1053c",
+    "value_key": [
+     "10~15%할인"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000378",
+   "bnft_nm_run31": "몽쥬약국 최대 15% 면세 혜택",
+   "reserved_identity": "BIZ_V1:SHOPPING/MONGEU_PHARMACY/TAX_FREE",
+   "reserved_bnft_cd": "BRAND_75E6BD3C8DC62DB4279848B5EFA4DC7B5CB515569E22C6DFA357CB939F5B7700",
+   "exclusion_group": "UNCERTAIN_NOTE",
+   "exclusion_reason": "certainty LOW, 면세 계산 기준·지급 방식 미명시",
+   "stored_check_cd": "CONTRACT_INVALID",
+   "uncertainty_note": "면세 혜택의 계산 기준과 지급 방식이 명시되지 않았습니다.",
+   "targets": [
+    "MERCHANT:몽쥬약국"
+   ],
+   "bnft_type_cd": "ETC",
+   "values": [
+    {
+     "rule_key": "b5_r1",
+     "value_raw_txt": "최대 15% 면세 혜택",
+     "value_num": "15",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "LOW",
+   "anchor": {
+    "evidence_id": "20261103_001649",
+    "card_doc_chunk_id": "20261103_000074",
+    "start_pos": 93,
+    "end_pos": 130,
+    "line_sha256": "b824484c1a680d0402e2c4d9d4edac2aee59c064e923499e86d77aa09ff1053c",
+    "value_key": [
+     "최대15%면세혜택"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000379",
+   "bnft_nm_run31": "Mastercard E-Commerce Protection 해외 온라인 직구 보험",
+   "reserved_identity": "BIZ_V1:SHOPPING/MASTERCARD_ECOMMERCE_PROTECTION/INSURANCE",
+   "reserved_bnft_cd": "BRAND_2AE19FCFAD2EF7A0B0052BE890235B2887F7BA6953AFEB46953ACAF8900E895F",
+   "exclusion_group": "UNCERTAIN_NOTE",
+   "exclusion_reason": "보상액 계산 방법 미명시",
+   "stored_check_cd": "LINK_REVIEW",
+   "uncertainty_note": "보상 한도 외에 보상액 계산 방법은 명시되지 않았습니다.",
+   "targets": [
+    "SERVICE:Mastercard E-Commerce Protection 해외 온라인 직구 보험"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [],
+   "limits": [
+    "연간 최대 23만원"
+   ],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001653",
+    "card_doc_chunk_id": "20261103_000074",
+    "start_pos": 132,
+    "end_pos": 196,
+    "line_sha256": "4c22b481a856129b8f763e518dd18cf54d4c13573e9a984f60e146f071ba23f7",
+    "value_key": []
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000380",
+   "bnft_nm_run31": "15개국 48개 골프장 그린피 25% 할인",
+   "reserved_identity": "BIZ_V1:GOLF/OVERSEAS_GOLF_48/GREEN_FEE",
+   "reserved_bnft_cd": "BRAND_E7EFA4F4ED5D557323B5BA39FF354CD8F8315D52E7650B3C4F5FDC1C37978C30",
+   "exclusion_group": "REVIEW_PERIOD",
+   "exclusion_reason": "'(연 4회), (~6.30)' 기간 해석 불가(사람 판단 필요)",
+   "stored_check_cd": "CONTRACT_INVALID",
+   "uncertainty_note": "명시된 종료일에 연도와 시작일이 없습니다.",
+   "targets": [
+    "INDUSTRY:골프장"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "b7_r1",
+     "value_raw_txt": "25% 할인",
+     "value_num": "25",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [
+    "연 4회"
+   ],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "anchor": {
+    "evidence_id": "20261103_001660",
+    "card_doc_chunk_id": "20261103_000074",
+    "start_pos": 208,
+    "end_pos": 248,
+    "line_sha256": "7ed28183cee9ce84ca21b2dffa627b194fa8e71acbfcf980d74f0cb927e0778f",
+    "value_key": [
+     "25%할인"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  },
+  {
+   "card_extr_stg_id": "20261103_000387",
+   "bnft_nm_run31": "김포공항 발렛파킹 서비스",
+   "reserved_identity": "BIZ_V1:VALET/GIMPO_AIRPORT/VALET_PARKING",
+   "reserved_bnft_cd": "BRAND_1A2B46B44A04BDF2BC338183E4A4A156D76AE1B0B62F6EE2489A35C918AECF15",
+   "exclusion_group": "UNCERTAIN_NOTE",
+   "exclusion_reason": "certainty LOW, PDF 2쪽 제목(김포공항 라운지 입장)과 내용(김포공항 발렛파킹) 불일치",
+   "stored_check_cd": "LINK_REVIEW",
+   "uncertainty_note": "제목은 김포공항 라운지 입장 서비스이나 서비스혜택 내용은 김포공항 무료 발렛파킹 서비스로 서로 다릅니다.",
+   "targets": [
+    "SERVICE:김포공항"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "gimpo_free",
+     "value_raw_txt": "무료 발렛파킹 서비스 제공",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [
+    "인천/김포공항 통합 월 7회 서비스 제공"
+   ],
+   "selection_service_txt": "Mastercard Platinum04 선택서비스",
+   "certainty": "LOW",
+   "anchor": {
+    "evidence_id": "20261103_001704",
+    "card_doc_chunk_id": "20261103_000077",
+    "start_pos": 4075,
+    "end_pos": 4100,
+    "line_sha256": "cb2c3f096534dbebc790b4daa351303a5000965c8c2b247360f60270f0cfaa90",
+    "value_key": [
+     "무료발렛파킹서비스제공"
+    ]
+   },
+   "review_status": "EXCLUDED"
+  }
+ ],
+ "registration": {
+  "date": "2026-11-04",
+  "run_id": "20261103_000031",
+  "inserted": 33,
+  "updated": 0,
+  "review_kept": 20,
+  "card_common_bnft_id_range": [
+   "20261104_000009",
+   "20261104_000041"
+  ],
+  "embedding": "미생성(--no-embed 상당). embedding_main으로 별도 처리 필요",
+  "neo4j": "미반영",
+  "backup": "src/data/backup/pre_calc_cleanup_20261104_093323 (Git 제외, VERIFY OK)",
+  "note": "review_status는 등록 성공과 별개다. 수동 28건은 사용자 검토 전까지 DRAFT_PENDING_USER_REVIEW로 둔다."
+ }
+}
