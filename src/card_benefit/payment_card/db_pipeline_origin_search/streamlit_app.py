@@ -12,15 +12,19 @@ EXAMPLES = [
     "ONE PICK과 STYLE 혜택의 차이는?",
     "놀이공원 할인율과 이용 횟수 제한은?",
     "1만원 이상 결제하면 캐시백은 얼마인가?",
+    "JADE Classic의 브랜드별 연회비는?",
+    "세 카드의 본인 연회비를 비교해 줘.",
+    "우리카드 카드의정석 SHOPPING 온라인 쇼핑 10% 혜택과 연회비를 함께 알려줘.",
 ]
-STATUS_LABELS = {"ANSWERED": "답변", "PARTIAL": "일부 답변 (검증 실패 문장 제외)",
+STATUS_LABELS = {"ANSWERED": "답변", "PARTIAL": "일부 답변 (검증 실패 문장 제외 또는 검토 필요 항목 포함)",
                  "NOT_ANSWERABLE": "답변 불가", "ERROR": "실행 오류"}
 VERIFICATION_LABELS = {"RAW_MATCH": "값이 인용 원문과 일치", "STRUCTURED_ONLY": "값이 구조화 데이터와 일치, 인용 원문에서는 미확인",
                        "CALCULATED": "인용 원문 값으로 계산한 차이", "NOT_CHECKED": "값이 없는 문장, 내용 일치 미검사"}
 APPROVAL_LABELS = {"PENDING": "검토 대기", "APPROVED": "승인", "REJECTED": "반려"}
 SOURCE_LABELS = {"llm": "LLM이 작성한 문장을 그대로 표시", "validated_sentences": "LLM 문장이 검증을 통과하지 못해 근거 확인 문장을 표시",
                  "program_exclusion": "제외 대상이라 프로그램 고정 문구로 표시",
-                 "program_tier": "LLM 문장이 금액 구간 검증을 통과하지 못해 조회 값으로 만든 구간 안내를 표시", "none": "답변 문장 없음"}
+                 "program_tier": "LLM 문장이 금액 구간 검증을 통과하지 못해 조회 값으로 만든 구간 안내를 표시",
+                 "program_fee": "연회비는 등록 값(item_data)으로 프로그램이 작성. LLM 미사용", "none": "답변 문장 없음"}
 NODE_LABELS = {"interpret": "질문 해석", "answer": "답변 생성"}
 _MARKDOWN_SPECIAL = re.compile(r"([\\`*_{}\[\]<>()#+\-.!|~$:])")
 
@@ -118,6 +122,10 @@ def show_outcome(outcome: dict) -> None:
     elif answer["conclusion"]:
         st.markdown(f"**{plain(answer['conclusion'])}**")
     show_generation(outcome)
+    if answer.get("fee_rows"):
+        st.subheader("연회비", anchor=False)
+        st.dataframe(answer["fee_rows"], hide_index=True)
+        st.caption("금액은 원문 표에서 등록한 값입니다. 상태가 '검토 필요'인 줄은 브랜드 옵션 등이 확인되지 않아 확정하지 않았습니다.")
     names = list(dict.fromkeys(point["benefit_name"] for point in answer["points"]))
     if names:
         st.subheader("근거로 확인한 내용", anchor=False)
@@ -177,8 +185,8 @@ def show_outcome(outcome: dict) -> None:
             st.code(query, language="cypher")
 
 
-st.set_page_config(page_title="카드 혜택 GraphRAG", layout="wide")
-st.title("카드 혜택 GraphRAG — 개발 테스트", anchor=False)
+st.set_page_config(page_title="카드 상품 GraphRAG", layout="wide")
+st.title("카드 상품 GraphRAG (혜택·연회비) — 개발 테스트", anchor=False)
 st.warning("개발용 미승인 자료입니다. 실제 카드 혜택으로 사용하지 마세요.")
 
 if st.radio("실행 모드", ("자동 실행", "개발 검증"), horizontal=True, key="run_mode") == "개발 검증":
@@ -190,7 +198,7 @@ search_mode = st.radio("검색 모드", list(MODE_LABELS), format_func=lambda mo
 st.pills("예시 질문", EXAMPLES, key="example", on_change=use_example)
 with st.form("question_form"):
     question = st.text_area("질문", key="question", max_chars=card_graphrag.MAX_QUESTION_CHARS, height=80,
-                            placeholder="카드 혜택을 자연어로 물어보세요.")
+                            placeholder="카드 혜택이나 연회비를 자연어로 물어보세요.")
     force = st.checkbox("같은 질문도 다시 실행 (API 비용 발생)", key="force_rerun")
     submitted = st.form_submit_button("질문 실행", type="primary")
 

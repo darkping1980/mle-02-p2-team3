@@ -28,6 +28,14 @@ RETURN b.key AS key, b.name AS name, b.card_bnft_id AS id, b.verification_status
        collect(DISTINCT a.min_amt) AS payment_min_amounts
 ORDER BY name
 
+// name: item_catalog
+// 혜택이 아닌 카드 상품 항목(연회비 등). 금액 등 상세는 source_json의 item_data에 있다.
+MATCH (c:dp_card_product)-[:dp_has_item]->(i:dp_card_product_item)
+WHERE i.item_type_cd <> 'BENEFIT'
+RETURN i.key AS key, i.name AS name, i.card_product_item_id AS id, i.verification_status AS status,
+       i.item_type_cd AS item_type, i.source_json AS item_source, c.source_json AS card_source
+ORDER BY c.card_id, i.card_product_item_id
+
 // name: common_catalog
 // 적용 관계가 없는 공통 혜택은 cards가 빈 목록이다. 임의로 카드를 붙이지 않는다.
 MATCH (b:dp_card_common_bnft)-[:dp_belongs_to]->(s:dp_card_common)
@@ -58,8 +66,8 @@ RETURN b.key AS key, coalesce(b.card_bnft_id, b.card_common_bnft_id) AS id, coll
 
 // name: benefit_context
 MATCH (b:dp_node {key:$key})
-WHERE b:dp_card_bnft OR b:dp_card_common_bnft
-OPTIONAL MATCH (c:dp_card_product)-[:dp_has_benefit|dp_has_common_benefit]->(b)
+WHERE b:dp_card_bnft OR b:dp_card_common_bnft OR b:dp_card_product_item
+OPTIONAL MATCH (c:dp_card_product)-[:dp_has_benefit|dp_has_common_benefit|dp_has_item]->(b)
 OPTIONAL MATCH (b)-[:dp_belongs_to]->(s:dp_card_common)
 OPTIONAL MATCH (s)-[:dp_has_document]->(d:dp_card_doc)
 WITH b, s, collect(DISTINCT c) AS cards, collect(DISTINCT d.doc_title) AS common_docs
@@ -104,6 +112,18 @@ MATCH (owner)-[link:dp_supported_by]->(e:dp_card_source_evidence)
       -[:dp_on_page]->(page:dp_card_doc_page)
       -[:dp_in_document]->(doc:dp_card_doc)
 RETURN labels(owner) AS owner_labels, owner.rule_key AS rule_key,
+       properties(link) AS link, properties(e) AS evidence,
+       properties(chunk) AS chunk, properties(page) AS page, properties(doc) AS document
+ORDER BY page.page_no, e.start_pos, e.evidence_id
+
+// name: item_evidence
+// 혜택이 아닌 카드 상품 항목(연회비 등)의 근거. 줄 단위 근거는 link.ev_item_cd='FEE_LINE', ev_item_key=줄 key다.
+MATCH (card:dp_card_product)-[:dp_has_item]->(i:dp_card_product_item {key:$key})
+      -[link:dp_supported_by]->(e:dp_card_source_evidence)
+      -[:dp_in_chunk]->(chunk:dp_card_doc_chunk)
+      -[:dp_on_page]->(page:dp_card_doc_page)
+      -[:dp_in_document]->(doc:dp_card_doc)
+RETURN labels(i) AS owner_labels, null AS rule_key,
        properties(link) AS link, properties(e) AS evidence,
        properties(chunk) AS chunk, properties(page) AS page, properties(doc) AS document
 ORDER BY page.page_no, e.start_pos, e.evidence_id

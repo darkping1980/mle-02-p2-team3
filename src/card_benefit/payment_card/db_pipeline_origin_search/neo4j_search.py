@@ -30,6 +30,8 @@ SOURCE_FIELDS = ("cond_basis_cd", "excl_raw_txt", "cond_status_cd", "value_unit_
 MAPPERS = Neo4jDbSession(mapper_root=Path(__file__).resolve().parent).mappers
 CATALOG_QUERY = MAPPERS["graph_questions.catalog"]
 COMMON_CATALOG_QUERY = MAPPERS["graph_questions.common_catalog"]
+ITEM_CATALOG_QUERY = MAPPERS["graph_questions.item_catalog"]
+ITEM_EVIDENCE_QUERY = MAPPERS["graph_questions.item_evidence"]
 LIST_QUERY = MAPPERS["graph_questions.list_benefits"]
 RELATION_QUERY = MAPPERS["graph_questions.candidate_relations"]
 CONTEXT_QUERY = MAPPERS["graph_questions.benefit_context"]
@@ -40,7 +42,8 @@ EVIDENCE_QUERY = MAPPERS["graph_questions.benefit_evidence"]
 COMMON_EVIDENCE_QUERY = MAPPERS["graph_questions.common_benefit_evidence"]
 HOP_QUERIES = {name: MAPPERS[f"graph_questions.{name}"] for name in
                ("hop1_card_benefits", "hop2_card_rules", "hop2_card_common", "hop3_card_targets", "hop3_common_docs", "hop3_target_cards")}
-QUERIES = {"카탈로그": CATALOG_QUERY, "공통 카탈로그": COMMON_CATALOG_QUERY, "목록": LIST_QUERY, "후보 관계": RELATION_QUERY,
+QUERIES = {"카탈로그": CATALOG_QUERY, "항목 카탈로그": ITEM_CATALOG_QUERY, "항목 근거": ITEM_EVIDENCE_QUERY,
+           "공통 카탈로그": COMMON_CATALOG_QUERY, "목록": LIST_QUERY, "후보 관계": RELATION_QUERY,
            "카드·혜택": CONTEXT_QUERY, "규칙·대상": RULE_QUERY, "조건식": CONDITION_QUERY, "한도": LIMIT_QUERY, "근거": EVIDENCE_QUERY,
            "공통 혜택 근거": COMMON_EVIDENCE_QUERY, **HOP_QUERIES}
 # 로그에 쓰는 Cypher 식별자와 그 쿼리가 지나가는 노드·관계 경로.
@@ -48,6 +51,9 @@ STATEMENTS = {
     "card.catalog": (CATALOG_QUERY, "(dp_card_product)-[dp_has_benefit]->(dp_card_bnft)"
                                     "-[dp_has_rule]->(dp_bnft_rule)-[dp_targets]->(dp_rule_target), "
                                     "(dp_bnft_rule)-[dp_has_expr]->()-[dp_has_branch]->()-[dp_has_atom]->(dp_cond_atom)"),
+    "card.item_catalog": (ITEM_CATALOG_QUERY, "(dp_card_product)-[dp_has_item]->(dp_card_product_item)"),
+    "card.item_evidence": (ITEM_EVIDENCE_QUERY, "(dp_card_product)-[dp_has_item]->(dp_card_product_item)-[dp_supported_by]->"
+                                                "(dp_card_source_evidence)-[dp_in_chunk]->(dp_card_doc_chunk)-[dp_on_page]->(dp_card_doc_page)"),
     "card.common_catalog": (COMMON_CATALOG_QUERY, "(dp_card_product)-[dp_has_common_benefit]->(dp_card_common_bnft)-[dp_belongs_to]->(dp_card_common)"),
     "card.list": (LIST_QUERY, "(dp_card_bnft|dp_card_common_bnft)"),
     "card.relations": (RELATION_QUERY, "(dp_card_product)-[dp_has_benefit|dp_has_common_benefit]->(혜택)-[dp_has_rule]->()-[dp_targets]->(dp_rule_target), "
@@ -91,6 +97,11 @@ def flatten_record(row: dict) -> dict:
         else:
             flat[column] = value
     return flat
+
+
+def is_item_key(key: str) -> bool:
+    """혜택이 아닌 카드 상품 항목(연회비 등) 노드의 key인지 판별한다."""
+    return key.startswith('["card_product_item"')
 
 
 def is_common_key(key: str) -> bool:
@@ -172,9 +183,19 @@ class Neo4jSearch:
         rows = self._query(CATALOG_QUERY)
         for row in rows:
             row["card"] = source({"source_json": row.pop("card_source")}).get("product_nm", "미확인")
+            row["item_type"] = "BENEFIT"
+        for row in self._query(ITEM_CATALOG_QUERY):
+            card = source({"source_json": row.pop("card_source")})
+            item = source({"source_json": row.pop("item_source")})
+            lines = (item.get("item_data") or {}).get("fee_lines") or []
+            rows.append({**row, "card": card.get("product_nm", "미확인"), "issuer": card.get("issuer"),
+                         "card_id": card.get("card_id"), "targets": [], "payment_min_amounts": [],
+                         # 같은 사실을 담은 기존 혜택 참조(예: 가족카드 연회비 면제). 답변에서 한 번만 쓴다.
+                         "same_fact_refs": [line["same_fact_item_ref"] for line in lines if line.get("same_fact_item_ref")]})
         for row in self._query(COMMON_CATALOG_QUERY):
             cards = row.pop("cards")
-            rows.append({**row, "card": ", ".join(cards) or "적용 카드 미확인", "targets": [], "payment_min_amounts": []})
+            rows.append({**row, "card": ", ".join(cards) or "적용 카드 미확인", "targets": [], "payment_min_amounts": [],
+                         "item_type": "COMMON_BENEFIT"})
         return rows
 
     def list_benefits(self, keyword: str = "") -> list[dict]:
@@ -202,6 +223,8 @@ class Neo4jSearch:
         for name, query in SECTION_QUERIES.items():
             if name == "evidence" and is_common_key(key):
                 query = COMMON_EVIDENCE_QUERY
+            elif name == "evidence" and is_item_key(key):
+                query = ITEM_EVIDENCE_QUERY
             detail[name] = self._query(query, key=key) if name in sections else []
         return detail
 

@@ -41,7 +41,8 @@ class SearchTests(unittest.TestCase):
 
     def test_queries_come_from_named_cypher_file(self):
         names = {"catalog", "common_catalog", "list_benefits", "candidate_relations", "benefit_context", "benefit_rules",
-                 "benefit_conditions", "benefit_limits", "benefit_evidence", "common_benefit_evidence", *neo4j_search.HOP_QUERIES}
+                 "benefit_conditions", "benefit_limits", "benefit_evidence", "common_benefit_evidence",
+                 "item_catalog", "item_evidence", *neo4j_search.HOP_QUERIES}
         self.assertEqual(set(neo4j_search.MAPPERS), {f"graph_questions.{name}" for name in names})
         self.assertEqual(set(neo4j_search.QUERIES.values()), set(neo4j_search.MAPPERS.values()))
 

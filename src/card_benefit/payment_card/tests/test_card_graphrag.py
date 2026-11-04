@@ -1253,7 +1253,7 @@ class StreamlitTests(unittest.TestCase):
     def test_load_makes_no_llm_or_db_call(self):
         app = AppTest.from_file(APP).run(timeout=30)
         self.assertFalse(app.exception)
-        self.assertEqual(app.title[0].value, "카드 혜택 GraphRAG — 개발 테스트")
+        self.assertEqual(app.title[0].value, "카드 상품 GraphRAG (혜택·연회비) — 개발 테스트")
         self.assertEqual(self.first.prompts, [])
         neo4j_search.connect.assert_not_called()
 
@@ -1490,3 +1490,89 @@ class LiveAccuracyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# region 연회비(ANNUAL_FEE): 금액은 등록 값으로 프로그램이 쓰고, 다른 카드·없는 줄을 추론하지 않는다.
+def fee_detail(card_nm, lines, ref_key, links=()):
+    item = {"item_type_cd": "ANNUAL_FEE", "item_data": {"schema_ver": "ANNUAL_FEE_V1", "fee_lines": lines}}
+    evidence = [{"link": {"ev_item_cd": cd, "ev_item_key": key}, "evidence": {"source_json": json.dumps({"evidence_id": ev})}}
+                for cd, key, ev in links]
+    return {"context": {"benefit": {"name": "연회비", "source_json": json.dumps(item)},
+                        "card": {"source_json": json.dumps({"product_nm": card_nm})}},
+            "evidence": evidence, "entity_ref": ref_key}
+
+
+WOORI_LINES = [
+    {"line_key": "P_MV", "holder_type_cd": "PRINCIPAL", "brand_txt": "해외겸용 (Mastercard, VISA)", "basic_fee_amt": 5000,
+     "affiliate_fee_amt": 7000, "total_fee_amt": 12000, "line_status_cd": "REVIEW", "review_note": "브랜드 옵션 미등록"},
+    {"line_key": "F_ALL", "holder_type_cd": "FAMILY", "total_fee_amt": 0, "line_status_cd": "DRAFT",
+     "same_fact_item_ref": "card_product_item:6:B23"}]
+
+
+class AnnualFeeTests(unittest.TestCase):
+    def test_family_question_uses_family_line_and_line_evidence(self):
+        detail = fee_detail("카드의정석 SHOPPING", WOORI_LINES, "card_product_item:6:F1",
+                            [("FEE_LINE", "P_MV", "EP"), ("FEE_LINE", "F_ALL", "EF"), ("SELF", "-", "ES")])
+        fee = card_graphrag.fee_answer([detail], "우리카드 가족카드 연회비는?", [{"evidence_id": "EF", "quote": "가족카드 연회비는 청구하지 않습니다."}])
+        self.assertEqual([p["text"] for p in fee["points"]], ["카드의정석 SHOPPING 가족: 0원"])
+        self.assertEqual(fee["points"][0]["evidence_ids"], ["EF"])
+        self.assertFalse(fee["review"])
+
+    def test_review_line_is_marked_and_amounts_are_not_rounded(self):
+        detail = fee_detail("카드의정석 SHOPPING", WOORI_LINES, "card_product_item:6:F1", [("FEE_LINE", "P_MV", "EP")])
+        fee = card_graphrag.fee_answer([detail], "본인 연회비", [])
+        self.assertIn("12,000원(기본 5,000원 + 제휴 7,000원)", fee["points"][0]["text"])
+        self.assertIn("검토 필요", fee["points"][0]["text"])
+        self.assertTrue(fee["review"])
+
+    def test_missing_family_line_is_not_inferred_as_zero(self):
+        detail = fee_detail("ONE PICK STYLE 하나 체크카드", [{"line_key": "P", "holder_type_cd": "PRINCIPAL", "total_fee_amt": 0,
+                                                       "line_status_cd": "DRAFT"}], "card_product_item:2:F", [("FEE_LINE", "P", "E1")])
+        fee = card_graphrag.fee_answer([detail], "ONE PICK STYLE 가족카드 연회비는?", [])
+        self.assertEqual([p["text"] for p in fee["points"]], ["ONE PICK STYLE 하나 체크카드: 원문에 가족카드 연회비 정보가 없습니다."])
+
+    def test_same_fact_benefit_is_dropped_when_fee_is_present(self):
+        fee = fee_detail("카드의정석 SHOPPING", WOORI_LINES, "card_product_item:6:F1")
+        benefit = {"context": {"benefit": {"name": "가족카드 연회비 면제", "source_json": json.dumps({"item_type_cd": None})}},
+                   "entity_ref": "card_product_item:6:B23"}
+        kept, dropped = card_graphrag.drop_duplicate_benefits([benefit, fee])
+        self.assertEqual(kept, [fee])
+        self.assertEqual(dropped, ["가족카드 연회비 면제"])
+
+    def test_fee_choice_swaps_same_fact_benefit_and_blocks_other_cards(self):
+        catalog = [{"id": "card_product_item:6:B23", "name": "가족카드 연회비 면제", "card": "카드의정석 SHOPPING", "item_type": "BENEFIT"},
+                   {"id": "card_product_item:6:F1", "name": "연회비", "card": "카드의정석 SHOPPING", "issuer": "우리카드",
+                    "item_type": "ANNUAL_FEE", "same_fact_refs": ["card_product_item:6:B23"]},
+                   {"id": "card_product_item:5:F2", "name": "연회비", "card": "JADE Classic", "issuer": "하나카드", "item_type": "ANNUAL_FEE"}]
+        by_id = {row["id"]: row for row in catalog}
+        chosen, _ = card_graphrag.resolve_fee_choice("우리카드 가족카드 연회비는?", ["card_product_item:6:B23"], by_id, catalog)
+        self.assertEqual(chosen, ["card_product_item:6:F1"])
+        chosen, warnings = card_graphrag.resolve_fee_choice("토스뱅크 Wide 연회비는?", ["card_product_item:5:F2"], by_id, catalog)
+        self.assertEqual(chosen, [])
+        self.assertTrue(warnings)
+        chosen, _ = card_graphrag.resolve_fee_choice("세 카드의 연회비 비교", ["card_product_item:6:F1", "card_product_item:5:F2"], by_id, catalog)
+        self.assertEqual(len(chosen), 2)
+
+    def test_fee_of_card_chosen_by_benefit_is_kept_when_issuer_is_named(self):
+        catalog = [{"id": "B1", "name": "STYLE 캐시백", "card": "ONE PICK STYLE 하나 체크카드", "item_type": "BENEFIT"},
+                   {"id": "F2", "name": "연회비", "card": "ONE PICK STYLE 하나 체크카드", "issuer": "하나카드", "item_type": "ANNUAL_FEE"},
+                   {"id": "F5", "name": "연회비", "card": "JADE Classic", "issuer": "하나카드", "item_type": "ANNUAL_FEE"}]
+        by_id = {row["id"]: row for row in catalog}
+        chosen, _ = card_graphrag.resolve_fee_choice("하나카드와 우리카드 중 연회비까지 비교", ["B1", "F2", "F5"], by_id, catalog)
+        self.assertEqual(chosen, ["B1", "F2"])          # 혜택으로 정해진 카드의 연회비만, 같은 발급사의 다른 카드는 아님
+        chosen, _ = card_graphrag.resolve_fee_choice("우리카드 연회비 비교", ["B1", "F2"], by_id, catalog)
+        self.assertEqual(chosen, ["B1"])                # 발급사 이름이 없으면 인정하지 않음
+        chosen, warnings = card_graphrag.resolve_fee_choice("하나카드와 우리카드 중 어느 카드가 유리해? 연회비 포함", ["F2"], by_id, catalog)
+        self.assertEqual(chosen, ["F2"])                # 발급사 이름 + 그 발급사 연회비를 하나만 고름 → 인정하고 해석을 알림
+        self.assertTrue(any("해석" in w for w in warnings))
+
+    def test_llm_fee_sentences_are_removed_when_fee_is_answered_by_program(self):
+        answer = {"answer_text": "온라인 10% 할인입니다. 연회비 정보는 검색 결과에서 확인되지 않습니다.\n월 한도는 4천원입니다.",
+                  "conclusion": "두 카드의 연회비는 검색 결과에 없어 비교하기 어렵습니다.",
+                  "points": [{"text": "연회비는 없습니다."}, {"text": "월 4천원 한도입니다."}]}
+        cleaned, removed = card_graphrag.strip_fee_sentences(answer)
+        self.assertNotIn("연회비", cleaned["answer_text"] + cleaned["conclusion"])
+        self.assertIn("온라인 10% 할인입니다.", cleaned["answer_text"])
+        self.assertEqual([p["text"] for p in cleaned["points"]], ["월 4천원 한도입니다."])
+        self.assertEqual(len(removed), 3)
+# endregion
