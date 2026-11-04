@@ -53,3 +53,20 @@ uv run python src/card_benefit/docs/identity_registry/simulate_ledger.py HANA_MP
 - 등록은 `CommonBenefitService.register_run`(임베딩 없음)을 바깥 트랜잭션으로 감싸, 대장 밖 쓰기·UPDATE·예상과 다른 판정이 나오면 COMMIT 전에 전체 ROLLBACK하도록 실행했다.
 - 등록 후 검증: 33건의 혜택명·유형·선택서비스·기간·값·한도·근거 ID 일치, 정합성 게이트 0, `bnft_cd` 중복 0, 백업 대비 다른 테이블·행 변경 0.
 - `review_status`는 등록 성공과 별개다. 수동 28건은 사용자 검토 전까지 `DRAFT_PENDING_USER_REVIEW`로 둔다.
+- 2026-11-04 Neo4j `dp_` 반영(`neo4j_load_draft --apply`): 노드 214→247, 관계 277→310. 추가는 `dp_card_common_bnft` 33개와 `dp_belongs_to` 33개뿐이고
+  기존 노드·관계 변경 0, PostgreSQL 대조 차이 0. 새 공통 혜택에는 카드 적용·근거 관계가 없다(적용 카드 0장, 아래 근거 구조 참고).
+  적재 전 그래프 백업 `src/data/backup/neo4j_dp_pre_reload_20261104_095543`(Git 제외).
+
+## 알려진 문제: 공통 혜택 근거 조회 (보류, 2026-11-04)
+
+`embedding_repository.select_common_bnft_evidence`는 공통 혜택의 근거를 **문서의 모든 추출 실행에서 혜택명이 같은 대표 후보**로 찾는다.
+공통 혜택에는 어느 실행·후보에서 등록했는지 기록하는 컬럼이 없고, `card_evidence_link`는 카드별 혜택만 담는다.
+
+- MP004 33건: 반환 483건 중 Run 31 근거 151건(대장 근거 137건 모두 포함), 과거 실행(26~30) 근거 332건(69%).
+  과거 근거는 같은 PDF 줄의 다른 구간 인용이며 다른 혜택의 근거가 섞이지는 않았다. 답변 근거 목록과 프롬프트에 중복이 늘어난다.
+- Neo4j에는 공통 혜택→근거 관계가 없다(`same_as`로 연결된 카드 혜택만 근거를 가진다). 검색은 그래프에 근거가 없으면 이 SQL로 대체 조회한다(`card_graphrag.py` retrieve).
+- 재추출로 혜택명이 바뀌면 이름이 같은 후보를 찾지 못해 근거가 0건이 될 수 있다.
+
+개선 방향(미적용):
+1. 최소안(SQL만): 혜택명이 같은 대표 후보 중 **가장 최근 실행 하나**로 한정한다. 33건 기준 483→151건, 대장 근거는 유지된다.
+2. 장기안(DB 구조 변경 필요, 별도 승인): 공통 혜택과 원문 근거를 직접 잇는 연결을 두고 Neo4j에도 `supported_by`로 올린다.
