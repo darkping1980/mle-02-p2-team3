@@ -106,7 +106,7 @@ SELECT c.card_doc_id, c.page_no, c.card_doc_chunk_id, c.chunk_raw_txt
 FROM db_pipeline.card_doc_chunk c
 WHERE c.card_doc_id=:CARD_DOC_ID AND c.page_no=:PAGE_NO AND c.card_doc_chunk_id=:CARD_DOC_CHUNK_ID;
 
--- name: insert_review_evidence!
+-- name: insert_review_evidence
 -- Explicitly approved cross-page evidence is appended to the target benefit staging item.
 INSERT INTO db_pipeline.card_source_evidence (
   card_doc_id,page_no,card_doc_chunk_id,card_extr_stg_id,quote_txt,start_pos,end_pos,approval_status_cd
