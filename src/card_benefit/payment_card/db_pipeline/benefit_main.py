@@ -35,6 +35,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--identity", action="append", default=[], help="추출항목ID=업무식별자 (common)")
     parser.add_argument("--no-embed", action="store_true", help="임베딩을 만들지 않는다. embedding_main으로 나중에 처리")
     parser.add_argument("--apply", action="store_true", help="실제로 등록한다")
+    parser.add_argument("--exclude-stg-id", action="append", default=[], help="Explicit product candidate exclusion; source staging is unchanged")
     args = parser.parse_args(argv)
     if args.kind != "brand-compare" and not args.run_id:
         parser.error("--run-id가 필요합니다")
@@ -66,7 +67,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         embedding = None if args.no_embed else EmbeddingService(session, OpenAIEmbedder())
         if args.kind == "product":
-            results = ProductBenefitService(session, embedding).register_run(args.card_id[0], args.run_id)
+            results = ProductBenefitService(session, embedding).register_run(
+                args.card_id[0], args.run_id, exclude_stg_ids=set(args.exclude_stg_id))
         else:
             identities = dict(item.split("=", 1) for item in args.identity)
             service = CommonBenefitService(session, embedding_service=embedding)

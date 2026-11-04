@@ -64,7 +64,7 @@ class UnresolvedReviewTests(unittest.TestCase):
              "reason": "tier applicability pending"},
         ]
         queue = unresolved_queue(rows, REVIEWS)
-        self.assertEqual([item["review_status"] for item in queue], [APPROVED, APPROVED, PENDING, PENDING, PENDING, PENDING])
+        self.assertEqual([item["review_status"] for item in queue], [APPROVED, APPROVED, APPROVED, APPROVED, APPROVED, PENDING])
         self.assertEqual(queue[0]["target_benefit_nms"], [
             "온라인 쇼핑 10% 청구할인", "온라인 업종 4대 PAY 결제 시 5% 추가할인",
         ])
@@ -73,9 +73,9 @@ class UnresolvedReviewTests(unittest.TestCase):
             "온라인 업종 4대 PAY 결제 시 추가할인 적용 할인", "오프라인 쇼핑 10% 청구할인",
         ])
         self.assertEqual(queue[2]["target_benefit_nms"], ["4대 주유소 주말 주유 청구할인"])
-        self.assertEqual([item["review_status"] for item in queue[3:]], [PENDING, PENDING, PENDING])
-        self.assertIn("온라인 업종 4대 PAY 결제 시 추가할인 적용 할인", queue[3]["target_benefit_nms"])
-        self.assertEqual(len(queue[5]["target_benefit_nms"]), 4)
+        self.assertEqual([item["review_status"] for item in queue[3:]], [APPROVED, APPROVED, PENDING])
+        self.assertIn("온라인 업종 4대 PAY 결제 시 5% 추가할인", queue[3]["target_benefit_nms"])
+        self.assertEqual(len(queue[5]["target_benefit_nms"]), 5)
 
     def test_tier_values_and_scopes_are_not_collapsed(self):
         table_ref = REVIEWS[0]["unresolved_refs"][1]["raw_txt"]
@@ -97,18 +97,18 @@ class UnresolvedReviewTests(unittest.TestCase):
             RUN, DOC, "온라인 업종 4대 PAY 결제 시 5% 추가할인", REVIEWS)})
         page4_pay_links = links_for_candidate(RUN, DOC, "온라인 업종 4대 PAY 결제 시 추가할인 적용 할인", REVIEWS)
         self.assertEqual(page4_pay_links[0]["review_status"], APPROVED)
-        self.assertIn(PENDING, {item["review_status"] for item in page4_pay_links})
+        self.assertEqual({item["review_status"] for item in page4_pay_links}, {APPROVED})
         self.assertIn("온라인 행과 별도", offline["limit_scope_note"])
         self.assertIn(PENDING, {item["review_status"] for item in links_for_candidate(
             RUN, DOC, "오프라인 쇼핑 10% 청구할인", REVIEWS)})
         for excluded in (
             "온라인 쇼핑 Two-in-One 결제서비스 0.3% 캐시백",
             "오프라인 쇼핑 Two-in-One 결제서비스 0.3% 캐시백",
-            "스타벅스, 폴바셋 청구할인",
         ):
             self.assertEqual(links_for_candidate(RUN, DOC, excluded, REVIEWS), [])
-        pending_gas = links_for_candidate(RUN, DOC, "4대 주유소 주말 주유 청구할인", REVIEWS)[0]
-        self.assertEqual(pending_gas["review_status"], PENDING)
+        pending_grace = [item for item in links_for_candidate(RUN, DOC, "온라인 쇼핑 10% 청구할인", REVIEWS)
+                         if item["review_status"] == PENDING]
+        self.assertEqual(pending_grace[0]["registration_effect"], "PENDING_SCOPE_NOTE")
 
     def test_review_evidence_must_match_the_cited_chunk(self):
         link = links_for_candidate(RUN, DOC, "온라인 쇼핑 10% 청구할인", REVIEWS)[0]
@@ -201,8 +201,9 @@ class UnresolvedReviewTests(unittest.TestCase):
         self.assertEqual(sum(name == "insert_review_evidence" for name, _ in service.repo.writes), 4)
         self.assertEqual(sum(name == "insert_evidence_link" for name, _ in service.repo.writes), 5)
 
-    def test_pending_review_cannot_register(self):
-        pending = links_for_candidate(RUN, DOC, "4대 주유소 주말 주유 청구할인", REVIEWS)[0]
+    def test_pending_blocking_review_cannot_register(self):
+        pending = dict(links_for_candidate(RUN, DOC, "온라인 쇼핑 10% 청구할인", REVIEWS)[-1])
+        pending["registration_effect"] = "BLOCK"
         service = ProductBenefitService(session=object())
 
         class EmptyRepo:

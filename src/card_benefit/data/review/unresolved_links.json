@@ -15,14 +15,22 @@
           "card_doc_chunk_id": "20261104_000079",
           "ordinal": 1,
           "raw_txt": "온라인 업종 통합 할인한도 내에서 할인 적용",
-          "target_benefit_nms": ["온라인 쇼핑 10% 청구할인", "온라인 업종 4대 PAY 결제 시 5% 추가할인"]
+          "target_benefit_nms": [
+            "온라인 쇼핑 10% 청구할인",
+            "온라인 업종 4대 PAY 결제 시 5% 추가할인"
+          ]
         },
         {
           "page_no": 3,
           "card_doc_chunk_id": "20261104_000080",
           "ordinal": 1,
           "raw_txt": "구분 \n전월 국내 가맹점 이용금액 \n30만원 이상 \n70만원 미만 \n70만원 이상 \n120만원 미만 \n120만원 이상 \n온라인 \n4천원 \n8천원 \n16천원 \n오프라인 \n6천원 \n12천원 \n24천원 \n합계 \n1만원 \n2만원 \n4만원",
-          "target_benefit_nms": ["온라인 쇼핑 10% 청구할인", "온라인 업종 4대 PAY 결제 시 5% 추가할인", "온라인 업종 4대 PAY 결제 시 추가할인 적용 할인", "오프라인 쇼핑 10% 청구할인"]
+          "target_benefit_nms": [
+            "온라인 쇼핑 10% 청구할인",
+            "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+            "온라인 업종 4대 PAY 결제 시 추가할인 적용 할인",
+            "오프라인 쇼핑 10% 청구할인"
+          ]
         }
       ],
       "targets": [
@@ -30,39 +38,114 @@
           "benefit_nm": "온라인 쇼핑 10% 청구할인",
           "limit_scope_note": "전월 국내 가맹점 이용금액 구간별 온라인 월 할인한도. 온라인 4대 PAY 추가할인과 공유한다. 표의 합계(1만원/2만원/4만원)는 온라인+오프라인의 표시 합계이며 별도 한도가 아니다.",
           "evidence": [
-            {"card_doc_id": "20261104_000023", "page_no": 3, "card_doc_chunk_id": "20261104_000080", "quote_txt": "전월 국내 가맹점 이용금액\n30만원 이상\n70만원 미만\n70만원 이상\n120만원 미만\n120만원 이상"},
-            {"card_doc_id": "20261104_000023", "page_no": 3, "card_doc_chunk_id": "20261104_000080", "quote_txt": "온라인\n4천원\n8천원\n16천원"},
-            {"card_doc_id": "20261104_000023", "page_no": 3, "card_doc_chunk_id": "20261104_000080", "quote_txt": "합계\n1만원\n2만원\n4만원"},
-            {"card_doc_id": "20261104_000023", "page_no": 2, "card_doc_chunk_id": "20261104_000079", "quote_txt": "온라인 업종 통합 할인한도 내에서 할인 적용"}
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 3,
+              "card_doc_chunk_id": "20261104_000080",
+              "quote_txt": "전월 국내 가맹점 이용금액\n30만원 이상\n70만원 미만\n70만원 이상\n120만원 미만\n120만원 이상"
+            },
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 3,
+              "card_doc_chunk_id": "20261104_000080",
+              "quote_txt": "온라인\n4천원\n8천원\n16천원"
+            },
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 3,
+              "card_doc_chunk_id": "20261104_000080",
+              "quote_txt": "합계\n1만원\n2만원\n4만원"
+            },
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 2,
+              "card_doc_chunk_id": "20261104_000079",
+              "quote_txt": "온라인 업종 통합 할인한도 내에서 할인 적용"
+            }
           ]
         },
         {
           "benefit_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
           "limit_scope_note": "전월 국내 가맹점 이용금액 구간별 온라인 월 할인한도. 온라인 쇼핑 10% 할인과 공유하며 별도 추가 월 한도가 아니다. 표의 합계(1만원/2만원/4만원)는 온라인+오프라인의 표시 합계이며 별도 한도가 아니다.",
           "evidence": [
-            {"card_doc_id": "20261104_000023", "page_no": 3, "card_doc_chunk_id": "20261104_000080", "quote_txt": "전월 국내 가맹점 이용금액\n30만원 이상\n70만원 미만\n70만원 이상\n120만원 미만\n120만원 이상"},
-            {"card_doc_id": "20261104_000023", "page_no": 3, "card_doc_chunk_id": "20261104_000080", "quote_txt": "온라인\n4천원\n8천원\n16천원"},
-            {"card_doc_id": "20261104_000023", "page_no": 3, "card_doc_chunk_id": "20261104_000080", "quote_txt": "합계\n1만원\n2만원\n4만원"},
-            {"card_doc_id": "20261104_000023", "page_no": 2, "card_doc_chunk_id": "20261104_000079", "quote_txt": "온라인 업종 통합 할인한도 내에서 할인 적용"}
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 3,
+              "card_doc_chunk_id": "20261104_000080",
+              "quote_txt": "전월 국내 가맹점 이용금액\n30만원 이상\n70만원 미만\n70만원 이상\n120만원 미만\n120만원 이상"
+            },
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 3,
+              "card_doc_chunk_id": "20261104_000080",
+              "quote_txt": "온라인\n4천원\n8천원\n16천원"
+            },
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 3,
+              "card_doc_chunk_id": "20261104_000080",
+              "quote_txt": "합계\n1만원\n2만원\n4만원"
+            },
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 2,
+              "card_doc_chunk_id": "20261104_000079",
+              "quote_txt": "온라인 업종 통합 할인한도 내에서 할인 적용"
+            }
           ]
         },
         {
           "benefit_nm": "온라인 업종 4대 PAY 결제 시 추가할인 적용 할인",
           "limit_scope_note": "전월 국내 가맹점 이용금액 구간별 온라인 월 할인한도. 온라인 쇼핑 10% 할인과 공유하며 별도 추가 월 한도가 아니다. 표의 합계(1만원/2만원/4만원)는 온라인+오프라인의 표시 합계이며 별도 한도가 아니다.",
           "evidence": [
-            {"card_doc_id": "20261104_000023", "page_no": 3, "card_doc_chunk_id": "20261104_000080", "quote_txt": "전월 국내 가맹점 이용금액\n30만원 이상\n70만원 미만\n70만원 이상\n120만원 미만\n120만원 이상"},
-            {"card_doc_id": "20261104_000023", "page_no": 3, "card_doc_chunk_id": "20261104_000080", "quote_txt": "온라인\n4천원\n8천원\n16천원"},
-            {"card_doc_id": "20261104_000023", "page_no": 3, "card_doc_chunk_id": "20261104_000080", "quote_txt": "합계\n1만원\n2만원\n4만원"},
-            {"card_doc_id": "20261104_000023", "page_no": 2, "card_doc_chunk_id": "20261104_000079", "quote_txt": "온라인 업종 통합 할인한도 내에서 할인 적용"}
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 3,
+              "card_doc_chunk_id": "20261104_000080",
+              "quote_txt": "전월 국내 가맹점 이용금액\n30만원 이상\n70만원 미만\n70만원 이상\n120만원 미만\n120만원 이상"
+            },
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 3,
+              "card_doc_chunk_id": "20261104_000080",
+              "quote_txt": "온라인\n4천원\n8천원\n16천원"
+            },
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 3,
+              "card_doc_chunk_id": "20261104_000080",
+              "quote_txt": "합계\n1만원\n2만원\n4만원"
+            },
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 2,
+              "card_doc_chunk_id": "20261104_000079",
+              "quote_txt": "온라인 업종 통합 할인한도 내에서 할인 적용"
+            }
           ]
         },
         {
           "benefit_nm": "오프라인 쇼핑 10% 청구할인",
           "limit_scope_note": "전월 국내 가맹점 이용금액 구간별 오프라인 월 할인한도이며 온라인 행과 별도다. 표의 합계(1만원/2만원/4만원)는 온라인+오프라인의 표시 합계이며 별도 한도가 아니다.",
           "evidence": [
-            {"card_doc_id": "20261104_000023", "page_no": 3, "card_doc_chunk_id": "20261104_000080", "quote_txt": "전월 국내 가맹점 이용금액\n30만원 이상\n70만원 미만\n70만원 이상\n120만원 미만\n120만원 이상"},
-            {"card_doc_id": "20261104_000023", "page_no": 3, "card_doc_chunk_id": "20261104_000080", "quote_txt": "오프라인\n6천원\n12천원\n24천원"},
-            {"card_doc_id": "20261104_000023", "page_no": 3, "card_doc_chunk_id": "20261104_000080", "quote_txt": "합계\n1만원\n2만원\n4만원"}
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 3,
+              "card_doc_chunk_id": "20261104_000080",
+              "quote_txt": "전월 국내 가맹점 이용금액\n30만원 이상\n70만원 미만\n70만원 이상\n120만원 미만\n120만원 이상"
+            },
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 3,
+              "card_doc_chunk_id": "20261104_000080",
+              "quote_txt": "오프라인\n6천원\n12천원\n24천원"
+            },
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 3,
+              "card_doc_chunk_id": "20261104_000080",
+              "quote_txt": "합계\n1만원\n2만원\n4만원"
+            }
           ]
         }
       ]
@@ -71,86 +154,136 @@
       "review_id": "WOORI_SHOPPING_RUN32_GAS_DISCOUNT_FORMULA",
       "run_id": "20261104_000032",
       "card_doc_id": "20261104_000023",
-      "review_status": "PENDING_REVIEW",
-      "reviewer": null,
-      "reviewed_at": null,
-      "review_note": "주유 할인 산정식과 유종 환산 규칙은 별도 검토가 필요하므로 정상 항목으로 승격하지 않는다.",
+      "review_status": "APPROVED",
+      "reviewer": "USER_AUTHORIZED_SOURCE_LINK",
+      "reviewed_at": "2026-11-04",
+      "review_note": "주유 할인 산식의 적용 혜택은 p3 주유 항목으로 원문에서 확인했다. 산식은 계산 결과로 바꾸지 않고 원문 텍스트 근거로 보존한다.",
       "unresolved_refs": [
         {
           "page_no": 3,
           "card_doc_chunk_id": "20261104_000080",
           "ordinal": 2,
           "raw_txt": "할인금액 산정방법  \n= 주유 이용금액 × 리터당 할인금액 / GS칼텍스 휘발유 공시가 \n(경유, 등유 등 기타 유종은 GS칼텍스 휘발유 공시가로 환산 적용)",
-          "target_benefit_nms": ["4대 주유소 주말 주유 청구할인"]
+          "target_benefit_nms": [
+            "4대 주유소 주말 주유 청구할인"
+          ]
         }
       ],
       "targets": [
-        {"benefit_nm": "4대 주유소 주말 주유 청구할인"}
+        {
+          "benefit_nm": "4대 주유소 주말 주유 청구할인",
+          "limit_scope_note": "주유 할인 산식의 적용 혜택은 p3 주유 항목으로 원문에서 확인했다. 산식은 계산 결과로 바꾸지 않고 원문 텍스트 근거로 보존한다.",
+          "evidence": [
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 3,
+              "card_doc_chunk_id": "20261104_000080",
+              "quote_txt": "할인금액 산정방법  \n= 주유 이용금액 × 리터당 할인금액 / GS칼텍스 휘발유 공시가 \n(경유, 등유 등 기타 유종은 GS칼텍스 휘발유 공시가로 환산 적용)"
+            }
+          ]
+        }
       ]
     },
     {
       "review_id": "WOORI_SHOPPING_RUN32_OFFLINE_EXAMPLE",
       "run_id": "20261104_000032",
       "card_doc_id": "20261104_000023",
-      "review_status": "PENDING_REVIEW",
-      "reviewer": null,
-      "reviewed_at": null,
-      "review_note": "오프라인 거래 예시의 연결 범위를 확인하기 전까지 오프라인 쇼핑 혜택을 완전한 것으로 보지 않는다.",
+      "review_status": "APPROVED",
+      "reviewer": "USER_AUTHORIZED_SOURCE_LINK",
+      "reviewed_at": "2026-11-04",
+      "review_note": "p4 이마트 오프라인 사례는 오프라인 쇼핑 10% 할인 후보와 연결된다. 5만원은 건당 할인 대상 매출액이며 월 한도와 별개로 보존한다.",
       "unresolved_refs": [
         {
           "page_no": 4,
           "card_doc_chunk_id": "20261104_000081",
           "ordinal": 1,
           "raw_txt": "예) 이마트(오프라인 가맹점)에서 10만원 결제 시 5만원에 대해서만 10% \n할인 적용 (5,000원 할인)",
-          "target_benefit_nms": ["오프라인 쇼핑 10% 청구할인"]
+          "target_benefit_nms": [
+            "오프라인 쇼핑 10% 청구할인"
+          ]
         }
       ],
       "targets": [
-        {"benefit_nm": "오프라인 쇼핑 10% 청구할인"}
+        {
+          "benefit_nm": "오프라인 쇼핑 10% 청구할인",
+          "limit_scope_note": "p4 이마트 오프라인 사례는 오프라인 쇼핑 10% 할인 후보와 연결된다. 5만원은 건당 할인 대상 매출액이며 월 한도와 별개로 보존한다.",
+          "evidence": [
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 4,
+              "card_doc_chunk_id": "20261104_000081",
+              "quote_txt": "예) 이마트(오프라인 가맹점)에서 10만원 결제 시 5만원에 대해서만 10% \n할인 적용 (5,000원 할인)"
+            }
+          ]
+        }
       ]
     },
     {
       "review_id": "WOORI_SHOPPING_RUN32_4PAY_MAX_DISCOUNT",
       "run_id": "20261104_000032",
       "card_doc_id": "20261104_000023",
-      "review_status": "PENDING_REVIEW",
-      "reviewer": null,
-      "reviewed_at": null,
-      "review_note": "10%+5% 합산 적용과 최대 7,500원 조건의 혜택 연결을 확인하기 전까지 4대 PAY 후보를 완전한 것으로 보지 않는다.",
+      "review_status": "APPROVED",
+      "reviewer": "USER_AUTHORIZED_SOURCE_LINK",
+      "reviewed_at": "2026-11-04",
+      "review_note": "p4의 4대 PAY 10%+5% 합산과 최대 7,500원은 p2의 온라인 4대 PAY 추가 할인에 연결한다. 이는 온라인 월 한도와 별개의 건당 할인 상한이다.",
       "unresolved_refs": [
         {
           "page_no": 4,
           "card_doc_chunk_id": "20261104_000081",
           "ordinal": 2,
           "raw_txt": "단, 온라인 업종 4대 PAY 결제로 추가할인 적용 시 (10%＋5%) 할인 \n(최대 7,500원 할인)",
-          "target_benefit_nms": ["온라인 업종 4대 PAY 결제 시 5% 추가할인", "온라인 업종 4대 PAY 결제 시 추가할인 적용 할인"]
+          "target_benefit_nms": [
+            "온라인 업종 4대 PAY 결제 시 5% 추가할인"
+          ]
         }
       ],
       "targets": [
-        {"benefit_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인"},
-        {"benefit_nm": "온라인 업종 4대 PAY 결제 시 추가할인 적용 할인"}
+        {
+          "benefit_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+          "limit_scope_note": "p4의 4대 PAY 10%+5% 합산과 최대 7,500원은 p2의 온라인 4대 PAY 추가 할인에 연결한다. 이는 온라인 월 한도와 별개의 건당 할인 상한이다.",
+          "evidence": [
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 4,
+              "card_doc_chunk_id": "20261104_000081",
+              "quote_txt": "단, 온라인 업종 4대 PAY 결제로 추가할인 적용 시 (10%＋5%) 할인 \n(최대 7,500원 할인)"
+            }
+          ]
+        }
       ]
     },
     {
       "review_id": "WOORI_SHOPPING_RUN32_4PAY_TXN_CAP",
       "run_id": "20261104_000032",
       "card_doc_id": "20261104_000023",
-      "review_status": "PENDING_REVIEW",
-      "reviewer": null,
-      "reviewed_at": null,
-      "review_note": "건당 5만원 한도의 대상 할인과 적용 범위를 확인하기 전까지 4대 PAY 후보를 완전한 것으로 보지 않는다.",
+      "review_status": "APPROVED",
+      "reviewer": "USER_AUTHORIZED_SOURCE_LINK",
+      "reviewed_at": "2026-11-04",
+      "review_note": "p4의 건당 5만원 할인 대상금액 제한은 p2의 온라인 4대 PAY 추가 할인에 연결한다. 월 한도를 뜻하지 않는다.",
       "unresolved_refs": [
         {
           "page_no": 4,
           "card_doc_chunk_id": "20261104_000081",
           "ordinal": 3,
           "raw_txt": "• 매출 건당 5만원까지 할인",
-          "target_benefit_nms": ["온라인 업종 4대 PAY 결제 시 5% 추가할인", "온라인 업종 4대 PAY 결제 시 추가할인 적용 할인"]
+          "target_benefit_nms": [
+            "온라인 업종 4대 PAY 결제 시 5% 추가할인"
+          ]
         }
       ],
       "targets": [
-        {"benefit_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인"},
-        {"benefit_nm": "온라인 업종 4대 PAY 결제 시 추가할인 적용 할인"}
+        {
+          "benefit_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+          "limit_scope_note": "p4의 건당 5만원 할인 대상금액 제한은 p2의 온라인 4대 PAY 추가 할인에 연결한다. 월 한도를 뜻하지 않는다.",
+          "evidence": [
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 4,
+              "card_doc_chunk_id": "20261104_000081",
+              "quote_txt": "• 매출 건당 5만원까지 할인"
+            }
+          ]
+        }
       ]
     },
     {
@@ -160,22 +293,85 @@
       "review_status": "PENDING_REVIEW",
       "reviewer": null,
       "reviewed_at": null,
-      "review_note": "카드 사용등록 후 첫 실적구간 적용 문구가 온라인·오프라인 월 한도 구간에 미치는 영향은 추가 검토 전까지 미확정으로 둔다.",
+      "review_note": "p5 특례는 카드 사용등록 후 30만원 실적구간 서비스를 언급하지만 개별 혜택을 열거하지 않는다. 아래 다섯 후보는 적용 가능성 검토 대상이며, 어느 후보에도 적용된다고 승인하지 않는다.",
       "unresolved_refs": [
         {
           "page_no": 5,
           "card_doc_chunk_id": "20261104_000082",
           "ordinal": 1,
           "raw_txt": "카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다.",
-          "target_benefit_nms": ["온라인 쇼핑 10% 청구할인", "오프라인 쇼핑 10% 청구할인", "온라인 업종 4대 PAY 결제 시 5% 추가할인", "온라인 업종 4대 PAY 결제 시 추가할인 적용 할인"]
+          "target_benefit_nms": [
+            "온라인 쇼핑 10% 청구할인",
+            "오프라인 쇼핑 10% 청구할인",
+            "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+            "4대 주유소 주말 주유 청구할인",
+            "스타벅스, 폴바셋 청구할인"
+          ]
         }
       ],
       "targets": [
-        {"benefit_nm": "온라인 쇼핑 10% 청구할인"},
-        {"benefit_nm": "오프라인 쇼핑 10% 청구할인"},
-        {"benefit_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인"},
-        {"benefit_nm": "온라인 업종 4대 PAY 결제 시 추가할인 적용 할인"}
-      ]
+        {
+          "benefit_nm": "온라인 쇼핑 10% 청구할인",
+          "unresolved_scope_note": "[미확정 특례 / PENDING_REVIEW] p5 원문: 카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다. 원문은 이 후보에 대한 적용 여부를 특정하지 않으므로 적용 관계는 미확정이다.",
+          "evidence": [
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 5,
+              "card_doc_chunk_id": "20261104_000082",
+              "quote_txt": "카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다."
+            }
+          ]
+        },
+        {
+          "benefit_nm": "오프라인 쇼핑 10% 청구할인",
+          "unresolved_scope_note": "[미확정 특례 / PENDING_REVIEW] p5 원문: 카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다. 원문은 이 후보에 대한 적용 여부를 특정하지 않으므로 적용 관계는 미확정이다.",
+          "evidence": [
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 5,
+              "card_doc_chunk_id": "20261104_000082",
+              "quote_txt": "카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다."
+            }
+          ]
+        },
+        {
+          "benefit_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+          "unresolved_scope_note": "[미확정 특례 / PENDING_REVIEW] p5 원문: 카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다. 원문은 이 후보에 대한 적용 여부를 특정하지 않으므로 적용 관계는 미확정이다.",
+          "evidence": [
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 5,
+              "card_doc_chunk_id": "20261104_000082",
+              "quote_txt": "카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다."
+            }
+          ]
+        },
+        {
+          "benefit_nm": "4대 주유소 주말 주유 청구할인",
+          "unresolved_scope_note": "[미확정 특례 / PENDING_REVIEW] p5 원문: 카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다. 원문은 이 후보에 대한 적용 여부를 특정하지 않으므로 적용 관계는 미확정이다.",
+          "evidence": [
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 5,
+              "card_doc_chunk_id": "20261104_000082",
+              "quote_txt": "카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다."
+            }
+          ]
+        },
+        {
+          "benefit_nm": "스타벅스, 폴바셋 청구할인",
+          "unresolved_scope_note": "[미확정 특례 / PENDING_REVIEW] p5 원문: 카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다. 원문은 이 후보에 대한 적용 여부를 특정하지 않으므로 적용 관계는 미확정이다.",
+          "evidence": [
+            {
+              "card_doc_id": "20261104_000023",
+              "page_no": 5,
+              "card_doc_chunk_id": "20261104_000082",
+              "quote_txt": "카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다."
+            }
+          ]
+        }
+      ],
+      "registration_effect": "PENDING_SCOPE_NOTE"
     }
   ]
 }

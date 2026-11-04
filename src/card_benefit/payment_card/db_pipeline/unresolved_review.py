@@ -15,6 +15,8 @@ from .extraction_service import compact
 REGISTRY_PATH = Path(__file__).resolve().parents[2] / "data" / "review" / "unresolved_links.json"
 APPROVED = "APPROVED"
 PENDING = "PENDING_REVIEW"
+BLOCK_REGISTRATION = "BLOCK"
+PENDING_SCOPE_NOTE = "PENDING_SCOPE_NOTE"
 
 
 def load_registry(path: Path = REGISTRY_PATH) -> list[dict[str, Any]]:
@@ -26,6 +28,11 @@ def load_registry(path: Path = REGISTRY_PATH) -> list[dict[str, Any]]:
             raise ValueError(f"invalid review status: {review.get('review_status')}")
         if not review.get("run_id") or not review.get("card_doc_id") or not review.get("review_id"):
             raise ValueError("review_id, run_id and card_doc_id are required")
+        effect = review.get("registration_effect", BLOCK_REGISTRATION)
+        if effect not in (BLOCK_REGISTRATION, PENDING_SCOPE_NOTE):
+            raise ValueError(f"invalid review registration_effect: {effect}")
+        if effect == PENDING_SCOPE_NOTE and review["review_status"] != PENDING:
+            raise ValueError("non-blocking scope notes must remain PENDING_REVIEW")
         for target in review.get("targets", []):
             if not target.get("benefit_nm"):
                 raise ValueError("review target benefit_nm is required")
@@ -56,6 +63,8 @@ def unresolved_queue(rows: list[dict], reviews: list[dict] | None = None) -> lis
         targets = [name for review, ref in matched
                    for name in ref.get("target_benefit_nms", [target["benefit_nm"] for target in review.get("targets", [])])]
         result.append({**row, "review_status": status, "review_ids": [r[0]["review_id"] for r in matched],
+                       "registration_effects": list(dict.fromkeys(
+                           r[0].get("registration_effect", BLOCK_REGISTRATION) for r in matched)),
                        "target_benefit_nms": list(dict.fromkeys(targets))})
     return result
 
@@ -88,6 +97,7 @@ def links_for_candidate(run_id: str, card_doc_id: str, benefit_nm: str,
             if target["benefit_nm"] == benefit_nm:
                 links.append({**target, "review_id": review["review_id"],
                               "review_status": review["review_status"],
+                          "registration_effect": review.get("registration_effect", BLOCK_REGISTRATION),
                               "review_note": review.get("review_note", "")})
     return links
 

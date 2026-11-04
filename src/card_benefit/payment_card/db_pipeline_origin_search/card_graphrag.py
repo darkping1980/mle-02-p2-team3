@@ -62,6 +62,13 @@ UNRESOLVED_ATOMS = {"transit_exclusions": "대중교통 제외 조건의 세부 
 RAW_ONLY_COND_TYPE = "ETC"          # 정형 판정 없이 원문으로만 보존한 조건 유형(공통코드 COND_TYPE).
 RAW_ONLY_INTENTS = ("BENEFIT_DETAIL", "BENEFIT_LIMIT", "BENEFIT_COMPARE")
 RAW_ONLY_WORDS = r"몇 명|몇 매|몇 장|인원|동반|가족|본인|입장권|티켓"     # 이용 대상·수량을 묻는 표현.
+INITIAL_GRACE_SOURCE = "카드 사용등록일로부터"
+INITIAL_GRACE_TOPIC = "최초 카드 사용등록 후 실적 유예 적용 범위"
+INITIAL_GRACE_INTENTS = ("BENEFIT_CONDITION", "BENEFIT_COMPARE", "EVIDENCE_SEARCH")
+INITIAL_GRACE_WORDS = r"최초|처음|사용등록|신규.*등록|첫\s*달|다음\s*달|익월|실적\s*유예|유예"
+INITIAL_GRACE_CLAIM = re.compile(r"최초|처음|사용등록|실적\s*유예|유예|익월|다음\s*달")
+INITIAL_GRACE_ASSERTION = re.compile(r"적용|제공|받을 수|받습니다|면제|충족")
+UNCERTAINTY_WORDS = re.compile(r"미확정|확인되지 않|알 수 없|판단할 수 없")
 TIER_NAME = "금액 구간"
 TIER_INTENTS = ("BENEFIT_DETAIL", "BENEFIT_COMPARE")
 TIER_WORDS = r"얼마|금액|구간"
@@ -459,6 +466,26 @@ def unresolved_items(details: list[dict]) -> list[dict]:
                               "confirmed": rule_text if raw in rule_text else raw, "intents": RAW_ONLY_INTENTS,
                               "words": f"{RAW_ONLY_WORDS}|{re.escape(raw)}",
                               "evidence_ids": _evidence_ids(detail, lambda item, key=key: item["link"].get("ev_item_key") == key)})
+        pending_grace = []
+        for row in detail["evidence"]:
+            evidence = source(row["evidence"])
+            quote = evidence.get("quote_txt", "")
+            if evidence.get("approval_status_cd") == "PENDING" and INITIAL_GRACE_SOURCE in quote:
+                pending_grace.append((row, quote))
+        if pending_grace:
+            quote = pending_grace[0][1]
+            found.append({
+                "kind": "CONDITION",
+                "text": f"{name}: 최초 카드 사용등록 실적 유예가 이 혜택에 적용되는지는 미확정입니다.",
+                "topic": INITIAL_GRACE_TOPIC,
+                "benefit": name,
+                "open": ("p5에는 최초 카드 사용등록 후 30만원 실적구간 서비스를 제공한다고 적혀 있지만, "
+                         f"이 혜택을 적용 대상으로 특정하지 않습니다. {name}에 대한 적용 여부는 확인되지 않았습니다."),
+                "confirmed": quote,
+                "intents": INITIAL_GRACE_INTENTS,
+                "words": INITIAL_GRACE_WORDS,
+                "evidence_ids": list(dict.fromkeys(source(row["evidence"])["evidence_id"] for row, _ in pending_grace)),
+            })
     return found
 
 
@@ -798,6 +825,15 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
         if not ids:
             drop("근거 ID가 없는 문장을 버렸습니다", text)
             continue
+        pending_grace = any(item.get("topic") == INITIAL_GRACE_TOPIC for item in context.get("open_conditions", []))
+        cites_pending_scope = any(
+            evidence[evidence_id].get("approval_status") == "PENDING"
+            and INITIAL_GRACE_SOURCE in evidence[evidence_id].get("quote", "") for evidence_id in ids)
+        if cites_pending_scope or (pending_grace and INITIAL_GRACE_CLAIM.search(text)
+                                   and INITIAL_GRACE_ASSERTION.search(text)
+                                   and not UNCERTAINTY_WORDS.search(text)):
+            drop("초기 실적 유예의 미확정 적용 범위를 확정한 문장을 버렸습니다", text)
+            continue
         unknown = unknown_values(text, known_values(context, question, benefit_id), numbers)
         if unknown:
             drop(f"조회 결과에 없는 값 {unknown}이 있는 문장을 버렸습니다", text)
@@ -882,6 +918,19 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
             program = tier_answer(conflicts, context.get("payment_amount"), context["evidence"])
             if program:
                 answer_text, source_cd = program, "program_tier"
+    grace_reviews = [item for item in context.get("open_conditions", [])
+                     if item.get("topic") == INITIAL_GRACE_TOPIC]
+    if grace_reviews:
+        benefits_in_question = ", ".join(dict.fromkeys(
+            name for item in grace_reviews for name in item.get("benefits", [])))
+        note = (f"{benefits_in_question}의 최초 카드 사용등록 실적 유예 적용 여부는 "
+                "원문에서 확인되지 않아 미확정입니다.")
+        if note not in conclusion:
+            conclusion = " ".join(part for part in (conclusion, note) if part)
+        if answer_text and note not in answer_text:
+            answer_text = f"{answer_text.rstrip()} {note}"
+        if points:
+            status = "PARTIAL"
     return {"status": status, "conclusion": conclusion, "answer_text": answer_text, "answer_source": source_cd, "points": points,
             "uncertain": uncertain, "message": reason}, warnings
 
