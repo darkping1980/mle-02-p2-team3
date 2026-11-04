@@ -1231,6 +1231,14 @@ class CreateLlmTests(unittest.TestCase):
             self.assertEqual(card_graphrag.create_llms(), (None, None))
 
 
+def streamlit_error_text() -> str:
+    """앱 모듈은 import하면 화면이 실행되므로 상수만 소스에서 읽는다."""
+    import ast
+    tree = ast.parse(Path(APP).read_text(encoding="utf-8"))
+    return next(node.value.value for node in tree.body if isinstance(node, ast.Assign)
+                and getattr(node.targets[0], "id", None) == "ERROR_TEXT")
+
+
 class StreamlitTests(unittest.TestCase):
     def setUp(self):
         st.cache_resource.clear()
@@ -1250,15 +1258,33 @@ class StreamlitTests(unittest.TestCase):
         app.text_area(key="question").set_value(question)
         return app.button[0].click().run(timeout=30)
 
+    def dev(self, app):
+        """개발자 모드를 켠다. 내부 검증 정보는 이 모드에서만 보인다."""
+        return app.toggle(key="dev_mode").set_value(True).run(timeout=30)
+
     def test_load_makes_no_llm_or_db_call(self):
         app = AppTest.from_file(APP).run(timeout=30)
         self.assertFalse(app.exception)
-        self.assertEqual(app.title[0].value, "카드 상품 GraphRAG (혜택·연회비) — 개발 테스트")
+        self.assertEqual(app.title[0].value, "카드 혜택 안내")
+        self.assertFalse(app.warning)
         self.assertEqual(self.first.prompts, [])
         neo4j_search.connect.assert_not_called()
 
-    def test_answer_evidence_and_developer_info(self):
+    def test_default_view_hides_internal_status(self):
+        self.second.parsed = card_answer([point("월 1000원 한도입니다.", ("E1",))], conclusion="월 1000원입니다.",
+                                         answer_text="월 1000원 한도입니다. 이 자료는 DRAFT 상태로 검토 대기입니다.")
         app = self.ask(AppTest.from_file(APP).run(timeout=30))
+        self.assertFalse(app.exception)
+        self.assertFalse(any("개발자 정보" in item.label or "API" in item.label for item in app.expander))
+        shown = " ".join([item.value for item in app.markdown] + [item.value for item in app.subheader]
+                         + [item.value for item in app.caption] + [item.value for item in app.info])
+        self.assertIn("1000원", shown)
+        for word in ("일부 답변", "검토 필요", "검토 대기", "검증 실패", "DRAFT", "PENDING", "추정 비용"):
+            self.assertNotIn(word, shown)
+        self.assertTrue(any(item.value == "카드 혜택 안내" for item in app.subheader))
+
+    def test_answer_evidence_and_developer_info(self):
+        app = self.ask(self.dev(AppTest.from_file(APP).run(timeout=30)))
         self.assertFalse(app.exception)
         page = " ".join(item.value for item in app.markdown)
         self.assertIn("1000원", page)
@@ -1271,7 +1297,7 @@ class StreamlitTests(unittest.TestCase):
         neo4j_search.connect.return_value = FakeSearch(amusement_detail())
         self.second.parsed = card_answer([point("월 1회입니다.", ("E53",))], conclusion="월 1회입니다.",
                                          answer_text="할인율은 50%입니다.\n\n월 1회 이용할 수 있습니다.")
-        app = self.ask(AppTest.from_file(APP).run(timeout=30), "놀이공원 할인율과 이용 횟수 제한은?")
+        app = self.ask(self.dev(AppTest.from_file(APP).run(timeout=30)), "놀이공원 할인율과 이용 횟수 제한은?")
         self.assertFalse(app.exception)
         self.assertTrue(any(item.value == "확인이 필요한 사항" for item in app.subheader))
         page = [item.value for item in app.markdown]
@@ -1286,14 +1312,14 @@ class StreamlitTests(unittest.TestCase):
         self.assertFalse(any("아직 확정되지 않았습니다" in value for value in page))
 
     def test_unrelated_unresolved_is_only_in_developer_info(self):
-        app = self.ask(AppTest.from_file(APP).run(timeout=30))
+        app = self.ask(self.dev(AppTest.from_file(APP).run(timeout=30)))
         self.assertFalse(app.exception)
         self.assertFalse(any("세부 적용 범위" in item.value for item in app.markdown))
         self.assertTrue(any("고객 화면에서 뺀" in item.value for item in app.markdown))
         self.assertTrue(any("세부 적용 범위" in item.value for item in app.caption))
 
     def test_rerun_and_same_question_do_not_call_llm_again(self):
-        app = self.ask(AppTest.from_file(APP).run(timeout=30))
+        app = self.ask(self.dev(AppTest.from_file(APP).run(timeout=30)))
         app.run(timeout=30)
         app = self.ask(app)
         self.assertEqual((len(self.first.prompts), len(self.second.prompts)), (1, 1))
@@ -1318,10 +1344,11 @@ class StreamlitTests(unittest.TestCase):
     def test_neo4j_failure_during_question_is_shown(self):
         neo4j_search.connect.return_value = FakeSearch(catalog_fail=OSError("SECRET_VALUE"))
         app = self.ask(AppTest.from_file(APP).run(timeout=30))
-        self.assertEqual(app.error[0].value, card_graphrag.MESSAGES["NEO4J_FAILED"])
+        self.assertEqual(app.error[0].value, streamlit_error_text())
+        self.assertNotIn("Neo4j", app.error[0].value)
 
     def verify_app(self):
-        app = AppTest.from_file(APP).run(timeout=30)
+        app = self.dev(AppTest.from_file(APP).run(timeout=30))
         app.radio(key="run_mode").set_value("개발 검증").run(timeout=30)
         app.text_area(key="verify_question").set_value("대중교통 혜택은?").run(timeout=30)
         return app
