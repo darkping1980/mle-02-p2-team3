@@ -1,0 +1,19 @@
+# Cloud-only dependencies for the card GraphRAG Streamlit app.
+# Place next to src/card_benefit/payment_card/db_pipeline_origin_search/streamlit_app.py
+# Development dependency files (pyproject.toml and uv.lock) stay unchanged.
+streamlit==1.65.0
+langgraph==1.2.13
+langchain-openai==1.6.7
+langchain-postgres==0.0.18
+neo4j==6.4.1
+psycopg[binary,pool]==3.3.6
+pgvector==0.3.6
+aiosql==15.0
+sqlalchemy==2.1.3
+pydantic==2.13.5
+openai==3.24.0
+python-dotenv==1.2.4
+pymupdf==1.28.2
+pypdf==6.19.0
+certifi==2026.10.23
+supabase==2.32.0

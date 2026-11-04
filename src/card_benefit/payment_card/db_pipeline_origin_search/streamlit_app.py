@@ -23,6 +23,13 @@ Streamlit 실행 모델 (Java 개발자 참고)
     화면 문구 정리(customer_text 등)는 표시만 바꾸며 결과 State의 값은 바꾸지 않는다.
 """
 import re
+import sys
+from pathlib import Path
+
+# Cloud dependency installs do not install the project in editable mode.
+_SRC_DIR = Path(__file__).resolve().parents[3]
+if str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
 
 from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag, verify_view
 from card_benefit.payment_card.db_pipeline_origin_search.benefit_search_service import MODE_LABELS
