@@ -8,7 +8,7 @@
     postgres_db_pipeline.json   테이블별 컬럼·행, 시퀀스, 지문(건수·md5)
     catalog.json                컬럼·제약·인덱스·뷰·함수·시퀀스·트리거·주석·소유자·권한
     schema_ddl.sql              catalog.json으로 만든 재생성 DDL(읽기용·복구용)
-    restore_stg_normalized_item.sql  정제본 값 복구(컬럼 복구 후 실행)
+    restore_stg_normalized_item.sql  정제본 값 복구(컬럼 복구 후 실행). 정제본 컬럼이 있는 DB에서만 만든다
 접속 정보는 출력하지 않는다. 모든 조회는 READ ONLY 트랜잭션에서 실행한다.
 """
 import argparse
@@ -48,6 +48,13 @@ def fingerprint_sql(table, cols):
 
 STG_FP = (f"SELECT count(*)::int AS n, md5(coalesce(string_agg(card_extr_stg_id || ':' || stg_normalized_item::text, ',' "
           f"ORDER BY card_extr_stg_id COLLATE \"C\"), '')) AS f FROM {SCHEMA}.card_extr_stg WHERE stg_normalized_item IS NOT NULL")
+STG_FP_KEY = "card_extr_stg.stg_normalized_item"
+
+
+def has_stg_normalized(cur) -> bool:
+    """정제본 컬럼은 2026-11-03 정리로 삭제됐다. 컬럼이 있는 DB(정리 전·복구 후)에서만 지문과 복구 SQL을 다룬다."""
+    return bool(q(cur, f"""SELECT 1 FROM pg_attribute WHERE attrelid = '{SCHEMA}.card_extr_stg'::regclass
+                           AND attname = 'stg_normalized_item' AND NOT attisdropped"""))
 
 
 def catalog(cur):
@@ -179,14 +186,16 @@ def export(out_dir: Path):
             rows = [r["j"] for r in q(cur, f"SELECT to_jsonb(t) AS j FROM {SCHEMA}.{t} t")]
             data["tables"][t] = {"columns": cols, "rows": rows}
             data["fingerprints"][t] = q(cur, fingerprint_sql(t, cols))[0]
-        data["fingerprints"]["card_extr_stg.stg_normalized_item"] = q(cur, STG_FP)[0]
+        if has_stg_normalized(cur):
+            data["fingerprints"][STG_FP_KEY] = q(cur, STG_FP)[0]
         data["sequences"] = {s["name"]: s["last_value"] for s in cat["sequences"]}
         conn.rollback()
     (out_dir / "postgres_db_pipeline.json").write_text(json.dumps(data, ensure_ascii=False, default=str), encoding="utf-8")
     (out_dir / "catalog.json").write_text(json.dumps(cat, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
     (out_dir / "schema_ddl.sql").write_text(ddl(cat), encoding="utf-8", newline="\n")
-    (out_dir / "restore_stg_normalized_item.sql").write_text(
-        restore_stg_sql(data["tables"]["card_extr_stg"]["rows"], data["fingerprints"]["card_extr_stg.stg_normalized_item"]), encoding="utf-8", newline="\n")
+    if STG_FP_KEY in data["fingerprints"]:
+        (out_dir / "restore_stg_normalized_item.sql").write_text(
+            restore_stg_sql(data["tables"]["card_extr_stg"]["rows"], data["fingerprints"][STG_FP_KEY]), encoding="utf-8", newline="\n")
     print("backup:", out_dir.relative_to(PROJECT))
     return out_dir
 
@@ -212,20 +221,27 @@ def verify(out_dir: Path):
             report[t] = len(v["rows"])
             if not ok:
                 problems.append(f"{t}: backup={len(v['rows'])} live={live_fp} diff={diff}")
-        stg = q(cur, STG_FP)[0]
-        if stg != data["fingerprints"]["card_extr_stg.stg_normalized_item"]:
+        backed_stg = data["fingerprints"].get(STG_FP_KEY)
+        live_has_stg = has_stg_normalized(cur)
+        stg = q(cur, STG_FP)[0] if live_has_stg else None
+        if (backed_stg is None) != (not live_has_stg):
+            problems.append(f"정제본 컬럼 존재 여부 불일치: 백업 {backed_stg is not None} / 실DB {live_has_stg}")
+        elif stg != backed_stg:
             problems.append(f"정제본 지문 불일치 {stg}")
         live_cat = catalog(cur)
         for key in ("columns", "constraints", "indexes", "views", "functions", "triggers"):
             if json.dumps(live_cat[key], default=str, sort_keys=True) != json.dumps(cat[key], default=str, sort_keys=True):
                 problems.append(f"catalog.{key} 불일치")
         conn.rollback()
-    restore = (out_dir / "restore_stg_normalized_item.sql").read_text(encoding="utf-8")
-    n_restore = restore.count("::jsonb)")
-    if n_restore != stg["n"]:
-        problems.append(f"복구 SQL 행 수 {n_restore} != {stg['n']}")
     print("tables", len(report), "rows", sum(report.values()), report)
-    print("stg_normalized_item non-null", stg["n"], "md5", stg["f"], "| restore rows", n_restore)
+    if backed_stg is not None:
+        restore = (out_dir / "restore_stg_normalized_item.sql").read_text(encoding="utf-8")
+        n_restore = restore.count("::jsonb)")
+        if stg is not None and n_restore != stg["n"]:
+            problems.append(f"복구 SQL 행 수 {n_restore} != {stg['n']}")
+        print("stg_normalized_item non-null", backed_stg["n"], "md5", backed_stg["f"], "| restore rows", n_restore)
+    else:
+        print("stg_normalized_item: 컬럼 없음(2026-11-03 삭제) — 지문·복구 SQL 생략")
     print("catalog: views", len(cat["views"]), "functions", len(cat["functions"]), "constraints", len(cat["constraints"]),
           "indexes", len(cat["indexes"]), "triggers", len(cat["triggers"]), "sequences", len(cat["sequences"]))
     print("VERIFY", "OK" if not problems else "FAIL", *problems, sep="\n  " if problems else " ")
@@ -239,8 +255,10 @@ if __name__ == "__main__":
     a = ap.parse_args()
     if a.rebuild_restore:
         d = json.loads((a.rebuild_restore / "postgres_db_pipeline.json").read_text(encoding="utf-8"))
+        if STG_FP_KEY not in d["fingerprints"]:
+            sys.exit("이 백업에는 정제본 컬럼이 없어 복구 SQL을 만들 수 없습니다")
         (a.rebuild_restore / "restore_stg_normalized_item.sql").write_text(
-            restore_stg_sql(d["tables"]["card_extr_stg"]["rows"], d["fingerprints"]["card_extr_stg.stg_normalized_item"]), encoding="utf-8", newline="\n")
+            restore_stg_sql(d["tables"]["card_extr_stg"]["rows"], d["fingerprints"][STG_FP_KEY]), encoding="utf-8", newline="\n")
         sys.exit(0)
     target = a.verify or export(BACKUP_ROOT / f"pre_calc_cleanup_{datetime.datetime.now():%Y%m%d_%H%M%S}")
     sys.exit(0 if verify(target) else 1)
