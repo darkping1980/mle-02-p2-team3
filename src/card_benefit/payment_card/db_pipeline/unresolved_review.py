@@ -2,6 +2,20 @@
 
 The registry is append-only curation data, separate from card_ai_call and
 card_extr_stg. Only APPROVED links can contribute LIMIT evidence at registration.
+
+[한국어 요약] LLM 응답의 ``unresolved`` (판단 보류 문구)에 대해 사람이 내린 검토 결과를 JSON 파일
+(``data/review/unresolved_links.json``)에서 읽어 등록 후보에 붙이는 모듈이다. DB에 쓰지 않는다.
+
+사용 위치 (3단계 등록)
+    CommonBenefitRepository.attach_normalized → load_registry / verified_reviews_for_run / links_for_candidate
+    ProductBenefitService._register → 검토 상태로 등록 차단 여부 판단
+    ProductBenefitService._materialize_reviewed_evidence → validate_review_sources(인용 위치 재확인)
+
+등록에 미치는 효과 (ProductBenefitService 기준. CommonBenefitService는 검토 연결을 붙이기만 하고 판정에 쓰지 않는다)
+    APPROVED                             : 검토 근거를 LIMIT 근거로 추가하고 등록 진행
+    PENDING_REVIEW + PENDING_SCOPE_NOTE   : 등록은 진행, 미해결 범위 메모를 한도 TEXT에 남김
+    그 밖(PENDING_REVIEW + BLOCK, REJECTED): 연결된 혜택을 REVIEW로 두고 등록하지 않음
+검토 기록이 가리키는 unresolved 항목이 현재 응답에 모두 남아 있지 않으면 APPROVED도 PENDING_REVIEW로 낮춘다.
 """
 from __future__ import annotations
 
@@ -20,6 +34,11 @@ PENDING_SCOPE_NOTE = "PENDING_SCOPE_NOTE"
 
 
 def load_registry(path: Path = REGISTRY_PATH) -> list[dict[str, Any]]:
+    """검토 기록 JSON을 읽고 형식(version=1, 상태값, 필수 키, 승인 근거)을 검증해 reviews 목록을 반환한다.
+
+    Raises:
+        ValueError: 형식이 맞지 않는 경우. 파일이 없으면 FileNotFoundError가 그대로 전파된다.
+    """
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("version") != 1 or not isinstance(data.get("reviews"), list):
         raise ValueError("unresolved review registry version/shape is invalid")

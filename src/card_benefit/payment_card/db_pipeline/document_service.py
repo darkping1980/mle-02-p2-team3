@@ -386,7 +386,8 @@ class DocumentService:
         """
         chunks: list[DocChunk] = []
         for page in pages:
-            # OCR_REVIEW 페이지의 청크는 EXCLUDED로 만들어 LLM 입력에서 뺀다(사람 확인 후 approve_review_page로 RAW 전환).
+            # OCR_REVIEW 페이지의 청크는 EXCLUDED로 만들어 LLM 입력에서 뺀다.
+            # 사람 확인 후 RAW로 되돌리는 SQL은 DocRepository.approve_review_page이며, 현재 이 저장소에 Python 호출처는 없다.
             if page.text.strip():
                 chunks.extend(page_chunks(page.page_no, page.text, len(chunks) + 1, self.split_rule,
                                           "EXCLUDED" if page.in_review else "RAW"))

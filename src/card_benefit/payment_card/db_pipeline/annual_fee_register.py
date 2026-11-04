@@ -6,6 +6,25 @@
 
 실행(저장소 루트):  .venv/Scripts/python -m card_benefit.payment_card.db_pipeline.annual_fee_register [--apply]
 --apply 없이는 계획만 출력한다. 이미 같은 item_cd가 있으면 건너뛴다(덮어쓰지 않음).
+
+[등록 파이프라인에서의 위치] 3단계 중 연회비 등록. 주의: 연회비는 LLM 추출(2단계)을 거치지 않는다.
+    금액·구분은 사람이 원문 표를 읽어 SEED 상수에 적은 값이고, 이 스크립트는 1단계에서 등록된 청크 원문으로
+    인용 위치만 다시 확인한다. 새 카드의 연회비를 넣으려면 SEED를 직접 추가해야 한다.
+
+처리 흐름 (``register``, 하나의 DB 연결·트랜잭션)
+    SEED 항목마다:
+    1. item_cd = "ANNUAL_FEE@{card_doc_id}" 로 기존 card_product_item 조회
+    2. ``build`` : card_product·card_doc_chunk 조회, 인용문이 청크에 정확히 1번 있는지 확인해 위치 계산,
+                   brand_opt_list로 브랜드 옵션 연결(없으면 줄 상태 REVIEW). 기존 행이 있어도 build는 실행된다.
+    3. 기존 행이 있으면 UNCHANGED(중복 방지, 덮어쓰지 않음), --apply가 아니면 PLAN만 기록
+    4. card_product_item INSERT(item_type_cd='ANNUAL_FEE', item_data=JSONB fee_lines) → PK 발급
+    5. 인용마다 card_source_evidence INSERT → card_evidence_link INSERT(ev_subject_cd='ITEM', SELF 또는 FEE_LINE 줄 key)
+    6. same_fact_item_ref가 있는 줄은 기존 BENEFIT 항목의 item_data를 새 JSON(same_fact)으로 UPDATE해 서로 가리키게 함
+       (item_data 컬럼 값 전체를 jsonb_build_object 결과로 바꾼다)
+    ``main`` 에서 --apply면 commit, 아니면 rollback한다(조회만 했으므로 rollback해도 변경 없음).
+
+DB 접근 방식: 다른 모듈과 달리 PostgresDbSession·SQL mapper를 쓰지 않고 psycopg로 직접 SQL을 실행한다.
+관련 테이블: card_product, card_doc_chunk, card_product_item, card_source_evidence, card_evidence_link
 """
 from __future__ import annotations
 
@@ -88,6 +107,14 @@ def brand_options(product, wanted):
 
 
 def build(cur, seed):
+    """SEED 1건을 등록 형태로 만든다. 조회만 하고 DB를 바꾸지 않는다.
+
+    Returns:
+        (상품 행, 위치가 채워진 인용 목록, item_data JSON, item_rule_txt)
+
+    Raises:
+        ValueError: 상품·청크가 없거나 인용문이 청크에 없거나 2번 이상 나와 위치를 하나로 정할 수 없는 경우.
+    """
     product = cur.execute("SELECT card_id, product_nm, brand_opt_list FROM db_pipeline.card_product WHERE card_id=%s",
                           (seed["card_id"],)).fetchone()
     chunk = cur.execute("""SELECT chunk_raw_txt FROM db_pipeline.card_doc_chunk
@@ -118,6 +145,11 @@ def build(cur, seed):
 
 
 def register(conn, apply: bool):
+    """SEED 전체를 처리하고 항목별 결과(UNCHANGED / PLAN / INSERTED)를 반환한다.
+
+    commit/rollback은 하지 않는다. 호출자(main)가 conn에서 결정한다. 중간에 예외가 나면 main의
+    ``with psycopg.connect(...)`` 블록이 예외로 끝나 commit되지 않는다.
+    """
     report = []
     with conn.cursor(row_factory=dict_row) as cur:
         for seed in SEED:
@@ -133,6 +165,7 @@ def register(conn, apply: bool):
             if not apply:
                 report.append({**entry, "status": "PLAN", "quotes": len(quotes)})
                 continue
+            # 연회비 항목 INSERT → card_product_item_id(PK)를 돌려받아 아래 근거 연결의 FK 값으로 쓴다.
             item_id = cur.execute("""
                 INSERT INTO db_pipeline.card_product_item (card_id, item_type_cd, item_cd, item_nm, item_data, item_rule_txt,
                        create_user_id, update_user_id)
@@ -173,6 +206,7 @@ def register(conn, apply: bool):
 
 
 def main():
+    """.env의 DB_URL로 접속해 register를 실행하고, --apply면 commit, 아니면 rollback한 뒤 결과를 JSON으로 출력한다."""
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true")

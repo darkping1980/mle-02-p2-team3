@@ -2,6 +2,9 @@
 
 호출자는 동일 트랜잭션에서 대상 행과 근거를 잠그고 상위키·중복 검사를 수행해야 한다.
 이 함수의 결과만으로 승인이나 업무 등록을 수행해서는 안 된다.
+
+호출하는 곳: common_auto_pipeline.PostgresCommonApproval.process (판정 결과로 card_extr_stg.stg_status를 UPDATE).
+상품설명서 등록(ProductBenefitService)은 이 정책을 쓰지 않는다.
 """
 from __future__ import annotations
 
@@ -22,6 +25,9 @@ def check_auto_approval(candidate: dict, evidence: list[dict], *,
 
     ``candidate`` 는 ``CommonBenefitRepository.attach_normalized`` 가 붙인 normalized·source_cnt·conflicts·check_cd를 가진다.
     저장된 검증 코드 OK는 값 검증 OK와 대상 연결 TEXT_CONFIRMED가 모두 통과했고 계약 오류가 없다는 뜻이다(sql_check_code).
+
+    Returns:
+        ApprovalDecision. 사유(reasons)가 하나도 없을 때만 eligible=True다.
     """
     reasons = []
     norm = candidate.get("normalized") or {}

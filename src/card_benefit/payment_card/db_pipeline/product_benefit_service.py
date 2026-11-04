@@ -1,7 +1,28 @@
-"""상품설명서 추출 후보를 ``card_bnft`` 에 등록한다.
+"""상품설명서 추출 후보를 카드 혜택으로 등록한다.
+
+저장 테이블은 ``card_product_item`` (item_type_cd='BENEFIT')이다. 2026-11-04 전환 이전 이름이 ``card_bnft`` 라서
+코드·결과 필드에는 ``card_bnft_id`` / ``bnft_cd`` 이름이 남아 있다(SQL에서 card_product_item_id·item_cd를 별칭으로 돌려준다).
 
 검토 전 상태인 PENDING_REVIEW로만 등록하고 승인하지 않는다. 같은 혜택 코드가 있으면 수정하지 않는다.
 검색 텍스트와 임베딩은 등록을 커밋한 뒤 ``EmbeddingService.embed_new`` 가 처리하므로, 실패해도 등록은 남는다.
+
+[등록 파이프라인에서의 위치] 3단계(상품설명서). 입력은 2단계가 남긴 card_extr_stg 대표 행이다.
+
+처리 흐름 (``register_run``, 전체가 1트랜잭션)
+    1. 정합성 위반 기준선(v_card_integrity_issue) 조회 → card_product 행 잠금(SELECT ... FOR UPDATE)
+    2. list_product_candidates: 해당 실행·카드의 대표 혜택 후보(상위 행 없음, 검증 코드 있음)
+    3. attach_normalized: 추출 원본에서 등록 형태(normalized)를 다시 만들고 사람 검토 기록(unresolved_links.json)을 붙임
+    4. 후보마다 ``_register``: 판정 → (통과 시) 검토 근거 추가 → card_product_item INSERT → card_evidence_link INSERT
+    5. 정합성 위반이 새로 생겼으면 ValueError → 전체 rollback, 아니면 commit
+    6. (커밋 후) 새로 INSERT한 항목만 임베딩
+
+중복 등록 방지: find_benefit로 (card_id, item_cd) 존재 확인 → 있으면 UNCHANGED.
+               INSERT도 ``ON CONFLICT (card_id,item_cd) DO NOTHING`` 이라 동시 실행 시 빈 결과 → 예외로 rollback.
+식별자: item_cd(bnft_cd)는 extraction_service.make_item_key("BNFT", 혜택명)가 만든 해시 코드,
+       card_product_item_id(PK)는 DB가 발급한다.
+
+관련 테이블: card_product, card_extr_stg, card_source_evidence, card_doc_chunk, card_product_item, card_evidence_link
+SQL: common_benefit_repository.sql (CommonBenefitRepository 경유)
 """
 from __future__ import annotations
 
@@ -27,16 +48,33 @@ class ProductDecision:
 
 
 class ProductBenefitService:
+    """상품설명서 추출 후보 → 카드 혜택(card_product_item BENEFIT) 등록 서비스. 호출: benefit_main product."""
+
     def __init__(self, session, embedding_service=None):
         self.session = session
         self.repo = CommonBenefitRepository(session)
         self.embedding_service = embedding_service
 
     def register_run(self, card_id: int, run_id: str, *, exclude_stg_ids: set[str] | None = None) -> list[ProductDecision]:
-        """실행의 혜택 후보를 등록한다. 정합성 위반이 새로 생기면 전체를 되돌린다."""
+        """실행의 혜택 후보를 등록한다. 정합성 위반이 새로 생기면 전체를 되돌린다.
+
+        Args:
+            card_id: 등록 대상 card_product.card_id.
+            run_id: 2단계 추출 실행 card_ai_run_id.
+            exclude_stg_ids: 명시적으로 제외할 card_extr_stg_id. 원본 추출 행은 바꾸지 않는다.
+
+        Returns:
+            후보별 ProductDecision(INSERTED / UNCHANGED / REVIEW / EXCLUDED).
+
+        Raises:
+            ValueError: 카드가 없거나, 신규 정합성 위반, 동시 등록 충돌. 모두 트랜잭션 전체 rollback.
+        """
         results = []
+        # 트랜잭션 시작: 이 블록 안의 모든 INSERT(혜택·근거·근거 연결)가 한 번에 commit 또는 rollback된다.
         with self.session.transaction():
+            # 등록 전 정합성 위반 목록을 기준선으로 저장한다. 끝에서 새로 생긴 위반만 비교한다.
             before = self._errors()
+            # 카드 행 잠금(FOR UPDATE): 같은 카드에 대한 동시 등록을 직렬화한다.
             if not self.repo.one('lock_card', CARD_ID=card_id):
                 raise ValueError('카드가 없습니다')
             rows = self.repo.rows('list_product_candidates', RUN_ID=run_id, CARD_ID=card_id)
@@ -50,12 +88,14 @@ class ProductBenefitService:
             new = self._errors() - before
             if new:
                 raise ValueError('신규 정합성 위반으로 트랜잭션을 롤백합니다: ' + ', '.join(sorted({g for g, _ in new})))
+        # 트랜잭션 종료(commit) 후: 새로 등록한 항목만 임베딩한다. 여기서 실패해도 등록은 이미 커밋되어 있다.
         inserted = [item.card_bnft_id for item in results if item.status == 'INSERTED']
         if inserted and self.embedding_service is not None:
             self.embedding_service.embed_new('card_bnft', inserted)
         return results
 
     def _errors(self):
+        """v_card_integrity_issue의 현재 위반을 (gate_cd, issue_key) 개수로 센다. 등록 전후 차이 비교용."""
         return Counter((r['gate_cd'], r['issue_key']) for r in self.repo.rows('integrity_errors'))
 
     def unresolved_review_queue(self, run_id: str) -> list[dict]:
@@ -63,6 +103,19 @@ class ProductBenefitService:
         return self.repo.unresolved_review_queue(run_id)
 
     def _register(self, card_id, candidate, evidence) -> ProductDecision:
+        """후보 1건을 판정하고, 모든 조건을 통과하면 등록한다. 호출자(register_run)의 트랜잭션 안에서 실행된다.
+
+        판정 순서(앞에서 걸리면 INSERT 없이 판정만 반환):
+            등록 형태 재생성 실패 → 미완료 사람 검토 → 이미 등록(UNCHANGED) → 제외 상태(EXCLUDED)
+            → 검증 코드가 OK·LINK_REVIEW 아님 → 공통서비스 후보 → 혜택 간 관계 있음 → 규칙 없음/DRAFT 아님
+            → 검토 근거 추가 실패 → 근거 연결(_links) 실패
+        통과 시 DB 변경:
+            (검토 근거가 있으면) card_source_evidence INSERT → card_product_item INSERT(PENDING_REVIEW)
+            → card_evidence_link INSERT(혜택 근거 ev_subject_cd='BNFT', 규칙 근거 'RULE')
+
+        Args:
+            evidence: candidate_evidence SQL 결과. 근거 위치로 잘라낸 원문(source_txt)을 포함한다.
+        """
         stg_id = candidate['card_extr_stg_id']
         def review(reason, status='REVIEW'):
             return ProductDecision(card_id, stg_id, status, reason)
@@ -77,6 +130,7 @@ class ProductBenefitService:
         if blocking_links:
             return review('연결된 미해결 항목의 사람 검토가 완료되지 않았습니다')
         code = norm.get('bnft_cd')
+        # 중복 등록 방지: 같은 카드에 같은 item_cd가 있으면 기존 행을 수정하지 않는다.
         existing = self.repo.one('find_benefit', CARD_ID=card_id, BNFT_CD=code)
         if existing:
             return ProductDecision(card_id, stg_id, 'UNCHANGED', '등록된 혜택은 수정하지 않습니다', code, existing['card_bnft_id'])
@@ -113,13 +167,17 @@ class ProductBenefitService:
         all_notes = list(dict.fromkeys([*limit_notes, *pending_notes]))
         if all_notes:
             limit_txt = ' / '.join(item for item in (limit_txt, ' / '.join(all_notes)) if item)
+        # card_product_item INSERT. 조건식·규칙은 JSONB, 혜택 내용·한도는 원문 인용을 이어 붙인 TEXT다.
         inserted = self.repo.write(
             'insert_local_benefit', CARD_ID=card_id, BNFT_CD=code, BNFT_NM=norm['bnft_nm'], BNFT_TYPE=norm['bnft_type_cd'],
             COND=Jsonb(bnft_cond) if bnft_cond is not None else None, RULES=Jsonb(rules),
             RULE_TXT=quote_text(evidence_items, 'RULE'), LIMIT_TXT=limit_txt)
+        # ON CONFLICT DO NOTHING으로 빈 결과면 위 find_benefit 이후 다른 실행이 먼저 넣은 것이다.
         if not inserted:
             raise ValueError('동시 등록 충돌: 전체 트랜잭션을 롤백합니다')
+        # DB가 발급한 card_product_item_id(SQL 별칭 card_bnft_id)를 근거 연결의 FK 값으로 쓴다.
         benefit_id = inserted[0]['card_bnft_id']
+        # key=None이면 혜택 전체 근거(BNFT), 값이 있으면 그 rule_key의 규칙 근거(RULE)다.
         for key, evidence_id in links:
             if key is None:
                 self.repo.write('insert_evidence_link', CARD_ID=card_id, BNFT_ID=benefit_id, EVIDENCE_ID=evidence_id)
@@ -128,7 +186,15 @@ class ProductBenefitService:
         return ProductDecision(card_id, stg_id, 'INSERTED', '검토 대기', code, benefit_id)
 
     def _materialize_reviewed_evidence(self, candidate, raw, evidence, reviewed_links):
-        """Append approved, exact-position source evidence without rewriting extraction history."""
+        """Append approved, exact-position source evidence without rewriting extraction history.
+
+        사람 검토에서 APPROVED된 미해결 연결(unresolved_links.json)의 인용을 원문 청크에서 다시 찾아
+        card_source_evidence에 PENDING으로 INSERT하고, 메모리의 raw·evidence 목록에 LIMIT 근거로 추가한다.
+        card_extr_stg 원본 행은 바꾸지 않는다. 인용 위치를 못 찾으면 ValueError(호출자가 REVIEW로 바꾼다).
+
+        Returns:
+            (근거가 추가된 raw, 추가된 evidence 목록, 한도 범위 메모 목록)
+        """
         if not reviewed_links:
             return raw, evidence, []
         document_id = candidate.get('card_doc_id')
@@ -185,7 +251,14 @@ class ProductBenefitService:
         return augmented_raw, augmented_evidence, notes
 
     def _materialize_pending_scope_evidence(self, candidate, raw, evidence, pending_links):
-        """Preserve unresolved applicability as pending evidence without claiming it applies."""
+        """Preserve unresolved applicability as pending evidence without claiming it applies.
+
+        registration_effect=PENDING_SCOPE_NOTE인 검토 대기 항목은 등록을 막지 않는 대신, 인용을
+        card_source_evidence(PENDING)로 저장하고 supports='UNRESOLVED_SCOPE'로 표시해 한도 TEXT에 메모만 남긴다.
+
+        Returns:
+            (근거가 추가된 raw, 추가된 evidence 목록, 미해결 범위 메모 목록)
+        """
         if not pending_links:
             return raw, evidence, []
         document_id = candidate.get('card_doc_id')
@@ -240,7 +313,14 @@ class ProductBenefitService:
 
     @staticmethod
     def _links(raw, rules, evidence):
-        """원문 인용을 혜택·규칙 근거로 연결한다. 위치가 확인된 인용만 연결한다."""
+        """원문 인용을 혜택·규칙 근거로 연결한다. 위치가 확인된 인용만 연결한다.
+
+        LLM 원본(raw['evidence'])의 인용마다 DB 근거(evidence) 중 위치가 있고 원문과 글자가 같은 행을 찾는다.
+
+        Returns:
+            ``([(rule_key 또는 None, evidence_id), ...], None)`` 또는 실패 시 ``([], 검토 사유)``.
+            혜택 근거(None)가 1건 이상이고 모든 rule_key에 근거가 있어야 성공이다.
+        """
         located = [e for e in evidence if e['start_pos'] is not None and e['end_pos'] is not None
                    and e.get('source_txt') is not None and compact(e['source_txt']) == compact(e['quote_txt'])]
         rule_keys = {rule['rule_key'] for rule in rules}

@@ -1,4 +1,15 @@
 """기존 공통서비스 문서 1건의 추출·승인 판정·혜택 등록 CLI."""
+# 주의: 위 모듈 docstring은 main()의 argparse description(--help 출력)으로 쓰이므로 내용을 바꾸지 않았다.
+#
+# [등록 파이프라인에서의 위치] 이미 1단계로 등록되고 card_common_doc에 연결된 BRAND_SERVICE 문서에 대해
+# 2단계(LLM 추출)와 3단계(공통 혜택 등록)를 CommonAutoPipeline으로 이어서 실행한다.
+#
+# 처리 순서(--execute일 때만 DB·API 접속)
+#     1. RegisterService.register(apply=False)로 ALREADY_REGISTERED·BRAND_SERVICE인지 확인(신규 문서는 거부)
+#     2. 연결된 공통서비스가 정확히 1개인지 확인
+#     3. AI 입력 청크 수 × 최대 추정 비용 + 기존 사용액이 예산 이내인지 확인
+#     4. TerraClient(OpenAI) 생성 → CommonAutoPipeline.run → 결과 JSON 출력
+# 종료 코드: 0 정상(REVIEW 포함), 1 파이프라인 ERROR, 2 인자 오류. 사전 확인의 ValueError는 잡지 않는다.
 from __future__ import annotations
 
 import argparse

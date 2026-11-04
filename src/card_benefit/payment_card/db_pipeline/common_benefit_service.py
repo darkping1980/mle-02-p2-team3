@@ -4,6 +4,33 @@
 브랜드·등급·선택서비스와 원문 근거를 확인한 카드만 ``card_common_bnft_apply`` 에 기록한다.
 식별자는 호출자가 근거를 검토해 제공한다. 자동 승인은 하지 않는다.
 혜택 설명과 한도는 원문 인용만 모아 TEXT로 저장한다. 금액을 계산하거나 원문에 없는 표현을 만들지 않는다.
+(``card_bnft`` 는 2026-11-04에 ``card_product_item`` 으로 전환되었다. SQL find_benefit은 card_product_item을 읽는다.)
+
+[등록 파이프라인에서의 위치] 3단계(브랜드 공통 안내서, doc_type_cd='BRAND_SERVICE').
+    1단계 RegisterService._link도 이 모듈의 ensure_common / link_doc으로 공통서비스·문서 연결을 만든다.
+
+처리 흐름
+    register_run(run_id, identities)   [1트랜잭션]
+        정합성 기준선 → candidates(list_candidates + attach_normalized) → 후보마다 _register_candidate
+        → 신규 정합성 위반이면 rollback → (커밋 후) 임베딩
+        _register_candidate: 판정 → common_of_doc(문서의 공통서비스 1개) → 브랜드·등급·선택서비스·기간 확인
+            → benefit_code(문서 계열 + 검토 식별자)로 bnft_cd 생성 → 근거 확인(_evidence_ids)
+            → card_common 잠금 → 기존 행 없음: INSERT / 같음: UNCHANGED / 이전 판에서 왔음: UPDATE / 그 외: CHANGE_REVIEW
+    apply_run(card_id, run_id, identities)   [카드마다 1트랜잭션]
+        card_product 잠금 → 후보마다 _apply_candidate: 대상·제외 카드, 브랜드·등급·선택서비스 옵션, 기간 근거 확인
+        → 이미 등록된 card_common_bnft를 찾아 card_common_bnft_apply INSERT(ON CONFLICT DO NOTHING)
+
+식별자와 중복 방지
+    bnft_cd = "BRAND_" + SHA-256(doc_family_cd + "\\0" + 검토 식별자). 문서 버전·혜택명은 쓰지 않으므로
+    개정판 문서에서도 같은 혜택은 같은 코드가 된다. (card_common_id, bnft_cd)가 같으면 새로 INSERT하지 않는다.
+    card_common_bnft_id(PK)는 DB가 발급한다. 물리 FK 대신 v_card_integrity_issue·common_integrity_errors로
+    등록 전후 정합성 위반 증가를 검사한다.
+
+관련 테이블: card_common, card_common_doc, card_common_bnft, card_common_bnft_apply, card_product, card_product_doc,
+            card_extr_stg, card_source_evidence, card_evidence_link(상품 근거 조회), card_product_item(동일 코드 확인)
+SQL: common_benefit_repository.sql
+호출하는 곳: benefit_main.py, register_service.py, common_auto_pipeline.py, product_benefit_service.py(Repository·함수),
+            neo4j_dry_run.py(compare_brand_bnft), 그리고 GraphRAG 검색 코드(db_pipeline_origin_search)도 import한다.
 """
 from __future__ import annotations
 
@@ -20,7 +47,9 @@ from .extraction_service import normalize_stored_run
 from .unresolved_review import load_registry, links_for_candidate, unresolved_queue, verified_reviews_for_run
 
 
+# region 문자열 비교·코드 생성·기간 해석 도우미 (DB 미사용)
 def compact(value: str) -> str:
+    """대소문자(casefold)와 공백을 무시하고 비교하기 위한 키."""
     return "".join(value.casefold().split())
 
 
@@ -46,6 +75,13 @@ def quote_text(evidence: list[dict], supports: str) -> str | None:
 
 
 def period(raw: str | None):
+    """``YYYY년 M월 D일 ~ (YYYY년) M월 D일`` 형식의 제공 기간을 ``(시작일, 종료일+1일)`` 로 해석한다.
+
+    종료일은 포함 기준이라 다음 날을 배타 종료(bnft_valid_to_excl)로 돌려준다. 값이 없으면 ``(None, None)``.
+
+    Raises:
+        ValueError: 형식이 다르거나 종료가 시작보다 앞선 경우.
+    """
     if raw is None or not raw.strip():
         return None, None
     # 끝의 "까지"는 종료일을 포함한다는 뜻이라 해석에 영향이 없다.
@@ -119,6 +155,7 @@ def common_texts(raw: dict, norm: dict) -> tuple[str | None, str | None]:
     rule_txt = quote_text(evidence, "RULE") or quote_text(evidence, "BNFT")
     limits = [quote_text(evidence, "LIMIT"), *condition_quotes(norm)]
     return rule_txt, " / ".join(dict.fromkeys(item for item in limits if item)) or None
+# endregion
 
 
 @dataclass(frozen=True)
@@ -163,18 +200,26 @@ def compare_brand_bnft(row: dict) -> tuple[str, list[str]]:
     return ('REVIEW', issues) if issues else ('SAME', [])
 
 
+# region Repository (common_benefit_repository.sql 호출)
 class CommonBenefitRepository:
-    """기존 세션과 mapper를 이용한다. 연결과 트랜잭션은 호출자가 관리한다."""
+    """기존 세션과 mapper를 이용한다. 연결과 트랜잭션은 호출자가 관리한다.
+
+    ``rows/one/write('쿼리이름', 파라미터=값)`` 은 ``common_benefit_repository.쿼리이름`` 을 실행하는 얇은 래퍼다.
+    ProductBenefitService도 이 Repository를 그대로 쓴다.
+    """
     def __init__(self, session):
         self.session = session
 
     def rows(self, name, **params):
+        """SELECT 결과 전체(list[dict])."""
         return self.session.select_list('common_benefit_repository.' + name, params)
 
     def one(self, name, **params):
+        """SELECT 결과 1행(dict) 또는 None. ``FOR UPDATE`` 잠금 쿼리(lock_card·lock_common)도 이것으로 실행한다."""
         return self.session.select_one('common_benefit_repository.' + name, params)
 
     def write(self, name, **params):
+        """INSERT/UPDATE 실행. ``RETURNING`` 행 목록을 돌려주며, ON CONFLICT DO NOTHING으로 건너뛰면 빈 목록이다."""
         return self.session.execute('common_benefit_repository.' + name, params) or []
 
     def stored_run(self, run_id: str) -> dict | None:
@@ -208,8 +253,10 @@ class CommonBenefitRepository:
     def unresolved_review_queue(self, run_id: str) -> list[dict]:
         """Read unresolved entries from immutable call responses and join separate review decisions."""
         return unresolved_queue(self.rows('list_unresolved_review_items', RUN_ID=run_id), load_registry())
+# endregion
 
 
+# region Service (공통 혜택 등록·카드 적용)
 class CommonBenefitService:
     """공통 혜택 등록과 카드 적용을 나눠 처리한다. 상태 승격과 기존 혜택 삭제는 하지 않는다."""
     def __init__(self, session, user_id='SYSTEM', embedding_service=None):
@@ -243,7 +290,17 @@ class CommonBenefitService:
             return row['card_id']
 
     def ensure_common(self, common: dict) -> int:
-        """공통서비스를 등록한다. 코드가 같으면 입력 정보도 일치해야 한다."""
+        """공통서비스를 등록한다. 코드가 같으면 입력 정보도 일치해야 한다.
+
+        card_common INSERT(ON CONFLICT (common_cd) DO NOTHING) 후 다시 조회해 이름·브랜드·등급이 입력과 같은지 확인한다.
+        트랜잭션을 직접 열지 않는다(호출자 RegisterService._link의 트랜잭션 안에서 실행).
+
+        Returns:
+            card_common_id.
+
+        Raises:
+            ValueError: 같은 common_cd의 기존 행이 입력과 다른 경우.
+        """
         self.repo.write('insert_common', COMMON_CD=common['common_cd'], COMMON_NM=common['common_nm'],
                         BRAND_CD=common.get('brand_cd'), SERVICE_GRADE_CD=common.get('service_grade_cd'),
                         COMMON_NOTE=common.get('common_note'), USER_ID=self.user_id)
@@ -260,14 +317,24 @@ class CommonBenefitService:
         self.repo.write('insert_common_doc', COMMON_ID=common_id, DOC_ID=card_doc_id)
 
     def register_run(self, run_id: str, identities: dict) -> list[Decision]:
-        """추출 실행의 후보를 공통 혜택으로 등록한다. 카드 적용은 ``apply_run`` 이 따로 판단한다."""
+        """추출 실행의 후보를 공통 혜택으로 등록한다. 카드 적용은 ``apply_run`` 이 따로 판단한다.
+
+        Args:
+            run_id: BRAND_SERVICE 문서의 SUCCEEDED 추출 실행 ID.
+            identities: ``{card_extr_stg_id: 검토된 업무 식별자}``. 없는 후보는 REVIEW가 된다.
+
+        Returns:
+            후보별 Decision(INSERTED / UPDATED / UNCHANGED / CHANGE_REVIEW / REVIEW / EXCLUDED).
+        """
         results = []
+        # 트랜잭션 시작: 모든 후보의 INSERT/UPDATE를 한 단위로 commit/rollback한다.
         with self.session.transaction():
             before = self._integrity_errors()
             for candidate in self.candidates(run_id):
                 evidence = self.repo.rows('candidate_evidence', STG_ID=candidate['card_extr_stg_id'])
                 results.append(self._register_candidate(candidate, evidence, identities))
             self._assert_no_new_errors(before)
+        # 커밋 후 임베딩. UPDATE된 행은 SQL에서 검색 텍스트·벡터를 NULL로 비웠으므로 다시 만든다.
         changed = [item.card_common_bnft_id for item in results if item.status in ('INSERTED', 'UPDATED')]
         if changed and self.embedding_service is not None:
             self.embedding_service.embed_new('card_common_bnft', changed)
@@ -281,6 +348,7 @@ class CommonBenefitService:
         return results
 
     def register_card_and_apply(self, product: dict, identities: dict):
+        """카드 상품을 등록(register_card)한 뒤 기존 공통 문서 실행 전체에 적용 판단(path_a)을 한다."""
         card_id = self.register_card(product)
         return card_id, self.path_a(card_id, identities)
 
@@ -303,6 +371,11 @@ class CommonBenefitService:
         return registration, extraction, registered, self.path_b(extraction.card_ai_run_id, identities)
 
     def apply_run(self, card_id: int, run_id: str, identities: dict):
+        """카드 1장에 대해 실행의 공통 혜택 후보마다 적용 여부를 판단하고 card_common_bnft_apply를 기록한다.
+
+        공통 혜택(card_common_bnft)이 먼저 register_run으로 등록되어 있어야 한다(없으면 REVIEW).
+        카드마다 별도 트랜잭션이며, 신규 정합성 위반이 생기면 이 카드의 적용 기록 전체가 rollback된다.
+        """
         results = []
         # 카드 행 잠금으로 카드별 적용 판단을 직렬화한다.
         with self.session.transaction():
@@ -327,11 +400,16 @@ class CommonBenefitService:
         return results
 
     def _integrity_errors(self):
-        rows = [*self.repo.rows('integrity_errors'), *self.repo.rows('common_integrity_errors')]
+        """정합성 위반(v_card_integrity_issue + 공통서비스 전용 검사)을 (gate_cd, issue_key) 개수로 센다.
+
+        물리 FK가 없는 구조라서, 등록 전후 이 값을 비교해 새로 생긴 고아 행·잘못된 연결을 막는다.
+        """
+        rows =[*self.repo.rows('integrity_errors'), *self.repo.rows('common_integrity_errors')]
         return Counter((r['gate_cd'], r['issue_key']) for r in rows)
 
     def _assert_no_new_errors(self, before):
-        new = self._integrity_errors() - before
+        """기준선보다 늘어난 위반이 있으면 ValueError를 내서 호출자의 트랜잭션을 rollback시킨다."""
+        new =self._integrity_errors() - before
         if new:
             raise ValueError('신규 정합성 위반으로 트랜잭션을 롤백합니다: ' + ', '.join(sorted({g for g, _ in new})))
 
@@ -355,6 +433,7 @@ class CommonBenefitService:
 
     @staticmethod
     def _located(evidence) -> list[dict]:
+        """위치가 있고 승인 상태가 PENDING·APPROVED이며, 위치로 잘라낸 원문(source_txt)이 인용과 같은 근거만 남긴다."""
         return [e for e in evidence if e['start_pos'] is not None and e['end_pos'] is not None
                 and e.get('approval_status_cd') in ('PENDING', 'APPROVED')
                 and e.get('source_txt') is not None and compact(e['source_txt']) == compact(e['quote_txt'])]
@@ -408,6 +487,12 @@ class CommonBenefitService:
         return sorted({evidence_id for _, _, evidence_id in source_targets.values()}), None
 
     def _register_candidate(self, candidate, evidence, identities) -> Decision:
+        """후보 1건을 공통 혜택으로 등록·갱신하거나 검토 사유를 반환한다. register_run의 트랜잭션 안에서 실행된다.
+
+        DB 변경: card_common 잠금(FOR UPDATE) 후 card_common_bnft INSERT 또는 UPDATE.
+        Raises:
+            ValueError: 동시 등록·갱신 충돌. register_run 전체가 rollback된다.
+        """
         stg_id = candidate['card_extr_stg_id']
         def review(reason, status='REVIEW', common_id=None):
             return Decision(None, stg_id, status, reason, card_common_id=common_id)
@@ -440,9 +525,11 @@ class CommonBenefitService:
         rule_txt, limit_txt = common_texts(raw, norm)
         values = dict(BNFT_NM=norm['bnft_nm'], BNFT_TYPE=norm['bnft_type_cd'], SERVICE_TYPE=service_type,
                       RULE_TXT=rule_txt, LIMIT_TXT=limit_txt, VALID_FROM=start, VALID_TO=end, USER_ID=self.user_id)
+        # 공통서비스 행 잠금 후 같은 (card_common_id, bnft_cd)가 있는지 확인한다(중복 등록 방지).
         self.repo.one('lock_common', COMMON_ID=common_id)
         existing = self.repo.one('find_common_bnft', COMMON_ID=common_id, BNFT_CD=code)
         done = dict(bnft_cd=code, card_common_id=common_id, evidence_ids=tuple(evidence_ids))
+        # 분기: 기존 행 있음 → 같으면 UNCHANGED, 이전 판 추출값 그대로면 UPDATE, 수동 수정 가능성이 있으면 CHANGE_REVIEW.
         if existing:
             benefit_id = existing['card_common_bnft_id']
             if self._same_common(existing, values):
@@ -460,6 +547,7 @@ class CommonBenefitService:
 
     @staticmethod
     def _same_common(existing, values) -> bool:
+        """기존 card_common_bnft 행이 이번에 저장할 값과 모든 업무 컬럼에서 같은지 비교한다."""
         return (existing['bnft_nm'] == values['BNFT_NM'] and existing['bnft_type_cd'] == values['BNFT_TYPE']
                 and existing['service_type_cd'] == values['SERVICE_TYPE'] and existing['bnft_rule_txt'] == values['RULE_TXT']
                 and existing['bnft_limit_txt'] == values['LIMIT_TXT'] and existing['bnft_valid_from'] == values['VALID_FROM']
@@ -562,7 +650,9 @@ class CommonBenefitService:
         if not benefit:
             return review('공통 혜택이 먼저 등록되어야 합니다')
         benefit_id = benefit['card_common_bnft_id']
+        # 카드 적용 관계 INSERT. 이미 있으면 ON CONFLICT DO NOTHING으로 빈 결과 → UNCHANGED.
         inserted = self.repo.write('insert_common_apply', COMMON_ID=common_id, BNFT_ID=benefit_id, CARD_ID=card_id)
+        # 같은 코드의 카드별 혜택(card_product_item)이 있으면 수정하지 않고 사유에만 알린다.
         legacy = self.repo.one('find_benefit', CARD_ID=card_id, BNFT_CD=code)
         reason = '카드별 혜택에 같은 코드의 기존 행이 있습니다. brand_bnft_compare로 동일성을 확인하세요' if legacy else '검토 대기'
         return Decision(card_id, stg_id, 'INSERTED' if inserted else 'UNCHANGED', reason, code,
@@ -580,3 +670,4 @@ class CommonBenefitService:
                     and (service_type in ('NONE', 'COMMON') or service_type in re.findall(r'(?<!\d)(0[1-4])(?!\d)', quote))):
                 return quote
         return None
+# endregion

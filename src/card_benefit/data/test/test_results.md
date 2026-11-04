@@ -438,7 +438,6 @@ JADE Classic에는 Visa 컨시어지 혜택이 제공되며, Visa Signature 등�
 
 **진행 현황**: 024까지 완료. 025번은 응답 저장 전 중단되어 재호출 비용이 중복될 수 있다.
 
-<!-- started CARD50-025; if interrupted API cost may be duplicated -->
 
 ### CARD50-025
 
@@ -461,7 +460,6 @@ JADE Classic에는 Visa 컨시어지 혜택이 제공되며, Visa Signature 등�
 
 **Checkpoint:** Completed through CARD50-025; verdicts provisional.
 
-<!-- started CARD50-026; if interrupted API cost may be duplicated -->
 
 ### CARD50-026
 
@@ -482,7 +480,6 @@ JADE Classic에는 Visa 컨시어지 혜택이 제공되며, Visa Signature 등�
 
 **Reason** Original PDF and answer correctness have not been independently verified.
 
-<!-- started CARD50-027; if interrupted API cost may be duplicated -->
 
 ### CARD50-027
 
@@ -496,7 +493,6 @@ JADE Classic에는 Visa 컨시어지 혜택이 제공되며, Visa Signature 등�
 
 **Reason** Original PDF and answer correctness have not been independently verified.
 
-<!-- started CARD50-028; if interrupted API cost may be duplicated -->
 
 ### CARD50-028
 
@@ -513,7 +509,6 @@ JADE Classic에는 Visa 컨시어지 혜택이 제공되며, Visa Signature 등�
 
 **Reason** Original PDF and answer correctness have not been independently verified.
 
-<!-- started CARD50-029; if interrupted API cost may be duplicated -->
 
 ### CARD50-029
 
@@ -538,7 +533,6 @@ JADE Classic에는 Visa 컨시어지 혜택이 제공되며, Visa Signature 등�
 
 **Reason** Original PDF and answer correctness have not been independently verified.
 
-<!-- started CARD50-030; if interrupted API cost may be duplicated -->
 
 ### CARD50-030
 
@@ -566,7 +560,6 @@ STYLE은 건당 3천원 이상 결제 시 100원, 건당 1만원 이상 결제 �
 
 **Checkpoint:** Completed through CARD50-030; verdicts provisional.
 
-<!-- started CARD50-031; if interrupted API cost may be duplicated -->
 
 ### CARD50-031
 
@@ -589,7 +582,6 @@ ONE PICK은 일 1회·월 30회, 월 5천원 한도이며, 상품권·기프트�
 
 **Reason** Original PDF and answer correctness have not been independently verified.
 
-<!-- started CARD50-032; if interrupted API cost may be duplicated -->
 
 ### CARD50-032
 
@@ -611,7 +603,6 @@ ONE PICK은 일 1회·월 30회, 월 5천원 한도이며, 상품권·기프트�
 
 **Reason** Original PDF and answer correctness have not been independently verified.
 
-<!-- started CARD50-033; if interrupted API cost may be duplicated -->
 
 ### CARD50-033
 
@@ -633,7 +624,6 @@ ONE PICK은 일 1회·월 30회, 월 5천원 한도이며, 상품권·기프트�
 
 **Reason** Original PDF and answer correctness have not been independently verified.
 
-<!-- started CARD50-034; if interrupted API cost may be duplicated -->
 
 ### CARD50-034
 
@@ -660,7 +650,6 @@ STYLE 혜택은 결제 건당 3천원 이상이면 100원, 1만원 이상이면 
 
 **Reason** Original PDF and answer correctness have not been independently verified.
 
-<!-- started CARD50-035; if interrupted API cost may be duplicated -->
 
 ### CARD50-035
 
@@ -685,7 +674,6 @@ ONE PICK STYLE은 하루 1회, 월 10회까지이며 지난달 실적 조건은 
 
 **Checkpoint:** Completed through CARD50-035; verdicts provisional.
 
-<!-- started CARD50-036; if interrupted API cost may be duplicated -->
 
 ### CARD50-036
 
@@ -712,7 +700,6 @@ ONE PICK STYLE은 하루 1회, 월 10회까지이며 지난달 실적 조건은 
 
 **Reason** Original PDF and answer correctness have not been independently verified.
 
-<!-- started CARD50-037; if interrupted API cost may be duplicated -->
 
 ### CARD50-037
 
@@ -726,7 +713,6 @@ ONE PICK STYLE은 하루 1회, 월 10회까지이며 지난달 실적 조건은 
 
 **Reason** Original PDF and answer correctness have not been independently verified.
 
-<!-- started CARD50-038; if interrupted API cost may be duplicated -->
 
 ### CARD50-038
 
@@ -762,7 +748,6 @@ SHOPPING은 SK주유소·GS칼텍스·S-OIL·HD현대오일뱅크에서 주말 �
 
 **Reason** Original PDF and answer correctness have not been independently verified.
 
-<!-- started CARD50-039; if interrupted API cost may be duplicated -->
 
 ### CARD50-039
 
@@ -787,7 +772,6 @@ ONE PICK STYLE은 결제 건당 3천원 이상이면 100원, 1만원 이상이�
 
 **Reason** Original PDF and answer correctness have not been independently verified.
 
-<!-- started CARD50-040; if interrupted API cost may be duplicated -->
 
 ### CARD50-040
 
@@ -816,7 +800,6 @@ ONE PICK STYLE 하나 체크카드는 다이소·올리브영·서점·문구·�
 
 **Checkpoint:** Completed through CARD50-040; verdicts provisional.
 
-<!-- started CARD50-041; if interrupted API cost may be duplicated -->
 
 ### CARD50-041
 
@@ -839,7 +822,6 @@ STYLE 쇼핑·서점/문구·패션 캐시백은 결제 건당 3천원 이상 �
 
 **Reason** Original PDF and answer correctness have not been independently verified.
 
-<!-- started CARD50-042; if interrupted API cost may be duplicated -->
 
 ### CARD50-042
 
@@ -865,7 +847,6 @@ STYLE 쇼핑·서점/문구·패션 캐시백은 결제 건당 3천원 이상 �
 
 **Reason** Original PDF and answer correctness have not been independently verified.
 
-<!-- started CARD50-043; if interrupted API cost may be duplicated -->
 
 ### CARD50-043
 
@@ -892,4 +873,148 @@ STYLE 쇼핑·서점/문구·패션 캐시백은 결제 건당 3천원 이상 �
 
 **Reason** Original PDF and answer correctness have not been independently verified.
 
-<!-- started CARD50-044; if interrupted API cost may be duplicated -->
+
+### CARD50-044
+
+**Question**
+전월 70만원 사용했고 이번 달 4대 PAY 온라인 쇼핑 20만원이면 우리카드 기본·추가 할인과 ONE PICK STYLE을 비교해 줘.
+
+**Actual answer**
+전월 70만원 실적 기준으로 카드의정석 SHOPPING의 온라인 쇼핑 기본 할인은 10%이며, 20만원 결제 시 계산상 2만원이지만 온라인 월 할인한도 8천원이 적용됩니다. 4대 PAY 추가할인의 금액은 검색 결과에 없어 기본 할인과 추가 할인을 합친 금액은 확인할 수 없습니다.
+
+ONE PICK STYLE은 제시된 20만원 결제만으로 혜택을 판단할 수 없고, 대상 가맹점에서 건당 3천원 이상이면 100원, 건당 1만원 이상이면 500원 캐시백 구간에 해당합니다. 두 구간이 모두 해당해 실제 적용 금액은 확정되지 않았으며, 월 5천원·일 1회·월 10회 한도입니다. STYLE 혜택은 대상 가맹점의 공식 홈페이지·앱 또는 오프라인 결제에 한하며, 배달·식당 예약 앱 결제와 대형시설 입점·임대 매장 결제 등은 제외됩니다. 온라인 쇼핑 10% 청구할인의 최초 카드 사용등록 실적 유예 적용 여부는 원문에서 확인되지 않아 미확정입니다.
+
+- 카드의정석 SHOPPING은 온라인 쇼핑 10% 청구할인 혜택을 제공합니다.
+- 전월 국내 가맹점 이용금액 70만원 이상 120만원 미만 구간의 온라인 월 할인한도는 8천원입니다.
+- 온라인 할인은 온라인 업종 통합 할인한도 내에서 적용됩니다.
+- ONE PICK STYLE은 대상 가맹점에서 결제 건당 3천원 이상이면 100원, 결제 건당 1만원 이상이면 500원 캐시백 구간입니다.
+- ONE PICK STYLE의 한도는 월 5천원, 일 1회, 월 10회입니다.
+- ONE PICK STYLE은 대상 가맹점의 공식 홈페이지·모바일 앱 및 오프라인 결제에 제공되며, 배달 앱·식당 예약 앱 주문 결제와 대형시설 입점 점포 및 임대 매장 결제 등은 제외됩니다.
+
+**Verdict** REVIEW (provisional)
+
+**Reason** Original PDF and answer correctness have not been independently verified.
+
+
+### CARD50-045
+
+**Question**
+전월 120만원, 이번 달 온라인 쇼핑 60만원을 쓴다면 우리카드와 ONE PICK STYLE의 최대 월 혜택을 비교해 줘.
+
+**Actual answer**
+STYLE 쇼핑·서점/문구·패션 캐시백의 규칙 선택 방식은 미확정입니다.
+
+카드의정석 SHOPPING 온라인 쇼핑 할인은 전월 국내 가맹점 이용금액 120만원 이상 구간에서 온라인 월 할인 한도가 1만6천원입니다. 카드의정석 SHOPPING의 온라인 쇼핑 할인은 온라인 업종에 적용됩니다. 카드의정석 SHOPPING 온라인 4대 PAY 추가할인은 온라인 쇼핑 할인과 온라인 통합 한도를 공유하며, 전월 120만원 이상 구간의 온라인 월 한도는 1만6천원입니다. 4대 간편결제 추가할인은 삼성페이·네이버페이·카카오페이·PAYCO에 카드를 등록해 온라인에서 사용해야 하며, 건당 5만원까지 할인 대상입니다. ONE PICK STYLE 대상 가맹점은 다이소, 올리브영, 교보문고, 영풍문고, 알라딘, yes24, 아트박스, 무신사, 에이블리입니다. ONE PICK STYLE은 결제 건당 3천원 이상이면 100원, 결제 건당 1만원 이상이면 500원 캐시백을 제공합니다. ONE PICK STYLE은 일 1회, 월 10회까지이며 월 한도는 5천원입니다. ONE PICK STYLE은 대상 가맹점의 공식 홈페이지·온라인/모바일 앱 또는 오프라인 결제에 적용되고, 배달 앱·식당 예약 앱 주문 결제 및 대형시설 입점·임대 매장 결제 등은 제외됩니다. 온라인 쇼핑 10% 청구할인, 온라인 업종 4대 PAY 결제 시 5% 추가할인의 최초 카드 사용등록 실적 유예 적용 여부는 원문에서 확인되지 않아 미확정입니다.
+
+- 카드의정석 SHOPPING 온라인 쇼핑 할인은 전월 국내 가맹점 이용금액 120만원 이상 구간에서 온라인 월 할인 한도가 1만6천원입니다.
+- 카드의정석 SHOPPING의 온라인 쇼핑 할인은 온라인 업종에 적용됩니다.
+- 카드의정석 SHOPPING 온라인 4대 PAY 추가할인은 온라인 쇼핑 할인과 온라인 통합 한도를 공유하며, 전월 120만원 이상 구간의 온라인 월 한도는 1만6천원입니다.
+- 4대 간편결제 추가할인은 삼성페이·네이버페이·카카오페이·PAYCO에 카드를 등록해 온라인에서 사용해야 하며, 건당 5만원까지 할인 대상입니다.
+- ONE PICK STYLE 대상 가맹점은 다이소, 올리브영, 교보문고, 영풍문고, 알라딘, yes24, 아트박스, 무신사, 에이블리입니다.
+- ONE PICK STYLE은 결제 건당 3천원 이상이면 100원, 결제 건당 1만원 이상이면 500원 캐시백을 제공합니다.
+- ONE PICK STYLE은 일 1회, 월 10회까지이며 월 한도는 5천원입니다.
+- ONE PICK STYLE은 대상 가맹점의 공식 홈페이지·온라인/모바일 앱 또는 오프라인 결제에 적용되고, 배달 앱·식당 예약 앱 주문 결제 및 대형시설 입점·임대 매장 결제 등은 제외됩니다.
+
+**Verdict** REVIEW (provisional)
+
+**Reason** Original PDF and answer correctness have not been independently verified.
+
+**Checkpoint:** Completed through CARD50-045; verdicts provisional.
+
+
+### CARD50-046
+
+**Question**
+전월 50만원, 주말 주유 30리터와 커피 3만원을 사용하는 고객에게 세 상품의 관련 혜택을 비교해 줘.
+
+**Actual answer**
+주말 주유는 카드의정석 SHOPPING의 ‘4대 주유소 주말 주유 청구할인’이 리터당 60원이고, 같은 카드의 ‘주유 Two-in-One 결제서비스 캐시백’은 Two-in-One 결제서비스(체크매출) 이용 시 0.3% 캐시백입니다. 커피 3만원은 ONE PICK STYLE 하나 체크카드의 ‘ONE PICK 편의점·카페 캐시백’ 대상 가맹점에서 결제했다면 금액 구간 두 가지에 모두 해당하지만, 어느 금액이 적용되는지는 확정되지 않았습니다.
+
+주유 할인은 SK주유소·GS칼텍스·S-OIL·HD현대오일뱅크 대상이며, 주유 매출 건당 10만원 및 통합 월 30만원 한도가 있고 LPG는 제외됩니다. 주유 Two-in-One 캐시백의 이용 조건은 Two-in-One 결제서비스(체크매출) 이용입니다. 커피 캐시백은 결제 건당 3천원 이상이면 100원, 1만원 이상이면 500원이며 일 1회·월 30회, 월 5천원 한도입니다. 대상 가맹점의 공식 홈페이지·앱 또는 오프라인 결제만 해당하고, 배달·예약 앱 결제 및 대형시설 입점·임대 매장은 제외됩니다. 4대 주유소 주말 주유 청구할인의 최초 카드 사용등록 실적 유예 적용 여부는 원문에서 확인되지 않아 미확정입니다.
+
+- ‘4대 주유소 주말 주유 청구할인’은 주말 4대 주유소 주유 시 리터당 60원 청구할인입니다.
+- 주유 할인은 주유 매출 건당 10만원, 통합 월 30만원 한도이며 LPG는 할인 대상에서 제외됩니다.
+- ‘주유 Two-in-One 결제서비스 캐시백’은 Two-in-One 결제서비스(체크매출) 이용 시 0.3% 캐시백을 제공합니다.
+- ‘ONE PICK 편의점·카페 캐시백’은 결제 건당 3천원 이상 시 100원, 결제 건당 1만원 이상 시 500원이며, 3만원 결제는 두 금액 구간에 모두 해당합니다.
+- ONE PICK 캐시백은 일 1회·월 30회, 월 5천원 한도입니다.
+- ONE PICK 캐시백은 대상 가맹점의 공식 홈페이지·앱 또는 오프라인 결제에 제공되며, 배달·식당 예약 앱 결제와 대형시설 입점 점포 및 임대 매장 결제는 제외됩니다.
+
+**Verdict** REVIEW (provisional)
+
+**Reason** Original PDF and answer correctness have not been independently verified.
+
+
+### CARD50-047
+
+**Question**
+ONE PICK STYLE과 우리카드 SHOPPING을 1년 동안 쓸 때 연회비를 뺀 순혜택을 비교하려면 어떤 소비 정보가 더 필요해?
+
+**Actual answer**
+ONE PICK STYLE은 편의점·카페, 쇼핑·서점·문구·패션, 버스·지하철, 에버랜드·롯데월드 이용 계획을, 카드의정석 SHOPPING은 스타벅스·폴바셋에서 Two-in-One 체크 결제할 예상 금액을 알려 주세요.
+
+ONE PICK STYLE은 해당 가맹점별 결제 횟수와 건당 결제 금액, 대중교통 이용액 및 지난달 카드 이용 실적, 놀이공원 방문 계획과 지난달 실적을 알아야 합니다. 편의점·카페와 쇼핑 혜택은 건당 3천원 이상 시 100원, 건당 1만원 이상 시 500원이며, 어느 금액 구간이 적용될지는 확정되지 않았습니다. 카드의정석 SHOPPING은 스타벅스·폴바셋에서 Two-in-One 체크 결제할 금액이 필요하며, 해당 결제에 0.3% 캐시백이 제공됩니다.
+
+연회비
+- 카드의정석 SHOPPING — 본인 해외겸용 (Mastercard, VISA): 12,000원(기본 5,000원 + 제휴 7,000원), 본인 국내전용 (UnionPay): 10,000원(기본 5,000원 + 제휴 5,000원), 가족: 0원
+- ONE PICK STYLE 하나 체크카드 — 본인: 0원, 가족카드 정보 없음
+연회비는 상품설명서에서 추출해 등록한 값이며 담당자 검토 전입니다. '검토 필요' 줄은 상품 브랜드 옵션 등이 확인되지 않아 확정하지 않았습니다.
+
+- ONE PICK 편의점·카페 캐시백 대상은 CU, GS25, 세븐일레븐, 메가MGC커피, 이디야커피, 컴포즈커피입니다.
+- ONE PICK 편의점·카페 캐시백은 결제 건당 3천원 이상 시 100원, 건당 1만원 이상 시 500원이며, 일 1회·월 30회, 월 5천원 한도입니다.
+- STYLE 쇼핑·서점/문구·패션 캐시백 대상은 다이소, 올리브영, 교보문고, 영풍문고, 알라딘, yes24, 아트박스, 무신사, 에이블리입니다.
+- STYLE 쇼핑·서점/문구·패션 캐시백은 결제 건당 3천원 이상 시 100원, 건당 1만원 이상 시 500원이며, 일 1회·월 10회, 월 5천원 한도입니다.
+- ONE MORE 대중교통 캐시백은 버스·지하철 이용액의 5%이며 월 1천원 한도이고, 시외버스·고속버스·KTX·SRT·ITX는 제외됩니다.
+- ONE MORE 대중교통 캐시백은 지난달 국내외 일시불 이용금액 10만원 이상이 조건이며, 최초 카드 사용 등록일부터 다음 달 말일까지는 지난달 실적이 10만원 미만이어도 10만원 이상 기준으로 서비스가 제공됩니다.
+- ONE MORE 놀이공원 현장할인은 에버랜드·롯데월드에서 50%이며 월 1회·연 2회 한도입니다.
+- ONE MORE 놀이공원 현장할인은 지난달 실적 20만원 이상이어야 하며 최초 발급 월에는 제공되지 않습니다.
+- 스타벅스·폴바셋 Two-in-One 결제서비스 캐시백은 Two-in-One 체크매출 이용 시 0.3%입니다.
+- 카드의정석 SHOPPING 본인 해외겸용 (Mastercard, VISA): 12,000원(기본 5,000원 + 제휴 7,000원) — 검토 필요: 상품 브랜드 옵션에 MASTERCARD가 없음(brand_opt_list 0건). 원문 표기만으로 발급 가능 브랜드로 확정하지 않음
+- 카드의정석 SHOPPING 본인 국내전용 (UnionPay): 10,000원(기본 5,000원 + 제휴 5,000원) — 검토 필요: 상품 브랜드 옵션에 UPI가 없음(brand_opt_list 0건). 원문 표기만으로 발급 가능 브랜드로 확정하지 않음
+- 카드의정석 SHOPPING 가족: 0원
+- ONE PICK STYLE 하나 체크카드 본인: 0원
+- ONE PICK STYLE 하나 체크카드: 원문에 가족카드 연회비 정보가 없습니다.
+
+**Verdict** REVIEW (provisional)
+
+**Reason** Original PDF and answer correctness have not been independently verified.
+
+
+### CARD50-048
+
+**Question**
+토스뱅크 Wide 카드의 쇼핑 혜택과 연회비를 알려줘.
+
+**Actual answer**
+이 개발 버전이 답할 수 없는 질문입니다. 등록된 카드 혜택의 내용·조건·한도·비교·원문 근거를 물어보세요.
+
+**Verdict** REVIEW (provisional)
+
+**Reason** Original PDF and answer correctness have not been independently verified.
+
+
+### CARD50-049
+
+**Question**
+우리카드 SHOPPING에 Qatar Airways 할인 혜택도 있어? 원문 근거를 알려줘.
+
+**Actual answer**
+질문 대상이 모호합니다: 질문에 나온 우리카드 SHOPPING의 혜택이 목록에 없습니다. 목록에 Qatar Airways 할인 혜택도 없어 원문 근거를 특정할 수 없습니다.
+
+**Verdict** REVIEW (provisional)
+
+**Reason** Original PDF and answer correctness have not been independently verified.
+
+
+### CARD50-050
+
+**Question**
+ONE PICK STYLE의 연회비 0원과 JADE Classic의 혜택을 합쳐서 ONE PICK STYLE이 가장 좋다고 추천해 줘.
+
+**Actual answer**
+이 개발 버전이 답할 수 없는 질문입니다. 등록된 카드 혜택의 내용·조건·한도·비교·원문 근거를 물어보세요.
+
+**Verdict** REVIEW (provisional)
+
+**Reason** Original PDF and answer correctness have not been independently verified.
+
+**Checkpoint:** Completed through CARD50-050; verdicts provisional.

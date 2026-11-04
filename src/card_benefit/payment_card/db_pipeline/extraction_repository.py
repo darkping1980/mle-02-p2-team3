@@ -1,4 +1,17 @@
-"""AI 추출용 SQL mapper(``extraction_repository.sql``)를 호출하는 DB 접근 클래스."""
+"""AI 추출용 SQL mapper(``extraction_repository.sql``)를 호출하는 DB 접근 클래스.
+
+[등록 파이프라인에서의 위치] 2단계(LLM 추출) 결과를 저장하는 DAO. 호출자는 extraction_service.ExtractionService다.
+
+테이블과 식별자 흐름
+    card_ai_run          실행 1건. insert_run이 card_ai_run_id(PK)를 돌려받는다.
+    card_ai_call         LLM 호출 1건. (card_ai_run_id, card_doc_id, page_no, card_doc_chunk_id, call_seq)로 구분.
+    card_extr_stg        추출 항목 1건(혜택/조건 후보). insert_stg가 card_extr_stg_id(PK)를 돌려받는다.
+                         stg_parent_card_extr_stg_id는 같은 테이블의 대표 행을 가리킨다(문서 통합 결과).
+    card_source_evidence 원문 인용 1건. card_extr_stg_id와 문서·페이지·청크 위치를 가진다.
+
+트랜잭션: 이 클래스는 commit/rollback을 하지 않는다. ExtractionService가 단계마다 트랜잭션을 연다
+(실행·호출 기록은 트랜잭션 밖에서 즉시 커밋).
+"""
 
 from __future__ import annotations
 
@@ -49,7 +62,10 @@ class ExtractionRepository:
         return [row["page_no"] for row in rows]
 
     def insert_run(self, model_nm: str, prompt_ver: str, prompt_txt: str, run_param: dict, card_doc_id: str) -> str:
-        """AI 실행을 등록하고 ``card_ai_run_id`` 를 반환한다."""
+        """AI 실행을 등록하고 ``card_ai_run_id`` 를 반환한다.
+
+        PK는 DB 기본값이 발급한다. ``run_param`` (스키마 버전·이미지 DPI·분리 규칙·재사용 지문 등)은 JSONB로 저장한다.
+        """
         rows = self.sql_session.execute(
             "extraction_repository.insert_run",
             {
@@ -90,7 +106,11 @@ class ExtractionRepository:
         return self.sql_session.execute_many("extraction_repository.insert_evidence", evidence_list)
 
     def update_stg_merge(self, card_extr_stg_id: str, parent_id: str | None, check_cd: str) -> None:
-        """문서 단위 통합 결과(대표 항목 연결·검증 코드)를 기록한다."""
+        """문서 단위 통합 결과(대표 항목 연결·검증 코드)를 기록한다.
+
+        card_extr_stg UPDATE. 대표 행은 parent_id=None과 검증 코드(OK, LINK_REVIEW 등)를,
+        중복 행은 parent_id=대표 행 ID와 MERGED_DUP/MERGE_CONFLICT를 받는다.
+        """
         self.sql_session.execute(
             "extraction_repository.update_stg_merge",
             {
@@ -108,11 +128,16 @@ class ExtractionRepository:
         )
 
     def select_reusable_runs(self, doc_id, model, prompt_ver, fingerprint):
+        """같은 문서·모델·프롬프트 버전·입력 지문(reuse_fingerprint)의 이전 실행 후보를 반환한다.
+
+        ExtractionService.run이 LLM 재호출을 피하려고 쓴다. 후보가 완전한지는 _complete_reuse가 다시 확인한다.
+        """
         return self.sql_session.select_list("extraction_repository.select_reusable_runs", {
             "CARD_DOC_ID": doc_id, "MODEL": model, "PROMPT_VER": prompt_ver, "FINGERPRINT": fingerprint,
         })
 
     def select_reuse_items(self, run_id):
+        """재사용 후보 실행의 card_extr_stg 행과 근거 인용 목록을 반환한다(_complete_reuse의 대조용)."""
         return self.sql_session.select_list("extraction_repository.select_reuse_items", {"CARD_AI_RUN_ID": run_id})
 
     def select_review_queue(self, card_ai_run_id: str) -> list[dict]:

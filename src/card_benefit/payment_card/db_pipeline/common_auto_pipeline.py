@@ -2,6 +2,18 @@
 
 승인과 혜택 등록은 별도 단계다. LINK_REVIEW는 승인하지 않지만 기존 공통 등록
 서비스가 근거를 검증하여 등록할 수 있다. DB·LLM·등록 서비스는 주입한다.
+
+[등록 파이프라인에서의 위치] 공통 안내서(BRAND_SERVICE)용 1→2→3단계 일괄 실행 오케스트레이터.
+    CommonAutoPipeline.run(pdf)
+      1. document       : RegisterService.register(apply=True)      → card_doc 등록 또는 기존 문서 재사용
+      2. extraction     : ExtractionService.run(card_id=None)        → LLM 추출(유료), SUCCEEDED가 아니면 REVIEW로 종료
+      3. approval       : PostgresCommonApproval.process(run_id)     → 자동 승인 판정, card_extr_stg.stg_status UPDATE
+                                                                       + 혜택명 기반 식별자(identities) 생성
+      4. common_benefit : CommonBenefitService.register_run          → card_common_bnft 등록
+    단계마다 결과를 stages에 남기고, 예외는 잡아서 status=ERROR로 반환한다(앞 단계에서 커밋된 내용은 남는다).
+    카드 적용(apply_run)은 이 파이프라인에 포함되어 있지 않다.
+
+호출하는 곳: common_auto_main.py
 """
 from __future__ import annotations
 
@@ -39,10 +51,17 @@ def identity_for(candidate: dict, evidence: list[dict]) -> str | None:
 
 
 class CommonAutoPipeline:
+    """문서 등록 → 추출 → 자동 승인 판정 → 공통 혜택 등록을 순서대로 호출한다. 각 서비스는 생성자에서 주입받는다."""
+
     def __init__(self, registration, extraction, common, approval):
         self.registration, self.extraction, self.common, self.approval = registration, extraction, common, approval
 
     def run(self, pdf, common_link=None) -> PipelineResult:
+        """파이프라인을 실행한다. 트랜잭션은 단계별 서비스 안에서 각각 열리므로 전체를 하나로 묶지 않는다.
+
+        Returns:
+            PipelineResult. status는 SUCCEEDED / REVIEW(추출 미완료 또는 검토 필요 후보 존재) / ERROR.
+        """
         result = PipelineResult()
         stage = 'document'
         try:
@@ -78,7 +97,20 @@ class PostgresCommonApproval:
         self.session, self.common = session, common
 
     def process(self, run_id: str):
+        """실행의 공통 혜택 후보를 잠그고 자동 승인 여부를 판정한다. 1트랜잭션.
+
+        처리 순서: card_ai_run → card_doc → 페이지·청크·공통서비스 연결 → 후보(card_extr_stg) 순으로 FOR UPDATE 잠금
+        → attach_normalized → 후보마다 identity_for(혜택명 식별자)·중복 확인·근거 확인 → check_auto_approval
+        → 통과하고 PENDING_REVIEW이면 stg_status='AUTO_APPROVED'로 UPDATE → 신규 정합성 위반 검사
+
+        Returns:
+            (후보별 판정 목록, ``{card_extr_stg_id: identity}``). identities는 register_run에 그대로 넘긴다.
+
+        Raises:
+            ValueError: 실행·문서 상태가 맞지 않거나, 후보 상태가 동시에 바뀌었거나, 신규 정합성 위반. 전체 rollback.
+        """
         results, identities = [], {}
+        # 트랜잭션 시작. mapper를 거치지 않는 SQL은 같은 트랜잭션의 연결(_active_connection)로 직접 실행한다.
         with self.session.transaction():
             conn = self.session._active_connection
             run = conn.execute("select card_ai_run_id,run_target_card_doc_id,run_status from db_pipeline.card_ai_run where card_ai_run_id=%s and run_stage_cd='EXTRACT' for update", (run_id,)).fetchone()

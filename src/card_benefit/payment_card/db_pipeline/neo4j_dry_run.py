@@ -4,6 +4,27 @@
 임베딩과 검색 텍스트는 옮기지 않는다. 원천을 해석할 수 없으면 건너뛰지 않고 모두 모아
 ``GraphValidationError`` 로 중단한다. 예상 건수는 고정값이 아니라 원천 행에서 따로 계산해 대조한다.
 """
+# 주의: 위 모듈 docstring은 main()의 argparse description(--help 출력)으로 쓰이므로 내용을 바꾸지 않았다.
+#
+# [등록 파이프라인에서의 위치] 4단계 "PostgreSQL → Neo4j 적재"의 변환·검증부. 적재(쓰기)는 neo4j_load_draft.py가 한다.
+#
+# 처리 흐름
+#     load_snapshot(conn) : REPEATABLE READ READ ONLY 트랜잭션 하나에서 원천 테이블 전체를 읽는다(일관된 스냅샷).
+#                           card_product_item은 BENEFIT(혜택)와 그 밖(연회비 등 items)으로 나눠 읽고,
+#                           혜택은 이전 card_bnft 컬럼명 별칭으로 바꿔 그래프 key가 유지되게 한다.
+#     build(snapshot)     : 원천 행 → Preview(nodes, edges). 노드 key = JSON 배열 [라벨, PK...].
+#                           부모가 없는 행(고아)·해석 불가 JSON은 건너뛰지 않고 errors에 모은 뒤 한 번에 중단한다.
+#                           expected_counts(원천 행에서 직접 센 건수)와 변환 건수를 대조한다.
+#     main()              : --dry-run 필수. 변환 통계와 스냅샷 해시를 출력한다(neo4j_writes=0).
+#
+# 테이블 → 노드/관계 매핑(라벨은 dp_ 접두사)
+#     card_product, card_doc, card_doc_page, card_doc_chunk, card_source_evidence(연결된 근거만), card_common,
+#     card_common_bnft → 같은 이름 노드 / card_product_item BENEFIT → dp_card_bnft, 그 밖 → dp_card_product_item
+#     rule_list[] → dp_bnft_rule, target_list[] → dp_rule_target(카드 간 공유), cond_expr → dp_cond_expr/branch/atom
+#     card_product_doc·card_common_doc → has_document, card_common_bnft_apply → has_common_benefit,
+#     card_evidence_link → supported_by, brand_bnft_compare 결과 SAME → same_as
+#
+# 호출하는 곳: neo4j_load_draft.py, neo4j_validate.py, test_neo4j_dry_run.py
 from __future__ import annotations
 
 import argparse
@@ -64,11 +85,20 @@ def key(label, *parts):
 
 
 class Preview:
+    """메모리상의 그래프. ``nodes`` 는 {key: 노드}, ``edges`` 는 {key: 관계}이며 Neo4j에 접속하지 않는다."""
+
     def __init__(self):
         self.nodes = {}
         self.edges = {}
 
     def node(self, label, parts, data):
+        """노드를 추가하고 key를 반환한다. 같은 key가 같은 내용이면 재사용, 다른 내용이면 ValueError.
+
+        Args:
+            label: dp_ 접두사 없는 라벨(PK_FIELDS의 키).
+            parts: PK 값 목록. PK_FIELDS[label]과 개수가 같아야 한다.
+            data: 원천 행 또는 JSON 조각. ``source_json`` 으로 그대로 보관한다.
+        """
         fields = PK_FIELDS.get(label)
         if fields is None or len(fields) != len(parts):
             raise ValueError(f"PK 정의와 다른 노드: {label} {parts}")
@@ -80,13 +110,15 @@ class Preview:
         return k
 
     def edge(self, kind, start, end, source):
-        k = key("relationship", kind, start, end, source)
+        """관계를 추가한다. key는 (유형, 시작 key, 끝 key, 원천 데이터)로 만들며 같은 관계를 두 번 넣으면 ValueError."""
+        k =key("relationship", kind, start, end, source)
         if k in self.edges:
             raise ValueError(f"duplicate edge: {k}")
         self.edges[k] = {"type": PREFIX + kind, "start": start, "end": end, "source_json": canonical(source)}
 
     def validate(self):
-        dangling = [k for k, e in self.edges.items()
+        """끝점 노드가 없는 관계(dangling)가 있으면 ValueError. 라벨·유형별 건수와 고립 노드 목록을 반환한다."""
+        dangling =[k for k, e in self.edges.items()
                     if e["start"] not in self.nodes or e["end"] not in self.nodes]
         if dangling:
             raise ValueError(f"dangling edges: {len(dangling)}")
@@ -201,6 +233,18 @@ def expected_counts(snapshot) -> tuple[dict, dict]:
 
 
 def build(snapshot):
+    """원천 스냅샷을 dp_ 그래프로 변환하고 검증한다. DB에 접속하지 않는다.
+
+    변환 순서: 상품(+조건식) → 문서 → 상품·문서 관계 → 페이지 → 청크 → 연결된 근거 → 혜택(+조건식·규칙·대상)
+    → 혜택 외 상품 항목 → 공통서비스·문서·공통 혜택·적용 → 동일성(same_as) → 근거 연결(supported_by)
+    → 건수·JSON 원본 대조.
+
+    Returns:
+        (Preview 그래프, 통계 dict)
+
+    Raises:
+        GraphValidationError: 변환·검증 오류를 모두 모은 목록.
+    """
     g = Preview()
     errors: list[str] = []
     products, docs, pages, chunks, evidence, benefits, rules, commons, common_benefits = {}, {}, {}, {}, {}, {}, {}, {}, {}
@@ -222,6 +266,7 @@ def build(snapshot):
         except (KeyError, TypeError) as error:
             errors.append(f"조건식 해석 실패 {label}: {type(error).__name__} {error}")
 
+    # region 문서 계층: 상품 → 문서 → 페이지 → 청크 → 원문 근거
     for row in snapshot["products"]:
         if row["card_cond_status_cd"] != "DRAFT":
             errors.append(f"DRAFT가 아닌 카드 조건: {row['card_id']}")
@@ -256,7 +301,9 @@ def build(snapshot):
             continue
         evidence[row["evidence_id"]] = g.node("card_source_evidence", [row["evidence_id"]], row)
         g.edge("in_chunk", evidence[row["evidence_id"]], chunks[chunk], {})
+    # endregion
 
+    # region 혜택 계층: 카드 혜택 → 규칙 → 대상, 조건식 / 혜택 외 상품 항목(연회비 등)
     for row in snapshot["benefits"]:
         card_id, bnft_id = row["card_id"], row["card_bnft_id"]
         if card_id not in products:
@@ -288,7 +335,9 @@ def build(snapshot):
             continue
         items[(card_id, item_id)] = g.node("card_product_item", [card_id, item_id], row)
         g.edge("has_item", products[card_id], items[(card_id, item_id)], {"item_type_cd": row["item_type_cd"]})
+    # endregion
 
+    # region 공통서비스 계층과 근거 연결
     for row in snapshot["commons"]:
         commons[row["card_common_id"]] = g.node("card_common", [row["card_common_id"]], row)
     for row in snapshot["common_docs"]:
@@ -336,7 +385,9 @@ def build(snapshot):
             errors.append(f"근거 연결 대상 없음: {link['ev_link_id']}")
             continue
         g.edge("supported_by", owner, evidence[link["evidence_id"]], link)
+    # endregion
 
+    # region 사후 검증: 끝점·건수·JSON 원본 대조
     stats = g.validate()
     node_counts, relationship_counts = expected_counts(snapshot)
     if not errors and (stats["nodes"] != node_counts or stats["relationships"] != relationship_counts):
@@ -359,6 +410,7 @@ def build(snapshot):
     stats["common_benefits_without_direct_evidence"] = [row["card_common_bnft_id"] for row in snapshot["common_benefits"]]
     stats["brand_compare"] = [{name: row[name] for name in ("card_bnft_id", "card_common_bnft_id", "status", "issues")}
                               for row in snapshot["brand_compare"]]
+    # endregion
     return g, stats
 
 

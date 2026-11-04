@@ -8,6 +8,13 @@
 - ``*`` ``※`` ``•`` 로 시작하는 줄과 그 이어지는 줄은 유의사항(NOTICE)이다. 같은 페이지의 다른 청크를
   추출할 때 적용 대상·제공 기간의 근거로 함께 보낸다.
 - 항목 줄이 없는 페이지(표 위주 등)는 나누지 않고 페이지 전체를 청크 1건으로 둔다.
+
+[등록 파이프라인에서의 위치] 1단계 "페이지 → 청크" 중 BLOCK_V1 규칙 구현. 기본 규칙(PAGE_V1)에서는 쓰이지 않는다.
+호출하는 곳: document_service.page_chunks(split_rule=BLOCK_V1일 때),
+            document_repository.DocRepository.add_block_chunks(등록된 문서에 BLOCK_V1 청크 추가 — 확인 시점 기준
+            db_pipeline 안에 이 메서드의 호출처는 없음)
+처리 순서: 줄 단위로 종류 판정(_kind) → 이어지는 줄·빈 줄을 앞 단위에 붙임 → 항목(·)/유의사항(*※•) 경계와
+          MAX_ITEMS 기준으로 BODY·NOTICE 청크를 묶음 → 위치(1부터, 종료 포함)를 가진 Block 반환
 """
 from __future__ import annotations
 
@@ -33,6 +40,12 @@ class Block:
 
 
 def _kind(line: str, has_unit: bool) -> str:
+    """줄 1개의 종류를 판정한다.
+
+    Returns:
+        blank(빈 줄), cont(앞 단위가 있을 때 들여쓴 이어지는 줄), item(``·`` 혜택 항목),
+        notice(``*`` ``※`` ``•`` 유의사항), label(숫자 없는 짧은 구역 이름), text(그 밖의 줄).
+    """
     stripped = line.strip()
     if not stripped:
         return "blank"

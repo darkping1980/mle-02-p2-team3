@@ -8,6 +8,17 @@
 
 ``--identity`` 는 사람이 검토한 ``추출항목ID=업무식별자`` 다. 공통 혜택은 ``--card-id`` 로 지정한 카드만 적용을 판단한다.
 종료 코드: 0 성공, 1 입력 오류, 2 인자 오류, 3 DB 오류.
+
+[등록 파이프라인에서의 위치] 3단계: 추출 후보(card_extr_stg) → 검증 → 업무 테이블 등록.
+    product : ProductBenefitService.register_run → card_product_item(item_type_cd='BENEFIT') + card_evidence_link
+    common  : CommonBenefitService.register_run  → card_common_bnft (공통 혜택 1회 저장)
+              CommonBenefitService.apply_run     → card_common_bnft_apply (``--card-id`` 카드마다 적용 관계)
+    brand-compare : 기존 BRAND_SERVICE 카드 혜택과 공통 혜택의 동일성 판정(읽기 전용)
+    review-queue  : 미해결(unresolved) 항목과 사람 검토 기록 조회(읽기 전용, --apply 없이 실행됨)
+
+등록 트랜잭션이 커밋된 뒤 ``--no-embed`` 가 없으면 EmbeddingService.embed_new가 검색 텍스트·임베딩을 만든다
+(OpenAI 임베딩 유료 호출). 임베딩 실패는 이미 커밋된 등록을 되돌리지 않는다.
+연회비(ANNUAL_FEE)는 이 CLI가 아니라 annual_fee_register.py가 등록한다.
 """
 from __future__ import annotations
 
@@ -28,6 +39,7 @@ from .product_benefit_service import ProductBenefitService
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """하위 명령(kind)과 옵션을 해석한다. product는 --card-id 1개, product·common은 --run-id가 필수다."""
     parser = argparse.ArgumentParser(prog="benefit_main", description="추출 후보 혜택 등록")
     parser.add_argument("kind", choices=("product", "common", "brand-compare", "review-queue"))
     parser.add_argument("--run-id", help="card_ai_run_id. product, common에 필수")
@@ -47,6 +59,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """하위 명령을 실행하고 후보별 판정(status·reason)을 출력한다.
+
+    트랜잭션은 각 Service 메서드(register_run / apply_run) 안에서 열리고 닫힌다.
+    common에서 register_run(공통 혜택 등록)과 카드별 apply_run은 서로 다른 트랜잭션이다.
+    """
     args = parse_args(argv)
     if not args.apply and args.kind != "review-queue":
         print("dry-run: --apply가 없어 DB에 접속하지 않았습니다")
@@ -70,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
             results = ProductBenefitService(session, embedding).register_run(
                 args.card_id[0], args.run_id, exclude_stg_ids=set(args.exclude_stg_id))
         else:
+            # --identity "추출항목ID=업무식별자" → {card_extr_stg_id: 식별자}. 공통 혜택 코드(bnft_cd) 생성에 쓰인다.
             identities = dict(item.split("=", 1) for item in args.identity)
             service = CommonBenefitService(session, embedding_service=embedding)
             results = service.register_run(args.run_id, identities)

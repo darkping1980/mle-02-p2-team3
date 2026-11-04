@@ -1,4 +1,18 @@
-"""단일 페이지 Terra 추출 CLI. 실행은 유료 호출 및 중간 테이블 쓰기다."""
+"""단일 페이지 Terra 추출 CLI. 실행은 유료 호출 및 중간 테이블 쓰기다.
+
+[등록 파이프라인에서의 위치] 2단계 "LLM 추출" 진입점(한 번에 페이지 1쪽). 1단계(main.py)로 등록된 card_doc을 대상으로 한다.
+
+실행 모드 (상호 배타)
+    (옵션 없음)   dry-run : 비용 추정만 출력. DB·API 접속 없음
+    --preflight  읽기 전용 DB 조회(SET TRANSACTION READ ONLY)로 입력을 실제처럼 구성하고, 가짜 클라이언트(Capture)로
+                 요청 형태만 확인. API 호출·DB 쓰기 없음
+    --execute    DB 누적 사용량으로 예산 재확인 → TerraClient(OpenAI) 생성 → ExtractionService.run(page_numbers={page})
+                 → card_ai_run / card_ai_call / card_extr_stg / card_source_evidence 저장 (유료 호출)
+
+호출 관계: main → preflight / ExtractionService.run (extraction_service.py) → TerraClient.extract (terra_client.py)
+종료 코드: 0 성공(pages_ok>0), 1 성공 페이지 없음, 2 인자 오류·예산 초과(argparse).
+          preflight·execute 중의 ValueError·RuntimeError·ExtractionError는 잡지 않으므로 traceback과 함께 종료된다.
+"""
 from __future__ import annotations
 import argparse
 from decimal import Decimal
@@ -89,6 +103,11 @@ def preflight(session, args, estimated):
 
 
 def main(argv=None):
+    """인자를 검증하고 dry-run / preflight / execute 중 하나를 실행한다.
+
+    부작용(--execute만): LLM 유료 호출 1회(max_attempts=1 기본) 및 추출 중간 테이블 INSERT/UPDATE.
+    예산 검증은 두 번 한다. 인자만으로 1차(argparse 오류), DB에 기록된 기존 토큰 사용량을 더해 2차(RuntimeError).
+    """
     p = argparse.ArgumentParser(description='Terra 단일 페이지 추출: 실제 API 호출 및 DB 저장')
     p.add_argument('--card-id', type=int)
     p.add_argument('--doc-id', required=True)
@@ -127,6 +146,7 @@ def main(argv=None):
         llm = TerraClient(OpenAI(max_retries=0), input_token_estimate=args.input_token_estimate,
                           max_output_tokens=args.max_output_tokens, budget_usd=args.budget_usd,
                           spent_usd=prior)
+        # 실제 추출 실행. page_numbers를 지정하므로 재사용 판정은 하지 않고, 결과 상태는 다른 페이지가 있으면 PARTIAL이다.
         result = ExtractionService(session, llm).run(args.doc_id, args.card_id, page_numbers={args.page})
         print(f'run={result.card_ai_run_id} status={result.status} note={result.note}')
         print(f'누적 사용액(토큰 기준): ${llm.spent_usd}; 사용량 불명: {llm.usage_uncertain}')

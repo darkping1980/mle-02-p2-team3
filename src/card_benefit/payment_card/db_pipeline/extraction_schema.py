@@ -3,6 +3,14 @@
 LLM은 원문 표기와 값만 내고, DB ID와 V6 조건식 트리는 만들지 않는다.
 코드 필드는 V6 공통코드에 ``UNKNOWN`` 을 더한 값이며, 고르지 못한 값은 정규화에서 검토 대상이 된다.
 금액과 횟수는 정수, 비율처럼 소수가 필요한 값은 ``Decimal`` 이고 원문 표기를 함께 둔다.
+
+[등록 파이프라인에서의 위치] 2단계 "LLM 추출 → 검증"의 데이터 계약. Java의 DTO + Bean Validation에 해당한다.
+    - LLM 계층(ExtractionModel 하위): PageExtraction ⊃ BenefitItem ⊃ RuleItem/LimitItem/ConditionItem/EvidenceQuote.
+      TerraClient가 ``to_strict_json_schema(PageExtraction)`` 으로 응답 형식을 강제하고,
+      ExtractionService._parse가 ``PageExtraction.model_validate`` 로 다시 검증한다(정의 밖 필드는 거부: extra="forbid").
+    - Python 계층(BaseModel 하위): EvidenceCheck, ItemCheck, SourceRef, MergeInfo, MergedBenefit, MergedCondition.
+      LLM이 아니라 extraction_service의 검증·통합 함수가 만든다.
+이 모듈은 DB·LLM에 접근하지 않는다.
 """
 
 from __future__ import annotations
@@ -37,6 +45,7 @@ EvidenceSubject = Literal["BNFT", "RULE", "LIMIT", "COND", "TARGET", "REL", "APP
 NumberValue = Annotated[Decimal, WithJsonSchema({"type": "number"})]
 
 
+# region LLM 응답 계층 (strict JSON Schema로 LLM에 전달되는 구조)
 class ExtractionModel(BaseModel):
     """LLM 계층 공통 설정. 정의하지 않은 필드는 거부한다."""
 
@@ -168,8 +177,10 @@ class PageExtraction(ExtractionModel):
     benefits: list[BenefitItem] = Field(default_factory=list)
     card_conditions: list[ConditionItem] = Field(default_factory=list)
     unresolved: list[UnresolvedItem] = Field(default_factory=list)
+# endregion
 
 
+# region Python 검증·통합 계층 (LLM 스키마에 포함되지 않음)
 class EvidenceCheck(BaseModel):
     """근거 1건의 위치 확인 결과. 위치는 청크 원문 기준 1부터다."""
 
@@ -232,3 +243,4 @@ class MergedCondition(BaseModel):
     applies_to_item_keys: list[str]
     normalized: dict[str, Any]
     sql_check_cd: str
+# endregion

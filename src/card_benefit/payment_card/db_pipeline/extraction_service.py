@@ -3,6 +3,35 @@
 LLM 클라이언트는 주입받는다. 이 모듈은 특정 모델이나 제공자에 의존하지 않는다.
 값 검증은 두 가지를 구분한다. 값이 원문에 있는지(``value_check_cd``)와
 그 값이 이 혜택의 값인지(``link_check_cd``)다. 표에서 읽은 연결은 텍스트로 증명할 수 없어 사람이 확인한다.
+
+[등록 파이프라인에서의 위치] 2단계: 청크 → LLM 추출 → 검증 → 중간 테이블(card_ai_run/call, card_extr_stg,
+card_source_evidence) 저장. 여기서 만든 결과는 아직 "후보"이며, 카드 혜택(card_product_item)·공통 혜택
+(card_common_bnft) 등록은 3단계 product_benefit_service / common_benefit_service가 한다.
+
+처리 흐름 (``ExtractionService.run``)
+    1. 상품·문서·AI 입력 청크 조회(select_card_product, select_doc, select_ai_input_chunks)
+    2. 분리 규칙·페이지·청크 필터, 로컬 PDF 해시 확인(_local_pdf → document_storage.resolve_local_pdf)
+    3. 재사용 판정: 같은 입력 지문(fingerprint)의 성공 실행이 완전히 남아 있으면 LLM을 다시 부르지 않고 반환
+    4. card_ai_run INSERT(RUNNING) → ``_run_pages``
+    5. 청크마다 ``_process_chunk``:
+         build_input(텍스트 + 페이지 이미지) → _call_llm(LLM 호출, card_ai_call INSERT — 즉시 커밋)
+         → _parse(Pydantic PageExtraction 검증) → [트랜잭션] _store_page(check_benefit/check_condition 검증 후
+         card_extr_stg + card_source_evidence INSERT)
+    6. 모든 청크가 성공하면 ``_store_merge``: merge_pages(문서 단위 통합) → [트랜잭션] card_extr_stg UPDATE
+       (대표 행 검증 코드·중복 행의 상위 행 연결)
+    7. finish_run(SUCCEEDED / PARTIAL / FAILED)
+
+트랜잭션 경계 (중요)
+    - card_ai_run INSERT, card_ai_call INSERT, finish_run은 트랜잭션 밖에서 실행되어 SQL마다 바로 커밋된다.
+      비용이 든 LLM 응답 원문이 뒤 단계 오류로 사라지지 않게 하기 위해서다.
+    - 페이지 항목 저장(_store_page)은 청크마다 1트랜잭션, 문서 통합(_store_merge)은 문서당 1트랜잭션이다.
+
+LLM 호출: 이 모듈은 ``LlmClient.extract`` 만 부른다. 실제 구현은 terra_client.TerraClient(OpenAI Responses API).
+         ``llm_client=None`` 으로 만들면(terra_main --preflight 등) 입력 구성만 하고 호출하지 않는다.
+
+호출하는 곳: terra_main.py, common_auto_main.py / common_auto_pipeline.py(공통 문서),
+            common_benefit_service(normalize_stored_run), product_benefit_service(locate_quote, strip_calc_*)
+관련 SQL: extraction_repository.sql (ExtractionRepository 경유)
 """
 
 from __future__ import annotations
@@ -56,6 +85,8 @@ RATE_PATTERN = re.compile(r"(\d+(?:\.\d+)?)%")
 # 외화 한도(예: "최대 USD 100", "$30", "50달러"). 공백을 지운 문자열에서 읽는다.
 FOREIGN_AMOUNT_PATTERN = re.compile(r"(?:USD|US\$|\$)(\d[\d,]*(?:\.\d+)?)|(\d[\d,]*(?:\.\d+)?)(?:USD|달러)", re.IGNORECASE)
 
+# region LLM 프롬프트 (변경 시 PROMPT_VER도 올려야 재사용 판정·이력 비교가 맞는다)
+# PROMPT_TXT는 card_ai_run.run_prompt_txt에 저장되고, 입력 해시(input_sha256)와 재사용 지문에도 들어간다.
 PROMPT_TXT = """당신은 카드 상품설명서에서 혜택 정보를 구조화하는 추출기입니다.
 입력은 페이지 전체 텍스트와 같은 페이지의 이미지입니다.
 
@@ -93,8 +124,10 @@ PROMPT_TXT = """당신은 카드 상품설명서에서 혜택 정보를 구조�
 18. bnft_nm은 혜택 내용(서비스혜택·할인 내용) 문장에서 정합니다. 주변 제목과 내용이 서로 다른 서비스를 가리키면 내용을 따르고,
     uncertainty_note에 제목과 내용이 다르다고 적으며 certainty=LOW로 둡니다.
 """
+# endregion
 
 
+# region 데이터 클래스 (LLM 입력·응답, 페이지 결과, 실행 결과)
 class ExtractionError(Exception):
     """추출을 시작할 수 없는 경우."""
 
@@ -164,8 +197,10 @@ class RunResult:
     merged: bool
     note: str | None = None
     reused: bool = False
+# endregion
 
 
+# region 문자열·숫자 도우미
 # =========================================================
 # 문자열·숫자 도우미
 # =========================================================
@@ -243,11 +278,15 @@ def make_item_key(prefix: str, name: str) -> str:
 def worst_value_check(codes: list[str]) -> str:
     """값 검증 코드 중 가장 심각한 것을 고른다."""
     return min(codes, key=VALUE_CHECK_ORDER.index) if codes else "OK"
+# endregion
 
 
+# region 원문 대조 (LLM 응답 검증: 인용 위치 찾기, 값이 인용에 있는지, 대상 연결 확인)
 # =========================================================
 # 원문 대조
 # =========================================================
+# 호출 순서: _store_page → check_benefit / check_condition → locate_evidence(위치) → check_values(값) → link_check(연결)
+# 결과 ItemCheck.value_check_cd는 VALUE_CHECK_ORDER 중 가장 심각한 값, link_check_cd는 TEXT_CONFIRMED/NEEDS_REVIEW다.
 def locate_evidence(quotes: list[EvidenceQuote], page: PageResult) -> list[EvidenceCheck]:
     """인용문을 원문에서 찾아 위치를 채운다. 대상 청크에 없으면 같은 페이지 유의사항 청크에서 찾고 그 청크를 기록한다."""
     checks = []
@@ -379,8 +418,10 @@ def check_benefit(benefit: BenefitItem, page: PageResult) -> ItemCheck:
     if benefit.certainty == "LOW" or benefit.is_common_candidate or applicability:
         link = "NEEDS_REVIEW"
     return ItemCheck(value_check_cd=worst_value_check(codes), link_check_cd=link, issues=issues, evidence=evidence)
+# endregion
 
 
+# region V6 계약 정규화 (LLM 항목 → 등록용 JSON: 조건식·rule_list)
 # =========================================================
 # V6 계약 정규화
 # =========================================================
@@ -500,11 +541,15 @@ def sql_check_code(check: ItemCheck, conflicts: list[str], unresolved: bool, inv
     if check.link_check_cd != "TEXT_CONFIRMED":
         return "LINK_REVIEW"
     return "OK"
+# endregion
 
 
+# region 문서 단위 통합 (페이지별 항목을 혜택명 기준으로 합침. DB·LLM 미사용)
 # =========================================================
 # 문서 단위 통합
 # =========================================================
+# 같은 혜택이 요약 페이지와 상세 페이지에 반복되므로, 혜택명(공백 제거·소문자)이 같은 항목을 한 그룹으로 묶는다.
+# 그룹의 대표(상세 페이지 우선)가 card_extr_stg의 "대표 행"이 되고, 나머지는 대표 행을 상위 행으로 가리킨다.
 def find_benefit_key(name: str, item_keys: dict[str, str]) -> str | None:
     """혜택명으로 문서의 혜택을 찾는다. 같은 이름을 우선하고, 부분 일치는 후보가 하나일 때만 인정한다.
 
@@ -699,11 +744,15 @@ def merge_pages(pages: list[PageResult]) -> tuple[list[MergedBenefit], list[Merg
             normalized=normalized, sql_check_cd=code,
         ))
     return merged_benefits, merged_conditions
+# endregion
 
 
+# region 저장된 추출 원본에서 등록용 혜택 만들기 (3단계 등록 서비스가 사용)
 # =========================================================
 # 저장된 추출 원본에서 등록용 혜택 만들기
 # =========================================================
+# 정제본(normalized)은 DB에 저장하지 않는다. 등록 시 CommonBenefitRepository.stored_run이
+# list_run_items 결과를 normalize_stored_run에 넣어 merge_pages와 같은 규칙으로 다시 만든다.
 @dataclass
 class StoredCandidate:
     """통합 대표 행 1건을 추출 원본(stg_raw_item)에서 다시 만든 결과. DB에 저장하지 않는다."""
@@ -771,8 +820,10 @@ def normalize_stored_run(rows: list[dict]) -> dict[str, StoredCandidate]:
             row["card_extr_stg_id"], normalized, invalid, conflicts, unresolved, len(group),
             effective_check_cd(row.get("stg_sql_check_cd"), invalid, conflicts, unresolved))
     return out
+# endregion
 
 
+# region 실행 흐름 (ExtractionService: 실행 등록 → 청크별 LLM 호출·저장 → 문서 통합 저장)
 # =========================================================
 # 실행 흐름
 # =========================================================
@@ -804,9 +855,24 @@ class ExtractionService:
         같은 원문을 두 번 추출하지 않기 위해서다. ``chunk_ids`` 는 일부 청크만 시험할 때 쓰며, 그 실행은 항상 PARTIAL이고
         재사용되지 않는다.
 
+        Args:
+            card_doc_id: 추출할 card_doc.card_doc_id.
+            card_id: 상품설명서면 card_product.card_id. ``None`` 이면 BRAND_SERVICE(공통 안내서)만 허용한다.
+            page_numbers: 일부 페이지만 실행할 때의 페이지 번호 집합.
+            split_rule_ver: PAGE_V1 / BLOCK_V1 중 사용할 청크 규칙.
+            chunk_ids: 일부 청크만 실행할 때의 card_doc_chunk_id 집합.
+
+        Returns:
+            RunResult(card_ai_run_id, status, 성공·실패 청크 수, 통합 저장 여부, 비고, 재사용 여부).
+
+        부작용:
+            card_ai_run INSERT/UPDATE, card_ai_call INSERT(호출마다), card_extr_stg·card_source_evidence INSERT,
+            card_extr_stg UPDATE(통합). LLM 유료 호출(``llm_client.extract``)이 청크 수만큼 일어난다.
+
         Raises:
             ExtractionError: 상품·문서·입력 페이지·로컬 PDF가 준비되지 않은 경우.
         """
+        # region 입력 검증과 대상 청크 선택 (DB 조회만, 변경 없음)
         if card_id is not None and self.repository.select_card_product(card_id) is None:
             raise ExtractionError(f"card_product가 없습니다: {card_id}")
         document = self.repository.select_doc(card_doc_id)
@@ -833,12 +899,19 @@ class ExtractionService:
                 raise ExtractionError("요청 청크가 AI 입력 대상에 없습니다")
             omitted_chunks = [c['card_doc_chunk_id'] for c in chunks if c['card_doc_chunk_id'] not in chunk_ids]
             chunks = [c for c in chunks if c['card_doc_chunk_id'] in chunk_ids]
+        # 이미지 렌더링에 쓸 로컬 PDF. 해시가 card_doc.doc_sha256과 다르거나 파일이 없으면 ExtractionError.
         pdf_path = self._local_pdf(document)
+        # blocked: 내용이 있지만 AI 입력에서 빠진 페이지(OCR 검토 대기 등) + 이번 실행에서 제외한 페이지.
         blocked = sorted(set(self.repository.select_blocked_pages(card_doc_id)) | set(omitted))
         params = self._run_param()
         params["split_rule_ver"] = rule_of(chunks[0])
         if chunk_ids is not None:
             params["chunk_ids"] = sorted(chunk_ids)
+        # endregion
+
+        # region 이전 실행 재사용 판정 (중복 LLM 호출 방지)
+        # 입력 전체(문서 해시·청크·파라미터·모델 설정·프롬프트 해시·렌더러 버전)를 SHA-256 지문으로 만들고,
+        # 같은 지문의 SUCCEEDED 실행이 있으며 _complete_reuse가 통과하면 새 실행 없이 그 run_id를 반환한다.
         # 부분 실행, 제외 페이지 또는 알려지지 않은 모델 설정은 재사용하지 않는다.
         config = getattr(self.llm_client, "reuse_config", None)
         if card_id is None and page_numbers is None and chunk_ids is None and not blocked and isinstance(config, dict):
@@ -854,8 +927,13 @@ class ExtractionService:
                 run_id = candidate["card_ai_run_id"]
                 if self._complete_reuse(run_id, chunks):
                     return RunResult(run_id, "SUCCEEDED", len(chunks), 0, True, reused=True)
+        # endregion
+
+        # 새 실행 등록. 트랜잭션 밖이라 바로 커밋되고, DB가 card_ai_run_id(PK)를 발급한다.
+        # 이 run_id가 이후 card_ai_call·card_extr_stg의 FK 값이 된다. 매 실행 새 ID라 이전 결과는 바뀌지 않는다.
         run_id = self.repository.insert_run(self.llm_client.model_nm, PROMPT_VER, PROMPT_TXT, params, card_doc_id)
 
+        # 오류 처리: 처리 중 어떤 예외든 실행을 FAILED로 기록한 뒤 다시 던진다.
         try:
             return self._run_pages(run_id, card_id, chunks, pdf_path, blocked, omitted_chunks)
         except Exception:
@@ -901,9 +979,17 @@ class ExtractionService:
 
     def _run_pages(self, run_id: str, card_id: int, chunks: list[dict], pdf_path: Path, blocked: list[int],
                    omitted_chunks: list[str] = ()) -> RunResult:
-        """페이지를 차례로 처리하고 모두 성공했을 때만 문서 통합을 저장한다."""
+        """페이지를 차례로 처리하고 모두 성공했을 때만 문서 통합을 저장한다.
+
+        상태 결정:
+            SUCCEEDED = 통합 저장 성공 + 제외 페이지·제외 청크 없음
+            PARTIAL   = 성공한 청크가 하나라도 있으나 위 조건을 못 채움
+            FAILED    = 성공한 청크가 없음
+        마지막에 finish_run으로 card_ai_run 상태를 UPDATE한다(트랜잭션 밖, 즉시 커밋).
+        """
         pages: list[PageResult] = []
         failed = 0
+        # 같은 페이지의 다른 청크(특히 NOTICE)를 문맥으로 함께 보내기 위해 페이지별 청크 목록을 만든다.
         per_page: dict[int, list[dict]] = {}
         for chunk in self.repository.select_ai_input_chunks(chunks[0]["card_doc_id"]):
             if rule_of(chunk) == rule_of(chunks[0]):
@@ -922,6 +1008,7 @@ class ExtractionService:
         notes = [f"AI 입력 제외 페이지: {blocked}"] if blocked else []
         if omitted_chunks:
             notes.append(f"AI 입력 제외 청크: {len(omitted_chunks)}건")
+        # 분기: 한 청크라도 실패하면 문서 단위 통합을 하지 않는다(페이지 원본 행은 이미 저장되어 남는다).
         if failed:
             notes.append("실패한 페이지가 있어 문서 통합을 하지 않음")
         else:
@@ -977,8 +1064,16 @@ class ExtractionService:
 
     def _process_chunk(self, run_id: str, card_id: int, chunk: dict, pdf_path: Path,
                        context: list[tuple[str, str]] = (), whole_page: bool = True) -> PageResult | None:
-        """청크 1건을 호출하고 저장한다. 실패하면 ``None`` 을 반환하고 다음 청크를 계속 처리한다."""
+        """청크 1건을 호출하고 저장한다. 실패하면 ``None`` 을 반환하고 다음 청크를 계속 처리한다.
+
+        처리 순서: build_input → (max_attempts회까지) _call_llm → 성공 응답이면 PageResult 생성
+        → [트랜잭션] _store_page(검증 + card_extr_stg·card_source_evidence INSERT) → commit
+
+        오류 처리: LLM 응답 파싱 실패는 다음 시도로 넘어가고(기본 max_attempts=1이면 바로 None),
+        저장 중 psycopg.Error는 이 청크의 INSERT만 rollback되고 ``None`` 을 반환한다.
+        """
         page_input = self.build_input(chunk, pdf_path, context, whole_page)
+        # call_seq는 같은 청크의 재시도 번호다. card_ai_call·card_extr_stg 식별자의 일부로 저장된다.
         for call_seq in range(1, self.max_attempts + 1):
             extraction = self._call_llm(run_id, chunk, call_seq, page_input)
             if extraction is None:
@@ -986,6 +1081,7 @@ class ExtractionService:
             page = PageResult(chunk["page_no"], chunk["card_doc_chunk_id"], chunk["chunk_raw_txt"], extraction,
                               chunk_seq=chunk.get("chunk_seq", 0), context=list(context))
             try:
+                # 트랜잭션 시작: 이 청크의 항목·근거 INSERT를 한 단위로 묶는다.
                 with self.sql_session.transaction():
                     self._store_page(run_id, card_id, chunk, call_seq, page)
             except psycopg.Error as error:
@@ -995,8 +1091,16 @@ class ExtractionService:
         return None
 
     def _call_llm(self, run_id: str, chunk: dict, call_seq: int, page_input: PageInput) -> PageExtraction | None:
-        """LLM을 호출해 호출 이력을 남기고 검증된 응답을 반환한다."""
+        """LLM을 호출해 호출 이력을 남기고 검증된 응답을 반환한다.
+
+        성공·실패와 관계없이 card_ai_call 1행을 INSERT한다. 트랜잭션 밖에서 실행되므로 바로 커밋된다.
+        CALL_STATUS: FAILED(호출 예외) / PARSE_ERROR(JSON·스키마·page_no 불일치) / SUCCEEDED.
+
+        Returns:
+            검증된 ``PageExtraction``. 호출 실패·파싱 실패면 ``None``.
+        """
         started = perf_counter()
+        # card_ai_call INSERT 파라미터. 기본값 FAILED로 시작해 결과에 따라 채운다.
         call = {
             "CARD_AI_RUN_ID": run_id,
             "CARD_DOC_ID": chunk["card_doc_id"],
@@ -1025,6 +1129,7 @@ class ExtractionService:
             )
             extraction = self._parse(response.raw_text, chunk["page_no"], call)
         call["CALL_LATENCY_MS"] = int((perf_counter() - started) * 1000)
+        # 비용이 든 응답을 잃지 않도록 트랜잭션 없이 바로 저장(커밋)한다.
         self.repository.insert_call(call)
         return extraction
 
@@ -1043,7 +1148,12 @@ class ExtractionService:
         return extraction
 
     def _store_page(self, run_id: str, card_id: int, chunk: dict, call_seq: int, page: PageResult) -> None:
-        """페이지 항목과 근거를 저장한다. 호출자가 트랜잭션을 연다."""
+        """페이지 항목과 근거를 저장한다. 호출자가 트랜잭션을 연다.
+
+        혜택(benefits) → 카드 조건(card_conditions) 순서로 항목 순번(stg_item_seq)을 1부터 매긴다.
+        각 항목은 저장 전에 원문 대조(check_benefit / check_condition)를 거치고, 결과 ItemCheck를 PageResult에 보관해
+        뒤의 문서 통합(merge_pages)에서 검증 코드 계산에 쓴다.
+        """
         seq = 0
         for benefit in page.extraction.benefits:
             seq += 1
@@ -1057,9 +1167,18 @@ class ExtractionService:
             page.conditions.append(StoredItem(stg_id, seq, condition, check))
 
     def _store_item(self, run_id, card_id, chunk, call_seq, seq, kind, item, check: ItemCheck) -> str:
-        """항목 1건과 근거를 저장한다. 위치를 찾은 첫 근거가 대표 근거다."""
+        """항목 1건과 근거를 저장한다. 위치를 찾은 첫 근거가 대표 근거다.
+
+        1) card_extr_stg INSERT → DB가 card_extr_stg_id(PK) 발급
+        2) 그 ID를 FK(card_extr_stg_id)로 넣어 card_source_evidence에 근거 전체를 일괄 INSERT
+           (위치를 못 찾은 근거도 start_pos/end_pos=NULL로 저장된다)
+
+        Returns:
+            발급된 card_extr_stg_id.
+        """
         primary = next((evidence for evidence in check.evidence if evidence.located), None)
         first = primary or (check.evidence[0] if check.evidence else None)
+        # stg_raw_item에는 LLM 항목 원본(JSON)을 그대로 저장한다. 등록용 정제본은 저장하지 않는다.
         stg_id = self.repository.insert_stg({
             "CARD_AI_RUN_ID": run_id,
             "CARD_DOC_ID": chunk["card_doc_id"],
@@ -1102,9 +1221,11 @@ class ExtractionService:
             for benefit in benefits
         }
         try:
+            # 트랜잭션 시작: 통합 결과 UPDATE를 문서 단위로 한 번에 commit/rollback한다.
             with self.sql_session.transaction():
                 for benefit in benefits:
                     self._store_group(benefit.merge, benefit.sql_check_cd, None, lookup)
+                # 조건이 혜택 하나에만 적용되면 그 혜택 대표 행을 상위 행으로 연결한다.
                 for condition in conditions:
                     keys = condition.applies_to_item_keys
                     parent = benefit_ids[keys[0]] if len(keys) == 1 else None
@@ -1123,5 +1244,7 @@ class ExtractionService:
         canonical = lookup[(first.card_doc_chunk_id, first.stg_item_seq)]
         self.repository.update_stg_merge(canonical, parent, check_cd)
         duplicate_cd = "MERGE_CONFLICT" if merge.conflicts else "MERGED_DUP"
+        # 중복 행: stg_parent_card_extr_stg_id = 대표 행 ID (같은 테이블 자기 참조). 등록 단계는 상위 행이 없는 대표만 읽는다.
         for ref in others:
             self.repository.update_stg_merge(lookup[(ref.card_doc_chunk_id, ref.stg_item_seq)], canonical, duplicate_cd)
+# endregion

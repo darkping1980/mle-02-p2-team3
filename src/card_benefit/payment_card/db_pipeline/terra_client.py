@@ -1,4 +1,17 @@
-"""Terra 페이지 추출 어댑터. 비용은 추정치이며 공급자의 청구 상한이 아니다."""
+"""Terra 페이지 추출 어댑터. 비용은 추정치이며 공급자의 청구 상한이 아니다.
+
+[등록 파이프라인에서의 위치] 2단계 "LLM 추출"의 실제 외부 호출부. extraction_service.LlmClient 계약
+(``model_nm`` 속성 + ``extract(PageInput) -> LlmResponse``)을 구현한다(Java의 interface 구현체에 해당).
+
+처리 흐름 (``extract``)
+    1. 예산 확인: 누적 사용액 + (입력 추정 + 최대 출력) 비용이 예산을 넘거나 이전 사용량이 불명이면 BudgetExceeded
+    2. 요청 구성: 프롬프트 + "PAGE n" + 페이지 텍스트, 페이지 이미지(PNG base64, 있을 때만)
+    3. ``client.responses.create`` 호출 — strict JSON Schema(PageExtraction)로 응답 형식 강제
+    4. 응답 usage로 누적 사용액 갱신. usage가 없거나 호출 예외면 usage_uncertain=True로 이후 호출 차단
+
+호출하는 곳: terra_main.py, common_auto_main.py (OpenAI 클라이언트를 주입해 생성)
+DB 접근 없음. 이 클래스가 호출 이력을 저장하지 않으며, 저장은 ExtractionService._call_llm이 한다.
+"""
 from __future__ import annotations
 
 import base64
@@ -10,6 +23,7 @@ from .extraction_service import LlmResponse, PageInput
 
 
 class BudgetExceeded(Exception):
+    """예산 초과 또는 사용량 미확인으로 호출을 막을 때 낸다. ExtractionService._call_llm에서는 호출 실패(FAILED)로 기록된다."""
     pass
 
 
@@ -37,15 +51,27 @@ class TerraClient:
 
     @classmethod
     def cost(cls, input_tokens: int, output_tokens: int, model_nm: str = 'gpt-6.1-terra') -> Decimal:
+        """토큰 수와 PRICES 단가(백만 토큰당 USD)로 추정 비용을 계산한다. 실제 청구액이 아니다."""
         input_price, output_price = cls.PRICES[model_nm]
         return (input_tokens * input_price + output_tokens * output_price) / Decimal(1000000)
 
     @property
     def reuse_config(self):
+        """ExtractionService.run의 재사용 지문에 들어가는 모델 설정. 값이 다르면 이전 실행을 재사용하지 않는다."""
         return {"adapter": "terra_v1", "reasoning": self.reasoning_effort, "image_detail": "high",
                 "max_output_tokens": self.max_output_tokens}
 
     def extract(self, page_input: PageInput) -> LlmResponse:
+        """페이지 입력 1건으로 LLM을 호출한다(유료 API 호출).
+
+        Returns:
+            LlmResponse(응답 원문, 입력·출력 토큰 수). 사용량을 알 수 없으면 토큰 수는 None.
+
+        Raises:
+            BudgetExceeded: 호출 전 예산 검사에 걸린 경우(호출하지 않음).
+            Exception: API 호출 예외를 그대로 전파한다. 이때 usage_uncertain=True가 되어 이후 호출이 막힌다.
+        """
+        # 호출 전 예산 검사: 최대 비용 기준으로 넘으면 호출하지 않는다.
         if self.usage_uncertain or self.spent_usd + self.cost(self.input_token_estimate, self.max_output_tokens, self.model_nm) > self.budget_usd:
             raise BudgetExceeded('예산 또는 사용량 미확인으로 호출 차단')
         content = [{'type': 'input_text', 'text': page_input.prompt_txt + '\n\nPAGE ' + str(page_input.page_no) + '\n' + page_input.page_text}]

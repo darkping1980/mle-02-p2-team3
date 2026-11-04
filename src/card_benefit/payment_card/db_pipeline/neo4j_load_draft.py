@@ -3,6 +3,24 @@
 MERGE만 쓰므로 재실행해도 중복되지 않는다. 노드·관계 삭제 구문이 없고 ``dp_`` 밖의 데이터는 건드리지 않는다.
 스키마 변경은 ``dp_`` 제약 생성뿐이다.
 """
+# 주의: 위 모듈 docstring은 main()의 argparse description(--help 출력)으로 쓰이므로 내용을 바꾸지 않았다.
+#
+# [등록 파이프라인에서의 위치] 4단계 "Neo4j 적재"의 쓰기부. 원천은 항상 PostgreSQL 전체 스냅샷이다(증분 적재 아님).
+#
+# 처리 흐름 (main)
+#     1. psycopg로 PostgreSQL 접속 → neo4j_dry_run.load_snapshot → build (변환·검증, 실패 시 GraphValidationError)
+#     2. prepare: 허용 라벨·관계 유형만 통과시키고 적재용 목록(nodes, relationships)으로 변환
+#     3. 미리보기 출력. --apply가 없으면 여기서 끝(Neo4j 접속 없음)
+#     4. --confirm APPROVED_DP_HANA_CARD 와 NEO4J_DATABASE == EXPECTED_DB 가 모두 맞아야 진행
+#     5. prepare_schema: dp_ 제약(CREATE CONSTRAINT IF NOT EXISTS) 생성·확인
+#     6. Neo4j에 있는 dp_ 노드 중 원천에 없는 노드(stale)가 있으면 중단(자동 삭제하지 않음)
+#     7. session.execute_write(write_transaction): 노드 MERGE → 관계 MERGE → 건수·key 사후 확인
+#        execute_write는 함수 전체를 하나의 Neo4j 쓰기 트랜잭션으로 실행하므로, 사후 확인에서 ValueError가 나면
+#        이번 적재 전체가 commit되지 않는다.
+#
+# 식별자: 노드는 (라벨 + PostgreSQL PK 속성)으로 MERGE하고, 모든 dp_ 노드에 dp_node 라벨과 고유 key를 둔다.
+#        관계 key는 neo4j_dry_run의 관계 key 문자열을 SHA-256한 값이다. 재실행해도 같은 key라 중복이 생기지 않는다.
+# 정적 Cypher 조회는 neo4j_validation.cypher(Neo4jDbSession mapper, CYPHER["neo4j_validation.이름"])에 있다.
 from __future__ import annotations
 
 import argparse
@@ -82,7 +100,17 @@ def prepare(graph):
 
 
 def write_transaction(tx, nodes, relationships):
-    """전용 라벨과 PK로만 MERGE한다. 값은 파라미터로 전달한다."""
+    """전용 라벨과 PK로만 MERGE한다. 값은 파라미터로 전달한다.
+
+    ``session.execute_write`` 의 트랜잭션 함수다. 라벨·관계 유형은 Cypher 파라미터로 쓸 수 없어 문자열에 넣지만,
+    prepare에서 허용 목록(NODE_LABELS·REL_TYPES)으로 확인한 값만 들어온다.
+
+    Returns:
+        (노드 수, 관계 수)
+
+    Raises:
+        ValueError: MERGE 결과가 1건이 아니거나 사후 확인에서 Neo4j의 dp_ key 집합이 원천과 다를 때(트랜잭션 rollback).
+    """
     for n in nodes:
         label = n["label"]  # prepare에서 허용 목록으로 확인했다.
         match = ", ".join(f"{field}: $pk.{field}" for field in n["pk"])
@@ -123,11 +151,13 @@ def prepare_schema(session) -> dict:
 
 
 def main():
+    """PostgreSQL 스냅샷을 변환해 미리보기를 출력하고, --apply와 확인 문구가 있을 때만 Neo4j에 적재한다."""
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--confirm", default="")
     args = ap.parse_args()
     load_dotenv(".env")
+    # PostgreSQL은 읽기만 한다(load_snapshot이 READ ONLY 트랜잭션을 설정).
     with psycopg.connect(os.environ["DB_URL"], connect_timeout=10) as c:
         graph, stats = build(load_snapshot(c))
     nodes, edges = prepare(graph)
@@ -146,6 +176,7 @@ def main():
         stale = existing - {n["props"]["key"] for n in nodes}
         if stale:
             raise SystemExit(f"원천에 없는 dp_ 노드가 있어 적재를 중단합니다. 자동 삭제하지 않습니다: {sorted(stale)[:5]}")
+        # Neo4j 쓰기 트랜잭션: write_transaction이 정상 반환하면 commit, 예외면 rollback된다.
         print("committed", session.execute_write(write_transaction, nodes, edges))
 
 

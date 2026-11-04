@@ -1,4 +1,13 @@
-"""PostgreSQL 원본과 Neo4j ``dp_`` 그래프를 읽기 전용으로 대조한다. 어떤 DB에도 쓰지 않는다."""
+"""PostgreSQL 원본과 Neo4j ``dp_`` 그래프를 읽기 전용으로 대조한다. 어떤 DB에도 쓰지 않는다.
+
+[등록 파이프라인에서의 위치] 4단계 Neo4j 적재 후 검증. 적재(neo4j_load_draft.py) 다음에 실행한다.
+
+처리 흐름 (``run``)
+    1. PostgreSQL 스냅샷 → build → prepare (적재 때와 같은 변환을 다시 수행해 "기대 그래프"를 만든다)
+    2. neo4j_validation.sql의 비교용 조회(COMPARED 4종)를 PostgresDbSession으로 실행
+    3. Neo4j를 READ_ACCESS 세션으로 읽어 노드·관계 key/라벨/source_json, 범위 밖 건수, 고아 노드, 같은 비교 조회 결과 수집
+    4. compare_graph + SQL·Cypher 결과 비교 → ``ok`` 판정. main은 ok가 아니면 종료 코드 1
+"""
 from __future__ import annotations
 
 import json
