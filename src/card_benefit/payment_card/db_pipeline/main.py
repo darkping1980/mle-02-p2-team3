@@ -1,5 +1,23 @@
 """PDF 원문 등록 CLI. ``--apply`` 가 없으면 조회만 하고 DB를 변경하지 않는다.
 
+[등록 파이프라인에서의 위치] 1단계: PDF → 파싱 → 페이지/청크 → PostgreSQL(문서·페이지·청크)
+    이 CLI는 LLM을 호출하지 않는다. LLM 추출은 ``terra_main`` (2단계), 혜택 등록은 ``benefit_main`` (3단계)이다.
+
+처리 흐름
+    1. ``parse_args`` : 인자 조합 검증(상품 연결/공통서비스 연결/manifest 없는 PDF 메타데이터)
+    2. ``PostgresDbSession`` 생성(SQL mapper 위치 = 이 폴더의 ``*.sql``, 원문 파라미터는 로그에서 가림)
+    3. ``DocumentService`` 생성(PDF 읽기·검증·청크 분리 담당, DB 미접근)
+    4. ``RegisterService.register`` 호출 → 실제 등록·검증·연결은 모두 그 안에서 처리
+    5. 결과 출력, ERROR 검증 항목이 있으면 종료 코드 1
+
+호출 관계
+    main → RegisterService.register (register_service.py)
+         → DocumentService.inspect / read (document_service.py)
+         → DocRepository (document_repository.py → document_repository.sql)
+
+관련 테이블(db_pipeline 스키마)
+    card_doc, card_doc_page, card_doc_chunk, card_product_doc(상품 연결), card_common·card_common_doc(공통서비스 연결)
+
 실행 예(src/card_benefit 폴더에서, PDF 경로는 data/raw/hana_all 기준):
     uv run python -m payment_card.db_pipeline.main --pdf "debit/파일명.pdf"
     uv run python -m payment_card.db_pipeline.main --pdf "debit/파일명.pdf" --apply
@@ -67,7 +85,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def links(args: argparse.Namespace) -> dict:
-    """인자를 문서 연결로 바꾼다."""
+    """인자를 문서 연결로 바꾼다.
+
+    Returns:
+        ``RegisterService.register`` 에 키워드 인자로 펼쳐 넘길 dict.
+        ``--card-id`` → ``{"product_link": ProductDocLink}`` (card_product_doc에 연결),
+        ``--common-cd`` → ``{"common_link": CommonDocLink}`` (card_common·card_common_doc에 연결),
+        둘 다 없으면 빈 dict(문서만 등록).
+    """
     if args.card_id is not None:
         return {"product_link": ProductDocLink(args.card_id, args.basis)}
     if args.common_cd:
@@ -98,7 +123,15 @@ def print_result(result: RegisterResult) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """인자를 해석해 등록을 실행하고, 끝나면 연결 pool을 닫는다."""
+    """인자를 해석해 등록을 실행하고, 끝나면 연결 pool을 닫는다.
+
+    Returns:
+        종료 코드. 0 성공, 1 입력 오류(ValueError·RegisterError) 또는 ERROR 검증 항목 존재, 3 DB 오류(psycopg.Error).
+
+    부작용:
+        ``--apply`` 일 때만 RegisterService 안에서 card_doc·card_doc_page·card_doc_chunk INSERT와 연결 INSERT가 일어난다.
+        트랜잭션은 이 함수가 아니라 ``RegisterService._insert`` / ``register`` 가 연다.
+    """
     args = parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     sql_session = PostgresDbSession(
@@ -109,7 +142,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(f"접속 대상: {urlparse(os.getenv('DB_URL', '')).hostname} / {'등록' if args.apply else 'dry-run'}")
     try:
+        # OCR 엔진은 --ocr를 줬을 때만 만든다. 없으면 텍스트 추출이 의심스러운 페이지가 있을 때 등록이 거부된다.
         ocr_engine = create_ocr_engine(args.ocr) if args.ocr else None
+        # 분기: --issuer-cd가 있으면 manifest 없는 타사 PDF(예: 우리카드), 없으면 하나카드 manifest.csv 기준 PDF.
         external_source = None
         data_root = None
         if args.issuer_cd:
@@ -125,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
         document_service = DocumentService(data_root=data_root, ocr_engine=ocr_engine,
                                            external_source=external_source) if data_root else DocumentService(
                                                ocr_engine=ocr_engine, external_source=external_source)
+        # 실제 등록 진입점. links(args)는 product_link 또는 common_link 중 하나만(또는 둘 다 없이) 넘긴다.
         result = RegisterService(sql_session, document_service).register(args.pdf, apply=args.apply, **links(args))
         print_result(result)
         return 1 if error_checks(result.checks) else 0
