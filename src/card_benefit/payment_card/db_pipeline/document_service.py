@@ -12,8 +12,9 @@ from datetime import date, datetime, timedelta, timezone
 import hashlib
 from pathlib import Path
 import re
+import unicodedata
 
-from common.document_reader import DocumentReader
+from common.document_reader import DocumentReader, measure_pdf_text
 
 from .block_chunking import SPLIT_RULE_BLOCK, split_blocks
 
@@ -26,6 +27,7 @@ SPLIT_RULE_VER = "PAGE_V1"                                    # 분리 규칙을
 
 KST = timezone(timedelta(hours=9))                            # manifest 수집일시의 기준 시간대
 FILE_CODE_PATTERN = re.compile(r"_([A-Za-z]*\d+)_(\d{8})\.pdf$", re.IGNORECASE)
+SIX_DIGIT_DATE_PATTERN = re.compile(r"_(\d{6})\.pdf$", re.IGNORECASE)
 REVIEW_PATTERN = re.compile(r"^.*준법심의\s*\S+?\((\d{4})\.(\d{1,2})\.(\d{1,2})\).*$", re.MULTILINE)
 QUALITY_PATTERNS = {
     "amount": re.compile(r"\d[\d,]*(?:천|만)?원"),
@@ -92,7 +94,7 @@ class ParsedDocument:
     doc_family_cd: str
     doc_type_cd: str
     doc_title: str
-    doc_source_url: str
+    doc_source_url: str | None
     doc_file_nm: str
     doc_file_size: int
     doc_sha256: str
@@ -127,13 +129,27 @@ def sha256_hex(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+@dataclass(frozen=True)
+class ExternalDocumentSource:
+    """Manifest-less, explicitly identified source for a non-Hana card PDF."""
+
+    issuer_cd: str
+    doc_code_prefix: str
+    doc_family_cd: str
+    doc_title: str
+    doc_type_cd: str = "PRODUCT_GUIDE"
+    doc_source_url: str | None = None
+
+
 class DocumentService:
     """manifest에 있는 공식 상품설명서 PDF를 검증하고 페이지·청크로 구성한다."""
 
-    def __init__(self, data_root: Path = DATA_ROOT, ocr_engine=None, split_rule: str = SPLIT_RULE_VER):
+    def __init__(self, data_root: Path = DATA_ROOT, ocr_engine=None, split_rule: str = SPLIT_RULE_VER,
+                 external_source: ExternalDocumentSource | None = None):
         self.data_root = Path(data_root)
         self.ocr_engine = ocr_engine
         self.split_rule = split_rule
+        self.external_source = external_source
 
     def inspect(self, pdf: str | Path) -> ParsedDocument:
         """파일과 manifest를 확인하되 페이지를 파싱하지 않는다."""
@@ -143,6 +159,8 @@ class DocumentService:
             ValueError: 파일이 없거나 PDF가 아닌 경우, manifest와 다르거나 대상 문서가 아닌 경우.
         """
         path, relative_path = self._resolve(pdf)
+        if self.external_source is not None:
+            return self._inspect_external(path, relative_path)
         rows = self._manifest_rows(relative_path)
         content = path.read_bytes()
         if not content.startswith(b"%PDF-"):
@@ -178,14 +196,58 @@ class DocumentService:
             chunks=(),
         )
 
+    def _inspect_external(self, path: Path, relative_path: Path) -> ParsedDocument:
+        """Validate a separately identified source without inventing a design code or manifest row."""
+        source = self.external_source
+        content = path.read_bytes()
+        if not content.startswith(b"%PDF-"):
+            raise ValueError(f"PDF 파일이 아닙니다: {relative_path}")
+        date_match = SIX_DIGIT_DATE_PATTERN.search(path.name)
+        if date_match is None:
+            raise ValueError(f"파일명 끝에서 YYMMDD 날짜를 찾지 못했습니다: {path.name}")
+        file_date = date_match.group(1)
+        # A checksum suffix makes the document code unique without pretending the source has a design code.
+        digest = sha256_hex(content)
+        try:
+            import pymupdf
+            with pymupdf.open(path) as pdf:
+                page_count = len(pdf)
+        except Exception as error:
+            raise ValueError(f"PDF를 열 수 없습니다: {type(error).__name__}") from error
+        if page_count < 1:
+            raise ValueError("페이지가 없는 PDF입니다")
+        collect_date = datetime.now(KST)
+        return ParsedDocument(
+            doc_cd=f"{source.doc_code_prefix}_{file_date}_{digest[:12]}",
+            doc_family_cd=source.doc_family_cd,
+            doc_type_cd=source.doc_type_cd,
+            doc_title=source.doc_title,
+            doc_source_url=source.doc_source_url,
+            doc_file_nm=(Path(self.data_root.name) / relative_path).as_posix(),
+            doc_file_size=len(content),
+            doc_sha256=digest,
+            doc_review_no=None,
+            doc_review_date=None,
+            doc_collect_date=collect_date,
+            doc_note=(f"issuer={source.issuer_cd}; 로컬 수집 PDF. 원본 공식 URL은 별도 확인 필요; "
+                      f"filename date={file_date}; declared pages={page_count}"),
+            pages=(),
+            chunks=(),
+        )
+
     def read(self, pdf: str | Path) -> ParsedDocument:
         from dataclasses import replace
         identity = self.inspect(pdf)
         path, relative_path = self._resolve(pdf)
         pages = self._read_pages(path)
-        expected = int(self._manifest_rows(relative_path)[0]["페이지수"])
+        if self.external_source is None:
+            expected = int(self._manifest_rows(relative_path)[0]["페이지수"])
+        else:
+            import pymupdf
+            with pymupdf.open(path) as pdf:
+                expected = len(pdf)
         if len(pages) != expected:
-            raise ValueError(f"manifest의 페이지 수({expected})와 다릅니다: {len(pages)}쪽")
+            raise ValueError(f"문서 페이지 수({expected})와 다릅니다: {len(pages)}쪽")
         # 파싱 중 파일이 바뀌었다면 결과를 저장하지 않는다.
         if sha256_hex(path.read_bytes()) != identity.doc_sha256:
             raise ValueError("파싱 중 PDF 내용이 변경되었습니다")
@@ -229,12 +291,17 @@ class DocumentService:
         reader.set_pdf_doc_list()
         blocked = [(row["page_no"], row["status"]) for row in reader.page_quality_list
                    if row["status"] in BLOCKING_PAGE_STATUS]
-        if blocked:
+        if blocked and self.external_source is None:
             raise ValueError(f"원문 추출을 신뢰할 수 없는 페이지가 있습니다: {blocked}")
         pages = []
         for doc, quality in zip(reader.doc_list, reader.page_quality_list):
             # PostgreSQL text는 NUL을 저장할 수 없다. 같은 길이의 문자로 바꿔 위치를 유지한다.
             text = doc["text"].replace("\x00", "�")
+            if self.external_source is not None:
+                # Some Woori PDFs encode bullet/check icons as private-use font glyphs.
+                # Map only those decorative glyphs to a same-width bullet; keep all text positions stable.
+                text = "".join("•" if unicodedata.category(char) == "Co" else char for char in text)
+                quality = {**quality, **measure_pdf_text(text, quality["has_visual"])}
             pages.append(DocPage(
                 page_no=doc["page_no"],
                 text=text,
@@ -244,6 +311,11 @@ class DocumentService:
                 extractor_ver=quality["extractor_ver"],
                 read_quality=quality,
             ))
+        if self.external_source is not None:
+            blocked = [(page.page_no, page.read_quality["status"]) for page in pages
+                       if page.read_quality["status"] in BLOCKING_PAGE_STATUS]
+            if blocked:
+                raise ValueError(f"원문 추출을 신뢰할 수 없는 페이지가 있습니다: {blocked}")
         return tuple(pages)
 
     @staticmethod

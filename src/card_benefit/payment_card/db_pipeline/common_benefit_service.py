@@ -17,6 +17,7 @@ from pydantic import ValidationError
 from psycopg.types.json import Jsonb
 
 from .extraction_service import normalize_stored_run
+from .unresolved_review import load_registry, links_for_candidate, unresolved_queue, verified_reviews_for_run
 
 
 def compact(value: str) -> str:
@@ -189,14 +190,24 @@ class CommonBenefitRepository:
         정제본은 DB에 저장하지 않는다(2026-11-03 stg_normalized_item 제거). 등록할 때마다 같은 규칙으로 다시 만든다.
         """
         stored = self.stored_run(run_id) or {}
+        registry = load_registry()
+        run_reviews = [review for review in registry if review['run_id'] == run_id]
+        reviews = verified_reviews_for_run(
+            run_id, self.rows('list_unresolved_review_items', RUN_ID=run_id), run_reviews) if run_reviews else []
         out = []
         for row in rows:
             item = stored.get(row['card_extr_stg_id'])
             out.append({**row, 'normalized': item.normalized if item else None,
                         'source_cnt': item.source_cnt if item else 0,
                         'conflicts': item.conflicts if item else [],
-                        'check_cd': item.check_cd if item else None})
+                        'check_cd': item.check_cd if item else None,
+                        'reviewed_unresolved_links': links_for_candidate(
+                            run_id, row.get('card_doc_id', ''), row.get('stg_raw_item', {}).get('bnft_nm', ''), reviews)})
         return out
+
+    def unresolved_review_queue(self, run_id: str) -> list[dict]:
+        """Read unresolved entries from immutable call responses and join separate review decisions."""
+        return unresolved_queue(self.rows('list_unresolved_review_items', RUN_ID=run_id), load_registry())
 
 
 class CommonBenefitService:

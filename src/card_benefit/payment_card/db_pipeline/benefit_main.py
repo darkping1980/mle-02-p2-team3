@@ -29,7 +29,7 @@ from .product_benefit_service import ProductBenefitService
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="benefit_main", description="추출 후보 혜택 등록")
-    parser.add_argument("kind", choices=("product", "common", "brand-compare"))
+    parser.add_argument("kind", choices=("product", "common", "brand-compare", "review-queue"))
     parser.add_argument("--run-id", help="card_ai_run_id. product, common에 필수")
     parser.add_argument("--card-id", type=int, action="append", default=[], help="대상 카드. product는 1개 필수")
     parser.add_argument("--identity", action="append", default=[], help="추출항목ID=업무식별자 (common)")
@@ -47,7 +47,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    if not args.apply:
+    if not args.apply and args.kind != "review-queue":
         print("dry-run: --apply가 없어 DB에 접속하지 않았습니다")
         return 0
     load_project_environment()
@@ -55,6 +55,11 @@ def main(argv: list[str] | None = None) -> int:
                                 sensitive_log_keys=(*QueryLogger.DEFAULT_SENSITIVE_KEYS, *EMBEDDING_LOG_KEYS))
     print(f"접속 대상: {urlparse(os.getenv('DB_URL', '')).hostname}")
     try:
+        if args.kind == "review-queue":
+            import json
+            rows = ProductBenefitService(session).unresolved_review_queue(args.run_id)
+            print(json.dumps(rows, ensure_ascii=False, indent=2, default=str))
+            return 0
         if args.kind == "brand-compare":
             for row in CommonBenefitService(session).compare_brand_benefits():
                 print(row)

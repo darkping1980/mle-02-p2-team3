@@ -90,6 +90,30 @@ LEFT JOIN db_pipeline.card_ai_call a
 WHERE s.card_ai_run_id = :RUN_ID
 ORDER BY c.chunk_seq, s.stg_item_seq;
 
+-- name: list_unresolved_review_items
+-- Immutable unresolved arrays are read from the saved LLM JSON; no staging row is rewritten.
+SELECT a.card_ai_run_id, a.card_doc_id, a.page_no, a.card_doc_chunk_id,
+       u.ordinality::integer AS unresolved_ordinal,
+       u.item->>'raw_txt' AS raw_txt, u.item->>'reason' AS reason
+FROM db_pipeline.card_ai_call a
+CROSS JOIN LATERAL jsonb_array_elements(COALESCE(a.call_resp_json->'unresolved','[]'::jsonb))
+     WITH ORDINALITY AS u(item, ordinality)
+WHERE a.card_ai_run_id=:RUN_ID
+ORDER BY a.page_no, a.card_doc_chunk_id, u.ordinality;
+
+-- name: select_review_source_chunk
+SELECT c.card_doc_id, c.page_no, c.card_doc_chunk_id, c.chunk_raw_txt
+FROM db_pipeline.card_doc_chunk c
+WHERE c.card_doc_id=:CARD_DOC_ID AND c.page_no=:PAGE_NO AND c.card_doc_chunk_id=:CARD_DOC_CHUNK_ID;
+
+-- name: insert_review_evidence!
+-- Explicitly approved cross-page evidence is appended to the target benefit staging item.
+INSERT INTO db_pipeline.card_source_evidence (
+  card_doc_id,page_no,card_doc_chunk_id,card_extr_stg_id,quote_txt,start_pos,end_pos,approval_status_cd
+) VALUES (
+  :CARD_DOC_ID,:PAGE_NO,:CARD_DOC_CHUNK_ID,:STG_ID,:QUOTE_TXT,:START_POS,:END_POS,'PENDING'
+) RETURNING evidence_id;
+
 -- name: candidate_evidence
 SELECT e.evidence_id,e.quote_txt,e.start_pos,e.end_pos,e.approval_status_cd,
        e.card_doc_id,e.page_no,e.card_doc_chunk_id,

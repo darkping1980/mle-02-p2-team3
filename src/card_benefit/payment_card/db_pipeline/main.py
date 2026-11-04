@@ -23,7 +23,7 @@ from common.postgres_db_session import PostgresDbSession
 from common.query_logger import QueryLogger
 import psycopg
 
-from .document_service import DocumentService
+from .document_service import DocumentService, ExternalDocumentSource
 from .register_service import (CommonDocLink, ProductDocLink, RegisterError, RegisterResult, RegisterService,
                                error_checks)
 from .document_repository import MAPPER_ROOT, RAW_TEXT_LOG_KEYS
@@ -32,7 +32,14 @@ from .document_repository import MAPPER_ROOT, RAW_TEXT_LOG_KEYS
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """등록 대상 PDF와 실행 옵션을 해석한다."""
     parser = argparse.ArgumentParser(prog="db_pipeline", description="PDF 원문 등록")
-    parser.add_argument("--pdf", required=True, help="data/raw/hana_all 기준 PDF 경로")
+    parser.add_argument("--pdf", required=True, help="--data-root 또는 기본 하나카드 PDF root 기준 상대 경로")
+    parser.add_argument("--data-root", help="manifest-less input PDF root (for another issuer)")
+    parser.add_argument("--issuer-cd", help="explicit issuer identifier for a manifest-less PDF")
+    parser.add_argument("--doc-code-prefix", help="issuer-specific document code prefix")
+    parser.add_argument("--doc-family-cd", help="explicit document family identifier")
+    parser.add_argument("--doc-title", help="explicit product/document title")
+    parser.add_argument("--doc-type-cd", choices=("PRODUCT_GUIDE", "BRAND_SERVICE"), default="PRODUCT_GUIDE")
+    parser.add_argument("--source-url", help="official source URL, if confirmed")
     parser.add_argument("--apply", action="store_true", help="실제로 등록한다. 없으면 dry-run")
     parser.add_argument("--ocr", choices=OCR_ENGINE_KINDS, help="문제 페이지에 쓸 OCR 엔진. 없으면 해당 PDF를 등록하지 않음")
     parser.add_argument("--card-id", type=int, help="상품설명서를 연결할 card_product.card_id")
@@ -49,6 +56,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--common-cd에는 --common-nm이 필요합니다")
     if args.card_id is not None and args.common_cd:
         parser.error("--card-id와 --common-cd는 함께 쓸 수 없습니다")
+    source_values = (args.issuer_cd, args.doc_code_prefix, args.doc_family_cd, args.doc_title)
+    if any(source_values) and not all(source_values):
+        parser.error("manifest-less PDF는 --issuer-cd, --doc-code-prefix, --doc-family-cd, --doc-title이 모두 필요합니다")
+    if args.data_root and not all(source_values):
+        parser.error("--data-root에는 명시적 source metadata가 필요합니다")
+    if args.source_url and not args.issuer_cd:
+        parser.error("--source-url은 manifest-less source metadata와 함께 사용합니다")
     return args
 
 
@@ -96,7 +110,22 @@ def main(argv: list[str] | None = None) -> int:
     print(f"접속 대상: {urlparse(os.getenv('DB_URL', '')).hostname} / {'등록' if args.apply else 'dry-run'}")
     try:
         ocr_engine = create_ocr_engine(args.ocr) if args.ocr else None
-        result = RegisterService(sql_session, DocumentService(ocr_engine=ocr_engine)).register(args.pdf, apply=args.apply, **links(args))
+        external_source = None
+        data_root = None
+        if args.issuer_cd:
+            external_source = ExternalDocumentSource(
+                issuer_cd=args.issuer_cd,
+                doc_code_prefix=args.doc_code_prefix,
+                doc_family_cd=args.doc_family_cd,
+                doc_title=args.doc_title,
+                doc_type_cd=args.doc_type_cd,
+                doc_source_url=args.source_url,
+            )
+            data_root = args.data_root
+        document_service = DocumentService(data_root=data_root, ocr_engine=ocr_engine,
+                                           external_source=external_source) if data_root else DocumentService(
+                                               ocr_engine=ocr_engine, external_source=external_source)
+        result = RegisterService(sql_session, document_service).register(args.pdf, apply=args.apply, **links(args))
         print_result(result)
         return 1 if error_checks(result.checks) else 0
     except (ValueError, RegisterError) as error:
