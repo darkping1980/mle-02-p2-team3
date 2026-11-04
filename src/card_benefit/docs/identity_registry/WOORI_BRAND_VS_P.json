@@ -1,0 +1,61 @@
+{
+ "ledger_version": 1,
+ "doc_family_cd": "WOORI_BRAND_VS_P",
+ "card_doc_id": "20261104_000027",
+ "card_common_id": 23,
+ "common_cd": "WOORI_VISA_PLATINUM",
+ "source_run_id": "20261104_000036",
+ "created_date": "2026-11-04",
+ "status": "DRAFT_PENDING_USER_REVIEW",
+ "identity_rules": "HANA_MP004.json의 identity_rules와 같다(BIZ_V1:<영역>/<제휴사·대상>/<혜택 구분>, anchor 대응).",
+ "register": [
+  {
+   "card_extr_stg_id": "20261104_000458",
+   "bnft_nm_run36": "해외렌터카 할인",
+   "identity": "BIZ_V1:TRAVEL/OVERSEAS_RENTAL_CAR/DISCOUNT",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_EA76C21D228658DCDD7FFBB90575E59013C257F89DE99F0E579DBB403D5A3013",
+   "targets": [
+    "INDUSTRY:해외렌터카",
+    "MERCHANT:He「tz",
+    "MERCHANT:RentaIcars℃om",
+    "MERCHANT:AVIS"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r14",
+     "value_raw_txt": "10~20%",
+     "value_num": null,
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "LOW",
+   "uncertainty_note": "업체별 할인율과 종료 연도, AVIS 예약 문구가 불명확합니다.",
+   "service_type_cd": "COMMON",
+   "valid_from": null,
+   "valid_to_excl": null,
+   "evidence_ids": [
+    "20261104_001981",
+    "20261104_001982",
+    "20261104_001983",
+    "20261104_001984"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_001981",
+    "card_doc_chunk_id": "20261104_000093",
+    "start_pos": 517,
+    "end_pos": 594,
+    "line_sha256": "ca5172458814972e108cbb9ef68ad6410a6a86a46faa348ea090a116c90a454b",
+    "value_key": [
+     "10~20%"
+    ]
+   },
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  }
+ ],
+ "excluded": [],
+ "review_note": "우리카드 공통 문서 5건(run 35~39) 154후보 중 기존 규칙 통과 1건만 등록. 나머지 153건은 woori_common_review_20261104.json 참고."
+}
