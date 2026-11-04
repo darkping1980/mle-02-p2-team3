@@ -26,7 +26,7 @@ CONFIRM = "APPROVED_DP_HANA_CARD"
 NODE_LABELS = frozenset(PREFIX + label for label in PK_FIELDS)
 REL_TYPES = frozenset(PREFIX + kind for kind in (
     "has_document", "has_benefit", "has_rule", "has_expr", "has_branch", "has_atom", "targets", "supported_by",
-    "in_chunk", "on_page", "in_document", "has_common_benefit", "belongs_to", "same_as"))
+    "in_chunk", "on_page", "in_document", "has_common_benefit", "belongs_to", "same_as", "has_item"))
 # 쓰기 구문이므로 읽기 전용 neo4j_validation.cypher에 두지 않는다. --apply에서만 실행한다.
 CREATE_CONSTRAINTS = (
     f"CREATE CONSTRAINT dp_node_key IF NOT EXISTS FOR (n:{COMMON_LABEL}) REQUIRE n.key IS UNIQUE",
@@ -34,7 +34,7 @@ CREATE_CONSTRAINTS = (
       f"REQUIRE ({', '.join('n.' + field for field in fields)}) IS NODE KEY"
       for label, fields in PK_FIELDS.items()),
 )
-SCALAR_FIELDS = ("card_id", "card_bnft_id", "rule_key", "value_num", "bnft_cd", "bnft_type_cd", "product_cd", "product_nm",
+SCALAR_FIELDS = ("card_id", "card_bnft_id", "card_product_item_id", "item_type_cd", "item_cd", "rule_key", "value_num", "bnft_cd", "bnft_type_cd", "product_cd", "product_nm",
                  "card_kind_cd", "card_common_id", "card_common_bnft_id", "common_cd", "common_nm", "brand_cd",
                  "service_grade_cd", "service_type_cd", "card_doc_id", "doc_title", "doc_type_cd", "card_doc_chunk_id",
                  "branch_no", "atom_seq", "evidence_id", "page_no", "start_pos", "end_pos", "target_nm", "target_key",
@@ -42,7 +42,9 @@ SCALAR_FIELDS = ("card_id", "card_bnft_id", "rule_key", "value_num", "bnft_cd", 
 ALIASES = {"bnft_nm": "name", "verification_status_cd": "verification_status", "bnft_rule_txt": "rule_text",
            "bnft_limit_txt": "limit_text", "atom_key": "key_name", "cond_type_cd": "kind", "cond_raw_txt": "raw_text",
            "negate_yn": "negate", "cond_min_amt": "min_amt", "approval_status_cd": "approval_status",
-           "card_cond_status_cd": "card_cond_status"}
+           "card_cond_status_cd": "card_cond_status", "item_nm": "name", "item_rule_txt": "rule_text",
+           "item_limit_txt": "limit_text"}
+ITEM_LABEL = PREFIX + "card_product_item"
 
 
 def node_properties(node):
@@ -57,6 +59,9 @@ def node_properties(node):
         value = row.get(src)
         if isinstance(value, (str, int, float, bool)):
             props[dest] = value
+    if node["label"] == PREFIX + "card_bnft":
+        # 혜택도 카드 상품 항목이다. 기존 key·속성은 그대로 두고 항목 ID·유형만 더한다.
+        props["card_product_item_id"], props["item_type_cd"] = row.get("card_bnft_id"), "BENEFIT"
     return props
 
 
@@ -81,7 +86,8 @@ def write_transaction(tx, nodes, relationships):
     for n in nodes:
         label = n["label"]  # prepare에서 허용 목록으로 확인했다.
         match = ", ".join(f"{field}: $pk.{field}" for field in n["pk"])
-        result = tx.run(f"MERGE (n:{label} {{{match}}}) SET n:{COMMON_LABEL}, n += $props RETURN count(n) AS n",
+        extra = f", n:{ITEM_LABEL}" if label == PREFIX + "card_bnft" else ""
+        result = tx.run(f"MERGE (n:{label} {{{match}}}) SET n:{COMMON_LABEL}{extra}, n += $props RETURN count(n) AS n",
                         pk=n["pk"], props=n["props"]).single(strict=True)
         if result["n"] != 1:
             raise ValueError("node creation mismatch")

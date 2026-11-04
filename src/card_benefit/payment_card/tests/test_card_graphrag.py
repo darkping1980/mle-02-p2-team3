@@ -323,19 +323,19 @@ class BenefitIdCollisionTests(unittest.TestCase):
         return CardGraphRAG(search, interpret_llm(ids=chosen), answer_llm("온라인 쇼핑 10% 할인입니다.", ("E1",))).run("온라인 쇼핑 할인?")
 
     def test_entity_ref_keeps_kind_and_owner(self):
-        self.assertEqual(card_graphrag.entity_ref(self.CARD_KEY), "card_bnft:6:20261104_000013")
+        self.assertEqual(card_graphrag.entity_ref(self.CARD_KEY), "card_product_item:6:20261104_000013")
         self.assertEqual(card_graphrag.entity_ref(self.COMMON_KEY), "card_common_bnft:9:20261104_000013")
-        self.assertEqual(card_graphrag.entity_ref("pg:CARD_BNFT:6:20261104_000013"), "card_bnft:6:20261104_000013")
+        self.assertEqual(card_graphrag.entity_ref("pg:CARD_BNFT:6:20261104_000013"), "card_product_item:6:20261104_000013")
         self.assertEqual(card_graphrag.entity_ref("pg:CARD_COMMON_BNFT:9:20261104_000013"), "card_common_bnft:9:20261104_000013")
         self.assertEqual(card_graphrag.entity_ref("not-a-key", "X"), "X")
 
     def test_catalog_offers_distinct_ids_to_llm(self):
-        state = self.run_with(("card_bnft:6:20261104_000013",))
+        state = self.run_with(("card_product_item:6:20261104_000013",))
         self.assertEqual([row["id"] for row in state["catalog"]],
-                         ["card_bnft:6:20261104_000013", "card_common_bnft:9:20261104_000013"])
+                         ["card_product_item:6:20261104_000013", "card_common_bnft:9:20261104_000013"])
 
     def test_card_and_common_benefit_resolve_independently(self):
-        card = self.run_with(("card_bnft:6:20261104_000013",))
+        card = self.run_with(("card_product_item:6:20261104_000013",))
         self.assertEqual(card["search_parameters"]["benefit_keys"], [self.CARD_KEY])
         self.assertEqual(card["search_parameters"]["benefit_names"], ["온라인 쇼핑 10% 청구할인"])
         common = self.run_with(("card_common_bnft:9:20261104_000013",))
@@ -348,8 +348,8 @@ class BenefitIdCollisionTests(unittest.TestCase):
         self.assertTrue(any("버렸습니다" in warning for warning in state["warnings"]))
 
     def test_evidence_scope_uses_reference(self):
-        state = self.run_with(("card_bnft:6:20261104_000013",))
-        self.assertEqual(state["evidence"][0]["benefit_ids"], ["card_bnft:6:20261104_000013"])
+        state = self.run_with(("card_product_item:6:20261104_000013",))
+        self.assertEqual(state["evidence"][0]["benefit_ids"], ["card_product_item:6:20261104_000013"])
 
 
 class CommonEvidenceFallbackTests(unittest.TestCase):

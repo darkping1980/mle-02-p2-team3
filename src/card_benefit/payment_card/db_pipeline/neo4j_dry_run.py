@@ -37,6 +37,8 @@ PK_FIELDS = {
     "card_doc_chunk": ("card_doc_id", "page_no", "card_doc_chunk_id"),
     "card_source_evidence": ("evidence_id",),
     "bnft_rule": ("card_id", "card_bnft_id", "rule_key"),
+    # 혜택이 아닌 카드 상품 항목(연회비 등). 혜택 노드는 기존 card_bnft key를 유지하고 라벨만 추가한다(neo4j_load_draft).
+    "card_product_item": ("card_id", "card_product_item_id"),
     "rule_target": ("target_type_cd", "target_key"),
     "cond_expr": ("expr_key",),
     "cond_branch": ("expr_key", "branch_no"),
@@ -105,10 +107,21 @@ def load_snapshot(conn):
         queries = {
             "products": "SELECT * FROM db_pipeline.card_product ORDER BY card_id",
             "product_docs": "SELECT * FROM db_pipeline.card_product_doc ORDER BY card_id, card_doc_id",
-            "benefits": "SELECT * FROM db_pipeline.card_bnft ORDER BY card_id, card_bnft_id",
+            # 카드 혜택 원천은 card_product_item(BENEFIT). 그래프 매핑은 기존 card_bnft 필드명을 쓴다.
+            "benefits": ("SELECT card_id, card_product_item_id AS card_bnft_id, item_cd AS bnft_cd, item_nm AS bnft_nm, "
+                         "item_subtype_cd AS bnft_type_cd, item_origin_cd AS bnft_origin_cd, item_scope_cd AS bnft_scope_cd, "
+                         "item_brand_opt_cds AS bnft_brand_opt_cds, item_cond_expr AS bnft_cond_expr, rule_list, relation_list, "
+                         "verification_status_cd, item_valid_from AS bnft_valid_from, item_valid_to_excl AS bnft_valid_to_excl, "
+                         "item_rule_txt AS bnft_rule_txt, item_limit_txt AS bnft_limit_txt, item_search_txt AS bnft_search_txt, "
+                         "item_embedding AS bnft_embedding "
+                         "FROM db_pipeline.card_product_item WHERE item_type_cd = 'BENEFIT' ORDER BY card_id, card_product_item_id"),
             # Neo4j 관계 속성은 ev_link_id를 유지한다(재적재 전까지). 승계한 문서·페이지·청크 ID는 원문 근거 노드 경로로 이미 표현된다.
-            "links": ("SELECT card_id, evidence_link_id AS ev_link_id, ev_subject_cd, card_bnft_id, rule_key, relation_key, "
+            # 관계 key가 원천 행으로 만들어지므로 기존 필드명(card_bnft_id)을 유지한다.
+            "links": ("SELECT card_id, evidence_link_id AS ev_link_id, ev_subject_cd, card_product_item_id AS card_bnft_id, rule_key, relation_key, "
                       "ev_item_cd, ev_item_key, evidence_id FROM db_pipeline.card_evidence_link ORDER BY card_id, evidence_link_id"),
+            "items": ("SELECT card_id, card_product_item_id, item_type_cd, item_cd, item_nm, item_scope_cd, item_brand_opt_cds, "
+                      "item_data, verification_status_cd, item_valid_from, item_valid_to_excl, item_rule_txt, item_limit_txt "
+                      "FROM db_pipeline.card_product_item WHERE item_type_cd <> 'BENEFIT' ORDER BY card_id, card_product_item_id"),
             "evidence": "SELECT * FROM db_pipeline.card_source_evidence ORDER BY evidence_id",
             "chunks": "SELECT * FROM db_pipeline.card_doc_chunk ORDER BY card_doc_id, page_no, card_doc_chunk_id",
             "pages": "SELECT * FROM db_pipeline.card_doc_page ORDER BY card_doc_id, page_no",
@@ -173,14 +186,16 @@ def expected_counts(snapshot) -> tuple[dict, dict]:
              "card_bnft": len(snapshot["benefits"]), "bnft_rule": len(rules),
              "rule_target": len({(t.get("target_type_cd"), t.get("target_key")) for t in targets}),
              "cond_expr": len(expressions), "cond_branch": len(branches), "cond_atom": len(atoms),
-             "card_common": len(snapshot["commons"]), "card_common_bnft": len(snapshot["common_benefits"])}
+             "card_common": len(snapshot["commons"]), "card_common_bnft": len(snapshot["common_benefits"]),
+             "card_product_item": len(snapshot.get("items", []))}
     relationships = {"has_document": len(snapshot["product_docs"]) + len(snapshot["common_docs"]),
                      "has_benefit": len(snapshot["benefits"]), "has_rule": len(rules), "targets": len(targets),
                      "has_expr": len(expressions), "has_branch": len(branches), "has_atom": len(atoms),
                      "supported_by": len(snapshot["links"]), "in_chunk": len(linked_evidence(snapshot)),
                      "on_page": len(snapshot["chunks"]), "in_document": len(snapshot["pages"]),
                      "has_common_benefit": len(snapshot["common_applies"]), "belongs_to": len(snapshot["common_benefits"]),
-                     "same_as": sum(row["status"] == "SAME" for row in snapshot["brand_compare"])}
+                     "same_as": sum(row["status"] == "SAME" for row in snapshot["brand_compare"]),
+                     "has_item": len(snapshot.get("items", []))}
     return ({PREFIX + name: count for name, count in nodes.items() if count},
             {PREFIX + name: count for name, count in relationships.items() if count})
 
@@ -189,6 +204,7 @@ def build(snapshot):
     g = Preview()
     errors: list[str] = []
     products, docs, pages, chunks, evidence, benefits, rules, commons, common_benefits = {}, {}, {}, {}, {}, {}, {}, {}, {}
+    items = {}
 
     def expression(owner, owner_key, expr, label):
         if expr is None:
@@ -265,6 +281,14 @@ def build(snapshot):
             except KeyError as error:
                 errors.append(f"규칙 해석 실패 {bnft_id}: 필드 {error}")
 
+    for row in snapshot.get("items", []):
+        card_id, item_id = row["card_id"], row["card_product_item_id"]
+        if card_id not in products:
+            errors.append(f"상품 항목의 상품 없음: {card_id}/{item_id}")
+            continue
+        items[(card_id, item_id)] = g.node("card_product_item", [card_id, item_id], row)
+        g.edge("has_item", products[card_id], items[(card_id, item_id)], {"item_type_cd": row["item_type_cd"]})
+
     for row in snapshot["commons"]:
         commons[row["card_common_id"]] = g.node("card_common", [row["card_common_id"]], row)
     for row in snapshot["common_docs"]:
@@ -303,6 +327,8 @@ def build(snapshot):
             owner = benefits.get((link["card_id"], link["card_bnft_id"]))
         elif subject == "RULE":
             owner = rules.get((link["card_id"], link["card_bnft_id"], link["rule_key"]))
+        elif subject == "ITEM":
+            owner = items.get((link["card_id"], link["card_bnft_id"]))
         else:
             errors.append(f"지원하지 않는 근거 주체: {subject} {link['ev_link_id']}")
             continue

@@ -64,6 +64,7 @@ WHERE (n:dp_card_bnft AND NOT (:dp_card_product)-[:dp_has_benefit]->(n))
    OR (n:dp_card_doc_page AND NOT (n)-[:dp_in_document]->(:dp_card_doc))
    OR (n:dp_card_doc AND NOT ()-[:dp_has_document]->(n))
    OR (n:dp_card_common_bnft AND NOT (n)-[:dp_belongs_to]->(:dp_card_common))
+   OR (n:dp_card_product_item AND NOT n:dp_card_bnft AND NOT (:dp_card_product)-[:dp_has_item]->(n))
 RETURN n.key AS key
 
 // name: condition_structure

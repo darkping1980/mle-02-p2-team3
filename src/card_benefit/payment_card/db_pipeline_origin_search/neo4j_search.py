@@ -99,21 +99,31 @@ def is_common_key(key: str) -> bool:
 
 
 def entity_ref(key: str, fallback: str | None = None) -> str | None:
-    """혜택 key를 엔터티 종류·소유자·ID가 모두 들어간 참조로 바꾼다.
+    """혜택 key를 엔터티 종류·소유자·ID가 모두 들어간 표준 참조로 바꾼다.
 
-    카드 혜택과 공통 혜택은 ID 문자열이 같을 수 있다(테이블별 시퀀스). 그래프 key ``["card_bnft",6,"ID"]`` 와
-    PostgreSQL key ``pg:CARD_BNFT:6:ID`` 는 같은 참조 ``card_bnft:6:ID`` 가 된다. 형식이 다른 key는 ``fallback`` 을 쓴다.
+    카드 상품 항목: ``card_product_item:{card_id}:{card_product_item_id}``. 혜택의 그래프 key ``["card_bnft",6,"ID"]``,
+    PostgreSQL key ``pg:CARD_BNFT:6:ID``, 연회비 등 항목 key ``["card_product_item",6,"ID"]`` 가 모두 이 참조가 된다.
+    공통 혜택: ``card_common_bnft:{card_common_id}:{card_common_bnft_id}``. 카드 항목과 ID 문자열이 같아도 섞이지 않는다.
+    형식이 다른 key는 ``fallback`` 을 쓴다.
     """
     if key.startswith("pg:"):
         parts = key.split(":", 3)
-        return f"{parts[1].lower()}:{parts[2]}:{parts[3]}" if len(parts) == 4 else fallback
+        if len(parts) != 4:
+            return fallback
+        kind = ITEM_KINDS.get(parts[1].lower())
+        return f"{kind}:{parts[2]}:{parts[3]}" if kind else fallback
     try:
         parts = json.loads(key)
     except (TypeError, ValueError):
         return fallback
-    if isinstance(parts, list) and len(parts) == 3 and parts[0] in ("card_bnft", "card_common_bnft"):
-        return ":".join(str(part) for part in parts)
+    if isinstance(parts, list) and len(parts) == 3 and parts[0] in ITEM_KINDS:
+        return f"{ITEM_KINDS[parts[0]]}:{parts[1]}:{parts[2]}"
     return fallback
+
+
+# key의 종류 → 표준 참조의 종류. 혜택(card_bnft)은 카드 상품 항목이다(2026-11-04 card_product_item 전환).
+ITEM_KINDS = {"card_bnft": "card_product_item", "card_product_item": "card_product_item",
+              "card_common_bnft": "card_common_bnft"}
 
 
 def statement_plan(statement_id: str, **params) -> dict:

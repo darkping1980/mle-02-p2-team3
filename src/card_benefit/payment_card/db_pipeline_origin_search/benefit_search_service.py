@@ -149,7 +149,7 @@ class BenefitSearchService:
         confirmed = set()
         for row in self.common_service.compare_brand_benefits():
             if row["status"] == "SAME" and row.get("card_common_id") is not None:
-                confirmed.add((f"card_bnft:{row['card_id']}:{row['card_bnft_id']}",
+                confirmed.add((f"card_product_item:{row['card_id']}:{row['card_bnft_id']}",
                                f"card_common_bnft:{row['card_common_id']}:{row['card_common_bnft_id']}"))
             elif row["status"] == "SAME":
                 warnings.append(f"공통 혜택 소유자를 확인하지 못해 병합하지 않음: {row['card_bnft_id']}")

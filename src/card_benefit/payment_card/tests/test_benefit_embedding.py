@@ -286,7 +286,7 @@ COMMON_ROW = {"card_common_id": 1, "card_common_bnft_id": "C1", "bnft_cd": "BRAN
 
 
 def test_common_duplicate_is_merged_only_when_pair_is_confirmed():
-    kept, merged = merge_duplicates([card_hit(CARD_ROW), common_hit(COMMON_ROW)], {("card_bnft:5:B1", "card_common_bnft:1:C1")})
+    kept, merged = merge_duplicates([card_hit(CARD_ROW), common_hit(COMMON_ROW)], {("card_product_item:5:B1", "card_common_bnft:1:C1")})
     assert [hit.source for hit in kept] == ["CARD_COMMON_BNFT"] and len(merged) == 1
     kept, merged = merge_duplicates([card_hit(CARD_ROW), common_hit(COMMON_ROW)], set())
     assert len(kept) == 2 and not merged
@@ -373,7 +373,7 @@ def test_mode_a_does_not_call_embedding_and_model_mismatch_blocks_vector():
 
 class GraphStub:
     def candidate_relations(self, ids):
-        return {"card_bnft:1:T": {"key": '["card_bnft",1,"T"]', "id": "T", "cards": ["c"], "targets": ["버스", "지하철"], "common_nm": None,
+        return {"card_product_item:1:T": {"key": '["card_bnft",1,"T"]', "id": "T", "cards": ["c"], "targets": ["버스", "지하철"], "common_nm": None,
                       "exclusions": ["시외버스, 고속버스, 철도(KTX/SRT/ITX)는 제외"]}}
 
 
@@ -462,7 +462,7 @@ class CollisionGraph:
         self.list_calls = 0
 
     def candidate_relations(self, ids):
-        return {"card_bnft:6:" + SAME_ID: {"key": WOORI_KEY, "id": SAME_ID, "cards": ["카드의정석 SHOPPING"],
+        return {"card_product_item:6:" + SAME_ID: {"key": WOORI_KEY, "id": SAME_ID, "cards": ["카드의정석 SHOPPING"],
                                            "targets": ["온라인 업종"], "exclusions": [], "common_nm": None},
                 "card_common_bnft:9:" + SAME_ID: {"key": MP004_KEY, "id": SAME_ID, "cards": [], "targets": ["카타르항공"],
                                                   "exclusions": ["온라인 쇼핑 제외"], "common_nm": "Mastercard"}}
@@ -523,8 +523,8 @@ def test_neo4j_name_score_only_counts_matching_entity():
 def test_confirmed_pair_needs_owner_reference():
     hits = [card_hit(WOORI_ROW), common_hit(MP004_ROW)]
     # 다른 카드(5)의 같은 ID 쌍이 확인돼도 우리카드(6) 혜택을 합치지 않는다.
-    kept, merged = merge_duplicates(hits, {(f"card_bnft:5:{SAME_ID}", f"card_common_bnft:9:{SAME_ID}")})
+    kept, merged = merge_duplicates(hits, {(f"card_product_item:5:{SAME_ID}", f"card_common_bnft:9:{SAME_ID}")})
     assert len(kept) == 2 and not merged
-    kept, merged = merge_duplicates(hits, {(f"card_bnft:6:{SAME_ID}", f"card_common_bnft:1:{SAME_ID}")})
+    kept, merged = merge_duplicates(hits, {(f"card_product_item:6:{SAME_ID}", f"card_common_bnft:1:{SAME_ID}")})
     assert len(kept) == 2 and not merged
 # endregion

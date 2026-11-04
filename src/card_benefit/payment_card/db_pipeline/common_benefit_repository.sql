@@ -127,8 +127,9 @@ WHERE (s.card_extr_stg_id=:STG_ID OR s.stg_parent_card_extr_stg_id=:STG_ID)
 ORDER BY e.evidence_id;
 
 -- name: find_benefit
-SELECT card_id,card_bnft_id,bnft_cd,bnft_nm,verification_status_cd
-FROM db_pipeline.card_bnft WHERE card_id=:CARD_ID AND bnft_cd=:BNFT_CD;
+-- 카드 상품 항목(card_product_item). item_cd는 카드 안에서 유형과 관계없이 유일하다.
+SELECT card_id,card_product_item_id AS card_bnft_id,item_cd AS bnft_cd,item_nm AS bnft_nm,verification_status_cd,item_type_cd
+FROM db_pipeline.card_product_item WHERE card_id=:CARD_ID AND item_cd=:BNFT_CD;
 
 -- name: brand_bnft_compare
 -- 카드별 BRAND_SERVICE 행과 같은 bnft_cd의 공통 혜택을 항목별로 나란히 읽는다. 판정은 Python이 한다.
@@ -138,10 +139,10 @@ SELECT b.card_id, b.card_bnft_id, b.bnft_cd, b.bnft_nm, b.bnft_type_cd, b.bnft_v
         FROM unnest(b.bnft_brand_opt_cds) AS x(cd)
         JOIN db_pipeline.v_card_brand_opt o ON o.card_id = b.card_id AND o.brand_opt_cd = x.cd) AS brand_grades,
        (SELECT array_agg(DISTINCT l.evidence_id::text) FROM db_pipeline.card_evidence_link l
-        WHERE l.card_id = b.card_id AND l.card_bnft_id = b.card_bnft_id) AS evidence_ids,
+        WHERE l.card_id = b.card_id AND l.card_product_item_id = b.card_bnft_id) AS evidence_ids,
        (SELECT array_agg(DISTINCT e.card_doc_id::text) FROM db_pipeline.card_evidence_link l
         JOIN db_pipeline.card_source_evidence e ON e.evidence_id = l.evidence_id
-        WHERE l.card_id = b.card_id AND l.card_bnft_id = b.card_bnft_id) AS doc_ids,
+        WHERE l.card_id = b.card_id AND l.card_product_item_id = b.card_bnft_id) AS doc_ids,
        cb.card_common_id, cb.card_common_bnft_id, cb.bnft_nm AS common_bnft_nm, cb.bnft_type_cd AS common_bnft_type_cd,
        cb.bnft_valid_from AS common_valid_from, cb.bnft_valid_to_excl AS common_valid_to_excl,
        cb.bnft_rule_txt AS common_rule_txt, cb.bnft_limit_txt AS common_limit_txt,
@@ -157,7 +158,11 @@ SELECT b.card_id, b.card_bnft_id, b.bnft_cd, b.bnft_nm, b.bnft_type_cd, b.bnft_v
        EXISTS (SELECT 1 FROM db_pipeline.card_common_bnft_apply a
                WHERE a.card_common_id = cb.card_common_id AND a.card_common_bnft_id = cb.card_common_bnft_id
                  AND a.card_id = b.card_id) AS applied
-FROM db_pipeline.card_bnft b
+FROM (SELECT card_id, card_product_item_id AS card_bnft_id, item_cd AS bnft_cd, item_nm AS bnft_nm, item_subtype_cd AS bnft_type_cd,
+             item_origin_cd AS bnft_origin_cd, item_brand_opt_cds AS bnft_brand_opt_cds, item_valid_from AS bnft_valid_from,
+             item_valid_to_excl AS bnft_valid_to_excl, item_rule_txt AS bnft_rule_txt, item_limit_txt AS bnft_limit_txt,
+             verification_status_cd
+      FROM db_pipeline.card_product_item WHERE item_type_cd = 'BENEFIT') b
 LEFT JOIN db_pipeline.card_common_bnft cb ON cb.bnft_cd = b.bnft_cd
 LEFT JOIN db_pipeline.card_common c ON c.card_common_id = cb.card_common_id
 WHERE b.bnft_origin_cd = 'BRAND_SERVICE'
@@ -165,14 +170,14 @@ ORDER BY b.card_id, b.card_bnft_id;
 
 -- name: insert_evidence_link
 -- 원문 근거의 문서·페이지·청크 ID는 card_source_evidence에서 evidence_id로 읽어 승계한다. 원문 근거가 없으면 등록하지 않는다.
-INSERT INTO db_pipeline.card_evidence_link (card_doc_id,page_no,card_doc_chunk_id,evidence_id,card_id,ev_subject_cd,card_bnft_id,ev_item_cd,ev_item_key)
+INSERT INTO db_pipeline.card_evidence_link (card_doc_id,page_no,card_doc_chunk_id,evidence_id,card_id,ev_subject_cd,card_product_item_id,ev_item_cd,ev_item_key)
 SELECT e.card_doc_id,e.page_no,e.card_doc_chunk_id,e.evidence_id,CAST(:CARD_ID AS bigint),'BNFT',CAST(:BNFT_ID AS varchar),'SELF','-'
 FROM db_pipeline.card_source_evidence e WHERE e.evidence_id=:EVIDENCE_ID
 ON CONFLICT ON CONSTRAINT card_evidence_link_natural_key DO NOTHING RETURNING evidence_link_id;
 
 -- name: insert_rule_evidence_link
 -- 원문 근거의 문서·페이지·청크 ID는 card_source_evidence에서 evidence_id로 읽어 승계한다. 원문 근거가 없으면 등록하지 않는다.
-INSERT INTO db_pipeline.card_evidence_link (card_doc_id,page_no,card_doc_chunk_id,evidence_id,card_id,ev_subject_cd,card_bnft_id,rule_key,ev_item_cd,ev_item_key)
+INSERT INTO db_pipeline.card_evidence_link (card_doc_id,page_no,card_doc_chunk_id,evidence_id,card_id,ev_subject_cd,card_product_item_id,rule_key,ev_item_cd,ev_item_key)
 SELECT e.card_doc_id,e.page_no,e.card_doc_chunk_id,e.evidence_id,CAST(:CARD_ID AS bigint),'RULE',CAST(:BNFT_ID AS varchar),CAST(:RULE_KEY AS varchar),'SELF','-'
 FROM db_pipeline.card_source_evidence e WHERE e.evidence_id=:EVIDENCE_ID
 ON CONFLICT ON CONSTRAINT card_evidence_link_natural_key DO NOTHING RETURNING evidence_link_id;
@@ -190,10 +195,11 @@ WHERE s.card_ai_run_id=:RUN_ID AND s.card_id=:CARD_ID AND s.stg_kind_cd='BENEFIT
 ORDER BY s.page_no,s.card_doc_chunk_id,s.stg_item_seq;   -- 다중 청크는 청크마다 항목 순번이 1부터다
 
 -- name: insert_local_benefit
-INSERT INTO db_pipeline.card_bnft (card_id,bnft_cd,bnft_nm,bnft_type_cd,bnft_origin_cd,bnft_scope_cd,
-  bnft_cond_expr,rule_list,relation_list,verification_status_cd,bnft_rule_txt,bnft_limit_txt)
-VALUES (:CARD_ID,:BNFT_CD,:BNFT_NM,:BNFT_TYPE,'LOCAL','PRODUCT',:COND,:RULES,'[]'::jsonb,'PENDING_REVIEW',:RULE_TXT,:LIMIT_TXT)
-ON CONFLICT (card_id,bnft_cd) DO NOTHING RETURNING card_bnft_id;
+INSERT INTO db_pipeline.card_product_item (card_id,item_type_cd,item_cd,item_nm,item_subtype_cd,item_origin_cd,item_scope_cd,
+  item_cond_expr,rule_list,relation_list,verification_status_cd,item_rule_txt,item_limit_txt,create_user_id,update_user_id)
+VALUES (:CARD_ID,'BENEFIT',:BNFT_CD,:BNFT_NM,:BNFT_TYPE,'LOCAL','PRODUCT',:COND,:RULES,'[]'::jsonb,'PENDING_REVIEW',:RULE_TXT,:LIMIT_TXT,
+        'PRODUCT_BENEFIT','PRODUCT_BENEFIT')
+ON CONFLICT (card_id,item_cd) DO NOTHING RETURNING card_product_item_id AS card_bnft_id;
 
 -- name: find_common
 SELECT card_common_id,common_cd,common_nm,brand_cd,service_grade_cd FROM db_pipeline.card_common WHERE common_cd=:COMMON_CD;

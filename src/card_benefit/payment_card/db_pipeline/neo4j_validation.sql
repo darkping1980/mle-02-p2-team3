@@ -2,7 +2,8 @@
 -- 현재 등록된 전체 상품을 대상으로 한다.
 
 -- name: condition_structure
-SELECT owner_cd, card_id, card_bnft_id, rule_key, branch_no, atom_seq, atom_key, cond_type_cd, negate_yn, cond_min_amt, cond_raw_txt
+-- Neo4j 혜택·규칙 노드 속성은 card_bnft_id를 유지한다(기존 key 보존). PostgreSQL 뷰 컬럼은 card_product_item_id다.
+SELECT owner_cd, card_id, card_product_item_id AS card_bnft_id, rule_key, branch_no, atom_seq, atom_key, cond_type_cd, negate_yn, cond_min_amt, cond_raw_txt
 FROM db_pipeline.v_card_cond_atom;
 
 -- name: evidence_links
@@ -16,4 +17,4 @@ JOIN db_pipeline.card_source_evidence e ON e.evidence_id = l.evidence_id;
 SELECT card_common_id, card_common_bnft_id, card_id FROM db_pipeline.card_common_bnft_apply;
 
 -- name: rule_targets
-SELECT card_id, card_bnft_id, rule_key, target_type_cd, target_key, target_nm FROM db_pipeline.v_card_rule_target;
+SELECT card_id, card_product_item_id AS card_bnft_id, rule_key, target_type_cd, target_key, target_nm FROM db_pipeline.v_card_rule_target;
