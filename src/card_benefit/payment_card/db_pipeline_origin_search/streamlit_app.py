@@ -1,4 +1,27 @@
-"""카드 혜택 GraphRAG 안내 화면. 개발자 모드에서만 단계별 개발 검증과 내부 진단 정보를 보여 준다."""
+"""카드 혜택 GraphRAG 안내 화면. 개발자 모드에서만 단계별 개발 검증과 내부 진단 정보를 보여 준다.
+
+[전체 흐름에서의 위치] 사용자 입력 → (이 파일) → card_graphrag.CardGraphRAG.run → (이 파일) 화면 출력
+
+Streamlit 실행 모델 (Java 개발자 참고)
+    Streamlit은 버튼 클릭·입력 변경 같은 이벤트마다 이 스크립트를 "위에서 아래로 다시 실행"한다.
+    Servlet처럼 요청마다 핸들러를 부르는 방식이 아니다. 그래서
+      - 재실행 사이에 유지할 값은 ``st.session_state`` (세션 저장소)에 둔다. 예: 마지막 결과 ``outcome``
+      - 비싼 객체(Neo4j 드라이버, LLM 클라이언트, 그래프)는 ``@st.cache_resource`` 로 프로세스 단위로 재사용한다.
+
+처리 흐름 (파일 맨 아래의 모듈 수준 코드)
+    1. 사이드바: 개발자 모드 토글, (개발자 모드일 때) 실행 모드(자동 실행 / 개발 검증)와 강제 재실행 체크
+    2. 실행 모드가 "개발 검증"이면 verify_view.render로 단계별 화면을 그리고 st.stop()
+    3. 검색 방식(A/B/C) 라디오, 예시 질문, 질문 폼
+    4. "질문하기" 제출 시:
+         같은 질문·같은 모드·이전 오류 없음·강제 재실행 아님 → 이전 결과 재사용(LLM 미호출)
+         그 외 → get_pipeline(search_mode).run(question) → 결과 State를 session_state.outcome에 저장
+    5. session_state.outcome이 있으면 show_outcome으로 답변·연회비 표·상세 문장·PDF 근거·(개발자) 진단 정보 출력
+
+호출 관계
+    get_pipeline → neo4j_search.connect, card_graphrag.create_llms, (B·C만) card_graphrag.create_benefit_search
+    show_outcome → show_text / show_open_items / show_evidence / show_generation (화면 출력 전용, DB·LLM 미사용)
+    화면 문구 정리(customer_text 등)는 표시만 바꾸며 결과 State의 값은 바꾸지 않는다.
+"""
 import re
 
 from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag, verify_view
@@ -6,6 +29,7 @@ from card_benefit.payment_card.db_pipeline_origin_search.benefit_search_service 
 from card_benefit.payment_card.db_pipeline_origin_search.neo4j_search import GRAPH_PREFIX, QUERIES, connect
 import streamlit as st
 
+# region 화면 상수 (예시 질문, 상태·출처 표시 문구, 사용자 화면에서 지울 내부 표현 정규식)
 EXAMPLES = [
     "ONE PICK STYLE 카드의 대중교통 혜택은?",
     "전월 실적이 없어도 대중교통 캐시백을 받을 수 있어?",
@@ -45,19 +69,34 @@ _STATUS_PHRASE = re.compile(r"일부 답변|검토 필요 항목 포함|검증 �
                             r"|담당자 검토|개발용|미승인")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 _FACT = re.compile(r"\d")
+# endregion
 
 card_graphrag.configure_card_logging()      # 재실행마다 호출해도 handler는 공통 함수가 한 번만 붙인다.
 
 
+# region 파이프라인 생성 (모드별 캐시)
 @st.cache_resource(show_spinner=False)
 def get_pipeline(search_mode: str = "A"):
-    """재실행 사이에 모드별 드라이버와 그래프를 재사용한다. 예외는 캐시되지 않는다."""
+    """재실행 사이에 모드별 드라이버와 그래프를 재사용한다. 예외는 캐시되지 않는다.
+
+    ``search_mode`` 값마다 CardGraphRAG 인스턴스가 하나씩 캐시된다(인자가 캐시 키).
+
+    Args:
+        search_mode: A(Neo4j 전체 카탈로그만), B(임베딩 후보), C(문자열+임베딩 하이브리드 후보).
+
+    Returns:
+        CardGraphRAG. A는 benefit_search=None이라 PostgreSQL에 접속하지 않는다.
+        B·C는 BenefitSearchService(PostgreSQL + OpenAI 임베딩 + Neo4j)를 함께 넘긴다.
+        OPENAI_API_KEY가 없으면 create_llms가 (None, None)을 돌려주고, 질문 시 LLM_NOT_CONFIGURED로 끝난다.
+    """
     search = connect()
     benefit_search = None if search_mode == "A" else card_graphrag.create_benefit_search(search)
     return card_graphrag.CardGraphRAG(search, *card_graphrag.create_llms(), benefit_search=benefit_search,
                                       search_mode=search_mode)
+# endregion
 
 
+# region 표시용 문자열 정리 (값을 바꾸지 않고 화면 문구만 정리)
 def plain(text: str) -> str:
     """원문의 기호가 마크다운 서식으로 바뀌지 않게 한다."""
     return _MARKDOWN_SPECIAL.sub(r"\\\1", text)
@@ -97,9 +136,12 @@ def show_text(text: str) -> None:
     cleaned = customer_text(text)
     if cleaned:
         st.markdown("\n\n".join(plain(part).replace("\n", "  \n") for part in cleaned.split("\n\n")))
+# endregion
 
 
+# region 결과 화면 출력 (show_outcome과 하위 출력 함수)
 def dev_mode() -> bool:
+    """사이드바 '개발자 모드' 토글 값(session_state['dev_mode'])."""
     return bool(st.session_state.get("dev_mode"))
 
 
@@ -164,8 +206,19 @@ def show_open_items(outcome: dict, pages: dict) -> None:
 
 
 def show_outcome(outcome: dict) -> None:
-    """마지막 실행 결과를 표시한다. 위젯 재실행은 이 저장값만 읽는다."""
+    """마지막 실행 결과를 표시한다. 위젯 재실행은 이 저장값만 읽는다.
+
+    Args:
+        outcome: CardGraphRAG.run이 돌려준 최종 CardState(dict) + search_mode(+ 재사용 시 reused).
+            주로 읽는 키: answer(status·message·answer_text·conclusion·points·fee_rows·uncertain),
+            evidence, open_conditions, data_notices, search_parameters, (개발자) llm_calls·path·context 등.
+
+    출력 순서: 제목·질문 → 오류/안내 메시지 → 모호성 참고 → 답변 본문(answer_text, 없으면 conclusion)
+    → 연회비 표(fee_rows) → 혜택별 상세 문장(points)과 출처 → 확인이 필요한 사항 → PDF 근거(인용된 것 / 그 밖)
+    → (개발자 모드) 답변 생성 정보·개발자 정보.
+    """
     answer = outcome["answer"]
+    # evidence_id → 페이지 번호. 문장 출처와 근거 목록에 쪽수를 붙일 때 쓴다.
     evidence = outcome.get("evidence") or []
     pages = {item["evidence_id"]: item["page_no"] for item in evidence}
     st.subheader(CUSTOMER_TITLES.get(answer["status"], "검색 결과"), anchor=False)
@@ -206,6 +259,7 @@ def show_outcome(outcome: dict) -> None:
                 source_text += f" · {VERIFICATION_LABELS[point['verification']]}{origin}"
             st.caption(source_text)
     show_open_items(outcome, pages)
+    # PDF 근거를 "답변 문장이 인용한 근거"와 "조회는 됐지만 인용되지 않은 근거"로 나눠 보여 준다.
     cited = {item for point in answer["points"] for item in point["evidence_ids"]}
     cited.update(item for condition in outcome.get("open_conditions") or [] for item in condition["evidence_ids"])
     used = [item for item in evidence if item["evidence_id"] in cited]
@@ -257,8 +311,10 @@ def show_outcome(outcome: dict) -> None:
         for name, query in QUERIES.items():
             st.caption(name)
             st.code(query, language="cypher")
+# endregion
 
 
+# region 페이지 본문 (Streamlit 재실행마다 위에서부터 실행되는 진입점)
 st.set_page_config(page_title="카드 혜택 안내", layout="wide")
 st.title("카드 혜택 안내", anchor=False)
 st.caption("카드 상품설명서(PDF)에 근거해 혜택과 연회비를 안내합니다. 실제 적용 조건은 카드사 안내를 함께 확인해 주세요.")
@@ -272,6 +328,7 @@ with st.sidebar:
     else:
         run_mode, force = "자동 실행", False
 
+# 분기: 개발 검증 모드는 단계별 버튼 화면(verify_view)을 그리고 이후 자동 실행 화면은 그리지 않는다.
 if run_mode == "개발 검증":
     verify_view.render(get_pipeline, show_outcome)
     st.stop()
@@ -284,11 +341,13 @@ with st.form("question_form"):
                             placeholder="카드 혜택이나 연회비를 자연어로 물어보세요.")
     submitted = st.form_submit_button("질문하기", type="primary")
 
+# 질문 제출 처리. submitted는 폼 버튼을 누른 그 재실행에서만 True다.
 if submitted:
     question = question.strip()
     last = st.session_state.get("outcome")
     if not question:
         st.warning("질문을 입력하세요.")
+    # 분기: 직전과 같은 질문·모드이고 오류가 없었으면 LLM 비용을 쓰지 않고 이전 결과를 재사용한다.
     elif (last and last["question"] == question and last.get("search_mode") == search_mode
           and not last.get("error") and not force):
         if dev_mode():
@@ -298,12 +357,17 @@ if submitted:
         try:
             pipeline = get_pipeline(search_mode)
             with st.spinner("카드 혜택을 찾아 답변을 준비하고 있습니다..."):
+                # GraphRAG 실행: interpret → (retrieve → answer) → finish. 반환값은 최종 State(dict)다.
+                # 노드가 직접 잡는 실패(LLM·Neo4j·후보 검색)는 예외가 아니라 State의 error와 answer.status=ERROR로 돌아온다.
                 st.session_state.outcome = {**pipeline.run(question), "search_mode": search_mode}
         except Exception:
+            # get_pipeline 생성(Neo4j 드라이버·PostgreSQL 세션 준비) 실패나, 노드가 잡지 않은 예외가 여기로 온다.
             st.session_state.outcome = None
             st.error(ERROR_TEXT)
             if dev_mode():
                 st.caption("실행 준비에 실패했습니다. Neo4j 연결 설정을 확인하세요.")
 
+# 재실행마다 저장된 마지막 결과를 다시 그린다(위젯 조작만 해도 결과가 화면에 남는 이유).
 if st.session_state.get("outcome"):
     show_outcome(st.session_state.outcome)
+# endregion

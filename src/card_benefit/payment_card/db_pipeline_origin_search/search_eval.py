@@ -2,6 +2,14 @@
 
 실행(src/card_benefit 폴더): uv run python -m payment_card.db_pipeline_origin_search.search_eval --out 결과.json
 정답은 등록 데이터 기준이다. 정답 혜택이 아직 등록되지 않은 질문은 정답률에서 분리한다.
+
+두 가지 평가 (main)
+    기본       evaluate: CASES 질문마다 BenefitSearchService.search를 4개 계층(LAYERS)으로 실행해 순위를 잰다.
+               SQL(A) / PGVECTOR(B) / HYBRID(C) / HYBRID_NEO4J(C + Neo4j 관계 보정). LLM은 부르지 않지만
+               B·C 계층은 질문 임베딩(유료)을 호출한다. 지표: top1/top3/top5, MRR, 제외 대상 노출 수 등.
+    --answers  evaluate_answers: CardGraphRAG(C 모드)로 REQUIRED_QUESTIONS·CASES를 끝까지 실행(질문 해석·답변 LLM 유료 호출)
+               하고 score_answer로 판정한다.
+Streamlit 화면과 독립된 오프라인 평가 스크립트이며, 결과는 --out JSON 파일에만 쓴다.
 """
 from __future__ import annotations
 
@@ -87,6 +95,7 @@ LAYERS = (("SQL", "A", False, False), ("PGVECTOR", "B", False, False), ("HYBRID"
 
 
 def rank_of(names: list[str], targets: tuple[str, ...]) -> int | None:
+    """결과 혜택명 목록에서 targets 중 하나가 처음 나오는 순위(1부터). 없으면 None."""
     return next((rank for rank, name in enumerate(names, 1) if name in targets), None)
 
 
@@ -110,6 +119,7 @@ def evaluate(sql_only: BenefitSearchService, with_graph: BenefitSearchService, t
 
 
 def summarize(rows: list[dict]) -> dict:
+    """계층(mode)별로 정답 순위 지표(top1/top3/top5/MRR)와 제외 대상 노출·병합·응답 시간을 집계한다."""
     grouped = defaultdict(list)
     for row in rows:
         grouped[row["mode"]].append(row)
@@ -171,6 +181,7 @@ def evaluate_answers(pipeline, cases: tuple[Case, ...]) -> list[dict]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """평가를 실행하고 결과 JSON을 --out에 저장, 요약을 표준출력에 쓴다. DB에는 쓰지 않는다."""
     parser = argparse.ArgumentParser(prog="search_eval", description="검색 모드 비교")
     parser.add_argument("--out", required=True, help="결과 JSON 경로")
     parser.add_argument("--top-k", type=int, default=5)

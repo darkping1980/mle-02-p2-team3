@@ -7,6 +7,38 @@
     finish     답변이 없는 경로의 안내 문구를 만들고 전체 시간·토큰·추정 비용을 기록한다.
 
 정상 질문의 LLM 호출은 interpret 1회, answer 1회다. 재시도와 다른 모델로의 전환은 없다.
+
+[전체 흐름] Streamlit(streamlit_app.py) → CardGraphRAG.run(question) → LangGraph 실행 → 최종 State(dict) → Streamlit 출력
+
+LangGraph 구성 (CardGraphRAG._build)
+    START → interpret ─(after_interpret)─┬→ retrieve ─(after_retrieve)─┬→ answer → finish → END
+                                         └→ finish                      └→ finish
+    - State(CardState)는 노드끼리 공유하는 dict다. 각 노드는 "바꿀 키만 담은 dict"를 반환하고, LangGraph가 합친다.
+      warnings·llm_calls·path는 덮어쓰지 않고 이어 붙인다(Annotated[..., operator.add] reducer).
+    - 조건부 Edge 함수(after_*)는 State를 보고 다음 노드 이름 문자열을 반환한다(Java의 switch 라우팅과 비슷).
+
+노드별 입력 → 출력(State 키)
+    interpret : question → catalog, intent, search_parameters, (B·C) candidate_search, llm_calls, warnings, error
+    retrieve  : search_parameters, intent → retrieved_data, evidence, statements, retrieval_trace, exclusions,
+                unresolved, open_conditions, data_notices, other_unresolved, error
+    answer    : retrieved_data, evidence, open_conditions, exclusions → context, answer, llm_calls, warnings, error
+    finish    : (answer가 없으면) error·intent 등으로 안내 answer 생성, 전체 비용·시간 로그
+
+LLM의 역할 (둘 다 ChatOpenAI 구조화 출력, 재시도 없음)
+    - 질문 해석 LLM(Interpretation): 혜택 목록(catalog) 중 질문 대상 ID와 질문 유형(intent)만 고른다.
+      Cypher·SQL은 만들지 않는다. 목록에 없는 ID는 interpret가 버린다.
+    - 답변 LLM(CardAnswer): 조회 결과(context)만 보고 답변 문장·근거 ID를 쓴다.
+      결과는 validate_answer가 다시 대조해 근거 없는 문장·값을 버리거나 프로그램 문구로 바꾼다.
+      연회비 금액은 LLM에 맡기지 않고 fee_answer가 등록 값으로 쓴다.
+
+검색 모드 A/B/C (CardGraphRAG.search_mode)
+    A: Neo4j 카탈로그(list_catalog) 전체를 질문 해석 LLM에 넘긴다. PostgreSQL·임베딩 미사용.
+    B: BenefitSearchService.catalog_rows(mode="B") — 질문 임베딩(pgvector) 후보만 넘긴다. Neo4j 카탈로그 조회가 실패해도 계속한다.
+    C: BenefitSearchService.catalog_rows(mode="C") — SQL 문자열 검색 + pgvector 결과를 RRF로 합친 후보만 넘긴다.
+    B·C 모두 후보에 Neo4j 관계(대상·제외 문구)로 순서를 보정하고, 연회비 질문이면 Neo4j의 ANNUAL_FEE 항목을 덧붙인다.
+    상세 조회는 모드와 관계없이 key 형식으로 갈린다: 그래프 key → Neo4jSearch.get_detail, ``pg:`` key → PostgreSQL.
+
+이 모듈은 DB에 쓰지 않는다(Neo4j는 READ_ACCESS 세션, PostgreSQL은 SELECT만).
 """
 from __future__ import annotations
 
@@ -125,6 +157,8 @@ UNRESOLVED_TOPICS = (r"DRAFT|PENDING|개발용|검토", r"중첩|함께 적용|�
                      r"NOT|제외 조건")
 
 
+# LLM 구조화 출력 스키마. Pydantic 모델이 JSON Schema(strict)로 바뀌어 LLM 응답 형식을 강제한다.
+# Field(description=...) 문구는 스키마에 들어가 LLM에 전달되므로 프롬프트의 일부다(변경 시 답변이 달라질 수 있음).
 class Interpretation(BaseModel):
     """질문 해석 LLM의 구조화 출력; 혜택 ID는 ``interpret`` 가 실제 목록과 다시 대조한다."""
     intent: Intent = Field(description="질문 유형")
@@ -148,6 +182,7 @@ class CardAnswer(BaseModel):
     cannot_answer_reason: str | None = Field(description="답할 수 없을 때의 이유. 답할 수 있으면 null")
 
 
+# 질문 해석 LLM 프롬프트. {catalog}에는 interpret가 만든 혜택 목록 JSON, {question}에는 사용자 질문이 들어간다.
 INTERPRET_PROMPT = """카드 혜택 질문의 유형과 대상 혜택을 고른다. 혜택 목록에 있는 id만 쓴다.
 
 유형:
@@ -178,6 +213,7 @@ INTERPRET_PROMPT = """카드 혜택 질문의 유형과 대상 혜택을 고른�
 {question}
 </question>"""
 
+# 답변 LLM 프롬프트. {context}에는 answer 노드가 만든 검색 결과 JSON(benefits·evidence·open_conditions 등)이 들어간다.
 ANSWER_PROMPT = """카드 혜택 검색 결과로 고객의 질문에 답한다. 한국어로 쓰고 검색 결과만 사용한다.
 
 answer_text 작성 규칙 (고객이 읽는 설명문):
@@ -231,7 +267,11 @@ answer_text 작성 규칙 (고객이 읽는 설명문):
 
 
 class CardState(TypedDict, total=False):
-    """LangGraph 노드가 공유하는 상태. Annotated 키는 노드가 돌려준 목록을 이어 붙인다."""
+    """LangGraph 노드가 공유하는 상태. Annotated 키는 노드가 돌려준 목록을 이어 붙인다.
+
+    TypedDict는 실행 시 일반 dict이며 타입 표시용이다(total=False: 모든 키가 선택). 초기값은 ``_initial_state`` 가 만든다.
+    Annotated가 없는 키는 노드가 반환한 값으로 덮어쓴다. 최종 State가 그대로 Streamlit의 ``outcome`` 이 된다.
+    """
 
     request_id: str  # run이 만든 요청 식별자.
     started: float  # run이 기록한 시작 시각(perf_counter).
@@ -272,7 +312,14 @@ def configure_card_logging() -> None:
 
 
 def create_benefit_search(neo4j_search=None):
-    """B·C 모드의 후보 검색을 만든다. A 모드는 호출하지 않으므로 PostgreSQL에 접속하지 않는다."""
+    """B·C 모드의 후보 검색을 만든다. A 모드는 호출하지 않으므로 PostgreSQL에 접속하지 않는다.
+
+    PostgreSQL 세션의 mapper는 db_pipeline 폴더의 SQL(embedding_repository.sql 등)을 쓴다.
+    OpenAIEmbedder는 질문 임베딩(유료 호출)에 쓰이며, 실제 호출은 검색 시점(B·C의 _vector)에 일어난다.
+
+    Args:
+        neo4j_search: Neo4jSearch. 혜택명 보강 검색·관계 보정에 함께 쓴다(None이면 PostgreSQL만 사용).
+    """
     from card_benefit.payment_card.db_pipeline.document_repository import MAPPER_ROOT
     from card_benefit.payment_card.db_pipeline.embedding_service import EMBEDDING_LOG_KEYS, OpenAIEmbedder
     from common.postgres_db_session import PostgresDbSession
@@ -314,6 +361,11 @@ def estimate_cost(model: str, input_tokens: int | None, output_tokens: int | Non
 
 # endregion
 # region 2. 조회 결과 정리와 답변 검증
+# 이 구역의 함수는 DB·LLM을 부르지 않는 순수 함수다(find_exclusions의 read_source 콜백만 예외적으로 PostgreSQL을 읽는다).
+# retrieve 노드: collect_evidence, find_exclusions, split_unresolved / answer 노드: benefit_context, rule_conflicts,
+# validate_answer, enforce_exclusions, fee_answer 가 주로 호출된다.
+
+# region 2-1. 근거 수집과 제외 대상 판정 (retrieve 노드)
 def postgresql_common_key(key: str) -> str | None:
     """Neo4j 공통 혜택 key ``["card_common_bnft", 공통서비스ID, 혜택ID]`` 를 같은 혜택의 PostgreSQL 조회 key로 바꾼다."""
     if not is_common_key(key):
@@ -331,7 +383,16 @@ def detail_ref(detail: dict) -> str | None:
 
 
 def collect_evidence(details: list[dict], intent: str) -> list[dict]:
-    """혜택별 근거를 evidence_id 하나로 합치고 질문 유형에 맞는 주체만 남긴다."""
+    """혜택별 근거를 evidence_id 하나로 합치고 질문 유형에 맞는 주체만 남긴다.
+
+    [PDF 원문 근거 연결] 각 detail["evidence"] 행은 (근거 연결 link, 원문 근거 evidence, rule_key)이다.
+    같은 PDF 인용(evidence_id)이 여러 혜택·규칙에 연결돼 있으면 한 건으로 합치고, 어느 혜택(benefit_ids)·
+    규칙(rule_keys)·연결 주체(subjects: CARD/BNFT/RULE/ITEM)에 속하는지 목록으로 남긴다.
+    이후 validate_answer는 benefit_ids로 "그 혜택의 근거만 인용했는지"를 검사한다.
+
+    Returns:
+        페이지·evidence_id 순으로 정렬한 근거 목록(State의 evidence).
+    """
     allowed = EVIDENCE_SUBJECTS_BY_INTENT.get(intent)
     merged: dict[str, dict] = {}
     for detail in details:
@@ -358,6 +419,12 @@ def find_exclusions(question: str, details: list[dict], read_source=None) -> lis
     """질문 낱말이 혜택의 적용 제외 문구에 있는지 원본 규칙과 조건으로 판정한다.
 
     ``read_source`` 가 있으면 PostgreSQL 원본을 읽고, 없으면 PostgreSQL과 대조된 그래프의 원본 JSON을 쓴다.
+
+    예: "KTX도 대중교통 캐시백 돼?" — 질문 낱말 'KTX'가 대중교통 혜택의 제외 문구 토큰에 있고 적용 대상 이름에는 없으면
+    제외로 판정한다. 결과는 answer 노드의 enforce_exclusions가 답변을 "받을 수 없습니다" 문구로 고정하는 데 쓴다.
+
+    Returns:
+        ``[{"benefit_id", "name", "terms", "verified_by"}]`` (State의 exclusions).
     """
     terms = search_terms(question)
     found = []
@@ -424,6 +491,7 @@ def condition_groups(rows: list[dict]) -> list[dict]:
     return [{"scope": group["scope"], "branches": [{"branch_no": number, "atoms": atoms}
                                                    for number, atoms in sorted(group["branches"].items())]}
             for group in groups.values()]
+# endregion
 
 
 # region 연회비(ANNUAL_FEE) — 금액은 item_data의 등록 값으로 프로그램이 쓴다. LLM에 계산·추측을 맡기지 않는다.
@@ -620,6 +688,7 @@ def resolve_fee_choice(question: str, chosen: list[str], by_id: dict, catalog: l
 # endregion
 
 
+# region 2-2. 답변 LLM 문맥 구성과 미확정 사항 판별 (retrieve·answer 노드)
 def benefit_context(detail: dict) -> dict:
     """Neo4j 상세 조회에서 답변에 필요한 필드만 추린다."""
     benefit = source(detail["context"]["benefit"])
@@ -725,8 +794,10 @@ def split_unresolved(details: list[dict], question: str, intent: str, amount: in
         else:
             others.append(item["text"])
     return list(conditions.values()), list(dict.fromkeys(notices)), list(dict.fromkeys(others))
+# endregion
 
 
+# region 2-3. 값 추출, 결제 금액, 금액 구간(규칙 여러 개) 처리
 def numbers_in(text: str) -> set[str]:
     """문장에 나온 숫자를 쉼표 없는 문자열로 뽑는다."""
     return {match.replace(",", "") for match in re.findall(r"\d[\d,]*(?:\.\d+)?", text)}
@@ -994,10 +1065,33 @@ def fixed_conclusion(conclusion: str, conflicts: list[dict], amount: int | None,
         note = f"{names}의 규칙 선택 방식은 미확정입니다."
         return (f"{conclusion} 다만 {note}" if conclusion else note), True
     return conclusion, False
+# endregion
 
 
+# region 2-4. 답변 검증 (LLM 출력 → 화면용 answer)
 def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict, list[str]]:
-    """LLM 답변을 조회 결과와 대조한다. 뒷받침되지 않는 문장은 버리고 미확정 규칙은 프로그램이 보장한다."""
+    """LLM 답변을 조회 결과와 대조한다. 뒷받침되지 않는 문장은 버리고 미확정 규칙은 프로그램이 보장한다.
+
+    Args:
+        raw: 답변 LLM의 구조화 출력(CardAnswer).
+        context: answer 노드가 LLM에 준 검색 결과 + unresolved·unresolved_topics.
+        question: 사용자 질문(질문에 있는 숫자는 "알려진 값"으로 인정한다).
+
+    처리 순서
+        1. points 문장마다: 상태 문장 → uncertain으로 이동 / 조회하지 않은 혜택·근거 ID 제거 /
+           다른 혜택의 근거 ID 제거 / 근거가 없으면 버림 / 미확정 실적 유예를 단정하면 버림 /
+           조회 결과에 없는 금액·비율·횟수가 있으면 버림 / 다른 혜택의 실적 기준, 금액 구간 왜곡,
+           일부 구간만 답함, 데이터에 없는 적용 방식이면 버림 → 통과하면 verification 등급을 붙여 남김
+        2. 결제 금액에 여러 구간이 해당하는 혜택은 구간 문장을 프로그램(origin=system)이 추가
+        3. conclusion 검증·보정(fixed_conclusion), 근거 없는 미확정 문구 제거
+        4. uncertain 정리(이미 화면이 따로 안내하는 주제는 뺌)
+        5. status 결정: 문장이 있으면 ANSWERED(하나라도 버렸으면 PARTIAL), 없으면 NOT_ANSWERABLE
+        6. answer_text: LLM 설명문이 검증(answer_text_problem)을 통과하면 그대로(llm),
+           아니면 검증된 문장 모음(validated_sentences) 또는 금액 구간 고정 문구(program_tier)
+
+    Returns:
+        (화면용 answer dict, 경고 목록). answer 키: status, conclusion, answer_text, answer_source, points, uncertain, message.
+    """
     evidence = {item["evidence_id"]: item for item in context["evidence"]}
     benefits = {item["benefit_id"]: item for item in context.get("benefits", [])}
     conflicts = context.get("rule_selection_unresolved", [])
@@ -1184,8 +1278,10 @@ def answer_text_problem(text: str, context: dict, question: str, known: set, num
     if conflicts and INVENTED_RULE.search(text):
         return "데이터에 없는 규칙 적용 방식이 있습니다"
     return None
+# endregion
 
 
+# region 2-5. 개발 검증 모드 도우미 (verify_view가 단계별 실행에 사용)
 def merge_state(state: CardState, update: CardState) -> CardState:
     """노드 결과를 LangGraph reducer와 같은 규칙으로 State에 합친다."""
     merged = dict(state)
@@ -1215,12 +1311,22 @@ def verification_plan(state: CardState) -> list[dict]:
     """검색 조건으로 실행할 Cypher 목록을 만든다. ``get_detail`` 과 같은 쿼리와 순서다."""
     parameters = state["search_parameters"]
     return detail_plan(parameters["benefit_keys"], tuple(parameters["sections"]))
+# endregion
 
 
 # endregion
 # region 3. LangGraph 노드
 class CardGraphRAG:
-    """Neo4j 검색과 LLM을 LangGraph로 연결한다. Streamlit이 한 번 만들어 재사용한다."""
+    """Neo4j 검색과 LLM을 LangGraph로 연결한다. Streamlit이 한 번 만들어 재사용한다.
+
+    생성 위치: streamlit_app.get_pipeline(모드별 캐시), search_eval.main(--answers, C 모드).
+    의존성은 생성자로 주입받는다(Java의 생성자 주입과 같다).
+        search          Neo4jSearch — 카탈로그·혜택 상세 Cypher 조회(neo4j_search.py)
+        interpret_llm   질문 해석용 ChatOpenAI(None이면 LLM_NOT_CONFIGURED)
+        answer_llm      답변용 ChatOpenAI
+        benefit_search  BenefitSearchService — B·C 후보 검색과 ``pg:`` key 상세 조회(A는 None)
+        search_mode     "A" / "B" / "C"
+    """
 
     def __init__(self, search, interpret_llm=None, answer_llm=None, benefit_search=None, search_mode: str = "A"):
         self.search = search
@@ -1235,6 +1341,8 @@ class CardGraphRAG:
         """노드와 조건부 Edge를 선언하고 실행 가능한 그래프로 컴파일한다."""
         from langgraph.graph import END, START, StateGraph
 
+        # 그래프 정의: START → interpret → [retrieve | finish] → [answer | finish] → finish → END
+        # add_conditional_edges(노드, 라우팅 함수, 가능한 다음 노드 목록): 라우팅 함수가 반환한 이름의 노드로 간다.
         builder = StateGraph(CardState)
         builder.add_node("interpret", self.interpret)
         builder.add_node("retrieve", self.retrieve)
@@ -1256,7 +1364,11 @@ class CardGraphRAG:
                 "error": None, "warnings": [], "llm_calls": [], "path": []}
 
     def run(self, question: str) -> CardState:
-        """질문 하나로 그래프를 한 번 실행하고 최종 State를 반환한다."""
+        """질문 하나로 그래프를 한 번 실행하고 최종 State를 반환한다.
+
+        호출: streamlit_app(질문하기), search_eval.evaluate_answers.
+        ``graph.invoke`` 는 START부터 END까지 노드를 동기 실행하고, 노드 반환값을 State에 합친 최종 dict를 돌려준다.
+        """
         return self.graph.invoke(self._initial_state(question))
 
     # 개발 검증 모드. 그래프와 같은 노드·라우팅 함수를 사용자가 누른 단계까지만 호출한다.
@@ -1290,7 +1402,20 @@ class CardGraphRAG:
         return self._step(state, self.answer)
 
     def _call_llm(self, node: str, llm, schema, prompt: str, request_id: str) -> tuple[object | None, dict]:
-        """구조화 출력을 한 번 호출한다. 호출 기록은 형식 오류일 때도 사용량을 보존한다."""
+        """구조화 출력을 한 번 호출한다. 호출 기록은 형식 오류일 때도 사용량을 보존한다.
+
+        Args:
+            node: 호출한 노드 이름(interpret / answer). 비용 기록에 남는다.
+            llm: ChatOpenAI 인스턴스.
+            schema: Interpretation 또는 CardAnswer(Pydantic). strict JSON Schema로 응답 형식을 강제한다.
+            prompt: 완성된 프롬프트 문자열.
+
+        Returns:
+            (파싱된 Pydantic 객체 또는 None, 호출 기록 dict). 응답 형식이 스키마와 다르면 None + parse_failed=True.
+
+        Raises:
+            Exception: API 호출 예외(타임아웃·인증 등)는 그대로 전파된다. 호출하는 노드가 잡아 LLM_FAILED로 바꾼다.
+        """
         CARD_LOG.logger.debug("LLM PROMPT [%s/%s]\n%s", request_id, node, prompt)
         started = perf_counter()
         call = {"node": node, "model": self.model, "response_model": None, "input_tokens": None,
@@ -1314,9 +1439,24 @@ class CardGraphRAG:
         return result["parsed"], call
 
     def interpret(self, state: CardState) -> CardState:
-        """혜택 목록을 읽고 LLM 해석 결과를 실제 목록으로 검증한다."""
+        """혜택 목록을 읽고 LLM 해석 결과를 실제 목록으로 검증한다.
+
+        입력 State: request_id, question
+        출력 State: path=["interpret"], catalog, intent, search_parameters, (B·C) candidate_search, llm_calls, warnings,
+                    실패 시 error({"stage": "interpret", "code": ..., "type": ...})
+
+        처리 순서
+            1. 질문 길이 검사, LLM 설정 확인 (실패 시 LLM 호출 없이 반환)
+            2. Neo4j 카탈로그 조회(list_catalog) — 카드 혜택·연회비 등 항목·공통 혜택 목록
+            3. (B·C) BenefitSearchService.catalog_rows로 후보만 남김. 연회비 질문이면 그래프의 ANNUAL_FEE 항목 추가
+            4. 각 행 id를 entity_ref(종류:소유자:ID)로 바꿔 LLM 프롬프트에 넣음
+            5. 질문 해석 LLM 호출 → intent, benefit_ids, ambiguity
+            6. 서버 측 검증: 목록에 없는 ID 버림 → 연회비 선택 정리 → UNKNOWN이면 대상 비움 → 결제 금액 필터
+            7. search_parameters 구성: benefit_ids / benefit_names / benefit_keys(조회용 key) / sections / payment_amount / ambiguity
+        """
         request_id, question = state["request_id"], state["question"]
         REQUEST_ID.set(request_id)
+        # 노드는 State 전체가 아니라 바뀐 키만 담은 update dict를 반환한다. path는 reducer가 이어 붙인다.
         update: CardState = {"path": ["interpret"]}
         if not question or len(question) > MAX_QUESTION_CHARS:
             code = "EMPTY_QUESTION" if not question else "QUESTION_TOO_LONG"
@@ -1330,6 +1470,7 @@ class CardGraphRAG:
                 return {**update, "error": {"stage": "interpret", "code": "NEO4J_FAILED", "type": type(error).__name__}}
             catalog = []                              # B는 PostgreSQL만으로 상세까지 조회할 수 있다.
         graph_catalog = catalog
+        # 분기: A는 그래프 카탈로그 전체를 그대로 LLM에 넘긴다. B·C는 PostgreSQL 후보 검색으로 목록을 줄인다.
         if self.search_mode != "A":
             try:
                 catalog, outcome = self.benefit_search.catalog_rows(question, self.search_mode, catalog)
@@ -1367,6 +1508,7 @@ class CardGraphRAG:
         update["llm_calls"] = [call]
         if parsed is None:
             return {**update, "error": {"stage": "interpret", "code": "LLM_FAILED", "type": "ParsingError"}}
+        # LLM 출력 검증: LLM이 고른 ID 중 실제 목록에 있는 것만 남긴다(환각 ID 차단).
         by_id = {row["id"]: row for row in catalog}
         chosen = list(dict.fromkeys(item for item in parsed.benefit_ids if item in by_id))
         dropped = [item for item in parsed.benefit_ids if item not in by_id]
@@ -1383,6 +1525,8 @@ class CardGraphRAG:
         if filtered:
             warnings.append(f"결제 금액 기준이 없는 혜택을 제외했습니다: {[by_id[item]['name'] for item in filtered]}")
         ambiguity = (parsed.ambiguity or "").strip()[:200] or None
+        # retrieve는 이 parameters만 사용한다. benefit_keys는 그래프 key(JSON 배열 문자열) 또는 "pg:..." key다.
+        # sections는 intent별로 조회할 상세 항목(rules/conditions/limits/evidence)이다.
         parameters = {"benefit_ids": chosen, "benefit_names": [by_id[item]["name"] for item in chosen],
                       "benefit_keys": [by_id[item]["key"] for item in chosen],
                       "sections": list(SECTIONS_BY_INTENT.get(intent, ())),
@@ -1395,13 +1539,31 @@ class CardGraphRAG:
                 "warnings": [*update.get("warnings", []), *warnings]}
 
     def after_interpret(self, state: CardState) -> str:
-        """오류, UNKNOWN, 대상 없음이면 Neo4j 상세 조회와 Answer를 건너뛴다."""
+        """오류, UNKNOWN, 대상 없음이면 Neo4j 상세 조회와 Answer를 건너뛴다.
+
+        Returns:
+            "retrieve" 또는 "finish" (조건부 Edge의 다음 노드 이름).
+        """
         if state.get("error") or state.get("intent") == "UNKNOWN":
             return "finish"
         return "retrieve" if state["search_parameters"]["benefit_keys"] else "finish"
 
     def retrieve(self, state: CardState) -> CardState:
-        """검증된 혜택 키와 질문 유형의 Cypher 템플릿만 실행한다."""
+        """검증된 혜택 키와 질문 유형의 Cypher 템플릿만 실행한다.
+
+        입력 State: search_parameters(benefit_keys, sections, payment_amount), intent, question
+        출력 State: path=["retrieve"], retrieved_data(혜택별 상세), evidence(합친 PDF 근거), statements(Cypher 식별자),
+                    retrieval_trace(혜택별 조회 엔진), exclusions, unresolved, open_conditions, data_notices,
+                    other_unresolved, warnings / 실패 시 error
+
+        처리 순서
+            1. benefit_key마다 상세 조회: 그래프 key → Neo4jSearch.get_detail(Cypher 템플릿),
+               ``pg:`` key → BenefitSearchService.get_detail(PostgreSQL)
+            2. 그래프 공통 혜택의 근거가 0건이면 같은 공통 혜택의 PostgreSQL 근거로 대체(postgresql_fallback)
+            3. collect_evidence: 근거를 evidence_id로 합침(PDF 원문 근거 연결)
+            4. find_exclusions: 질문 낱말이 제외 문구에 있는지 판정(B·C는 PostgreSQL 원본, A는 그래프 source_json)
+            5. split_unresolved: 미확정 사항을 질문 영향 조건 / 자료 상태 / 기타로 분리
+        """
         request_id, parameters, intent = state["request_id"], state["search_parameters"], state["intent"]
         REQUEST_ID.set(request_id)
         sections = tuple(parameters["sections"])
@@ -1454,11 +1616,24 @@ class CardGraphRAG:
                 "warnings": [f"조회되지 않은 혜택 {len(missing)}건이 있습니다."] if missing else []}
 
     def after_retrieve(self, state: CardState) -> str:
-        """조회 결과와 근거가 있을 때만 Answer LLM을 호출한다."""
+        """조회 결과와 근거가 있을 때만 Answer LLM을 호출한다.
+
+        Returns:
+            "answer" 또는 "finish". PDF 근거가 0건이면 답변을 만들지 않는다(finish에서 NO_EVIDENCE/NO_RESULT 안내).
+        """
         return "answer" if not state.get("error") and state.get("evidence") else "finish"
 
     def answer(self, state: CardState) -> CardState:
-        """조회 결과만 LLM에 전달하고 답변을 검증한다. 연회비는 등록 값으로 프로그램이 쓰고 LLM에 넘기지 않는다."""
+        """조회 결과만 LLM에 전달하고 답변을 검증한다. 연회비는 등록 값으로 프로그램이 쓰고 LLM에 넘기지 않는다.
+
+        입력 State: retrieved_data, evidence, search_parameters, open_conditions, exclusions, unresolved, question
+        출력 State: path=["answer"], context(LLM에 보낸 검색 결과), answer(화면용), llm_calls, warnings / 실패 시 error
+
+        분기
+            - 연회비 항목만 조회됨 → LLM 미호출. fee_answer의 등록 값 문장과 표로 answer 생성(answer_source=program_fee)
+            - 그 외 → 연회비를 뺀 혜택으로 context 구성 → 답변 LLM 호출 → validate_answer → enforce_exclusions
+                      → 연회비도 함께 조회됐으면 LLM 문장 중 연회비 문장을 빼고 등록 값 문장·표를 뒤에 붙임
+        """
         request_id, evidence = state["request_id"], state["evidence"]
         details, duplicates = drop_duplicate_benefits(state["retrieved_data"])
         fees = [detail for detail in details if is_fee_detail(detail)]
@@ -1472,6 +1647,7 @@ class CardGraphRAG:
                       "message": None, "fee_rows": fee["rows"]}
             CARD_LOG.log_summary("ANSWER", request_id, status=answer["status"], fee_rows=len(fee["rows"]), llm="skipped")
             return {"path": ["answer"], "context": {"fees": fee["rows"]}, "answer": answer, "warnings": notes}
+        # LLM 문맥 구성: 답변 대상 혜택에 연결된 근거만 남기고, 혜택 상세는 benefit_context로 필요한 필드만 추린다.
         refs = {detail_ref(detail) for detail in details}
         evidence = [item for item in evidence if set(item.get("benefit_ids", [])) & refs]
         benefits = [benefit_context(detail) for detail in details]
@@ -1499,6 +1675,7 @@ class CardGraphRAG:
         update["llm_calls"] = [call]
         if parsed is None:
             return {**update, "error": {"stage": "answer", "code": "LLM_FAILED", "type": "ParsingError"}}
+        # 근거 검증 단계: LLM 답변을 조회 결과와 대조(validate_answer)한 뒤, 제외 대상 판정(enforce_exclusions)을 덮어쓴다.
         # LLM에는 질문에 영향을 주는 조건만 보내고, 중복 문장 판별에는 미확정 사항 전체를 쓴다.
         topics = [item["topic"] for item in unresolved_items(state["retrieved_data"]) if item["kind"] == "CONDITION"]
         answer, warnings = validate_answer(parsed, {**context, "unresolved": state["unresolved"], "unresolved_topics": topics}, state["question"])
@@ -1526,7 +1703,12 @@ class CardGraphRAG:
         return {**update, "answer": answer, "warnings": [*warnings, *notes]}
 
     def finish(self, state: CardState) -> CardState:
-        """답변이 없는 경로의 안내를 만들고 전체 실행 결과를 기록한다."""
+        """답변이 없는 경로의 안내를 만들고 전체 실행 결과를 기록한다.
+
+        모든 경로가 마지막에 지나는 노드다. 입력 State 전체를 읽고, 출력은 path=["finish"]와
+        (answer가 없을 때) 안내용 answer(status=ERROR 또는 NOT_ANSWERABLE, message=MESSAGES[code])뿐이다.
+        비용을 확인하지 못한 호출이 있으면 경고 1건을 추가한다. 나머지는 로그(FINAL 요약) 기록이다.
+        """
         request_id = state["request_id"]
         update: CardState = {"path": ["finish"]}
         if state.get("answer") is None:

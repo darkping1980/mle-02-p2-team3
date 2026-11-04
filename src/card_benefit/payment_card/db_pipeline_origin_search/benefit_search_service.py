@@ -2,6 +2,26 @@
 
 유사도는 후보를 찾는 데만 쓴다. 공통 혜택의 카드 적용 여부는 ``card_common_bnft_apply`` 로만 판단하고,
 적용 관계가 없는 공통 혜택은 ``applied=False`` 로 표시한다. 실제 조건 검증은 원본 조건과 원문 근거로 한다.
+
+주의: 이 파일의 mode "A"(SQL 문자열 검색)와 CardGraphRAG의 search_mode "A"는 다르다.
+    CardGraphRAG는 A 모드에서 이 서비스를 만들지 않는다(Neo4j 카탈로그 전체 사용). CardGraphRAG의 B·C만
+    ``catalog_rows(question, "B"|"C", ...)`` 로 이 서비스를 쓴다. 이 서비스의 A 모드는 search_eval.py의 SQL 계층 비교에서 쓴다.
+
+검색 모드별 실행 (``search``)
+    A: _keyword — 질문 낱말(search_terms)로 PostgreSQL 문자열 검색(keyword_card_bnft, keyword_common_bnft)
+                  + (Neo4j가 있으면) 혜택명 Cypher(list_benefits) 일치 수를 점수에 더함
+    B: _vector  — 질문 1건을 OpenAI 임베딩 → pgvector 코사인 유사도 검색(search_card_bnft, search_common_bnft)
+    C: _fuse(_keyword, _vector) — 두 순위를 RRF(1/(60+순위))로 합침
+    공통 후처리: 동일성 SAME이 확인된 카드 혜택·공통 혜택 중복 병합 → (use_graph) Neo4j 관계로 순서 보정 → 상위 top_k
+
+데이터 출처
+    PostgreSQL: card_product_item(item_type_cd='BENEFIT', 카드 혜택), card_common_bnft(공통 혜택),
+                card_common_bnft_apply(적용 카드), card_product. SQL은 db_pipeline/embedding_repository.sql
+                (EmbeddingRepository 경유, 모두 SELECT).
+    Neo4j: neo4j_search.Neo4jSearch(list_benefits, candidate_relations).
+
+호출하는 곳: card_graphrag.create_benefit_search → CardGraphRAG.interpret(catalog_rows), CardGraphRAG.retrieve(get_detail,
+            repository.one('select_card_bnft_detail')), search_eval.py
 """
 from __future__ import annotations
 
@@ -47,6 +67,7 @@ class SearchHit:
 
 @dataclass
 class SearchOutcome:
+    """``search`` 결과. hits는 상위 top_k, engines는 실제 사용한 엔진(sql / pgvector / neo4j_name / neo4j_relations)."""
     mode: str
     hits: list[SearchHit]
     elapsed_ms: float
@@ -66,6 +87,7 @@ def search_terms(question: str) -> list[str]:
 
 
 def card_hit(row: dict) -> SearchHit:
+    """카드 혜택 SQL 행 → SearchHit. key는 ``pg:CARD_BNFT:{card_id}:{card_bnft_id}`` (card_bnft_id = card_product_item_id 별칭)."""
     return SearchHit("CARD_BNFT", f"pg:CARD_BNFT:{row['card_id']}:{row['card_bnft_id']}", row["card_bnft_id"],
                      row["bnft_cd"], row["bnft_nm"], row["bnft_type_cd"],
                      [{"card_id": row["card_id"], "product_nm": row["product_nm"]}], True,
@@ -73,6 +95,10 @@ def card_hit(row: dict) -> SearchHit:
 
 
 def common_hit(row: dict) -> SearchHit:
+    """공통 혜택 SQL 행 → SearchHit. key는 ``pg:CARD_COMMON_BNFT:{card_common_id}:{card_common_bnft_id}``.
+
+    적용 카드(apply_cards)가 없으면 applied=False다.
+    """
     cards = row["apply_cards"]
     return SearchHit("CARD_COMMON_BNFT", f"pg:CARD_COMMON_BNFT:{row['card_common_id']}:{row['card_common_bnft_id']}",
                      row["card_common_bnft_id"], row["bnft_cd"], row["bnft_nm"], row["bnft_type_cd"], cards, bool(cards),
@@ -104,6 +130,19 @@ class BenefitSearchService:
         self.neo4j_search = neo4j_search
 
     def search(self, question: str, mode: str = "C", top_k: int = 5, use_graph: bool = False) -> SearchOutcome:
+        """모드별로 후보를 검색한다(DB 읽기 전용).
+
+        Args:
+            question: 사용자 질문.
+            mode: A(문자열) / B(임베딩) / C(하이브리드).
+            top_k: 돌려줄 후보 수.
+            use_graph: True면 Neo4j 관계(적용 대상·제외 문구)로 순서를 보정한다.
+
+        부작용: B·C는 OpenAI 임베딩 API를 1회 호출한다(유료).
+
+        Raises:
+            ValueError: 모드가 잘못됐거나, 임베딩 클라이언트가 없거나, 저장된 벡터 모델과 질문 임베딩 모델이 다른 경우.
+        """
         if mode not in MODES:
             raise ValueError(f"검색 모드가 아닙니다: {mode}")
         started = perf_counter()
@@ -158,6 +197,11 @@ class BenefitSearchService:
         return confirmed
 
     def _keyword(self, question: str, warnings: list[str]) -> list[SearchHit]:
+        """문자열 검색. keyword_score = 질문 낱말 중 카드명·혜택명·적용 대상에 포함된 낱말 수(SQL이 계산).
+
+        카드 혜택·공통 혜택을 모두 읽은 뒤, Neo4j 혜택명 검색에서 걸린 혜택은 낱말마다 1점씩 더한다.
+        점수가 0인 행은 버린다.
+        """
         terms = search_terms(question)
         if not terms:
             return []
@@ -179,6 +223,10 @@ class BenefitSearchService:
         return sorted((hit for hit in rows if hit.keyword_score), key=lambda hit: (-hit.keyword_score, hit.bnft_nm))
 
     def _vector(self, question: str) -> list[SearchHit]:
+        """임베딩 검색. 질문 벡터와 저장된 item_embedding/bnft_embedding의 코사인 유사도 상위 FETCH_PER_TABLE건씩.
+
+        저장 벡터를 만든 마지막 임베딩 실행의 모델과 질문 임베딩 모델이 다르면 비교가 무의미하므로 거부한다.
+        """
         if self.embedder is None:
             raise ValueError("임베딩 클라이언트가 없습니다")
         last = self.repository.one("select_last_embedding_run")
@@ -207,7 +255,15 @@ class BenefitSearchService:
         return sorted(merged.values(), key=lambda hit: -scores[hit.key])
 
     def catalog_rows(self, question: str, mode: str, graph_catalog: list[dict], top_k: int = 8) -> tuple[list[dict], SearchOutcome]:
-        """검색 결과를 질문 해석용 혜택 목록으로 바꾼다. 그래프에 있는 혜택은 그래프 상세를 쓴다."""
+        """검색 결과를 질문 해석용 혜택 목록으로 바꾼다. 그래프에 있는 혜택은 그래프 상세를 쓴다.
+
+        CardGraphRAG.interpret(B·C 모드)가 호출한다. 항상 use_graph=True로 search를 실행한다.
+        후보가 Neo4j 카탈로그에도 있으면 그 행(그래프 key)을 그대로 쓰고, 없으면 ``pg:`` key 행을 만든다.
+        → 이 key 형식이 retrieve에서 Neo4j/PostgreSQL 중 어디서 상세를 읽을지 결정한다.
+
+        Returns:
+            (질문 해석용 목록, SearchOutcome)
+        """
         graph = {entity_ref(row["key"], row["id"]): row for row in graph_catalog}   # 종류·소유자 포함 참조로 그래프 항목을 찾는다.
         outcome = self.search(question, mode, top_k, use_graph=True)
         rows = []
@@ -222,7 +278,21 @@ class BenefitSearchService:
         return rows, outcome
 
     def get_detail(self, key: str, sections: tuple[str, ...]) -> dict | None:
-        """PostgreSQL 혜택 상세를 Neo4j 조회와 같은 구조로 돌려준다."""
+        """PostgreSQL 혜택 상세를 Neo4j 조회와 같은 구조로 돌려준다.
+
+        CardGraphRAG.retrieve가 ``pg:`` key(그래프에 없는 혜택)나 공통 혜택 근거 대체 조회 때 호출한다.
+        반환 구조를 Neo4jSearch.get_detail과 같게 맞춰(context / rules / conditions / limits / evidence, 값은 source_json 문자열)
+        이후 처리(collect_evidence, benefit_context 등)가 출처를 구분하지 않게 한다.
+
+        Args:
+            key: ``pg:CARD_BNFT:{card_id}:{id}`` 또는 ``pg:CARD_COMMON_BNFT:{common_id}:{id}``.
+            sections: 채울 항목. 없는 항목은 빈 목록.
+
+        Returns:
+            상세 dict. 행이 없으면 None.
+        """
+        # 조회 SQL: select_card_bnft_detail / select_common_bnft_detail(혜택 본문·규칙·조건식),
+        #           select_card_bnft_evidence / select_common_bnft_evidence(연결된 PDF 원문 근거).
         _, table, owner, bnft_id = key.split(":", 3)
         if table == "CARD_BNFT":
             row = self.repository.one("select_card_bnft_detail", CARD_ID=int(owner), BNFT_ID=bnft_id)
@@ -259,7 +329,8 @@ class BenefitSearchService:
 
     @staticmethod
     def _conditions(row: dict) -> list[dict]:
-        owners = [("CARD", None, row.get("card_cond_expr")), ("BNFT", None, row.get("bnft_cond_expr"))]
+        """카드·혜택·규칙의 조건식 JSON(branches → atoms)을 Neo4j 조건 조회 결과와 같은 행 목록으로 펼친다."""
+        owners =[("CARD", None, row.get("card_cond_expr")), ("BNFT", None, row.get("bnft_cond_expr"))]
         owners += [("RULE", rule["rule_key"], rule.get("cond_expr")) for rule in row.get("rule_list") or []]
         conditions = []
         for owner_cd, rule_key, expression in owners:

@@ -1,4 +1,16 @@
-"""개발 검증 모드 화면. 버튼을 누른 단계만 실행하고 결과는 session_state에 둔다."""
+"""개발 검증 모드 화면. 버튼을 누른 단계만 실행하고 결과는 session_state에 둔다.
+
+[전체 흐름에서의 위치] streamlit_app에서 개발자 모드 → 실행 모드 "개발 검증"을 고르면 render가 호출된다.
+자동 실행(graph.invoke)과 같은 노드 함수를 쓰되, 다음 노드로 넘어가는 시점을 사용자가 버튼으로 정한다.
+
+단계 (CardGraphRAG의 verify_* 메서드)
+    1. 질문 해석 실행  → verify_interpret: 카탈로그 Cypher + 질문 해석 LLM(유료 1회)
+    2. 실행 예정 Cypher → verification_plan: 실행하지 않고 값이 들어간 Cypher만 표시(Neo4j Browser 복사용)
+    3. DB 조회 실행    → verify_retrieve: 혜택 상세 Cypher 실행, 레코드 표 표시
+    4. LLM 답변 생성   → verify_answer: 답변 LLM(유료 1회) → show_outcome으로 자동 실행과 같은 화면 출력
+State는 ``st.session_state.verify`` 에 저장되며, 질문이 바뀌면 지운다.
+주의: get_pipeline()을 인자 없이 부르므로 검증 모드는 항상 A 모드 파이프라인을 쓴다.
+"""
 import streamlit as st
 
 from . import card_graphrag
@@ -80,7 +92,15 @@ def _show_results(state: dict) -> None:
 
 
 def render(get_pipeline, show_outcome) -> None:
-    """단계별 검증 화면. 자동 실행과 같은 노드 함수를 쓰고 LangGraph 흐름만 사용자가 진행한다."""
+    """단계별 검증 화면. 자동 실행과 같은 노드 함수를 쓰고 LangGraph 흐름만 사용자가 진행한다.
+
+    Args:
+        get_pipeline: streamlit_app.get_pipeline(캐시된 CardGraphRAG 생성 함수).
+        show_outcome: streamlit_app.show_outcome(최종 결과 출력 함수). 마지막 단계에서 재사용한다.
+
+    next_step(state)가 "retrieve" / "answer" / "done" 중 무엇인지로 보여 줄 버튼을 정한다.
+    해석 단계에서 오류·대상 없음이면 _step이 바로 finish까지 진행해 done이 된다.
+    """
     st.info("버튼을 누른 단계만 실행합니다. 질문 해석과 답변 생성은 유료 API를 각 1회 호출합니다. DB 조회는 읽기 전용입니다.")
     question = st.text_area("질문", key="verify_question", max_chars=card_graphrag.MAX_QUESTION_CHARS, height=80,
                             placeholder="카드 혜택을 자연어로 물어보세요.").strip()

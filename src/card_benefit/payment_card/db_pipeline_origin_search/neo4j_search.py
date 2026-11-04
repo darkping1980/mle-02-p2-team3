@@ -1,4 +1,22 @@
-"""dp_ 그래프 읽기 전용 조회. Cypher는 graph_questions.cypher에 있고 실행과 로그는 여기서 맡는다."""
+"""dp_ 그래프 읽기 전용 조회. Cypher는 graph_questions.cypher에 있고 실행과 로그는 여기서 맡는다.
+
+Java 관점: Neo4j용 Repository/DAO다. Cypher 문장은 같은 폴더의 ``graph_questions.cypher`` 에 ``// name: 이름`` 으로
+정의되어 있고, ``MAPPERS["graph_questions.이름"]`` 으로 문자열을 꺼내 파라미터와 함께 실행한다(LLM이 Cypher를 만들지 않음).
+모든 조회는 ``READ_ACCESS`` 세션의 ``execute_read`` 로 실행되어 그래프를 바꾸지 않는다.
+그래프 자체는 db_pipeline/neo4j_load_draft.py가 PostgreSQL에서 적재한 ``dp_`` 라벨 노드·관계다.
+
+Cypher별 용도 (STATEMENTS의 식별자 → 호출 메서드)
+    card.catalog / card.item_catalog / card.common_catalog  → list_catalog : 질문 해석용 혜택·연회비 항목·공통 혜택 목록
+    card.list                                              → list_benefits : 혜택명 문자열 검색(B·C 후보 점수 보강)
+    card.relations                                         → candidate_relations : 후보별 적용 대상·제외 문구
+    card.context                                           → get_detail : 혜택 1건과 카드·공통서비스·문서
+    card.rules / card.conditions / card.limits             → get_detail : 규칙·대상, 조건식(branch·atom), 한도 원문
+    card.evidence / card.common_evidence / card.item_evidence → get_detail : 연결된 PDF 원문 근거(페이지·청크·문서)
+    card.hop*                                              → hop : 다중 홉 조회(GraphRAG 흐름에서는 호출하지 않고 tests/test_neo4j_origin_search.py만 사용)
+
+호출하는 곳: card_graphrag.CardGraphRAG(interpret·retrieve), benefit_search_service.BenefitSearchService,
+            streamlit_app(connect, QUERIES 표시), verify_view(STATEMENTS·flatten_record)
+"""
 from __future__ import annotations
 
 import json
@@ -157,11 +175,20 @@ def detail_plan(keys: list[str], sections: tuple[str, ...]) -> list[dict]:
 
 
 class Neo4jSearch:
+    """dp_ 그래프 조회 객체. 드라이버와 대상 DB 이름을 갖고, 모든 공개 메서드는 _query를 거쳐 읽기 전용으로 실행한다."""
+
     def __init__(self, driver, database: str | None = None):
         self.driver = driver
         self.database = database
 
     def _query(self, query: str, **params) -> list[dict]:
+        """Cypher 1건을 READ_ACCESS 세션에서 실행하고 레코드를 dict 목록으로 반환한다.
+
+        값은 ``$파라미터`` 로만 전달한다(문자열 조합 없음). 요약 로그는 항상, Cypher 전문·레코드는 DEBUG 또는 검증 모드에서만 남긴다.
+
+        Raises:
+            neo4j 드라이버 예외(연결·인증 등)를 그대로 전파한다. CardGraphRAG 노드가 잡아 NEO4J_FAILED로 바꾼다.
+        """
         statement_id = STATEMENT_IDS.get(query, "card.unregistered")
         label = f"{REQUEST_ID.get()}/{statement_id}"
         detail = DETAIL_LOG.get() or CARD_LOG.logger.isEnabledFor(logging.DEBUG)  # 전문과 레코드는 DEBUG·검증 모드에서만
@@ -179,7 +206,16 @@ class Neo4jSearch:
         return rows
 
     def list_catalog(self) -> list[dict]:
-        """질문 해석에 쓸 카드별·공통 혜택 목록과 적용 대상을 반환한다."""
+        """질문 해석에 쓸 카드별·공통 혜택 목록과 적용 대상을 반환한다.
+
+        Cypher 3건을 차례로 실행해 한 목록으로 합친다.
+            catalog        카드 혜택(dp_card_bnft) + 규칙 대상·결제 기준 금액 → item_type="BENEFIT"
+                           (공통 혜택과 dp_same_as로 동일성이 확인된 카드 혜택은 빼고 공통 혜택 쪽으로 보여 준다)
+            item_catalog   혜택 외 상품 항목(dp_card_product_item, 연회비 등) → item_data.fee_lines의 같은 사실 참조 포함
+            common_catalog 공통 혜택(dp_card_common_bnft) 전체와 적용 카드 이름 → item_type="COMMON_BENEFIT"
+                           (적용 관계가 없으면 card="적용 카드 미확인")
+        각 행의 key는 그래프 노드 key(JSON 배열 문자열)이며, retrieve의 get_detail 인자로 그대로 쓰인다.
+        """
         rows = self._query(CATALOG_QUERY)
         for row in rows:
             row["card"] = source({"source_json": row.pop("card_source")}).get("product_nm", "미확인")
@@ -199,6 +235,7 @@ class Neo4jSearch:
         return rows
 
     def list_benefits(self, keyword: str = "") -> list[dict]:
+        """혜택명에 keyword가 들어간 카드·공통 혜택을 찾는다(BenefitSearchService._keyword의 점수 보강용)."""
         return self._query(LIST_QUERY, keyword=keyword.strip())
 
     def candidate_relations(self, ids: list[str]) -> dict[str, dict]:
@@ -211,7 +248,19 @@ class Neo4jSearch:
         return self._query(HOP_QUERIES[name], **params)
 
     def get_detail(self, key: str, sections: tuple[str, ...] = ALL_SECTIONS) -> dict | None:
-        """혜택 상세를 조회한다. ``sections`` 에 없는 항목은 조회하지 않고 빈 목록으로 둔다."""
+        """혜택 상세를 조회한다. ``sections`` 에 없는 항목은 조회하지 않고 빈 목록으로 둔다.
+
+        CardGraphRAG.retrieve가 그래프 key마다 호출한다. 실행 순서는 detail_statements와 같다.
+            1. card.context : 혜택 노드와 카드(들)·공통서비스 정보. 없으면 None 반환
+            2. sections 순서대로 rules / conditions / limits / evidence
+               evidence는 key 종류에 따라 Cypher가 다르다 — 공통 혜택: common_evidence(dp_same_as로 연결된 카드 혜택의 근거),
+               연회비 등 항목: item_evidence, 그 밖: benefit_evidence
+        근거 행은 (dp_card_source_evidence)-[in_chunk]->(청크)-[on_page]->(페이지)-[in_document]->(문서) 경로로
+        PDF 페이지와 인용 원문을 함께 돌려준다.
+
+        Returns:
+            ``{"context": ..., "rules": [...], "conditions": [...], "limits": [...], "evidence": [...]}`` 또는 None.
+        """
         context = self._query(CONTEXT_QUERY, key=key)
         if not context:
             return None
@@ -230,5 +279,6 @@ class Neo4jSearch:
 
 
 def connect() -> Neo4jSearch:
-    driver = create_neo4j_driver()  # project helper keeps certificate verification enabled
+    """공통 드라이버 생성 함수로 Neo4j에 연결하고, NEO4J_DATABASE(없으면 기본 DB)를 대상으로 Neo4jSearch를 만든다."""
+    driver =create_neo4j_driver()  # project helper keeps certificate verification enabled
     return Neo4jSearch(driver, os.getenv("NEO4J_DATABASE") or None)
