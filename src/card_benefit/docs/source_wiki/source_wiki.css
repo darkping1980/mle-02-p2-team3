@@ -1,0 +1,262 @@
+/* VS Code built-in Markdown Preview skin for the source wiki. */
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  color: var(--vscode-editor-foreground);
+  background: var(--vscode-editor-background);
+}
+
+.markdown-body {
+  box-sizing: border-box;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 2rem clamp(1rem, 4vw, 3rem) 5rem;
+  color: var(--vscode-editor-foreground);
+  font-size: 15px;
+  line-height: 1.72;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  color: var(--vscode-editor-foreground);
+  letter-spacing: -0.025em;
+  line-height: 1.35;
+}
+
+.markdown-body h1 {
+  margin: 0 0 1.35rem;
+  padding: 0 0 0.8rem;
+  border-bottom: 2px solid var(--vscode-focusBorder);
+  font-size: clamp(1.75rem, 3vw, 2.2rem);
+}
+
+.markdown-body h2 {
+  margin-top: 2rem;
+  font-size: 1.35rem;
+}
+
+.markdown-body p,
+.markdown-body li {
+  line-height: 1.75;
+}
+
+.markdown-body blockquote {
+  margin: 1.2rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid var(--vscode-focusBorder);
+  border-radius: 0 8px 8px 0;
+  background: var(--vscode-textBlockQuote-background);
+  color: var(--vscode-editor-foreground);
+}
+
+.markdown-body details {
+  box-sizing: border-box;
+  margin: 1rem 0;
+  overflow: hidden;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-radius: 14px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--vscode-editor-foreground) 8%, transparent);
+}
+
+.markdown-body details > summary {
+  display: flex;
+  min-height: 2.9rem;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.78rem 1.05rem;
+  list-style: none;
+  cursor: pointer;
+  color: var(--vscode-editor-foreground);
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.45;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.markdown-body details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.markdown-body details > summary::marker {
+  content: "";
+}
+
+.markdown-body details > summary::before {
+  flex: 0 0 1rem;
+  color: var(--vscode-textLink-foreground);
+  content: "▸";
+  font-size: 1.05rem;
+  text-align: center;
+}
+
+.markdown-body details[open] > summary::before {
+  content: "▾";
+}
+
+.markdown-body details > summary:hover {
+  background: var(--vscode-list-hoverBackground, var(--vscode-sideBar-background));
+}
+
+.markdown-body details > summary:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: -2px;
+}
+
+.markdown-body details[open] > summary {
+  border-bottom: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+}
+
+/* Process cards: first level */
+.markdown-body > details {
+  margin: 1.15rem 0;
+  border-left: 4px solid var(--vscode-focusBorder);
+}
+
+.markdown-body > details > summary {
+  min-height: 3.35rem;
+  padding: 0.9rem 1.2rem;
+  font-size: 1.08rem;
+}
+
+/* Files and classes: second level */
+.markdown-body details details {
+  margin: 0.85rem 1rem;
+  border-left: 3px solid var(--vscode-textLink-foreground);
+  border-radius: 10px;
+  background: var(--vscode-editor-background);
+  box-shadow: none;
+}
+
+.markdown-body details details > summary {
+  min-height: 2.65rem;
+  padding: 0.68rem 0.9rem;
+  font-size: 0.97rem;
+}
+
+/* Methods and implementation details: third and deeper levels */
+.markdown-body details details details {
+  margin: 0.7rem 0.8rem;
+  border-left-color: var(--vscode-descriptionForeground);
+  border-radius: 8px;
+  background: var(--vscode-input-background, var(--vscode-editor-background));
+}
+
+.markdown-body details details details > summary {
+  min-height: 2.4rem;
+  padding: 0.58rem 0.8rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.markdown-body details > p,
+.markdown-body details > ul,
+.markdown-body details > ol,
+.markdown-body details > table,
+.markdown-body details > pre,
+.markdown-body details > blockquote {
+  margin-right: 1.15rem;
+  margin-left: 1.15rem;
+}
+
+.markdown-body details > p:first-of-type {
+  margin-top: 1rem;
+}
+
+.markdown-body details > p:last-child,
+.markdown-body details > ul:last-child,
+.markdown-body details > ol:last-child,
+.markdown-body details > table:last-child,
+.markdown-body details > pre:last-child {
+  margin-bottom: 1.1rem;
+}
+
+.markdown-body table {
+  display: block;
+  width: max-content;
+  max-width: calc(100% - 2rem);
+  overflow-x: auto;
+  border-spacing: 0;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-radius: 10px;
+  background: var(--vscode-editor-background);
+}
+
+.markdown-body th {
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  font-weight: 650;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 0.65rem 0.8rem;
+  border-right: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-bottom: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+}
+
+.markdown-body tr:last-child td {
+  border-bottom: 0;
+}
+
+.markdown-body th:last-child,
+.markdown-body td:last-child {
+  border-right: 0;
+}
+
+.markdown-body a {
+  color: var(--vscode-textLink-foreground);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.16em;
+}
+
+.markdown-body a[href*="#L"] {
+  display: inline-block;
+  padding: 0.04rem 0.38rem;
+  border: 1px solid var(--vscode-textLink-foreground);
+  border-radius: 6px;
+  background: var(--vscode-input-background, var(--vscode-editor-background));
+  font-size: 0.92em;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.markdown-body a[href*="#L"]:hover {
+  background: var(--vscode-list-hoverBackground, var(--vscode-sideBar-background));
+  text-decoration: underline;
+}
+
+.markdown-body a[href^="https://github.com/"] {
+  text-decoration-style: dotted;
+}
+
+.markdown-body code {
+  padding: 0.12em 0.34em;
+  border-radius: 5px;
+  background: var(--vscode-textCodeBlock-background);
+  font-size: 0.9em;
+}
+
+.markdown-body pre {
+  padding: 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-radius: 10px;
+  background: var(--vscode-textCodeBlock-background);
+}
+
+@media (max-width: 700px) {
+  .markdown-body {
+    padding: 1.1rem 0.85rem 3rem;
+    font-size: 14px;
+  }
+
+  .markdown-body details details {
+    margin-right: 0.55rem;
+    margin-left: 0.55rem;
+  }
+}

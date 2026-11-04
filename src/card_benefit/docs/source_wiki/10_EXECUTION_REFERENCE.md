@@ -2,7 +2,7 @@
 
 [목차](README.md)
 
-<details><summary>▼ 10.1 진입점별 호출 관계</summary>
+<details><summary>10.1 진입점별 호출 관계</summary>
 
 | 실행/진입 | 핵심 호출 | 목적 |
 |---|---|---|
@@ -16,21 +16,25 @@
 각 단계를 한 프로세스가 반드시 연속 실행하는 구조는 아니다. CLI 선택과 작업자가 지정하는 run/IDs에 따라 독립적으로 실행한다.
 </details>
 
-<details><summary>▼ 10.2 SQL Mapper 연결표</summary>
+<details><summary>10.2 SQL Mapper 연결표</summary>
 
 Python에서 실제 statement 이름은 Repository 메서드의 호출 문자열과 Mapper의 `-- name:`를 대조한다.
 
 | Mapper | 주요 statement | 주요 테이블 |
 |---|---|---|
-| [`document_repository.sql`](../../payment_card/db_pipeline/document_repository.sql) | `select_doc_by_sha256_or_cd`, `insert_doc`, `insert_doc_page!`, `insert_doc_chunk!`, `verify_doc`, `select_table_counts`, `insert_product_doc_link` | `card_doc`, `card_doc_page`, `card_doc_chunk`, `card_product_doc`, `card_product` |
-| [`extraction_repository.sql`](../../payment_card/db_pipeline/extraction_repository.sql) | `select_ai_input_chunks`, `select_blocked_pages`, `insert_run`, `insert_call!`, `insert_stg`, `insert_evidence!`, `update_stg_merge!`, `finish_run!` | `card_doc*`, `card_ai_run`, `card_ai_call`, `card_extr_stg`, `card_source_evidence` |
-| [`common_benefit_repository.sql`](../../payment_card/db_pipeline/common_benefit_repository.sql) | `lock_card`, `integrity_errors`, `select_merged_benefits`, `insert_local_benefit`, `insert_evidence_link`, `insert_common`, `insert_common_bnft`, `insert_common_apply` | `card_product_item`, `card_common*`, evidence/link tables |
-| [`embedding_repository.sql`](../../payment_card/db_pipeline/embedding_repository.sql) | `select_*_rows`, `update_*_text`, `update_*_embedding!`, `start_embedding_run`, `finish_embedding_run!`, `search_*`, `keyword_*`, `select_*_detail` | `card_product_item`, `card_common_bnft`, `card_ai_run`, `card_product`, rule target/evidence views |
+| [`document_repository.sql`](../../payment_card/db_pipeline/document_repository.sql) | [select_doc_by_sha256_or_cd (L10)](../../payment_card/db_pipeline/document_repository.sql#L10), [insert_doc (L18)](../../payment_card/db_pipeline/document_repository.sql#L18), [insert_doc_page! (L60)](../../payment_card/db_pipeline/document_repository.sql#L60), [insert_doc_chunk! (L88)](../../payment_card/db_pipeline/document_repository.sql#L88), [verify_doc (L218)](../../payment_card/db_pipeline/document_repository.sql#L218) | `card_doc`, `card_doc_page`, `card_doc_chunk`, `card_product_doc`, `card_product` |
+| [`extraction_repository.sql`](../../payment_card/db_pipeline/extraction_repository.sql) | [select_ai_input_chunks (L32)](../../payment_card/db_pipeline/extraction_repository.sql#L32), [insert_run (L72)](../../payment_card/db_pipeline/extraction_repository.sql#L72), [insert_call! (L108)](../../payment_card/db_pipeline/extraction_repository.sql#L108), [insert_stg (L144)](../../payment_card/db_pipeline/extraction_repository.sql#L144), [insert_evidence! (L179)](../../payment_card/db_pipeline/extraction_repository.sql#L179) | `card_doc*`, `card_ai_run`, `card_ai_call`, `card_extr_stg`, `card_source_evidence` |
+| [`common_benefit_repository.sql`](../../payment_card/db_pipeline/common_benefit_repository.sql) | [lock_card (L1)](../../payment_card/db_pipeline/common_benefit_repository.sql#L1), [integrity_errors (L5)](../../payment_card/db_pipeline/common_benefit_repository.sql#L5), [insert_local_benefit (L197)](../../payment_card/db_pipeline/common_benefit_repository.sql#L197), [insert_common (L207)](../../payment_card/db_pipeline/common_benefit_repository.sql#L207), [insert_common_bnft (L233)](../../payment_card/db_pipeline/common_benefit_repository.sql#L233), [insert_common_apply (L256)](../../payment_card/db_pipeline/common_benefit_repository.sql#L256) | `card_product_item`, `card_common*`, evidence/link tables |
+| [`embedding_repository.sql`](../../payment_card/db_pipeline/embedding_repository.sql) | [select_card_bnft_rows (L8)](../../payment_card/db_pipeline/embedding_repository.sql#L8), [update_card_bnft_embedding (L50)](../../payment_card/db_pipeline/embedding_repository.sql#L50), [search_card_bnft (L99)](../../payment_card/db_pipeline/embedding_repository.sql#L99), [keyword_card_bnft (L130)](../../payment_card/db_pipeline/embedding_repository.sql#L130), [select_card_bnft_detail (L163)](../../payment_card/db_pipeline/embedding_repository.sql#L163) | `card_product_item`, `card_common_bnft`, `card_ai_run`, `card_product`, rule target/evidence views |
 
 Mapper 파일 내 statement 선언 위치는 VS Code 링크로 열어 `-- name:`을 찾는다. 줄 링크는 `#L` URL 규칙으로 고정하되 실제 statement line을 기계적으로 확인한 링크만 메서드 수준 링크로 제공한다. SQL/DDL은 [6장](06_POSTGRESQL_SCHEMA.md).
+
+우선 검증 링크: [`DocRepository.insert_doc()` 로컬 (L52)](../../payment_card/db_pipeline/document_repository.py#L52) · [GitHub 기준 커밋 (L52)](https://github.com/darkping1980/mle-02-p2-team3/blob/7b37de03b17a9671d703f183ec83b386c78d98f7/src/card_benefit/payment_card/db_pipeline/document_repository.py#L52) → [`insert_doc` SQL 로컬 (L18)](../../payment_card/db_pipeline/document_repository.sql#L18) · [GitHub 기준 커밋 (L18)](https://github.com/darkping1980/mle-02-p2-team3/blob/7b37de03b17a9671d703f183ec83b386c78d98f7/src/card_benefit/payment_card/db_pipeline/document_repository.sql#L18).
+
+Cypher도 이름 선언 줄로 이동한다: [`catalog` (L18)](../../payment_card/db_pipeline_origin_search/graph_questions.cypher#L18), [`candidate_relations` (L54)](../../payment_card/db_pipeline_origin_search/graph_questions.cypher#L54), [`benefit_context` (L67)](../../payment_card/db_pipeline_origin_search/graph_questions.cypher#L67), [`benefit_evidence` (L105)](../../payment_card/db_pipeline_origin_search/graph_questions.cypher#L105).
 </details>
 
-<details><summary>▼ 10.3 Cypher Mapper 참조</summary>
+<details><summary>10.3 Cypher Mapper 참조</summary>
 
 [`graph_questions.cypher`](../../payment_card/db_pipeline_origin_search/graph_questions.cypher)의 `// name:` 쿼리를 [`neo4j_search.py`](../../payment_card/db_pipeline_origin_search/neo4j_search.py)에서 로드한다. 주요 대응:
 
@@ -45,7 +49,7 @@ Mapper 파일 내 statement 선언 위치는 VS Code 링크로 열어 `-- name:`
 실행은 READ_ACCESS/`execute_read`. 쿼리는 [7장](07_NEO4J_SYNC.md).
 </details>
 
-<details><summary>▼ 10.4 분석 범위·한계 및 점검 집계</summary>
+<details><summary>10.4 분석 범위·한계 및 점검 집계</summary>
 
 - 기준 커밋: `7b37de03b17a9671d703f183ec83b386c78d98f7`.
 - 운영 DB 접속, SQL 실행, 그래프 적재, 임베딩/LLM API 호출: 수행하지 않음.

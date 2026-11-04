@@ -2,13 +2,13 @@
 
 [목차](README.md) · [AI 추출](02_AI_EXTRACTION.md)
 
-<details><summary>▼ 3.1 진입점과 실행 단위</summary>
+<details><summary>3.1 진입점과 실행 단위</summary>
 
 [`benefit_main.py`](../../payment_card/db_pipeline/benefit_main.py)는 product/common/brand-compare 작업을 선택한다. 적용 모드가 아니면 변경 작업을 하지 않으며 공통 혜택 등록과 카드별 적용도 분리된 실행 단위다.
 
-<details><summary>▼ 3.1.1 ProductBenefitService.register_run()</summary>
+<details><summary>3.1.1 ProductBenefitService.register_run()</summary>
 
-소스 [`product_benefit_service.py`](../../payment_card/db_pipeline/product_benefit_service.py), [register_run GitHub](https://github.com/darkping1980/mle-02-p2-team3/blob/7b37de03b17a9671d703f183ec83b386c78d98f7/src/card_benefit/payment_card/db_pipeline/product_benefit_service.py#L58).
+소스 [ProductBenefitService.register_run() 로컬 (L58)](../../payment_card/db_pipeline/product_benefit_service.py#L58) · [GitHub 기준 커밋](https://github.com/darkping1980/mle-02-p2-team3/blob/7b37de03b17a9671d703f183ec83b386c78d98f7/src/card_benefit/payment_card/db_pipeline/product_benefit_service.py#L58).
 
 - run과 대상 카드를 잠그고 기존 무결성 오류를 검사한 뒤 staging 후보를 조회한다.
 - 기존 카드 혜택과 동일 키가 있으면 서비스의 변경 정책에 따라 unchanged/excluded/review로 처리한다. 후보 상태, SQL 검사 코드, 관계/규칙 및 근거가 부족하면 등록 대신 review 결과를 남긴다.
@@ -16,9 +16,9 @@
 - 정확한 SQL은 [`common_benefit_repository.sql`](../../payment_card/db_pipeline/common_benefit_repository.sql)의 `lock_card`, `integrity_errors`, `select_merged_benefits`, `insert_local_benefit`, evidence-link statement들이다. Python facade는 [`common_benefit_service.py`](../../payment_card/db_pipeline/common_benefit_service.py)와 `product_benefit_service.py`.
 </details>
 
-<details><summary>▼ 3.1.2 CommonBenefitService.register_run() / apply_run()</summary>
+<details><summary>3.1.2 CommonBenefitService.register_run() / apply_run()</summary>
 
-소스 [`common_benefit_service.py`](../../payment_card/db_pipeline/common_benefit_service.py), [register_run GitHub](https://github.com/darkping1980/mle-02-p2-team3/blob/7b37de03b17a9671d703f183ec83b386c78d98f7/src/card_benefit/payment_card/db_pipeline/common_benefit_service.py#L319), [apply_run GitHub](https://github.com/darkping1980/mle-02-p2-team3/blob/7b37de03b17a9671d703f183ec83b386c78d98f7/src/card_benefit/payment_card/db_pipeline/common_benefit_service.py#L373).
+소스 [CommonBenefitService.register_run() 로컬 (L319)](../../payment_card/db_pipeline/common_benefit_service.py#L319) · [GitHub 기준 커밋](https://github.com/darkping1980/mle-02-p2-team3/blob/7b37de03b17a9671d703f183ec83b386c78d98f7/src/card_benefit/payment_card/db_pipeline/common_benefit_service.py#L319), [apply_run() 로컬 (L373)](../../payment_card/db_pipeline/common_benefit_service.py#L373) · [GitHub 기준 커밋](https://github.com/darkping1980/mle-02-p2-team3/blob/7b37de03b17a9671d703f183ec83b386c78d98f7/src/card_benefit/payment_card/db_pipeline/common_benefit_service.py#L373).
 
 - `register_run()`은 문서 단위 대표 후보를 확인하고 `card_common`/`card_common_bnft`에 공통 엔티티와 혜택을 등록한다. SQL 적격 후보만 처리하며 제외·불충분·모호한 연결은 REVIEW/EXCLUDED로 남는다.
 - `apply_run()`은 등록된 공통 혜택을 지정 카드에 적용할 후보를 검증한다. 카드 상태, 브랜드/등급, 선택 서비스 식별, 적용 근거와 기간 등을 확인하고 확정 불가하면 REVIEW로 보류한다.
@@ -28,7 +28,7 @@
 </details>
 </details>
 
-<details><summary>▼ 3.2 후보 상태와 저장 모델</summary>
+<details><summary>3.2 후보 상태와 저장 모델</summary>
 
 상품별 혜택은 현재 SQL에서 `card_product_item` 테이블의 `item_type_cd='BENEFIT'`로 표현된다. 공통 혜택은 `card_common_bnft`, 카드별 적용은 `card_common_bnft_apply`다. 증거 연결은 `card_evidence_link` 및 `card_source_evidence`를 사용한다.
 
