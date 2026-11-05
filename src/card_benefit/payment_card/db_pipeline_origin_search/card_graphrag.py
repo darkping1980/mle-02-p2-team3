@@ -320,16 +320,20 @@ def create_benefit_search(neo4j_search=None):
 
     PostgreSQL 세션의 mapper는 db_pipeline 폴더의 SQL(embedding_repository.sql 등)을 쓴다.
     OpenAIEmbedder는 질문 임베딩(유료 호출)에 쓰이며, 실제 호출은 검색 시점(B·C의 _vector)에 일어난다.
+    검색 경로는 SELECT만 하므로 검색 전용 연결 관리자(autocommit + 서버 읽기 전용)를 쓴다. SELECT마다 붙던
+    BEGIN·COMMIT 왕복이 없어지고, 쓰기 SQL은 세션과 DB 양쪽에서 거부된다. 등록·수정용 연결은 바꾸지 않는다.
 
     Args:
         neo4j_search: Neo4jSearch. 혜택명 보강 검색·관계 보정에 함께 쓴다(None이면 PostgreSQL만 사용).
     """
     from card_benefit.payment_card.db_pipeline.document_repository import MAPPER_ROOT
     from card_benefit.payment_card.db_pipeline.embedding_service import EMBEDDING_LOG_KEYS, OpenAIEmbedder
+    from common.database_manager import DatabaseManager
     from common.postgres_db_session import PostgresDbSession
 
     load_project_environment()
     session = PostgresDbSession(mapper_root=MAPPER_ROOT, camel_case_keys=False, sql_log_mode="none",
+                                database_manager=DatabaseManager(autocommit=True, read_only=True),
                                 sensitive_log_keys=(*DEFAULT_SENSITIVE_KEYS, *EMBEDDING_LOG_KEYS))
     return BenefitSearchService(session, OpenAIEmbedder(), neo4j_search)
 

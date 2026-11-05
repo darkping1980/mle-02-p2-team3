@@ -164,7 +164,14 @@ pipeline 측정 대상 5건은 keyword_card_bnft, keyword_common_bnft, select_la
 - 지금 쓰는 Supabase pooler는 5432(session 모드)다. 6543(transaction 모드)으로 바꾸면 psycopg 자동 prepare와 충돌할 수 있다.
 - pipeline 방식은 오류가 나면 뒤 쿼리가 함께 실패하므로 예외 처리를 다시 설계해야 한다.
 
-### P2. 반복 조회되는 Neo4j 카탈로그·정적 조회의 안전한 캐시
+> **P1 구현 완료 (2026-11-05)** — 결과는 §6 참조. 실측 PG 6.36 s → 2.44 s, 왕복 24 → 8, 검색 결과 동일.
+
+### P2. ~~반복 조회되는 Neo4j 카탈로그·정적 조회의 안전한 캐시~~ — **계획에서 제외 (2026-11-05 결정)**
+
+> C타입(조합 검색)은 다양한 카드·혜택·조건 조합에 대해 매 요청 현재 PostgreSQL·Neo4j 데이터로 실제 검색·검증을 해야 하므로
+> **캐싱을 사용하지 않는다.** 카탈로그·혜택·조건·Neo4j 조회 결과·LLM 답변에 새 캐시를 추가하지 않는다.
+> 이후 개선은 P3 → P4 → P5 순서로 각각 별도 승인 후 진행한다(왕복 감소·쿼리 통합·배치·전송량 감소·독립 작업 병렬화).
+> 아래 원래 설계 내용은 기록으로만 남긴다.
 
 **캐시 대상 (질문과 무관하게 적재 전까지 결과가 같은 것만)**
 
@@ -261,6 +268,142 @@ pipeline 측정 대상 5건은 keyword_card_bnft, keyword_common_bnft, select_la
 3. `search_eval.py` 50문항 A/B/C 후보 검색 결과가 같은지 확인한다.
 4. 캐시 무효화 테스트: Neo4j 재적재 또는 등록 후 카탈로그가 갱신되는지 확인한다.
 5. 실제 API를 쓰는 답변 비교는 소수 문항만, 별도 승인을 받아 진행한다.
+
+---
+
+## 6. P1 구현 결과 — PostgreSQL 검색 전용 읽기 연결의 BEGIN/COMMIT 왕복 제거 (2026-11-05)
+
+> 기준 경로: **C타입(search_mode="C", 하이브리드 = 문자열 SQL + pgvector + Neo4j 혜택명·관계)**.
+> C는 질문으로 분류되는 값이 아니라 Streamlit 검색 방식 선택값(기본값 `index=2`)이다. 측정 결과의
+> `candidate_search.mode = "C"`, engines `sql, pgvector, neo4j_name, neo4j_relations`로 실제 C 경로를 탔음을 확인했다.
+
+### 6-1. 변경 파일·함수
+
+| 파일 | 함수 | 변경 |
+|---|---|---|
+| `src/common/database_manager.py` | `DatabaseManager.__init__` | 키워드 전용 옵션 `autocommit=False`, `read_only=False` 추가(기본값 = 기존 동작) |
+| 〃 | `DatabaseManager._get_pool` | `autocommit=True`면 pool 연결을 autocommit으로 생성. `read_only=True`면 연결 초기화 콜백을 `_configure_read_only_connection`으로 교체. 기본 manager의 연결 옵션·콜백은 그대로 |
+| 〃 | `_configure_read_only_connection` (신규) | 기존 `_configure_connection`(pgvector 등록) 후 `SET default_transaction_read_only = on`. 물리 연결당 1회 |
+| `src/common/postgres_db_session.py` | `_reject_read_only` (신규), `execute`, `execute_many`, `transaction` | autocommit·read_only manager이면 DB 접속 전에 `RuntimeError`. 명시적으로 `True`인 경우만 막는다(테스트 대역 MagicMock 오판 방지). `select_list`·`select_one`은 변경 없음 |
+| `card_graphrag.py` | `create_benefit_search` | `PostgresDbSession(..., database_manager=DatabaseManager(autocommit=True, read_only=True))` |
+| `src/common/tests/test_read_only_manager.py` (신규) | — | 12건: 기본 manager 무변경, 검색 manager 옵션, pool 재사용, 쓰기·트랜잭션 거부, MagicMock 오판 없음, `_connection` context manager 유지, 검색 서비스·요청별 파이프라인 연결 확인 |
+
+**변경하지 않은 것:**
+- SQL 파일(`embedding_repository.sql` 등)과 조회 조건·정렬·반환 데이터.
+- `BenefitSearchService`, `CardGraphRAG` 노드, `validate_answer`, Neo4j 모듈, `neo4j_relation_sync.py`, Pydantic 추출 모델.
+- 등록·수정용 `DatabaseManager` 사용처(기본값 그대로).
+- app_log 저장용 `_log_database_manager`(P5 대상).
+
+`execution_log.request_pipeline`은 기존 코드 그대로 원래 서비스의 manager를 넘기므로 자동으로 같은 읽기 전용 pool을 쓴다.
+
+### 6-2. 구조 차이
+
+| | 변경 전 | 변경 후 |
+|---|---|---|
+| 검색 SQL 연결 | 등록 경로와 같은 종류의 기본 pool(non-autocommit) | 검색 전용 pool(autocommit, 서버 세션 읽기 전용) |
+| SELECT 1건의 왕복 | BEGIN + SELECT + COMMIT = 3 | SELECT = 1 |
+| 쓰기 방지 | 없음(검색 코드가 쓰지 않을 뿐) | ① 세션 가드(execute·execute_many·transaction 거부) ② DB가 `ReadOnlySqlTransaction`으로 거부 |
+| 조회 실패 시 | 트랜잭션 rollback 후 반환 | 트랜잭션이 없어 연결이 IDLE 그대로 반환 |
+
+**측정 중 발견한 문제와 수정:** 처음에는 접속 옵션 `options=-c default_transaction_read_only=on`으로 서버 읽기 전용을 걸었다. 그러나 실측에서 `SHOW default_transaction_read_only = off`가 나왔고, 무해한 쓰기 시험(`UPDATE … WHERE false`)도 거부되지 않았다. Supabase pooler(Supavisor)가 startup options를 적용하지 않기 때문이다. 그래서 연결 초기화 콜백의 세션 `SET`으로 바꿨고, 재검증 결과 `on`·쓰기 거부를 확인했다.
+
+같은 이유로, 이번 세션 앞부분의 측정 스크립트에서 쓴 `options=…read_only` 접속도 실제로는 서버 읽기 전용이 적용되지 않았다. 해당 스크립트는 SELECT만 실행했으므로 데이터 변경은 없다.
+
+### 6-3. 실측 (유료 API 없음: LLM·임베딩 stub, Streamlit과 같은 request_pipeline 경로)
+
+**기준 질문 "ONE PICK STYLE 카드의 대중교통 혜택은?"** (웜 7회 중앙값, 최종 코드)
+
+| 항목 | 변경 전 | 변경 후 | 차이 |
+|---|---:|---:|---:|
+| PostgreSQL 시간 (8건) | **6,356 ms** | **2,444 ms** | **−3,912 ms (−62%)** |
+| PostgreSQL 왕복 (BEGIN·SELECT·COMMIT 계측) | 24 (8·8·8) | **8** (0·8·0) | −16 |
+| 요청 전체 (LLM·임베딩 제외) | 10,564 ms | 6,583 ms | −3,981 ms |
+| Neo4j (변경 없음, 대조용) | 4,136 ms | 4,080 ms | 오차 범위 |
+| 최초 요청 PG (cold: pool 생성·pgvector 등록 포함) | 10,909 ms / 28 왕복 | 7,637 ms / 13 왕복 | −3.3 s |
+
+- 문장별 웜 중앙값: 약 765 ms → 약 270 ms. `keyword_common_bnft`만 545 ms로, 결과 82행 전송 때문이며 변경 전에도 다른 문장보다 컸다.
+- 웜 PG 7회 원값: 2,444 / 2,427 / 2,165 / 2,451 / 4,342 / 2,305 / 2,476 ms. 4,342 ms 1회는 네트워크 지연 튐이며, 중앙값으로 보고했다.
+
+**C타입 조합 질문 6종** (app_log 실제 요청 재현: 실제 해석 LLM이 고른 혜택을 stub이 그대로 선택. 질문별 5회 중앙값, 최종 코드)
+
+| 질문 (request_id) | 유형 | PG 문장 | PG 변경 전 → 후 | 왕복 | 요청 전체(LLM 제외) | 결과 |
+|---|---|---:|---:|---:|---:|---|
+| ONE PICK STYLE 대중교통 혜택 (9caef9dc) | 혜택 1, 전 항목 | 8 | 6,187 → 2,322 | 24 → 8 | 10,336 → 6,519 | 동일 |
+| DAILY 고정소비·정기결제 통합 한도 (46e02898) | 같은 카드 혜택 2 | 9 | 7,399 → 2,595 | 27 → 9 | 13,502 → 8,963 | 동일 |
+| ONE PICK STYLE 전월 실적 조건과 혜택 (7b9e4910) | 혜택 4, 조건 | 11 | 8,402 → 2,851 | 33 → 11 | 16,740 → 11,538 | 동일 |
+| GS25 캐시백 카드 추천 (3596f2e8) | 카드 간 혜택 2 | 9 | 7,127 → 2,328 | 27 → 9 | 12,343 → 7,785 | 동일 |
+| ONE PICK STYLE KTX 캐시백 (8cf912f9) | 제외 판정 | 8 | 6,157 → 2,077 | 24 → 8 | 10,561 → 6,601 | 동일 (제외 1건 유지) |
+| 카드의정석2 SIMPLE 0.8% 제외 항목 (b639ba9a) | 제외 항목 | 8 | 6,141 → 2,079 | 24 → 8 | 10,171 → 6,300 | 동일 |
+| **6종 PG 합계** | | | **41,412 → 14,252 ms** | | | |
+
+- 질문별 절감은 3.9~5.6 s다. 혜택 수가 많아 PG 문장이 많을수록 절감이 크다(문장당 약 0.5 s). 특정 질문만 빨라진 것이 아니다.
+- 6종 모두 선택 혜택이 app_log 실제 선택과 같고, 캡처한 쿼리 수가 app_log 기록 수(21·28·37·26·22·21)와 같아 실제 요청 경로를 재현했다.
+
+**실제 API 포함 전체 시간 추정(측정 아님):** §2 실측 21.74 s에서 PG 절감분 약 3.9 s를 빼면 약 17.8 s. 실제 LLM 호출로 재확인하려면 별도 승인이 필요하다.
+
+### 6-4. 검색 결과·PDF 근거 동일성
+
+변경 전후로 다음을 비교했고 **기준 질문과 6종 모두 완전히 동일**했다:
+- PG 문장별 결과 행 수와 SHA-256(8~11건 각각)
+- C 모드·엔진, 후보 hits(순위·대상·제외 낱말), 동일성 병합 결과
+- 선택 혜택 key, intent, 제외 판정(exclusions), 미확정 조건(open_conditions)
+- PDF 근거(evidence_id·쪽·혜택 연결·인용 원문), 답변 points·검증 등급, 상태·경로·경고
+- 답변 LLM에 전달하는 context 전체와 retrieved_data 전체의 SHA-256
+
+반복 실행 간에도 결과가 매번 같았다.
+
+### 6-5. 연결 복구·안전 확인 (실제 DB, 데이터 변경 없음)
+
+| 항목 | 결과 |
+|---|---|
+| 서버 읽기 전용 | `SHOW default_transaction_read_only = on` |
+| 쓰기 시험 `UPDATE db_pipeline.app_log … WHERE false` (0행 대상) | `ReadOnlySqlTransaction`으로 거부, 연결 IDLE 유지 |
+| 세션 가드 `execute()` | DB 접속 전 거부 |
+| 잘못된 SQL 후 다음 조회 | 정상 |
+| 끊긴 연결 반환 | pool이 BAD로 폐기(`returns_bad=1`), 다음 조회는 새 backend로 정상 |
+| 재사용 | 조회 10회, 새 물리 연결 0 |
+| 종료 | `close()` 후 pool closed, 목록 비움 |
+
+### 6-6. 테스트
+
+| 묶음 | 결과 |
+|---|---|
+| `run_offline_tests.py` common | 129 통과 (신규 `test_read_only_manager` 12건 포함) |
+| `run_offline_tests.py` recipe | 실패 20건. **clean HEAD worktree와 실패 목록이 완전히 같다**(Streamlit AppTest API 불일치 등 기존 문제, 이번 변경과 무관) |
+| `payment_card/tests`·`db_pipeline` 오프라인 (live 제외, 접속정보 차단) | 293 통과 |
+| `test_card_graphrag` | 164 실행, 148 통과, 7 건너뜀, Streamlit UI 테스트 9건 실패(AppTest 30초 timeout 8, assertion 1). **clean HEAD(`2699617`)에서도 동일한 9건** |
+| Neo4j 관련 (`test_neo4j_*`, `test_neo4j_relation_sync`) | 변경 영향 없음(이전 실행 109건 통과·8 건너뜀) |
+
+### 6-7. 다른 검색 타입 영향
+
+| 모드 | 영향 |
+|---|---|
+| A | `benefit_search=None`이라 PostgreSQL을 쓰지 않는다 → 영향 없음 |
+| B | 같은 `create_benefit_search`를 써서 같은 읽기 전용 pool을 사용한다. 경로가 SELECT뿐이라 같은 방식으로 빨라진다(측정 안 함) |
+| `search_eval.py` | 자체 세션(기본 manager) → 변경 없음 |
+
+### 6-8. 기존 캐시 현황 (분석만, 변경 없음)
+
+| 위치 | 대상 | 성격 |
+|---|---|---|
+| `streamlit_app.get_pipeline` (`@st.cache_resource`) | 모드별 Neo4j 드라이버·PG pool·LLM 클라이언트·컴파일한 그래프 | 연결 객체 재사용. 데이터 캐시 아님 |
+| `execution_log._log_database_manager` (`@lru_cache`) | app_log 저장 pool | 연결 객체 |
+| `streamlit_app.py:395-406` | 같은 세션에서 같은 질문·같은 모드·오류 없음이면 이전 결과 재표시 | **유일한 결과 재사용.** 세션 범위, 개발자 모드의 "다시 실행"으로 우회 가능. 제거하지 않았다 |
+| `common.neo4j_db_session` (`@lru_cache`) | 지연 import 도우미 | 데이터 아님 |
+
+### 6-9. 남은 위험·부작용
+
+- 읽기 전용 pool은 검색 서비스에만 주입했다. 앞으로 검색 서비스에 쓰기 기능을 추가하면 세션 가드와 DB가 거부한다(의도된 보호). 쓰기가 필요하면 별도 manager를 써야 한다.
+- 검색 pool은 기존과 마찬가지로 모드(B·C)별 `get_pipeline` 캐시마다 하나씩 생긴다. 최대 연결 수는 `DB_POOL_MAX_SIZE`(기본 5) × 모드 수다.
+- autocommit이라 한 요청 안의 SELECT들이 서로 다른 시점의 스냅샷을 본다. 변경 전에도 SELECT마다 별도 트랜잭션이었으므로 일관성 수준은 같다.
+- 6543(transaction 모드 pooler)로 바꾸면 세션 `SET`이 유지되지 않을 수 있다. 현재 5432(session 모드)에서는 확인했다.
+
+### 6-10. P3~P5 진행 시 고려 사항 (P2 캐싱 제외)
+
+- **P3 (Neo4j):** P1 후 최대 구간은 Neo4j다(혜택 1개 약 4.1 s, 혜택 4개 약 8.5 s). `card.list` UNWIND 통합과 `get_detail` 트랜잭션·단일 문장 통합은 §3-2 실측대로 결과가 동일했다. 다만 `neo4j_search.py`·`graph_questions.cypher`는 Codex 작업 파일이므로 조율 후 새 named query를 추가하는 방식으로 진행한다.
+- **P4 (배치·병렬):** P1로 PG 1건이 약 0.27 s가 되어, pipeline 배치(5건 1왕복) 효과는 약 1 s다. 병렬화 시 ContextVar(app_log 수집) 전달과 연결 분리가 필요하다.
+- **P5 (app_log):** 저장 pool은 아직 non-autocommit(INSERT 1건 = 3왕복, 약 0.77 s)이다. 표시 뒤로 순서를 바꾸면 체감에서 빠진다.
+- 모든 단계에서 이번처럼 C 조합 질문 6종의 결과 지문(PG·후보·혜택·제외·근거·context SHA)을 전후 비교한다.
 
 ---
 

@@ -380,6 +380,16 @@ class PostgresDbSession(QuerySession):
         # endregion
         return getattr(mapper, query_id)                                                                                      # aiosql이 만든 실행 함수를 반환
 
+    def _reject_read_only(self, operation: str) -> None:
+        """읽기 전용(검색용) manager로 쓰기·트랜잭션을 시도하면 DB에 보내기 전에 막는다.
+
+        autocommit 연결에서는 ``transaction()`` 의 commit/rollback이 원자성을 보장하지 못하므로 함께 막는다.
+        """
+        manager = self.database_manager
+        # 명시적으로 True로 만든 manager만 막는다(테스트 대역·다른 manager 구현의 임의 속성은 무시).
+        if getattr(manager, "read_only", False) is True or getattr(manager, "autocommit", False) is True:
+            raise RuntimeError(f"읽기 전용(autocommit) 연결 관리자에서는 {operation}를 사용할 수 없습니다.")
+
     #=========================================================
     # 트랜잭션 중이면 기존 연결, 아니면 새 연결 제공
     #=========================================================
@@ -450,6 +460,7 @@ class PostgresDbSession(QuerySession):
             처리하고 정상 종료하면 commit된다. ``camel_case_keys`` 옵션은 이
             트랜잭션 연결의 row factory에도 적용된다.
         """
+        self._reject_read_only("transaction()")
         if self._active_connection is not None:                                                                               # 중첩 트랜잭션은 지원하지 않음
             raise RuntimeError("이미 Transaction이 실행 중입니다.")                                                               # 중첩 사용을 명확히 알림
         # transaction 전체가 하나의 pool lease 안에 있어 중간에 connection이 바뀌지 않는다.
@@ -606,6 +617,7 @@ class PostgresDbSession(QuerySession):
             트랜잭션 밖에서는 호출마다 별도 연결을 사용한다. 결과 dict가
             반환되는 SQL이라면 키는 연결의 ``camel_case_keys`` 설정을 따른다.
         """
+        self._reject_read_only("execute()")
         query = self._query(statement_id)                                                                                     # 실행할 쿼리 매핑 함수 조회
         started = perf_counter()                                                                                              # DB 연결과 명령 실행 시간 측정 시작
         with self._connection() as connection:                                                                                # 트랜잭션 안에서는 같은 연결 재사용
@@ -686,6 +698,7 @@ class PostgresDbSession(QuerySession):
             ``parameters_list`` 를 그대로 전달한다.
         """
 
+        self._reject_read_only("execute_many()")
         # 실행할 SQL mapper 조회
         query = self._query(statement_id)
 

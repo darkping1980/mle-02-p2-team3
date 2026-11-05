@@ -30,6 +30,17 @@ def _configure_connection(connection: psycopg.Connection) -> None:
     connection.commit()
 
 
+def _configure_read_only_connection(connection: psycopg.Connection) -> None:
+    """검색 전용 physical connection: pgvector 등록 후 세션을 서버 읽기 전용으로 만든다.
+
+    접속 문자열의 ``options=-c ...`` 는 Supabase pooler(Supavisor)가 적용하지 않아(2026-11-05 SHOW로 off 확인)
+    연결을 만든 직후 세션 설정으로 건다. 연결마다 한 번만 실행되므로 조회마다 왕복이 늘지 않는다.
+    """
+    _configure_connection(connection)
+    connection.execute("SET default_transaction_read_only = on")
+    connection.commit()
+
+
 def snake_to_camel(name: str) -> str:
     """밑줄로 구분된 컬럼명을 camelCase 문자열로 변환한다.
 
@@ -134,10 +145,20 @@ class DatabaseManager:                                                     # Pos
     # 인스턴스 속성
     connection: Any                              # 마지막으로 생성한 DB 연결
 
-    def __init__(self, connection: Any = None) -> None:
-        """``.env`` 를 읽고 빈 pool 저장소를 준비한다. 이 시점에는 DB에 접속하지 않는다."""
+    def __init__(self, connection: Any = None, *, autocommit: bool = False, read_only: bool = False) -> None:
+        """``.env`` 를 읽고 빈 pool 저장소를 준비한다. 이 시점에는 DB에 접속하지 않는다.
+
+        Args:
+            connection: 기존 호출 호환용 초기 연결 참조.
+            autocommit: True면 pool 연결을 autocommit으로 연다. SELECT마다 붙던 BEGIN·COMMIT 왕복이 없어진다.
+                검색 같은 단건 조회 전용 manager에만 쓴다. 기본값 False(기존 동작)는 그대로다.
+            read_only: True면 새 연결마다 ``SET default_transaction_read_only = on`` 을 걸어 쓰기 SQL을 DB가 거부한다.
+                ``PostgresDbSession`` 도 이 manager로는 ``execute``·``execute_many``·``transaction`` 을 거부한다.
+        """
         load_dotenv()                                                                # DB_URL 등을 .env에서 읽음
         self.connection = connection                                                  # 마지막으로 생성한 DB 연결
+        self.autocommit = autocommit                                                  # 연결 생성 옵션(생성 후 바꾸지 않는다)
+        self.read_only = read_only
         # camelCase/snake_case row_factory별 pool을 manager 생명주기 동안 보관한다.
         self._pools: dict[bool, ConnectionPool] = {}
         self._pool_lock = RLock()  # 동시 Streamlit 요청이 같은 pool을 중복 생성하지 않게 보호
@@ -169,13 +190,19 @@ class DatabaseManager:                                                     # Pos
 
             # row_factory는 physical connection 설정이므로 결과 형식별로 pool을 나눈다.
             row_factory = camel_dict_row if camel_case_keys else dict_row
+            connect_kwargs: dict[str, Any] = {"row_factory": row_factory}
+            if self.autocommit:
+                # 조회마다 BEGIN·COMMIT을 보내지 않는다. 실패한 조회도 트랜잭션을 남기지 않는다.
+                connect_kwargs["autocommit"] = True
+            # read_only면 연결 생성 직후 세션을 서버 읽기 전용으로 만든다(쓰기 SQL을 DB가 거부).
+            configure = _configure_read_only_connection if self.read_only else _configure_connection
             # Pool 객체는 연결 관리 틀이다. 실제 min_size 연결 준비는 open/wait에서 완료된다.
             pool = ConnectionPool(
                 conninfo=os.getenv("DB_URL"),
                 min_size=min_size,
                 max_size=max_size,
-                kwargs={"row_factory": row_factory},
-                configure=_configure_connection,  # physical connection마다 최초 생성 때 pgvector 등록
+                kwargs=connect_kwargs,
+                configure=configure,  # physical connection마다 최초 생성 때 pgvector 등록(+읽기 전용 설정)
                 open=True,
             )
             try:
@@ -186,7 +213,8 @@ class DatabaseManager:                                                     # Pos
                 raise
             self._pools[camel_case_keys] = pool
             # DB URL 등 민감정보는 출력하지 않고 pool 크기만 기록한다.
-            db_logger.info("DB POOL created min_size=%d max_size=%d", min_size, max_size)
+            db_logger.info("DB POOL created min_size=%d max_size=%d autocommit=%s read_only=%s",
+                           min_size, max_size, self.autocommit, self.read_only)
             return pool
 
 
