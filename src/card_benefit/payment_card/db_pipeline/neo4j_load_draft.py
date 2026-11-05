@@ -44,7 +44,7 @@ CONFIRM = "APPROVED_DP_HANA_CARD"
 NODE_LABELS = frozenset(PREFIX + label for label in PK_FIELDS)
 REL_TYPES = frozenset(PREFIX + kind for kind in (
     "has_document", "has_benefit", "has_rule", "has_expr", "has_branch", "has_atom", "targets", "supported_by",
-    "in_chunk", "on_page", "in_document", "has_common_benefit", "belongs_to", "same_as", "has_item"))
+    "in_chunk", "on_page", "in_document", "has_common_benefit", "belongs_to", "same_as", "has_item", "related_to"))
 # 쓰기 구문이므로 읽기 전용 neo4j_validation.cypher에 두지 않는다. --apply에서만 실행한다.
 CREATE_CONSTRAINTS = (
     f"CREATE CONSTRAINT dp_node_key IF NOT EXISTS FOR (n:{COMMON_LABEL}) REQUIRE n.key IS UNIQUE",
@@ -99,6 +99,16 @@ def prepare(graph):
     return nodes, relationships
 
 
+def relationship_properties(edge):
+    """관계 원본에서 Cypher가 기록할 스칼라 속성을 선택한다."""
+    original = json.loads(edge["source_json"])
+    fields = ("ev_link_id", "ev_subject_cd", "ev_item_cd", "ev_item_key", "atom_seq", "doc_role_cd",
+              "approval_status_cd", "status", "bnft_cd")
+    if edge["type"] == PREFIX + "related_to":
+        fields += ("relation_key", "rel_type_cd", "rel_priority", "to_bnft_id")
+    return {k: v for k, v in original.items() if k in fields and isinstance(v, (str, int, float, bool))}
+
+
 def write_transaction(tx, nodes, relationships):
     """전용 라벨과 PK로만 MERGE한다. 값은 파라미터로 전달한다.
 
@@ -121,10 +131,7 @@ def write_transaction(tx, nodes, relationships):
             raise ValueError("node creation mismatch")
     for e in relationships:
         kind = e["type"]  # prepare에서 허용 목록으로 확인했다.
-        original = json.loads(e["source_json"])
-        extra = {k: v for k, v in original.items()
-                 if k in ("ev_link_id", "ev_subject_cd", "ev_item_cd", "ev_item_key", "atom_seq", "doc_role_cd",
-                          "approval_status_cd", "status", "bnft_cd") and isinstance(v, (str, int, float, bool))}
+        extra = relationship_properties(e)
         result = tx.run(f"MATCH (a:{COMMON_LABEL} {{key:$start}}), (b:{COMMON_LABEL} {{key:$end}}) "
                         f"MERGE (a)-[r:{kind} {{key:$key}}]->(b) SET r.source_json=$source_json, r += $extra RETURN count(r) AS n",
                         extra=extra, **{k: e[k] for k in ("start", "end", "key", "source_json")}).single(strict=True)

@@ -21,7 +21,7 @@ from common.neo4j_connection import create_neo4j_driver
 from common.postgres_db_session import PostgresDbSession
 
 from .neo4j_dry_run import build, load_snapshot
-from .neo4j_load_draft import CYPHER, EXPECTED_DB, prepare
+from .neo4j_load_draft import CYPHER, EXPECTED_DB, prepare, relationship_properties
 
 MAPPER_ROOT = Path(__file__).resolve().parent
 COMPARED = {
@@ -41,22 +41,45 @@ def _normalize(rows: list[dict], fields: tuple[str, ...]) -> list[tuple]:
 
 
 def compare_graph(nodes: list[dict], edges: list[dict], graph_nodes: list[dict], graph_edges: list[dict]) -> dict:
-    """변환 결과와 Neo4j의 키, 라벨, 원본 JSON, 관계 유형, 끝점을 대조한다."""
+    """라벨 집합과 전체 속성, 관계 유형·끝점을 독립적으로 대조한다."""
     expected_nodes = {n["props"]["key"]: n for n in nodes}
     found_nodes = {n["key"]: n for n in graph_nodes}
     expected_edges = {e["key"]: e for e in edges}
     found_edges = {e["key"]: e for e in graph_edges}
     shared_nodes = set(expected_nodes) & set(found_nodes)
     shared_edges = set(expected_edges) & set(found_edges)
+
+    def differences(key, expected, actual):
+        return [{"key": key, "field": field, "expected_present": field in expected,
+                 "actual_present": field in actual, "expected": expected.get(field), "actual": actual.get(field)}
+                for field in sorted(set(expected) | set(actual))
+                if field not in expected or field not in actual or expected[field] != actual[field]]
+
+    node_labels, node_properties, edge_properties, edge_structure = [], [], [], []
+    for k in sorted(shared_nodes):
+        node = expected_nodes[k]
+        labels = {"dp_node", node["label"]}
+        if node["label"] == "dp_card_bnft":
+            labels.add("dp_card_product_item")
+        actual_labels = set(found_nodes[k]["labels"])
+        if labels != actual_labels:
+            node_labels.append({"key": k, "field": "labels", "expected": sorted(labels), "actual": sorted(actual_labels)})
+        node_properties.extend(differences(k, node["props"], found_nodes[k]["props"]))
+    for k in sorted(shared_edges):
+        expected_edge, actual_edge = expected_edges[k], found_edges[k]
+        edge_structure.extend(differences(k, {f: expected_edge[f] for f in ("type", "start", "end")},
+                                          {f: actual_edge[f] for f in ("type", "start", "end")}))
+        props = {"key": k, "source_json": expected_edge["source_json"], **relationship_properties(expected_edge)}
+        edge_properties.extend(differences(k, props, actual_edge["props"]))
     return {
         "nodes_missing": sorted(set(expected_nodes) - set(found_nodes)),
         "nodes_extra": sorted(set(found_nodes) - set(expected_nodes)),
-        "nodes_changed": sorted(k for k in shared_nodes if found_nodes[k]["source_json"] != expected_nodes[k]["props"]["source_json"]
-                                or found_nodes[k]["label"] != expected_nodes[k]["label"]),
+        "node_labels_changed": node_labels,
+        "node_properties_changed": node_properties,
         "relationships_missing": sorted(set(expected_edges) - set(found_edges)),
         "relationships_extra": sorted(set(found_edges) - set(expected_edges)),
-        "relationships_changed": sorted(k for k in shared_edges if any(
-            found_edges[k][field] != expected_edges[k][field] for field in ("type", "start", "end", "source_json"))),
+        "relationship_structure_changed": edge_structure,
+        "relationship_properties_changed": edge_properties,
     }
 
 

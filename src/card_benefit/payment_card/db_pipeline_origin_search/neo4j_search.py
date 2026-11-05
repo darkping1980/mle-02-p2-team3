@@ -52,6 +52,7 @@ ITEM_CATALOG_QUERY = MAPPERS["graph_questions.item_catalog"]
 ITEM_EVIDENCE_QUERY = MAPPERS["graph_questions.item_evidence"]
 LIST_QUERY = MAPPERS["graph_questions.list_benefits"]
 RELATION_QUERY = MAPPERS["graph_questions.candidate_relations"]
+BENEFIT_RELATIONS_QUERY = MAPPERS["graph_questions.benefit_relations"]
 CONTEXT_QUERY = MAPPERS["graph_questions.benefit_context"]
 RULE_QUERY = MAPPERS["graph_questions.benefit_rules"]
 CONDITION_QUERY = MAPPERS["graph_questions.benefit_conditions"]
@@ -61,7 +62,7 @@ COMMON_EVIDENCE_QUERY = MAPPERS["graph_questions.common_benefit_evidence"]
 HOP_QUERIES = {name: MAPPERS[f"graph_questions.{name}"] for name in
                ("hop1_card_benefits", "hop2_card_rules", "hop2_card_common", "hop3_card_targets", "hop3_common_docs", "hop3_target_cards")}
 QUERIES = {"카탈로그": CATALOG_QUERY, "항목 카탈로그": ITEM_CATALOG_QUERY, "항목 근거": ITEM_EVIDENCE_QUERY,
-           "공통 카탈로그": COMMON_CATALOG_QUERY, "목록": LIST_QUERY, "후보 관계": RELATION_QUERY,
+           "공통 카탈로그": COMMON_CATALOG_QUERY, "목록": LIST_QUERY, "후보 관계": RELATION_QUERY, "혜택 간 관계": BENEFIT_RELATIONS_QUERY,
            "카드·혜택": CONTEXT_QUERY, "규칙·대상": RULE_QUERY, "조건식": CONDITION_QUERY, "한도": LIMIT_QUERY, "근거": EVIDENCE_QUERY,
            "공통 혜택 근거": COMMON_EVIDENCE_QUERY, **HOP_QUERIES}
 # 로그에 쓰는 Cypher 식별자와 그 쿼리가 지나가는 노드·관계 경로.
@@ -76,6 +77,7 @@ STATEMENTS = {
     "card.list": (LIST_QUERY, "(dp_card_bnft|dp_card_common_bnft)"),
     "card.relations": (RELATION_QUERY, "(dp_card_product)-[dp_has_benefit|dp_has_common_benefit]->(혜택)-[dp_has_rule]->()-[dp_targets]->(dp_rule_target), "
                                        "(혜택|규칙)-[dp_has_expr]->()-[dp_has_branch]->()-[dp_has_atom]->(dp_cond_atom)"),
+    "card.benefit_relations": (BENEFIT_RELATIONS_QUERY, "(dp_card_bnft)-[dp_related_to]->(dp_card_bnft)"),
     "card.context": (CONTEXT_QUERY, "(dp_card_product)-[dp_has_benefit|dp_has_common_benefit]->(혜택)-[dp_belongs_to]->(dp_card_common)-[dp_has_document]->(dp_card_doc)"),
     "card.rules": (RULE_QUERY, "(dp_card_bnft)-[dp_has_rule]->(dp_bnft_rule)-[dp_targets]->(dp_rule_target)"),
     "card.conditions": (CONDITION_QUERY, "(dp_card_product|dp_card_bnft|dp_bnft_rule)-[dp_has_expr]->(dp_cond_expr)"
@@ -242,6 +244,10 @@ class Neo4jSearch:
         """검색 후보별 카드·대상·제외 문구를 관계로 찾는다."""
         # ID 문자열이 같은 카드·공통 혜택을 따로 돌려준다. 결과는 종류·소유자 포함 참조로 찾는다.
         return {entity_ref(row["key"], row["id"]): row for row in self._query(RELATION_QUERY, ids=ids)} if ids else {}
+
+    def benefit_relations(self, key: str) -> list[dict]:
+        """혜택에서 출발하는 관계를 명시적으로 조회한다. 기존 검색 결과에는 반영하지 않는다."""
+        return self._query(BENEFIT_RELATIONS_QUERY, key=key)
 
     def hop(self, name: str, **params) -> list[dict]:
         """다중 홉 조회를 실행한다."""

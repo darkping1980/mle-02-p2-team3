@@ -228,6 +228,7 @@ def expected_counts(snapshot) -> tuple[dict, dict]:
                      "on_page": len(snapshot["chunks"]), "in_document": len(snapshot["pages"]),
                      "has_common_benefit": len(snapshot["common_applies"]), "belongs_to": len(snapshot["common_benefits"]),
                      "same_as": sum(row["status"] == "SAME" for row in snapshot["brand_compare"]),
+                     "related_to": sum(len(row.get("relation_list") or []) for row in snapshot["benefits"]),
                      "has_item": len(snapshot.get("items", []))}
     return ({PREFIX + name: count for name, count in nodes.items() if count},
             {PREFIX + name: count for name, count in relationships.items() if count})
@@ -330,6 +331,17 @@ def build(snapshot):
                     g.edge("targets", r, t, target)
             except KeyError as error:
                 errors.append(f"규칙 해석 실패 {bnft_id}: 필드 {error}")
+
+    # 모든 혜택 노드를 만든 뒤 원천 관계를 연결한다. 같은 카드의 대상만 허용한다.
+    for row in snapshot["benefits"]:
+        source = benefits.get((row["card_id"], row["card_bnft_id"]))
+        for relation in row.get("relation_list") or []:
+            target_id = relation.get("to_bnft_id")
+            target = benefits.get((row["card_id"], target_id))
+            if source is None or target is None:
+                errors.append(f"혜택 관계 대상 없음: {row['card_id']}/{row['card_bnft_id']}/{relation.get('relation_key')} -> {target_id}")
+                continue
+            g.edge("related_to", source, target, relation)
 
     for row in snapshot.get("items", []):
         card_id, item_id = row["card_id"], row["card_product_item_id"]

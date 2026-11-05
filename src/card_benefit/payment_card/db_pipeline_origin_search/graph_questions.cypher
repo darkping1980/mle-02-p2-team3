@@ -67,6 +67,14 @@ OPTIONAL MATCH (b)-[:dp_belongs_to]->(s:dp_card_common)
 RETURN b.key AS key, coalesce(b.card_bnft_id, b.card_common_bnft_id) AS id, collect(DISTINCT c.product_nm) AS cards,
        collect(DISTINCT t.target_nm) AS targets, collect(DISTINCT a.excl_raw_txt) AS exclusions, s.common_nm AS common_nm
 
+// name: benefit_relations
+// 명시적 조회 전용. 기존 후보 점수·답변 문맥에는 자동으로 포함하지 않는다.
+MATCH (b:dp_card_bnft {key:$key})-[r:dp_related_to]->(target:dp_card_bnft)
+RETURN b.key AS source_key, target.key AS target_key, target.card_bnft_id AS target_id,
+       target.name AS target_name, r.relation_key AS relation_key, r.rel_type_cd AS rel_type_cd,
+       r.rel_priority AS rel_priority, r.source_json AS source_json
+ORDER BY relation_key, target_id
+
 // name: benefit_context
 MATCH (b:dp_node {key:$key})
 WHERE b:dp_card_bnft OR b:dp_card_common_bnft OR b:dp_card_product_item

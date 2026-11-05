@@ -1,0 +1,758 @@
+{
+  "$defs": {
+    "BenefitItem": {
+      "additionalProperties": false,
+      "description": "페이지에서 읽은 혜택 1건.",
+      "properties": {
+        "item_key": {
+          "title": "Item Key",
+          "type": "string"
+        },
+        "bnft_nm": {
+          "title": "Bnft Nm",
+          "type": "string"
+        },
+        "bnft_type_cd": {
+          "enum": [
+            "DISCOUNT",
+            "CASHBACK",
+            "POINT",
+            "FEE_WAIVER",
+            "SERVICE",
+            "INSTALLMENT",
+            "ETC",
+            "UNKNOWN"
+          ],
+          "title": "Bnft Type Cd",
+          "type": "string"
+        },
+        "is_common_candidate": {
+          "default": false,
+          "title": "Is Common Candidate",
+          "type": "boolean"
+        },
+        "no_condition_stated": {
+          "default": false,
+          "title": "No Condition Stated",
+          "type": "boolean"
+        },
+        "certainty": {
+          "enum": [
+            "HIGH",
+            "LOW"
+          ],
+          "title": "Certainty",
+          "type": "string"
+        },
+        "brand_txt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Brand Txt"
+        },
+        "service_grade_txt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Service Grade Txt"
+        },
+        "applicable_cards": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Applicable Cards",
+          "type": "array"
+        },
+        "selection_service_txt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Selection Service Txt"
+        },
+        "excluded_cards": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Excluded Cards",
+          "type": "array"
+        },
+        "validity_period_txt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Validity Period Txt"
+        },
+        "targets": {
+          "items": {
+            "$ref": "#/$defs/TargetItem"
+          },
+          "title": "Targets",
+          "type": "array"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/RuleItem"
+          },
+          "title": "Rules",
+          "type": "array"
+        },
+        "limits": {
+          "items": {
+            "$ref": "#/$defs/LimitItem"
+          },
+          "title": "Limits",
+          "type": "array"
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/ConditionItem"
+          },
+          "title": "Conditions",
+          "type": "array"
+        },
+        "relations": {
+          "items": {
+            "$ref": "#/$defs/RelationItem"
+          },
+          "title": "Relations",
+          "type": "array"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceQuote"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "uncertainty_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Uncertainty Note"
+        }
+      },
+      "required": [
+        "item_key",
+        "bnft_nm",
+        "bnft_type_cd",
+        "is_common_candidate",
+        "no_condition_stated",
+        "certainty",
+        "brand_txt",
+        "service_grade_txt",
+        "applicable_cards",
+        "selection_service_txt",
+        "excluded_cards",
+        "validity_period_txt",
+        "targets",
+        "rules",
+        "limits",
+        "conditions",
+        "relations",
+        "evidence",
+        "uncertainty_note"
+      ],
+      "title": "BenefitItem",
+      "type": "object"
+    },
+    "ConditionItem": {
+      "additionalProperties": false,
+      "description": "조건 1건. 조건식 트리는 Python이 만든다.",
+      "properties": {
+        "cond_key": {
+          "title": "Cond Key",
+          "type": "string"
+        },
+        "cond_type_cd": {
+          "enum": [
+            "SPEND_REQ",
+            "SPEND_EXCL",
+            "BNFT_EXCL",
+            "USAGE_REQ",
+            "PAYMENT_METHOD",
+            "MERCHANT_RULE",
+            "GRACE",
+            "ETC",
+            "UNKNOWN"
+          ],
+          "title": "Cond Type Cd",
+          "type": "string"
+        },
+        "cond_basis_cd": {
+          "anyOf": [
+            {
+              "enum": [
+                "PREV_MONTH_SPEND",
+                "PREV_YEAR_SPEND",
+                "TXN_AMT",
+                "MONTH_USAGE",
+                "ROLLING_MONTHS",
+                "UNKNOWN"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cond Basis Cd"
+        },
+        "cond_min_amt": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cond Min Amt"
+        },
+        "cond_max_amt_excl": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cond Max Amt Excl"
+        },
+        "negate_yn": {
+          "default": false,
+          "title": "Negate Yn",
+          "type": "boolean"
+        },
+        "excl_raw_txt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Excl Raw Txt"
+        },
+        "cond_raw_txt": {
+          "title": "Cond Raw Txt",
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "ALL_BENEFITS",
+            "NAMED_BENEFITS",
+            "THIS_BENEFIT",
+            "UNKNOWN"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "target_benefit_nms": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Target Benefit Nms",
+          "type": "array"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceQuote"
+          },
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "cond_key",
+        "cond_type_cd",
+        "cond_basis_cd",
+        "cond_min_amt",
+        "cond_max_amt_excl",
+        "negate_yn",
+        "excl_raw_txt",
+        "cond_raw_txt",
+        "scope",
+        "target_benefit_nms",
+        "evidence"
+      ],
+      "title": "ConditionItem",
+      "type": "object"
+    },
+    "EvidenceQuote": {
+      "additionalProperties": false,
+      "description": "원문 근거 1건. ``quote_txt`` 는 페이지 텍스트를 그대로 옮긴 문자열이다.",
+      "properties": {
+        "quote_txt": {
+          "title": "Quote Txt",
+          "type": "string"
+        },
+        "supports": {
+          "enum": [
+            "BNFT",
+            "RULE",
+            "LIMIT",
+            "COND",
+            "TARGET",
+            "REL",
+            "APPLICABILITY"
+          ],
+          "title": "Supports",
+          "type": "string"
+        },
+        "support_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Support Key"
+        },
+        "link_basis": {
+          "enum": [
+            "SAME_TEXT",
+            "TABLE_IMAGE",
+            "NOT_SURE"
+          ],
+          "title": "Link Basis",
+          "type": "string"
+        }
+      },
+      "required": [
+        "quote_txt",
+        "supports",
+        "support_key",
+        "link_basis"
+      ],
+      "title": "EvidenceQuote",
+      "type": "object"
+    },
+    "LimitItem": {
+      "additionalProperties": false,
+      "description": "횟수·금액 한도 1건. 공유 표현이 원문에 있을 때만 ``shared_scope_txt`` 를 채운다.",
+      "properties": {
+        "limit_key": {
+          "title": "Limit Key",
+          "type": "string"
+        },
+        "period_cd": {
+          "enum": [
+            "TXN",
+            "DAY",
+            "MONTH",
+            "YEAR",
+            "UNKNOWN"
+          ],
+          "title": "Period Cd",
+          "type": "string"
+        },
+        "cap_unit_cd": {
+          "enum": [
+            "KRW",
+            "HANAMONEY",
+            "COUNT",
+            "UNKNOWN"
+          ],
+          "title": "Cap Unit Cd",
+          "type": "string"
+        },
+        "limit_num": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Limit Num"
+        },
+        "limit_raw_txt": {
+          "title": "Limit Raw Txt",
+          "type": "string"
+        },
+        "shared_scope_txt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Shared Scope Txt"
+        },
+        "applies_to_benefit_nms": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Applies To Benefit Nms",
+          "type": "array"
+        }
+      },
+      "required": [
+        "limit_key",
+        "period_cd",
+        "cap_unit_cd",
+        "limit_num",
+        "limit_raw_txt",
+        "shared_scope_txt",
+        "applies_to_benefit_nms"
+      ],
+      "title": "LimitItem",
+      "type": "object"
+    },
+    "ProductMention": {
+      "additionalProperties": false,
+      "description": "페이지의 상품 정보. V6 상품은 사람이 등록하므로 원본 응답에만 남긴다.",
+      "properties": {
+        "product_nm": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Product Nm"
+        },
+        "issuer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Issuer"
+        },
+        "card_kind_cd": {
+          "anyOf": [
+            {
+              "enum": [
+                "CREDIT",
+                "DEBIT"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Card Kind Cd"
+        },
+        "brand_txts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Brand Txts",
+          "type": "array"
+        },
+        "annual_fee_txt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Annual Fee Txt"
+        },
+        "issue_target_txt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Issue Target Txt"
+        }
+      },
+      "title": "ProductMention",
+      "type": "object",
+      "required": [
+        "product_nm",
+        "issuer",
+        "card_kind_cd",
+        "brand_txts",
+        "annual_fee_txt",
+        "issue_target_txt"
+      ]
+    },
+    "RelationItem": {
+      "additionalProperties": false,
+      "description": "혜택 간 관계 1건. 페이지를 넘을 수 있어 대상은 혜택명으로 적는다.",
+      "properties": {
+        "relation_key": {
+          "title": "Relation Key",
+          "type": "string"
+        },
+        "rel_type_cd": {
+          "enum": [
+            "MUTUALLY_EXCLUSIVE",
+            "HIGHER_VALUE_WINS",
+            "FALLBACK_AFTER_CAP",
+            "OVERRIDES",
+            "UNKNOWN"
+          ],
+          "title": "Rel Type Cd",
+          "type": "string"
+        },
+        "to_benefit_nm": {
+          "title": "To Benefit Nm",
+          "type": "string"
+        },
+        "trigger_limit_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Trigger Limit Key"
+        }
+      },
+      "required": [
+        "relation_key",
+        "rel_type_cd",
+        "to_benefit_nm",
+        "trigger_limit_key"
+      ],
+      "title": "RelationItem",
+      "type": "object"
+    },
+    "RuleItem": {
+      "additionalProperties": false,
+      "description": "혜택 값 1건. 값과 단위는 원문 인용과 대조하는 설명 값이며 보상액을 계산하지 않는다.",
+      "properties": {
+        "rule_key": {
+          "title": "Rule Key",
+          "type": "string"
+        },
+        "value_num": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value Num"
+        },
+        "value_raw_txt": {
+          "title": "Value Raw Txt",
+          "type": "string"
+        },
+        "value_unit_cd": {
+          "anyOf": [
+            {
+              "enum": [
+                "PERCENT",
+                "KRW",
+                "UNIMILE",
+                "MULTIPLIER",
+                "UNKNOWN"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value Unit Cd"
+        },
+        "min_txn_amt": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Min Txn Amt"
+        },
+        "min_txn_raw_txt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Min Txn Raw Txt"
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/ConditionItem"
+          },
+          "title": "Conditions",
+          "type": "array"
+        },
+        "limit_keys": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limit Keys",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rule_key",
+        "value_num",
+        "value_raw_txt",
+        "value_unit_cd",
+        "min_txn_amt",
+        "min_txn_raw_txt",
+        "conditions",
+        "limit_keys"
+      ],
+      "title": "RuleItem",
+      "type": "object"
+    },
+    "TargetItem": {
+      "additionalProperties": false,
+      "description": "혜택 대상 가맹점·업종.",
+      "properties": {
+        "target_type_cd": {
+          "enum": [
+            "MERCHANT",
+            "INDUSTRY",
+            "CHANNEL",
+            "SERVICE",
+            "UNKNOWN"
+          ],
+          "title": "Target Type Cd",
+          "type": "string"
+        },
+        "target_nm": {
+          "title": "Target Nm",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target_type_cd",
+        "target_nm"
+      ],
+      "title": "TargetItem",
+      "type": "object"
+    },
+    "UnresolvedItem": {
+      "additionalProperties": false,
+      "description": "LLM이 판단을 보류한 문구.",
+      "properties": {
+        "raw_txt": {
+          "title": "Raw Txt",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "raw_txt",
+        "reason"
+      ],
+      "title": "UnresolvedItem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "LLM 응답 1건. 페이지 1쪽에 대응한다.",
+  "properties": {
+    "page_no": {
+      "title": "Page No",
+      "type": "integer"
+    },
+    "page_role": {
+      "enum": [
+        "SUMMARY",
+        "DETAIL",
+        "NOTICE",
+        "MIXED"
+      ],
+      "title": "Page Role",
+      "type": "string"
+    },
+    "product": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ProductMention"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "benefits": {
+      "items": {
+        "$ref": "#/$defs/BenefitItem"
+      },
+      "title": "Benefits",
+      "type": "array"
+    },
+    "card_conditions": {
+      "items": {
+        "$ref": "#/$defs/ConditionItem"
+      },
+      "title": "Card Conditions",
+      "type": "array"
+    },
+    "unresolved": {
+      "items": {
+        "$ref": "#/$defs/UnresolvedItem"
+      },
+      "title": "Unresolved",
+      "type": "array"
+    }
+  },
+  "required": [
+    "page_no",
+    "page_role",
+    "product",
+    "benefits",
+    "card_conditions",
+    "unresolved"
+  ],
+  "title": "PageExtraction",
+  "type": "object"
+}

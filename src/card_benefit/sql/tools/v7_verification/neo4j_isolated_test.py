@@ -75,7 +75,7 @@ with create_neo4j_driver() as driver:
             result = val.compare_graph(nodes, edges, read("node_sources"), read("relationship_sources"))
             print("graph differences", {k: len(v) for k, v in result.items()})
             print("orphans", read("orphan_nodes"))
-            print("labels", {r["label"]: r["n"] for r in read("label_counts")})
+            print("labels", {tuple(r["labels"]): r["n"] for r in read("label_counts")})
             condition_fields = ("owner_cd", "rule_key", "branch_no", "atom_seq", "atom_key", "cond_type_cd", "negate_yn", "cond_min_amt", "cond_raw_txt")
             link_fields = ("ev_link_id", "ev_subject_cd", "rule_key", "pool_id", "ev_item_cd", "ev_item_key", "evidence_id", "start_pos", "end_pos")
             a, b = val._normalize(saved["sql_conditions"], condition_fields), val._normalize(read("condition_structure"), condition_fields)

@@ -16,20 +16,26 @@ MATCH (a:dp_node)-[r]->(b:dp_node) WHERE type(r) STARTS WITH 'dp_' RETURN r.key 
 
 // name: label_counts
 MATCH (n:dp_node)
-RETURN [l IN labels(n) WHERE l <> 'dp_node'][0] AS label, count(*) AS n ORDER BY label
+UNWIND labels(n) AS label
+WITH n, label ORDER BY label
+WITH n, collect(label) AS labels
+RETURN labels, count(*) AS n ORDER BY labels
 
 // name: relationship_counts
 MATCH (a:dp_node)-[r]->(b:dp_node) WHERE type(r) STARTS WITH 'dp_'
-RETURN type(r) AS type, [l IN labels(a) WHERE l <> 'dp_node'][0] AS start_label, count(*) AS n
-ORDER BY type, start_label
+UNWIND labels(a) AS label
+WITH r, label ORDER BY label
+WITH r, collect(label) AS start_labels
+RETURN type(r) AS type, start_labels, count(*) AS n
+ORDER BY type, start_labels
 
 // name: node_sources
 MATCH (n:dp_node)
-RETURN n.key AS key, [l IN labels(n) WHERE l <> 'dp_node'][0] AS label, n.source_json AS source_json
+RETURN n.key AS key, labels(n) AS labels, properties(n) AS props
 
 // name: relationship_sources
 MATCH (a:dp_node)-[r]->(b:dp_node) WHERE type(r) STARTS WITH 'dp_'
-RETURN r.key AS key, type(r) AS type, a.key AS start, b.key AS end, r.source_json AS source_json
+RETURN r.key AS key, type(r) AS type, a.key AS start, b.key AS end, r.source_json AS source_json, properties(r) AS props
 
 // name: outside_scope_counts
 // dp_ 경계 위반만 센다. 정상은 모두 0이다. fp_ 등 다른 프로젝트 데이터는 위반이 아니다.

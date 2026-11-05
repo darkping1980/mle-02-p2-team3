@@ -40,11 +40,19 @@ class SearchTests(unittest.TestCase):
         self.assertIn("$keyword", neo4j_search.LIST_QUERY)
 
     def test_queries_come_from_named_cypher_file(self):
-        names = {"catalog", "common_catalog", "list_benefits", "candidate_relations", "benefit_context", "benefit_rules",
+        names = {"catalog", "common_catalog", "list_benefits", "candidate_relations", "benefit_relations", "benefit_context", "benefit_rules",
                  "benefit_conditions", "benefit_limits", "benefit_evidence", "common_benefit_evidence",
                  "item_catalog", "item_evidence", *neo4j_search.HOP_QUERIES}
         self.assertEqual(set(neo4j_search.MAPPERS), {f"graph_questions.{name}" for name in names})
         self.assertEqual(set(neo4j_search.QUERIES.values()), set(neo4j_search.MAPPERS.values()))
+
+    def test_benefit_relations_are_explicit_and_directional(self):
+        driver = FakeDriver([{"relation_key": "r", "target_id": "b"}])
+        rows = neo4j_search.Neo4jSearch(driver).benefit_relations("source")
+        self.assertEqual(rows[0]["target_id"], "b")
+        self.assertEqual(driver.tx.calls, [(neo4j_search.BENEFIT_RELATIONS_QUERY, {"key": "source"})])
+        self.assertIn("-[r:dp_related_to]->", neo4j_search.BENEFIT_RELATIONS_QUERY)
+        self.assertNotIn(neo4j_search.BENEFIT_RELATIONS_QUERY, neo4j_search.SECTION_QUERIES.values())
 
     def test_cypher_file_has_no_write_clause(self):
         for query in neo4j_search.MAPPERS.values():

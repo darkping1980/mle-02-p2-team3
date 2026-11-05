@@ -156,6 +156,7 @@ class PreviewTests(unittest.TestCase):
 
     def test_relation_evidence_hangs_on_benefit_with_relation_key(self):
         data = fixture()
+        data["benefits"].append({"card_id": 2, "card_bnft_id": "other", "bnft_cond_expr": None, "rule_list": []})
         data["benefits"][0]["relation_list"] = [{"relation_key": "fb", "to_bnft_id": "other", "rel_type_cd": "FALLBACK_AFTER_CAP"}]
         data["links"].append({"card_id": 2, "ev_subject_cd": "REL", "card_bnft_id": "benefit", "relation_key": "fb",
                               "evidence_id": "ev", "ev_link_id": "rel_link"})
@@ -168,6 +169,7 @@ class PreviewTests(unittest.TestCase):
 
     def test_relation_evidence_without_stored_relation_is_rejected(self):
         data = fixture()
+        data["benefits"].append({"card_id": 2, "card_bnft_id": "other", "bnft_cond_expr": None, "rule_list": []})
         data["benefits"][0]["relation_list"] = [{"relation_key": "fb", "to_bnft_id": "other", "rel_type_cd": "FALLBACK_AFTER_CAP"}]
         for relation_key in ("missing", None):
             bad = copy.deepcopy(data)
@@ -175,6 +177,26 @@ class PreviewTests(unittest.TestCase):
                                  "evidence_id": "ev", "ev_link_id": "rel_link"})
             with self.assertRaisesRegex(GraphValidationError, "근거 연결 대상 없음"):
                 build(bad)
+
+    def test_benefit_relations_have_direction_source_and_stable_keys(self):
+        data = fixture()
+        data["benefits"].append({"card_id": 2, "card_bnft_id": "destination", "bnft_cond_expr": None, "rule_list": []})
+        relation = {"relation_key": "fallback", "to_bnft_id": "destination", "rel_type_cd": "FALLBACK_AFTER_CAP", "rel_priority": None}
+        data["benefits"][0]["relation_list"] = [relation]
+        graph, stats = build(data)
+        edges = [(k, e) for k, e in graph.edges.items() if e["type"] == "dp_related_to"]
+        self.assertEqual(stats["relationships"]["dp_related_to"], 1)
+        self.assertEqual(edges[0][1]["start"], key("card_bnft", 2, "benefit"))
+        self.assertEqual(edges[0][1]["end"], key("card_bnft", 2, "destination"))
+        import json
+        self.assertEqual(json.loads(edges[0][1]["source_json"]), relation)
+        self.assertEqual(set(graph.edges), set(build(data)[0].edges))
+
+    def test_benefit_relation_rejects_missing_or_other_card_target(self):
+        data = fixture()
+        data["benefits"][0]["relation_list"] = [{"relation_key": "bad", "to_bnft_id": "other", "rel_type_cd": "OVERRIDES"}]
+        with self.assertRaisesRegex(GraphValidationError, "혜택 관계 대상 없음"):
+            build(data)
 
     def test_rule_key_is_scoped_by_benefit(self):
         data = fixture()

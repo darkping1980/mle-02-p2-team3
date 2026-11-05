@@ -454,3 +454,286 @@ TERMS는 `terms_register.py`와 `docs/identity_registry/terms/WOORI_CARD2_SIMPLE
 | 벡터 조회 | `src/card_benefit/payment_card/db_pipeline/embedding_repository.sql` | PostgreSQL vector 검색 |
 | 정적 구조 설명 | `src/card_benefit/docs/source_wiki/09_POSTGRESQL_NEO4J_STRUCTURE_COMPARISON.md` | DB 실측값으로 간주하지 않을 것 |
 
+
+## 추출 MODEL 필드 계약 보충 (소스 확인, 2026-11-05)
+
+아래 타입·기본값은 실행 환경의 Pydantic 모델을 직접 읽었다. 필수는 Python 입력 기준이다. 각 의미는 필드명·docstring 및 프롬프트가 뒷받침하는 범위이며, 세부 업무 정의가 없는 코드는 아래에 명시했다. 모든 항목은 먼저 응답 JSON에 남는다. 최종 경로는 등록 성공과 관계 해결을 전제로 하며, 클래스별 경로는 표 아래의 변환 규칙을 함께 읽는다.
+
+[MODEL 로컬](../../payment_card/db_pipeline/extraction_schema.py#L49) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_schema.py#L49) · [프롬프트 로컬](../../payment_card/db_pipeline/extraction_service.py#L90) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L90)
+
+### PageExtraction — 확인 완료
+
+저장 경로: 응답 전체 card_ai_call.call_resp_json; benefits/card_conditions는 각각 card_extr_stg.stg_raw_item
+
+| 필드 | Python 타입 | 필수 / 기본값 | PDF 추출 의미 |
+|---|---|---|---|
+| `page_no` | `<class 'int'>` | 필수 | PDF 페이지 번호 |
+| `page_role` | `Literal['SUMMARY', 'DETAIL', 'NOTICE', 'MIXED']` | 필수 | 페이지 역할 |
+| `product` | `payment_card.db_pipeline.extraction_schema.ProductMention \| None` | 선택 / None | 페이지에서 언급된 상품 정보 |
+| `benefits` | `list[payment_card.db_pipeline.extraction_schema.BenefitItem]` | 선택 / [] | 페이지 혜택 후보 목록 |
+| `card_conditions` | `list[payment_card.db_pipeline.extraction_schema.ConditionItem]` | 선택 / [] | 카드 범위 조건 후보 |
+| `unresolved` | `list[payment_card.db_pipeline.extraction_schema.UnresolvedItem]` | 선택 / [] | 판단을 보류한 문구 |
+
+### ProductMention — 확인 완료
+
+저장 경로: card_ai_call.call_resp_json.product (최종 상품 자동 등록 안 함)
+
+| 필드 | Python 타입 | 필수 / 기본값 | PDF 추출 의미 |
+|---|---|---|---|
+| `product_nm` | `str \| None` | 선택 / None | 상품명 |
+| `issuer` | `str \| None` | 선택 / None | 발행사 |
+| `card_kind_cd` | `Optional[Literal['CREDIT', 'DEBIT']]` | 선택 / None | 카드 종류 |
+| `brand_txts` | `list[str]` | 선택 / [] | 브랜드 원문 목록 |
+| `annual_fee_txt` | `str \| None` | 선택 / None | 연회비 원문 |
+| `issue_target_txt` | `str \| None` | 선택 / None | 발급 대상 원문 |
+
+### BenefitItem — 확인 완료
+
+저장 경로: card_extr_stg.stg_raw_item; 정규화 후 card_product_item 및 JSONB
+
+| 필드 | Python 타입 | 필수 / 기본값 | PDF 추출 의미 |
+|---|---|---|---|
+| `item_key` | `<class 'str'>` | 필수 | 페이지 혜택 후보 키 |
+| `bnft_nm` | `<class 'str'>` | 필수 | 혜택 내용에서 정한 혜택명 |
+| `bnft_type_cd` | `Literal['DISCOUNT', 'CASHBACK', 'POINT', 'FEE_WAIVER', 'SERVICE', 'INSTALLMENT', 'ETC', 'UNKNOWN']` | 필수 | 혜택 유형 |
+| `is_common_candidate` | `<class 'bool'>` | 선택 / False | 공통 혜택 후보 여부 |
+| `no_condition_stated` | `<class 'bool'>` | 선택 / False | 조건 미기재 여부 |
+| `certainty` | `Literal['HIGH', 'LOW']` | 필수 | 추출 판단 확실성 |
+| `brand_txt` | `str \| None` | 선택 / None | 혜택별 브랜드 원문 |
+| `service_grade_txt` | `str \| None` | 선택 / None | 서비스 등급 원문 |
+| `applicable_cards` | `list[str]` | 선택 / [] | 대상 카드 원문 목록 |
+| `selection_service_txt` | `str \| None` | 선택 / None | 선택 서비스 원문 |
+| `excluded_cards` | `list[str]` | 선택 / [] | 제외 카드 원문 목록 |
+| `validity_period_txt` | `str \| None` | 선택 / None | 제공 기간 원문 |
+| `targets` | `list[payment_card.db_pipeline.extraction_schema.TargetItem]` | 선택 / [] | 대상 목록 |
+| `rules` | `list[payment_card.db_pipeline.extraction_schema.RuleItem]` | 선택 / [] | 혜택 값 규칙 목록 |
+| `limits` | `list[payment_card.db_pipeline.extraction_schema.LimitItem]` | 선택 / [] | 한도 목록 |
+| `conditions` | `list[payment_card.db_pipeline.extraction_schema.ConditionItem]` | 선택 / [] | 적용 조건 목록 |
+| `relations` | `list[payment_card.db_pipeline.extraction_schema.RelationItem]` | 선택 / [] | 혜택 간 관계 목록 |
+| `evidence` | `list[payment_card.db_pipeline.extraction_schema.EvidenceQuote]` | 선택 / [] | 원문 근거 인용 목록 |
+| `uncertainty_note` | `str \| None` | 선택 / None | 불확실성 설명 |
+
+### TargetItem — 확인 완료
+
+저장 경로: card_product_item.rule_list[].target_list[]
+
+| 필드 | Python 타입 | 필수 / 기본값 | PDF 추출 의미 |
+|---|---|---|---|
+| `target_type_cd` | `Literal['MERCHANT', 'INDUSTRY', 'CHANNEL', 'SERVICE', 'UNKNOWN']` | 필수 | 대상 유형 |
+| `target_nm` | `<class 'str'>` | 필수 | 원문에 등장한 가맹점·서비스 이름 |
+
+### RuleItem — 확인 완료
+
+저장 경로: card_product_item.rule_list[]; 원문은 staging/evidence
+
+| 필드 | Python 타입 | 필수 / 기본값 | PDF 추출 의미 |
+|---|---|---|---|
+| `rule_key` | `<class 'str'>` | 필수 | 규칙 식별 키 |
+| `value_num` | `Optional[Annotated[decimal.Decimal, WithJsonSchema(json_schema={'type': 'number'}, mode=None)]]` | 선택 / None | 원문에 표시된 수치 |
+| `value_raw_txt` | `<class 'str'>` | 필수 | 혜택 값 원문 |
+| `value_unit_cd` | `Optional[Literal['PERCENT', 'KRW', 'UNIMILE', 'MULTIPLIER', 'UNKNOWN']]` | 선택 / None | 원문 값의 단위 |
+| `min_txn_amt` | `int \| None` | 선택 / None | 건당 최소 금액 |
+| `min_txn_raw_txt` | `str \| None` | 선택 / None | 건당 최소 금액 원문 |
+| `conditions` | `list[payment_card.db_pipeline.extraction_schema.ConditionItem]` | 선택 / [] | 적용 조건 목록 |
+| `limit_keys` | `list[str]` | 선택 / [] | 연결 한도 키 목록 |
+
+### LimitItem — 확인 완료
+
+저장 경로: staging 및 근거; 최종 card_product_item.item_limit_txt 원문 (한도 풀 제거)
+
+| 필드 | Python 타입 | 필수 / 기본값 | PDF 추출 의미 |
+|---|---|---|---|
+| `limit_key` | `<class 'str'>` | 필수 | 한도 식별 키 |
+| `period_cd` | `Literal['TXN', 'DAY', 'MONTH', 'YEAR', 'UNKNOWN']` | 필수 | 한도 기간 |
+| `cap_unit_cd` | `Literal['KRW', 'HANAMONEY', 'COUNT', 'UNKNOWN']` | 필수 | 한도 단위 |
+| `limit_num` | `int \| None` | 선택 / None | 한도 수치 |
+| `limit_raw_txt` | `<class 'str'>` | 필수 | 한도 원문 |
+| `shared_scope_txt` | `str \| None` | 선택 / None | 원문에 명시된 공유 범위 |
+| `applies_to_benefit_nms` | `list[str]` | 선택 / [] | 적용 혜택명 목록 |
+
+### ConditionItem — 확인 완료
+
+저장 경로: card_product_item.item_cond_expr 또는 rule_list[].cond_expr의 branches[].atoms[]
+
+| 필드 | Python 타입 | 필수 / 기본값 | PDF 추출 의미 |
+|---|---|---|---|
+| `cond_key` | `<class 'str'>` | 필수 | 조건 식별 키 |
+| `cond_type_cd` | `Literal['SPEND_REQ', 'SPEND_EXCL', 'BNFT_EXCL', 'USAGE_REQ', 'PAYMENT_METHOD', 'MERCHANT_RULE', 'GRACE', 'ETC', 'UNKNOWN']` | 필수 | 조건 유형 |
+| `cond_basis_cd` | `Optional[Literal['PREV_MONTH_SPEND', 'PREV_YEAR_SPEND', 'TXN_AMT', 'MONTH_USAGE', 'ROLLING_MONTHS', 'UNKNOWN']]` | 선택 / None | 조건 기준 |
+| `cond_min_amt` | `int \| None` | 선택 / None | 조건 금액 하한 |
+| `cond_max_amt_excl` | `int \| None` | 선택 / None | 조건 금액 배타적 상한 |
+| `negate_yn` | `<class 'bool'>` | 선택 / False | 조건 부정 여부 |
+| `excl_raw_txt` | `str \| None` | 선택 / None | 제외 항목 원문 |
+| `cond_raw_txt` | `<class 'str'>` | 필수 | 조건 원문 |
+| `scope` | `Literal['ALL_BENEFITS', 'NAMED_BENEFITS', 'THIS_BENEFIT', 'UNKNOWN']` | 필수 | 조건 적용 범위 |
+| `target_benefit_nms` | `list[str]` | 선택 / [] | 적용 대상 혜택명 목록 |
+| `evidence` | `list[payment_card.db_pipeline.extraction_schema.EvidenceQuote]` | 필수 | 원문 근거 인용 목록 |
+
+### RelationItem — 확인 완료
+
+저장 경로: card_product_item.relation_list[] (대상 해결 시)
+
+| 필드 | Python 타입 | 필수 / 기본값 | PDF 추출 의미 |
+|---|---|---|---|
+| `relation_key` | `<class 'str'>` | 필수 | 관계 식별 키 |
+| `rel_type_cd` | `Literal['MUTUALLY_EXCLUSIVE', 'HIGHER_VALUE_WINS', 'FALLBACK_AFTER_CAP', 'OVERRIDES', 'UNKNOWN']` | 필수 | 관계 유형 |
+| `to_benefit_nm` | `<class 'str'>` | 필수 | 대상 혜택명 |
+| `trigger_limit_key` | `str \| None` | 선택 / None | 관계를 유발하는 한도 키 |
+
+### EvidenceQuote — 확인 완료
+
+저장 경로: card_source_evidence 및 card_evidence_link
+
+| 필드 | Python 타입 | 필수 / 기본값 | PDF 추출 의미 |
+|---|---|---|---|
+| `quote_txt` | `<class 'str'>` | 필수 | 페이지 텍스트에서 복사한 원문 인용 |
+| `supports` | `Literal['BNFT', 'RULE', 'LIMIT', 'COND', 'TARGET', 'REL', 'APPLICABILITY']` | 필수 | 인용이 뒷받침하는 대상 종류 |
+| `support_key` | `str \| None` | 선택 / None | 대상 키 |
+| `link_basis` | `Literal['SAME_TEXT', 'TABLE_IMAGE', 'NOT_SURE']` | 필수 | 값과 대상의 연결 근거 |
+
+### UnresolvedItem — 확인 완료
+
+저장 경로: card_ai_call.call_resp_json.unresolved
+
+| 필드 | Python 타입 | 필수 / 기본값 | PDF 추출 의미 |
+|---|---|---|---|
+| `raw_txt` | `<class 'str'>` | 필수 | 해석 보류 원문 |
+| `reason` | `<class 'str'>` | 필수 | 해석 보류 사유 |
+
+### 코드 의미와 검증 범위
+
+`BnftType`: DISCOUNT 할인, CASHBACK 캐시백, POINT 포인트, FEE_WAIVER 수수료 면제, SERVICE 서비스, INSTALLMENT 할부, ETC 기타, UNKNOWN 미확정. `ValueUnit`: PERCENT %, KRW 원, UNIMILE 유니마일, MULTIPLIER 배수, UNKNOWN 미확정. `LimitPeriod`: TXN 건, DAY 일, MONTH 월, YEAR 연, UNKNOWN 미확정. `LimitUnit`: KRW 원, HANAMONEY 하나머니, COUNT 횟수, UNKNOWN 미확정. `CondType`: SPEND_REQ 실적 요구, SPEND_EXCL 실적 제외, BNFT_EXCL 혜택 제외, USAGE_REQ 이용 요구, PAYMENT_METHOD 결제수단, MERCHANT_RULE 가맹점 규칙, GRACE 유예, ETC 기타, UNKNOWN 미확정. `CondBasis`: PREV_MONTH_SPEND 전월 실적, PREV_YEAR_SPEND 전년 실적, TXN_AMT 거래 금액, MONTH_USAGE 월 이용, ROLLING_MONTHS 연속 월, UNKNOWN 미확정. `TargetType`: MERCHANT 가맹점, INDUSTRY 업종, CHANNEL 채널, SERVICE 서비스, UNKNOWN 미확정. `RelType`: MUTUALLY_EXCLUSIVE 상호 배타, HIGHER_VALUE_WINS 높은 값 우선, FALLBACK_AFTER_CAP 한도 소진 후 대체, OVERRIDES 우선 적용, UNKNOWN 미확정. 이 이름 이상의 구체적 업무 판정 기준은 정의 불명확이다.
+
+`PageRole`: SUMMARY 요약, DETAIL 상세, NOTICE 유의사항, MIXED 혼합. `Certainty`: HIGH 높음, LOW 낮음. `CondScope`: ALL_BENEFITS 전체 혜택, NAMED_BENEFITS 명시 혜택, THIS_BENEFIT 해당 혜택, UNKNOWN 미확정. `LinkBasis`: SAME_TEXT 같은 문장, TABLE_IMAGE 표 이미지, NOT_SURE 불확실. `EvidenceSubject`: BNFT 혜택, RULE 규칙, LIMIT 한도, COND 조건, TARGET 대상, REL 관계, APPLICABILITY 적용 대상·기간. `card_kind_cd`: CREDIT 신용, DEBIT 체크. 각 코드의 경계 사례는 정의 불명확이다.
+
+프롬프트 1–18은 텍스트에서만 값을 추출하고 이미지는 표 연결 판단에 쓰며, 인용을 그대로 복사하고 금액·횟수를 정수로 기록하도록 지시한다. 특히 9번은 적용 정보와 APPLICABILITY, 10–11번은 규칙·한도별 키가 일치하는 인용, 13–15번은 설명 수치·비수치 혜택·한도 단위, 16–18번은 원문 대상명·조건별 근거·혜택명을 지시한다. 필드마다 독립된 설명이나 모든 Literal의 세부 정의를 제공하지는 않는다.
+
+`extra="forbid"`는 미정의 필드를 거부하지만 `RuleItem._drop_legacy_keys`는 이전 `calc_method_cd`, `payout_unit_cd`를 검증 전에 제거한다. 타입 검증만으로 인용의 진실성이나 의미를 보장하지 않는다. `check_values`는 인용 위치, raw 포함, 숫자 파싱을 확인하고, `check_benefit`은 대상과 적용 정보도 확인한다. `contract_issues`는 키 형식·중복, UNKNOWN, 실적 기준, 제외 원문, 금액 범위를 추가 확인한다. scope, 대상 연결, 관계 등은 통합 단계에서 판단되며 모든 필드가 독립적으로 의미 검증되는 것은 아니다. [검증 로컬](../../payment_card/db_pipeline/extraction_service.py#L313) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L313).
+
+필드별 최종 변환: `bnft_nm`, `bnft_type_cd`는 혜택 컬럼으로, targets는 각 규칙의 `target_list`로, rules의 키·값·단위는 `rule_list`로 이동한다. 조건은 `branches[].atoms[]`로 재구성되고 `min_txn_amt`는 생성된 `MIN_` 조건으로 바뀐다. `scope`와 `target_benefit_nms`는 배포 대상 결정에 사용되며 atom에 그대로 들어가지 않는다. 한도는 구조화 풀 대신 원문으로 보존된다. `limit_keys`, 관계 트리거, certainty, uncertainty_note 등은 최종 JSONB에 그대로 복사된다고 가정할 수 없다. 적용 정보는 검토 및 근거에 사용된다. 상세 저장 여부는 등록 코드와 원본별로 확인해야 한다. [정규화 로컬](../../payment_card/db_pipeline/extraction_service.py#L428) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L428).
+
+### 실제 strict JSON Schema — 확인 완료
+
+동일 가상환경의 `openai.lib._pydantic.to_strict_json_schema(PageExtraction)`를 외부 호출 없이 실행한 결과를 [분석용 JSON](PAGE_EXTRACTION_STRICT_JSON_SCHEMA.analysis.json)에 저장했다. strict 변환은 모든 객체의 필드를 `required`에 넣고 `additionalProperties: false`를 적용한다. 따라서 Python에서 생략 가능한 기본값 필드도 LLM 응답에서는 반드시 키를 내야 하며, nullable은 null을 허용할 뿐 생략을 뜻하지 않는다. `NumberValue`는 Python에서 Decimal이지만 JSON Schema에는 number다. 이 파일은 분석 산출물이며 실행 로직은 읽지 않는다. [API 구성 로컬](../../payment_card/db_pipeline/terra_client.py#L64) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/terra_client.py#L64).
+
+## 추출부터 등록까지의 실행 흐름 보충
+
+**확인 완료: 소스 정적 추적. 실제 DB 행·PDF·검색 결과의 일치 여부는 이번 분석에서 조회하지 않았다.** Java에 비유하면 `PageExtraction`은 입력 DTO, `ExtractionService`는 검증·조정 Service, repository/SQL mapper는 DAO, `card_extr_stg`는 검토 전 staging 테이블이다. DTO의 타입 통과와 RDB CHECK 통과는 업무 의미의 승인과 다르다.
+
+1. `ExtractionService.run`은 문서·상품·청크를 조회하고 분리 규칙과 대상 페이지를 고르며 로컬 PDF를 확인한다. 지문이 일치하고 완전한 성공 이력이 있으면 재사용한다. 새 실행은 `card_ai_run`을 만든다. `build_input`은 전체 페이지면 150 DPI PNG와 텍스트를, 부분 청크면 대상 텍스트와 같은 페이지 유의사항 문맥을 구성한다. 프롬프트·텍스트·이미지 해시를 입력 식별에 쓴다. [로컬](../../payment_card/db_pipeline/extraction_service.py#L850) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L850).
+2. `TerraClient.extract`는 예산·사용량 불확실성을 확인하고 프롬프트, `PAGE n`, 텍스트 및 선택적 PNG를 Responses API에 보낸다. 응답 형식은 `PageExtraction`의 strict schema다. 반환은 `LlmResponse(raw_text, input_tokens, output_tokens)`다. 사용량이 불명이거나 호출 예외면 후속 호출을 막는다. [로컬](../../payment_card/db_pipeline/terra_client.py#L64) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/terra_client.py#L64).
+3. `_call_llm`은 JSON 파싱과 `PageExtraction.model_validate`, 페이지 번호 일치 확인을 거친다. `card_ai_call`에는 입력 해시, 상태, 원문 응답, 성공 시 모델 직렬화 JSON, 토큰, 지연, 오류 유형을 저장한다. 호출 오류는 FAILED, JSON·모델·페이지 번호 오류는 PARSE_ERROR다. **순서 주의:** 원문·숫자 대조는 이 행 저장 후 `_store_page`에서 실행된다. [로컬](../../payment_card/db_pipeline/extraction_service.py#L1093) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L1093).
+4. `_store_page`는 혜택과 카드 조건을 각각 검사하고 `_store_item`에서 항목별 `stg_raw_item`과 근거 행을 저장한다. 인용 위치를 찾지 못해도 근거 행은 위치 NULL로 남는다. 청크 하나가 트랜잭션 단위이며 SQL 오류 시 그 청크 저장이 롤백된다. 호출 이력은 별도로 이미 커밋된다. 값 검증은 원문 존재와 파싱 비교이고, 연결 검증은 표 이미지 등을 검토 대상으로 둔다. [로컬](../../payment_card/db_pipeline/extraction_service.py#L1150) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L1150).
+5. 모든 청크 성공 시 `merge_pages`는 공백 제거·소문자 혜택명으로 그룹화하고 상세 페이지를 우선한다. 규칙 값이나 한도가 다르면 충돌을 남긴다. `normalize_benefit`은 대상·규칙·조건·관계를 등록 계약으로 바꾸고 미해결 관계와 계약 오류를 판정한다. `_store_merge`는 대표·중복 관계와 검사 결과를 문서 단위 트랜잭션으로 갱신한다. 통합 실패 시 앞서 저장한 페이지 원본은 남는다. 등록 시 `normalize_stored_run`이 저장 원본에서 다시 정규화한다. [로컬](../../payment_card/db_pipeline/extraction_service.py#L568) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L568).
+6. 별도 `ProductBenefitService.register_run`은 후보·보정·관계·근거를 확인하고 `card_product_item` BENEFIT와 `card_evidence_link`를 등록한다. 규칙이 없거나 근거가 부족한 경우 검토로 돌린다. 규칙과 조건은 JSONB, 규칙·한도 인용은 텍스트로 남으며 필요 시 검토 보정이 `item_data`에 남는다. 후보별 격리된 트랜잭션과 실패 처리를 코드에서 확인할 것. TERMS는 `terms_register.py`와 제품별 seed JSON의 별도 등록 경로이며 `card_conditions`를 TERMS로 자동 1:1 등록하지 않는다. [BENEFIT 로컬](../../payment_card/db_pipeline/product_benefit_service.py#L182) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/product_benefit_service.py#L182) · [TERMS 로컬](../../payment_card/db_pipeline/terms_register.py#L347) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/terms_register.py#L347).
+
+**설명용 가상 예시, 실제 DB 조회값 아님:** PDF 텍스트가 `A 10% 할인`이고 규칙 `R1`의 `value_raw_txt`가 `10%`라면 추출 원본은 `{"rule_key":"R1","value_num":10,"value_raw_txt":"10%","value_unit_cd":"PERCENT","conditions":[],"limit_keys":[]}`와 근거 인용을 가진다. 정규화된 `rule_list` 항목은 `{"rule_key":"R1","cond_expr":null,"target_list":[],"value_num":10,"value_unit_cd":"PERCENT","rule_status_cd":"DRAFT"}` 형태다. `value_raw_txt`와 인용은 rule JSONB에 복사되지 않고 staging·근거 및 규칙 텍스트에서 추적한다. 실제 행은 다른 필드·검토 보정을 포함할 수 있다. 이 예시는 계산 결과나 등록 성공을 주장하지 않는다.
+
+## PostgreSQL → Neo4j 변환 보충
+
+**확인 완료: 소스 정적 추적. 추가 확인 필요: 현재 DB의 전체 건수·키, 실제 PDF 의미와 검색 결과.** 그래프 추출 스키마를 LLM에 보내는 호출은 이 경로에 없다. `load_snapshot`이 PostgreSQL을 `REPEATABLE READ READ ONLY`로 읽고 `build(snapshot)`이 Python에서 `Preview.node`와 `Preview.edge`를 생성한다. `TerraClient`의 schema는 페이지 추출용이다. [매핑 로컬](../../payment_card/db_pipeline/neo4j_dry_run.py#L133) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/neo4j_dry_run.py#L133) · [적재 로컬](../../payment_card/db_pipeline/neo4j_load_draft.py#L86) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/neo4j_load_draft.py#L86).
+
+| 원천 | 변환과 관계 결정 |
+|---|---|
+| `card_product`, `card_doc`, `card_doc_page`, `card_doc_chunk` | 각각 동명 `dp_` 노드; 상품/공통 문서 연결은 `has_document`, 페이지→문서 `in_document`, 청크→페이지 `on_page` |
+| `card_product_item` BENEFIT의 `item_cond_expr`, `rule_list`, `relation_list` 등 | `dp_card_bnft`에 `dp_card_product_item` 라벨 추가; 상품→혜택 `has_benefit`. `rule_list[]`는 `dp_bnft_rule`과 `has_rule`, `target_list[]`는 공유 `dp_rule_target`과 `targets`. 상품·혜택·규칙 조건식은 `dp_cond_expr`→`dp_cond_branch`→`dp_cond_atom` |
+| BENEFIT 외 `card_product_item`의 `item_data` 등 | `dp_card_product_item`, 상품→항목 `has_item`; TERMS도 이 경로 |
+| `card_source_evidence`, `card_evidence_link` | 연결된 근거만 `dp_card_source_evidence`; `ev_subject_cd`가 CARD/BNFT/RULE/ITEM/REL인 경우 Python이 출발 노드를 선택해 `supported_by`, 근거→청크 `in_chunk` |
+| `card_common`, `card_common_bnft`, `card_common_doc`, `card_common_bnft_apply` | 공통 노드, `belongs_to`, `has_document`, `has_common_benefit`; 비교 결과 `SAME`만 `same_as` |
+
+노드 식별 속성은 상품 `card_id`, 혜택 `(card_id, card_bnft_id)`, 상품 항목 `(card_id, card_product_item_id)`, 공통 `(card_common_id)`, 공통 혜택 `(card_common_id, card_common_bnft_id)`, 문서 `(card_doc_id)`, 페이지 `(card_doc_id,page_no)`, 청크 `(card_doc_id,page_no,card_doc_chunk_id)`, 근거 `(evidence_id)`, 규칙 `(card_id,card_bnft_id,rule_key)`, 대상 `(target_type_cd,target_key)`, 조건식 `(expr_key)`, 분기 `(expr_key,branch_no)`, atom `(expr_key,branch_no,atom_key)`다. `expr_key`는 소유자 유형과 키에서 만든다. 내부 노드 key는 라벨과 키 조각의 JSON 배열이다. 관계는 유형·양 끝 key·원천 데이터로 만든 key를 SHA-256하여 MERGE한다. [키 정의 로컬](../../payment_card/db_pipeline/neo4j_dry_run.py#L52) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/neo4j_dry_run.py#L52).
+
+**문제 발견: 모든 원천 관계가 별도 그래프 edge로 변환되는 것은 아니다.** 혜택 간 `relation_list`는 혜택 `source_json`에 남고 혜택 간 edge를 만들지 않는다. REL 근거는 relation_key 존재를 확인한 뒤 혜택에 연결한다. 연결되지 않은 evidence는 제외하고 ID를 보고하며, 공통 혜택의 직접 근거도 별도 목록으로 보고한다. `SAME` 이외 비교 결과에는 `same_as`가 없다. 검색 텍스트와 임베딩은 스냅샷에서 제거된다. 따라서 그래프 탐색만으로 원천의 모든 관계를 동등하게 횡단한다고 볼 수 없다. [관계 처리 로컬](../../payment_card/db_pipeline/neo4j_dry_run.py#L350) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/neo4j_dry_run.py#L350).
+
+`expected_counts`는 선택된 원천과 JSON 조각으로 예상 건수를 계산하고 `build`는 끝점·건수 및 규칙/조건식 `source_json`을 대조한다. 적재는 허용 라벨·관계만 사용하고 Neo4j 트랜잭션에서 MERGE 후 전체 key 집합을 대조한다. 이는 선택된 투영의 구조적 일관성 검사다. PDF에서 값이 해당 혜택에 속하는지, 제외·한도·기간이 올바른지, 검색이 그 의미를 보존하는지는 별도의 원문·검토·검색 결과 대조가 필요하다. 건수 일치는 의미 정확성의 증거가 아니다. 이번에는 실제 PDF→추출 응답→등록 행→그래프→검색 결과의 동일 혜택 1건을 끝까지 조회하지 않았으므로 **추가 확인 필요**로 남긴다.
+
+
+## 실제 BENEFIT 1건 추적 (2026-11-05, 읽기 전용)
+
+**부분 확인 완료; PDF 파일 직접 검증은 추가 확인 필요.** 대상은 `card_id=42`, `card_product_item_id=20261105_000179`, `고정소비 영역 5% 청구할인`이다. PostgreSQL과 Neo4j를 각각 조회했다. 이 결과는 같은 시각의 원자적 양 DB 스냅샷은 아니다. 입력 PDF 메타데이터는 문서 `20261105_000048`, 파일명 `woori_all/credit/상품안내장_카드의정석2 DAILY_260602.pdf`, SHA-256 `54fc35e144559f631a55931f968ef150f9ef5320527460b98cae6c12e9968d26`, 페이지 2다. 로컬 파일을 찾지 못했고 저장소 객체 조회는 404, DB `doc_source_url`은 NULL이었다. 따라서 아래 인용은 **DB에 저장된 PDF 추출 텍스트 및 근거**이며, 이 PDF 바이너리의 해당 페이지를 직접 열어 확인한 결과는 아니다. 참고로 [우리카드 공개 상품 안내](https://m.wooricard.com/ai-data/cardDetail_standard2Daily.html)는 별도 현재 웹 자료이며 해당 PDF의 동일 해시를 증명하지 않는다.
+
+재현 SQL (읽기 전용; 값은 위 식별자에 고정):
+
+```sql
+SELECT item_nm, item_subtype_cd, item_cond_expr, rule_list, relation_list,
+       item_data, verification_status_cd, item_rule_txt, item_limit_txt
+FROM db_pipeline.card_product_item
+WHERE card_id=42 AND card_product_item_id='20261105_000179';
+
+SELECT l.ev_subject_cd,l.rule_key,l.relation_key,e.evidence_id,e.quote_txt,
+       e.start_pos,e.end_pos,s.card_extr_stg_id,s.card_ai_run_id,s.call_seq,
+       s.stg_raw_item,s.stg_sql_check_cd,s.stg_status,
+       e.card_doc_id,e.page_no,e.card_doc_chunk_id
+FROM db_pipeline.card_evidence_link l
+JOIN db_pipeline.card_source_evidence e USING(card_doc_id,page_no,card_doc_chunk_id,evidence_id)
+LEFT JOIN db_pipeline.card_extr_stg s ON s.card_extr_stg_id=e.card_extr_stg_id
+WHERE l.card_id=42 AND l.card_product_item_id='20261105_000179';
+
+SELECT call_status,call_resp_json FROM db_pipeline.card_ai_call
+WHERE card_ai_run_id='20261105_000046' AND card_doc_id='20261105_000048'
+  AND page_no=2 AND card_doc_chunk_id='20261105_000191' AND call_seq=1;
+SELECT chunk_raw_txt FROM db_pipeline.card_doc_chunk
+WHERE card_doc_id='20261105_000048' AND page_no=2 AND card_doc_chunk_id='20261105_000191';
+```
+
+DB 텍스트에는 고정소비 5%, 전월실적 50만원 이상, 매출 건당 3만원 이상과 다이소 예외, 특별할인 한도 초과 시 다음 결제부터 기본할인 제공이라는 문구가 있다. 표의 고정소비 월 한도는 전월 실적 50만~100만원 미만 3,000원, 100만~200만원 미만 6,000원, 200만원 이상 12,000원이고 통합 한도는 각각 8,000원·11,000원·17,000원으로 저장돼 있다. 이 표의 시각적 행·열 연결은 PDF 원본을 직접 보지 못해 확정하지 않는다.
+
+`call_status=SUCCEEDED`, `page_role=MIXED`; `call_resp_json.benefits`의 해당 객체는 `card_extr_stg_id=20261105_000659`의 `stg_raw_item`과 JSON 값으로 동일했다. 원본에는 `fixed_rate_50`, `fixed_rate_100`, `fixed_rate_200` 세 규칙이 각각 `value_num="5"`, `value_unit_cd=PERCENT`와 전월 실적 구간 조건을 갖고, 한도 6개와 `fixed_fallback` 관계 1개가 있다. `stg_sql_check_cd=LINK_REVIEW`, `stg_status=PENDING_REVIEW`다. 대표 근거 `20261105_002804`는 `고정소비 영역 5% 청구할인`, 위치 11–25; 규칙 근거 `20261105_002805`는 `고정소비 영역 5%`. 표 연결 검토 판정과 PDF 원본 시각 대조는 별개다. [검증 로컬](../../payment_card/db_pipeline/extraction_service.py#L313) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L313).
+
+최종 BENEFIT는 `verification_status_cd=PENDING_REVIEW`이고 `item_data.review_patch`에 승인 보정 `BP-20261105-0004`가 기록되어 있다. 원본 3개 규칙이 그대로 등록된 것이 아니라 대상별 9개 규칙 `food.dine`, `food.delivery`, `grocery.online`, `grocery.offline`, `grocery.daiso`, `transit.taxi`, `transit.kakaot`, `transit.fuel`, `telecom`으로 분리되었고 모두 5 PERCENT다. 예를 들어 `grocery.daiso`는 건당 최소금액 조건이 없고 다른 규칙에는 해당 조건이 붙는다. `item_cond_expr`에는 `fixed_spend`(PREV_MONTH_SPEND, 500000), `special_grace`(GRACE), `spend_exclusions`(SPEND_EXCL) 세 atom이 있다. 한도 구간은 `item_data.limit_tiers`와 `item_limit_txt`로 보존된다. 이 차이는 자동 정규화만으로 설명하지 말고 보정 이력과 함께 해석해야 한다. [보정 파일 로컬](../identity_registry/benefit_patch/WOORI_CARD2_DAILY.json) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/docs/identity_registry/benefit_patch/WOORI_CARD2_DAILY.json#L1) · [등록 로컬](../../payment_card/db_pipeline/product_benefit_service.py#L256) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/product_benefit_service.py#L256).
+
+최종 `relation_list`는 모두 대상 `20261105_000178`, `rel_priority=null`인 `fixed_fallback/FALLBACK_AFTER_CAP`, `special_over_basic/OVERRIDES`, `special_basic_exclusive/MUTUALLY_EXCLUSIVE`다. 관계 근거 `20261105_002814`는 한도 초과 후 기본할인 문구, `20261105_003032`는 특별할인 중복 불가·우선 적용 문구이며 후자는 두 관계에 연결된다. 원본 추출에는 첫 관계만 있었고 나머지는 검토 보정으로 추가되었다.
+
+아래 Cypher를 적재 전 운영 Aura에서 READ 세션으로 실행했다.
+
+```cypher
+MATCH (b:dp_card_bnft {card_id:42,card_bnft_id:'20261105_000179'})
+RETURN labels(b), properties(b);
+MATCH (b:dp_card_bnft {card_id:42,card_bnft_id:'20261105_000179'})-[r]-(n)
+RETURN type(r), labels(n), properties(r), properties(n);
+MATCH (b:dp_card_bnft {card_id:42,card_bnft_id:'20261105_000179'})-[:dp_has_rule]->(r)-[e]->(n)
+RETURN properties(r), type(e), labels(n), properties(n);
+```
+
+혜택 노드 `source_json`의 `rule_list`, `bnft_cond_expr`, `relation_list`는 각 PostgreSQL JSONB와 값으로 동일했고 `dp_has_rule` 9개가 있었다. 혜택 노드의 직접 관계는 상품 연결 1, 조건식 1, 규칙 9, 근거 15개였으며, 혜택 간 edge는 없었다. `value_unit_cd`와 조건 상세 등은 독립 스칼라가 아닌 `source_json`에서 읽는 경우가 있다. 원본 한도/조건과 등록본의 변환 결과 전체가 PDF 의미에 맞는지까지 이 건수 비교로 보장하지 않는다.
+
+기존 GraphRAG `candidate_relations`는 이름과 달리 혜택 간 `relation_list`가 아니라 대상·제외 조건을 읽는다. 실제 읽기 전용 `get_detail` 결과는 규칙 9개와 근거 24개를 반환했고, `benefit_context`에는 `relation_list`가 없었다. 따라서 이 경로의 답변 문맥과 후보 보정은 해당 3개 관계를 구조화된 혜택 간 관계로 사용하지 않는다. 관계 근거 인용은 evidence로 전달될 수 있으므로 문구가 전혀 전달되지 않는다고 단정할 수는 없다. [검색 Cypher 로컬](../../payment_card/db_pipeline_origin_search/graph_questions.cypher#L57) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline_origin_search/graph_questions.cypher#L57) · [답변 문맥 로컬](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L699) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L699).
+
+**후속 소스 변경:** `dp_related_to` 투영과 명시적 검색을 추가하는 작업을 진행했다. 위 Aura 관찰은 그 변경을 운영에 적재하기 전의 실제 상태다. PDF 원본 직접 확인과 적재 후 관계 조회는 여전히 추가 확인 필요다.
+
+
+### 혜택 간 관계 보완 — 소스 변경 및 dry-run (운영 미적재)
+
+**확인 완료:** 2026-11-05 읽기 전용 조회에서 관계를 보유한 BENEFIT는 2건, 원천 `relation_list` 항목은 총 6건이고 대상은 모두 같은 카드의 BENEFIT `20261105_000178`로 존재했다. `rel_priority`는 6건 모두 NULL이다. 관계 보유자 `20261105_000179`의 키는 `fixed_fallback`, `special_basic_exclusive`, `special_over_basic`, `20261105_000180`의 키는 `recurring_fallback`, `special_basic_exclusive`, `special_over_basic`다. 각각의 유형은 앞의 사례 표기와 같이 FALLBACK_AFTER_CAP·MUTUALLY_EXCLUSIVE·OVERRIDES다.
+
+```sql
+SELECT p.card_id,p.card_product_item_id,p.item_nm,r.value AS relation,
+       t.card_product_item_id IS NOT NULL AS target_exists
+FROM db_pipeline.card_product_item p
+CROSS JOIN LATERAL jsonb_array_elements(coalesce(p.relation_list,'[]'::jsonb)) r(value)
+LEFT JOIN db_pipeline.card_product_item t
+  ON t.card_id=p.card_id AND t.item_type_cd='BENEFIT'
+ AND t.card_product_item_id=r.value->>'to_bnft_id'
+WHERE p.item_type_cd='BENEFIT'
+ORDER BY p.card_id,p.card_product_item_id,r.value->>'relation_key';
+```
+
+변경된 `build`는 모든 혜택 노드를 만든 뒤 원본 → 대상 `dp_related_to`를 만들고, 같은 카드에 대상이 없으면 `GraphValidationError`로 중단한다. 관계 원본 JSON과 `relation_key`, `rel_type_cd`, `to_bnft_id`, NULL이 아닌 `rel_priority`를 저장한다. Neo4j에서 NULL은 속성 부재로 표현되며 원본 `source_json`의 null은 유지된다. 이 관계는 공통 혜택 동일성을 뜻하는 `dp_same_as`와 별개다. 관계 키는 기존 방식대로 유형·양 끝점·원본 JSON의 해시이므로 동일 스냅샷을 재생성하면 같다. 원본 관계 내용이 나중에 바뀌면 키도 바뀌며 기존 loader는 삭제하지 않으므로 사후 key 검증에 걸릴 수 있다. 변경·삭제 이력을 운영에 반영하는 절차는 별도 설계가 필요하다.
+
+실제 스냅샷 dry-run과 적재 전 Aura 읽기 대조: 예상 노드 937, 예상 관계 1,303, 이 중 `dp_related_to` 6. 노드 누락·추가·변경 0, 관계 누락 6(모두 신규 유형), 기존 관계 추가·변경 0이다. 이 검증은 실제 적재 또는 적재 후 재실행 검증이 아니다. `neo4j_validate.compare_graph`는 새 관계도 유형·양 끝점·원본 JSON 및 key로 대조하며, 적재 전에는 6건 누락으로 실패하는 것이 정상이다.
+
+신규 `Neo4jSearch.benefit_relations(key)`는 명시적 요청에서만 새 edge를 읽는다. 기존 후보 순위, `get_detail`과 답변 문맥은 바꾸지 않았다. 실제 답변에 구조화된 관계를 반영하려면 해당 조회를 `get_detail`/retrieve에 연결하고 `benefit_context`에 전달하며 대상과 근거 해석·답변 테스트를 추가해야 한다. 현재 Aura에는 Edge가 없어서 실제 신규 조회 결과는 적재 후에만 검증할 수 있다.
+
+```cypher
+MATCH (b:dp_card_bnft {key:$key})-[r:dp_related_to]->(target:dp_card_bnft)
+RETURN b.key AS source_key, target.key AS target_key,
+       target.card_bnft_id AS target_id, target.name AS target_name,
+       r.relation_key AS relation_key, r.rel_type_cd AS rel_type_cd,
+       r.rel_priority AS rel_priority, r.source_json AS source_json;
+```
+
+추가 누락 확인: 이 BENEFIT의 `item_data.limit_tiers` 및 `review_patch`는 현재 BENEFIT 스냅샷 SELECT에 포함되지 않아 혜택 노드 `source_json`에는 없다. 한도 텍스트 `item_limit_txt`는 `limit_text`로 전해진다. 이는 관계 보완과 별개의 투영 제한이며, 실제 업무 판단에 필요한 구조화 한도를 그래프에서 조회할 수 있는지는 추가 검토가 필요하다.
+
+
+운영 적용 재시도에서는 `dp_related_to`에만 관계 속성을 적용하도록 수정한 뒤 사전 비교가 통과했지만, 쓰기 트랜잭션 내부의 적용 후 기존 상태 전체 비교가 불일치를 감지하여 예외로 롤백했다. 불일치의 정확한 필드와 원인은 아직 확인되지 않았다. 독립 읽기 전용 사후 조회에서는 노드 937개, 관계 1,297개, 기존 노드·관계 속성 변화 0개, 신규 관계 0개를 확인했다. PostgreSQL 기준 신규 관계 6개는 여전히 미적재이며 동일 입력에서 생성한 관계 키는 안정적이었다. 원인 분석과 적재 전용 검증 개선은 별도 작업으로 남긴다. `relation_list` 변경 시 기존 관계 키가 남는 문제도 기존에 기록한 별도 개선 항목이다.
+
