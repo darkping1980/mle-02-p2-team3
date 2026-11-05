@@ -14,5 +14,11 @@
 20261103_000020,common,COMMON,common/20261103_000020,16,,BRAND_SERVICE,HANA_VI001_20260317,공통_VISA브랜드서비스_VI001_20260317,2,2,hana_all/common/공통_VISA브랜드서비스_VI001_20260317.pdf
 20261103_000021,common,COMMON,common/20261103_000021,17,,BRAND_SERVICE,HANA_VP001_20230727,공통_VISA브랜드서비스_VP001_20230727,2,2,hana_all/common/공통_VISA브랜드서비스_VP001_20230727.pdf
 20261103_000022,common,COMMON,common/20261103_000022,17,,BRAND_SERVICE,HANA_VP001_20260317,공통_VISA브랜드서비스_VP001_20260317,2,2,hana_all/common/공통_VISA브랜드서비스_VP001_20260317.pdf
+20261104_000024,common,COMMON,common/20261104_000024,20,,BRAND_SERVICE,WOORI_BRAND_260225_346dbaa50ad5,우리카드 국제브랜드 서비스안내장(2026) Mastercard World,2,2,woori_all/common/공통_브랜드서비스_1.(개정후)국제브랜드서비스안내장(2026년)_MC_W_기본_2af8892d.pdf
+20261104_000025,common,COMMON,common/20261104_000025,21,,BRAND_SERVICE,WOORI_BRAND_260225_b05e4c64ec0b,우리카드 국제브랜드 서비스안내장(2026) Mastercard Platinum/Titanium,2,2,woori_all/common/공통_브랜드서비스_9.(개정후)국제브랜드서비스안내장(2026년)_MC_P.T_기본_64f5730d.pdf
+20261104_000026,common,COMMON,common/20261104_000026,22,,BRAND_SERVICE,WOORI_BRAND_260313_2039d0154f17,우리카드 국제브랜드 서비스안내장(2026) Visa Infinite,2,2,woori_all/common/공통_브랜드서비스_국제브랜드서비스안내장(2026)_VISA-I_기본_696d7877.pdf
+20261104_000027,common,COMMON,common/20261104_000027,23,,BRAND_SERVICE,WOORI_BRAND_260313_65f1ddecc9b2,우리카드 국제브랜드 서비스안내장(2026) Visa Platinum,2,2,woori_all/common/공통_브랜드서비스_국제브랜드서비스안내장(2026)_VISA-P_기본_550cec24.pdf
+20261104_000028,common,COMMON,common/20261104_000028,24,,BRAND_SERVICE,WOORI_BRAND_260316_40819705fc4c,우리카드 국제브랜드 서비스안내장(2026) UnionPay Platinum,2,2,woori_all/common/공통_브랜드서비스_32.(개정후)국제브랜드서비스안내장(2026년)_UPI_P_기본_out_c11b6d49.pdf
 20261101_000002,product,PRODUCT,product/20261101_000002,,2:PRODUCT_GUIDE,PRODUCT_GUIDE,HANA_15650_20260429,ONE PICK STYLE 하나 체크카드 상품설명서,2,2,"hana_all/debit/체크_ONEPICKSTYLE하나체크카드_상품설명서(공식PDF,URL추정확인)_15650_20260429.pdf"
 20261102_000003,product,PRODUCT,product/20261102_000003,,5:PRODUCT_GUIDE,PRODUCT_GUIDE,HANA_14955_20260609,JADE Classic 상품설명서,6,6,hana_all/credit/신용_JADEClassic_상품설명서(공식PDF)_14955_20260609.pdf
+20261104_000023,product,PRODUCT,product/20261104_000023,,6:PRODUCT_GUIDE,PRODUCT_GUIDE,WOORI_260901_917bba9e9473,카드의정석 SHOPPING 상품안내장,8,8,woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf

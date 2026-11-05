@@ -1,0 +1,25 @@
+{
+  "card_doc_id": "20261104_000024",
+  "doc_cd": "WOORI_BRAND_260225_346dbaa50ad5",
+  "doc_title": "우리카드 국제브랜드 서비스안내장(2026) Mastercard World",
+  "doc_type_cd": "BRAND_SERVICE",
+  "pdf_file": "woori_all/common/공통_브랜드서비스_1.(개정후)국제브랜드서비스안내장(2026년)_MC_W_기본_2af8892d.pdf",
+  "pdf_sha256": "346dbaa50ad57fdb2b98d34c9beb94e19a45ac5e1b976c7605d12f0727f0fa66",
+  "db_page_cnt": 2,
+  "markdown_page_cnt": 2,
+  "pages": [
+    {
+      "page_no": 1,
+      "file": "page_001.md",
+      "chars": 89
+    },
+    {
+      "page_no": 2,
+      "file": "page_002.md",
+      "chars": 3552
+    }
+  ],
+  "converter": "card_doc_page.page_raw_txt (WindowsOCR 10.0.26300)",
+  "generated_at": "2026-11-05T00:09:48.227380+00:00",
+  "note": "중간 산출물. 원문 근거 위치는 card_doc_page.page_raw_txt 기준이며 이 Markdown의 문자 위치를 쓰지 않는다. 이 PDF는 텍스트 레이어가 없어(윤곽선 글자) pymupdf4llm 변환 대신 db_pipeline이 등록한 OCR 원문을 그대로 저장했다. OCR 오류가 있을 수 있으며 수정하지 않았다."
+}

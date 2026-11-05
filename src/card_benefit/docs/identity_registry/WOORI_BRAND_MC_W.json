@@ -1,0 +1,57 @@
+{
+ "ledger_version": 1,
+ "doc_family_cd": "WOORI_BRAND_MC_W",
+ "card_doc_id": "20261104_000024",
+ "card_common_id": 20,
+ "common_cd": "WOORI_MASTERCARD_WORLD",
+ "source_run_id": "20261104_000038",
+ "created_date": "2026-11-05",
+ "status": "DRAFT_PENDING_USER_REVIEW",
+ "identity_rules": "HANA_MP004.json의 identity_rules와 같다(BIZ_V1:<영역>/<제휴사·대상>/<혜택 구분>, anchor 대응).",
+ "register": [
+  {
+   "card_extr_stg_id": "20261104_000494",
+   "bnft_nm_extracted": "국내 특급호텔 객실 할인",
+   "identity": "BIZ_V1:HOTEL/DOMESTIC_LUXURY_HOTEL_ROOM/DISCOUNT",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_08FAD3A9B0332DA57163A02B17B740635D6B5B93398E22BB87F2C9698BED2DFE",
+   "targets": [
+    "INDUSTRY:국내 특급호텔"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r01",
+     "value_raw_txt": "5~50% 할인",
+     "value_num": null,
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002121",
+    "20261104_002122",
+    "20261104_002123"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002121",
+    "card_doc_chunk_id": "20261104_000087",
+    "start_pos": 28,
+    "end_pos": 52,
+    "line_sha256": "d1bb31d6ecdbc6c7bf50afb382f8fafac98c9b617c9f2db2c6a631c6576504e9",
+    "value_key": [
+     "5~50%할인"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 PDF 2쪽 렌더 이미지와 값 대조 일치",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  }
+ ],
+ "excluded": [],
+ "review_note": "기존 규칙 + 추가 안전 게이트(certainty HIGH, 값 존재, OCR 이상 표기 없음, 자체 기간 표현 없음, PDF 이미지 대조) 통과분만 등록."
+}

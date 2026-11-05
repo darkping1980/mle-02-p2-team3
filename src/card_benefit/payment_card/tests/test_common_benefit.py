@@ -366,3 +366,22 @@ def test_target_quote_supports_the_benefit():
     service.repo.evidence.append(dict(evidence_id='E8',quote_txt='대상 호텔',source_txt='대상 호텔',start_pos=1,end_pos=5,approval_status_cd='PENDING'))
     decision = service.register_run('R1', IDS)[0]
     assert decision.status == 'INSERTED' and 'E8' in decision.evidence_ids
+
+
+def test_woori_period_wordings_2026_11_05():
+    """우리카드 표기 지원. 연도 없는 표기·역전·뒤에 다른 말이 붙은 표기는 계속 거부한다."""
+    expected = (date(2026,1,1), date(2027,1,1))
+    for text in ('2026년 1월 1일부터 2026년 12월 31일까지', '2026년 1월 1일 부터 2026년 12월 31일까지',
+                 '2026년 1월 1일부터 2026년 12월 31일\n까지', '2026년 1월 1일부터 12월 31일까지',
+                 '2026.01.01~2026.12.31', '2026.1.1 ~ 12.31', '2026년 1월 1일 ~ 12월 31일'):
+        assert period(text) == expected, text
+    for bad in ('1월 1일부터 3월 31일까지', '~3/31', '-12/30 예약시까지', '4월 중~', '~6/30',
+                '2026년 12월 31일부터 2026년 1월 1일까지', '2026년 1월 1일부터 2026년 12월 31일까지 예정',
+                '2026.13.01~2026.12.31', '2026년 1월 1일부터'):
+        with pytest.raises(ValueError):
+            period(bad)
+    woori = '별도 기간이 지정된 경우를 제외하고 2026년 1월 1일부터 2026년 12월 31일까지'
+    for text in (woori, '본 서비스는 ' + woori):
+        assert candidate_period({'validity_period_txt': text, 'evidence': [{'supports': 'RULE', 'quote_txt': '국내 특급호텔 43개 객실 5~50% 할인'}]}) == expected
+        with pytest.raises(ValueError):   # 혜택 자신의 기간 표현이 있으면 기본 기간을 쓰지 않는 기존 규칙 유지
+            candidate_period({'validity_period_txt': text, 'evidence': [{'supports': 'RULE', 'quote_txt': '그린피 50% 할인 연 4회 (~6/30)'}]})

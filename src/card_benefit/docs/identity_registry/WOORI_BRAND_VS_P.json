@@ -54,8 +54,274 @@
     ]
    },
    "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000460",
+   "bnft_nm_extracted": "movv 해외 이동서비스 할인",
+   "identity": "BIZ_V1:TRAVEL/MOVV/OVERSEAS_DISCOUNT",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_A80D4A1A962E273AB187C0CB6599E3E8BD047A100DC69347B8D3C8E44FDC0772",
+   "targets": [
+    "SERVICE:movv 이동서비스"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r16",
+     "value_raw_txt": "8%",
+     "value_num": "8",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_001989",
+    "20261104_001990",
+    "20261104_001991",
+    "20261104_001992"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_001989",
+    "card_doc_chunk_id": "20261104_000093",
+    "start_pos": 596,
+    "end_pos": 644,
+    "line_sha256": "5866278e026c6273a959ba23d90d1012fcde4de45f34a62b5fa68bc4afb75c2c",
+    "value_key": [
+     "8%"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 PDF 2쪽 렌더 이미지와 값 대조 일치",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000464",
+   "bnft_nm_extracted": "트립닷컴 할인",
+   "identity": "BIZ_V1:TRAVEL/TRIP_COM/HOTEL_AIR_ACTIVITY",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_B2F5A07AABBCD03BB8ED1FF5054D3559B0C94D7691A0ECCD926396BF385B2859",
+   "targets": [
+    "MERCHANT:트립닷컴"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r20a",
+     "value_raw_txt": "6%",
+     "value_num": "6",
+     "value_unit_cd": "PERCENT"
+    },
+    {
+     "rule_key": "r20b",
+     "value_raw_txt": "3%",
+     "value_num": "3",
+     "value_unit_cd": "PERCENT"
+    },
+    {
+     "rule_key": "r20c",
+     "value_raw_txt": "4%",
+     "value_num": "4",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002005",
+    "20261104_002006",
+    "20261104_002007",
+    "20261104_002008",
+    "20261104_002009",
+    "20261104_002010"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002005",
+    "card_doc_chunk_id": "20261104_000093",
+    "start_pos": 788,
+    "end_pos": 826,
+    "line_sha256": "66989c02d74e33cca24c81b3c44d59742f94cdcb574299b166cd07fc9d83927f",
+    "value_key": [
+     "3%",
+     "4%",
+     "6%"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 PDF 2쪽 렌더 이미지와 값 대조 일치",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000468",
+   "bnft_nm_extracted": "트립쿠폰 멤버십 7일권 무료 제공",
+   "identity": "BIZ_V1:DINING_LIFESTYLE/TRIP_COUPON/MEMBERSHIP",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_51B1DEE99C880534FED02D018AB2C03C31D006794A47AA5F46F33346E4CD42CB",
+   "targets": [
+    "SERVICE:트립쿠폰(Tⅱp Coupon)"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "r24",
+     "value_raw_txt": "멤버십 7일권 무료 제공",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002026",
+    "20261104_002027",
+    "20261104_002028",
+    "20261104_002029"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002026",
+    "card_doc_chunk_id": "20261104_000093",
+    "start_pos": 983,
+    "end_pos": 1014,
+    "line_sha256": "60d2158b4a1fbf03af7123bdcbaa3d65916bad0523bef96b9c37cc6fa88d7168",
+    "value_key": [
+     "멤버십7일권무료제공"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 PDF 2쪽 렌더 이미지와 값 대조 일치",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000469",
+   "bnft_nm_extracted": "하와이 올로마나골프장 그린피 할인 및 연습볼 제공",
+   "identity": "BIZ_V1:GOLF/OLOMANA/GREEN_FEE",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_58506E17A5D970D6F465D59113380835F57D351D584F1EA93D036367E4B0FA7A",
+   "targets": [
+    "MERCHANT:하와이 올로마나골프장"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "r25a",
+     "value_raw_txt": "15%",
+     "value_num": "15",
+     "value_unit_cd": "PERCENT"
+    },
+    {
+     "rule_key": "r25b",
+     "value_raw_txt": "1인당 연습볼 1Bucket 무료 제공",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002030",
+    "20261104_002031",
+    "20261104_002032",
+    "20261104_002033",
+    "20261104_002034"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002030",
+    "card_doc_chunk_id": "20261104_000093",
+    "start_pos": 1016,
+    "end_pos": 1063,
+    "line_sha256": "504f03c0f78b86073c1a02038dc12ac543ea73982ed6c9a15321d1fe25671ee6",
+    "value_key": [
+     "15%",
+     "1인당연습볼1bucket무료제공"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 PDF 2쪽 렌더 이미지와 값 대조 일치",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000462",
+   "bnft_nm_extracted": "goodlugg 글로벌 짐배송/보관 할인",
+   "identity": "BIZ_V1:TRAVEL/GOODLUGG/GLOBAL_LUGGAGE",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_71E80468E08689909098CF6FA73072AF6A9BDA98B36A2AA3584E7642F47C1915",
+   "targets": [
+    "SERVICE:굿<#(goodlugg)"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r18",
+     "value_raw_txt": "10%",
+     "value_num": "10",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "LOW",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_001997",
+    "20261104_001998",
+    "20261104_001999",
+    "20261104_002000"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_001997",
+    "card_doc_chunk_id": "20261104_000093",
+    "start_pos": 686,
+    "end_pos": 729,
+    "line_sha256": "8cbb245a0ac3bd16c7c4a7ea604cb7b3db69dc16afa380f67e579222539ec8b3",
+    "value_key": [
+     "10%"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 2차 검토: PDF 2쪽 '굿럭(goodlugg) 글로벌 700여개 도시 짐배송/보관 10% 할인 등' 일치. LOW 사유(한글명 OCR '굿<#')는 저장 문구와 무관",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
   }
  ],
- "excluded": [],
- "review_note": "우리카드 공통 문서 5건(run 35~39) 154후보 중 기존 규칙 통과 1건만 등록. 나머지 153건은 woori_common_review_20261104.json 참고."
+ "excluded": [
+  {
+   "card_extr_stg_id": "20261104_000461",
+   "bnft_nm_extracted": "TBR GIobaI 공항 픽업 서비스 할인",
+   "reserved_identity": "BIZ_V1:AIRPORT/TBR_GLOBAL/PICKUP_DISCOUNT",
+   "reserved_bnft_cd": "BRAND_96D0A4D008CE5FDD76DD34F44D73B915C5BEA82831D2DB1223DF4A45DA03948F",
+   "exclusion_group": "REVIEW_OCR",
+   "exclusion_reason": "OCR_TEXT_GARBLED: 혜택명·원문 'TBR GIobaI'(PDF: TBR Global). 숫자 값은 PDF 이미지와 일치. OCR 원문 보정 후 등록 검토",
+   "values": [
+    {
+     "rule_key": "r17",
+     "value_raw_txt": "10%",
+     "value_num": "10",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "anchor": {
+    "evidence_id": "20261104_001993",
+    "card_doc_chunk_id": "20261104_000093",
+    "start_pos": 646,
+    "end_pos": 684,
+    "line_sha256": "83ff129e2768ab189a5c197c1117f49cba67c95c7cde63dbf5c185a46ac0d4bc",
+    "value_key": [
+     "10%"
+    ]
+   }
+  }
+ ],
+ "review_note": "우리카드 공통 문서 5건(run 35~39) 154후보 중 기존 규칙 통과 1건만 등록. 나머지 153건은 woori_common_review_20261104.json 참고. 2026-11-05: 기간 파서 보완 후 추가 검증 통과분 추가(PDF 이미지 대조)."
 }

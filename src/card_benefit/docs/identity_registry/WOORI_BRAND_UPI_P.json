@@ -1,0 +1,573 @@
+{
+ "ledger_version": 1,
+ "doc_family_cd": "WOORI_BRAND_UPI_P",
+ "card_doc_id": "20261104_000028",
+ "card_common_id": 24,
+ "common_cd": "WOORI_UPI_PLATINUM",
+ "source_run_id": "20261104_000037",
+ "created_date": "2026-11-05",
+ "status": "DRAFT_PENDING_USER_REVIEW",
+ "identity_rules": "HANA_MP004.json의 identity_rules와 같다(BIZ_V1:<영역>/<제휴사·대상>/<혜택 구분>, anchor 대응).",
+ "register": [
+  {
+   "card_extr_stg_id": "20261104_000472",
+   "bnft_nm_extracted": "해외 라이프스타일 컨시어지 서비스",
+   "identity": "BIZ_V1:GLOBAL/LIFESTYLE_CONCIERGE/SERVICE",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_068ED3D9DAFF08BC0B2E1097D66E66E36FCF55324F43368E9DD44EAA563906FD",
+   "targets": [],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "r1",
+     "value_raw_txt": "해외 라이프스타일 컨시어지 서비스",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002037",
+    "20261104_002038",
+    "20261104_002039"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002037",
+    "card_doc_chunk_id": "20261104_000095",
+    "start_pos": 53,
+    "end_pos": 70,
+    "line_sha256": "0c30fd23bc4a28856092b2fabad21aeeecedf6f46285916ed363c42831523038",
+    "value_key": [
+     "해외라이프스타일컨시어지서비스"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 PDF 2쪽 렌더 이미지와 값 대조 일치",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000475",
+   "bnft_nm_extracted": "트립닷컴 국내외 항공권 할인",
+   "identity": "BIZ_V1:TRAVEL/TRIP_COM/AIRFARE",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_18197EF40A00479199E745F20C76B7D23BEB2FDC4C962C4A29663919A9A253D0",
+   "targets": [
+    "MERCHANT:트립닷컴(Trip.com/"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r4",
+     "value_raw_txt": "10%",
+     "value_num": "10",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002049",
+    "20261104_002050",
+    "20261104_002051",
+    "20261104_002052"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002049",
+    "card_doc_chunk_id": "20261104_000095",
+    "start_pos": 244,
+    "end_pos": 257,
+    "line_sha256": "7fe8390bd87df1864362d91022ac24df55fc13b11a42e6bdf0d2d2ecae57fa17",
+    "value_key": [
+     "10%"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 PDF 2쪽 렌더 이미지와 값 대조 일치",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000478",
+   "bnft_nm_extracted": "마이리얼트립 할인",
+   "identity": "BIZ_V1:TRAVEL/MYREALTRIP/DISCOUNT",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_7837CE6E90627BE92B50954C58C156EAD8328467F09A535AD66D346ED0FE279C",
+   "targets": [
+    "MERCHANT:마이리얼트립"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r7",
+     "value_raw_txt": "최대 10%",
+     "value_num": "10",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [
+    "월 1회",
+    "최대 17,000원"
+   ],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002062",
+    "20261104_002063",
+    "20261104_002065",
+    "20261104_002066"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002062",
+    "card_doc_chunk_id": "20261104_000095",
+    "start_pos": 331,
+    "end_pos": 346,
+    "line_sha256": "9c99fac1f9144188fb6c2e35af5daa1648f8336e15b86d025cfefaad6e7b6a63",
+    "value_key": [
+     "최대10%"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 PDF 2쪽 렌더 이미지와 값 대조 일치",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000480",
+   "bnft_nm_extracted": "K공항리무진 승차권 1+1",
+   "identity": "BIZ_V1:AIRPORT/K_LIMOUSINE/ONE_PLUS_ONE",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_DE51B261C8E44E6BD8713DD9EF4BE4817D9DE8E33DFA1A7D039B6F7CF56DF0E2",
+   "targets": [
+    "MERCHANT:K공항리무진"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r9",
+     "value_raw_txt": "1+1",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002072",
+    "20261104_002073",
+    "20261104_002074"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002072",
+    "card_doc_chunk_id": "20261104_000095",
+    "start_pos": 418,
+    "end_pos": 435,
+    "line_sha256": "21e3abf62f08a0a197e6c991e45eeb01a187ba2a45cf5b75e12263485c3eb30b",
+    "value_key": [
+     "1+1"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 PDF 2쪽 렌더 이미지와 값 대조 일치",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000481",
+   "bnft_nm_extracted": "인천공항 제휴 매장 커피 할인",
+   "identity": "BIZ_V1:AIRPORT/INCHEON_PARTNER_COFFEE/DISCOUNT",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_CBBF96DBA19983D68B6341A66E95D90AD975D8B649E23B59E30E385BCD4EFD1A",
+   "targets": [
+    "MERCHANT:인천공항 제휴 매장"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r10",
+     "value_raw_txt": "10%",
+     "value_num": "10",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002075",
+    "20261104_002076",
+    "20261104_002077"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002075",
+    "card_doc_chunk_id": "20261104_000095",
+    "start_pos": 439,
+    "end_pos": 465,
+    "line_sha256": "c869c0e3ea61556c6eaf228838d106718fc0dfe4db5f5af1aca082ccdbdc0883",
+    "value_key": [
+     "10%"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 PDF 2쪽 렌더 이미지와 값 대조 일치",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000482",
+   "bnft_nm_extracted": "경복궁면세점 인천공항점 사은품 제공",
+   "identity": "BIZ_V1:AIRPORT/KYUNGBOKGUNG_DUTY_FREE/GIFT",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_0913F3B11595F3166DA8FDF77B9104EB21C258B0068F3178041A9CE4DCC36FB8",
+   "targets": [
+    "MERCHANT:경복궁면세점 인천공항점"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "r11",
+     "value_raw_txt": "사은품 제공",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [
+    "일 1회"
+   ],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002078",
+    "20261104_002079",
+    "20261104_002080",
+    "20261104_002081"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002078",
+    "card_doc_chunk_id": "20261104_000095",
+    "start_pos": 495,
+    "end_pos": 513,
+    "line_sha256": "0f929abfaa0b20e3a0c470984b93e2c679cb4233b3d7c7fa6ad02f0da19f0ed7",
+    "value_key": [
+     "사은품제공"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 PDF 2쪽 렌더 이미지와 값 대조 일치",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000484",
+   "bnft_nm_extracted": "국내 특급호텔 객실 할인",
+   "identity": "BIZ_V1:HOTEL/DOMESTIC_LUXURY_HOTEL_ROOM/DISCOUNT",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_2EFEF0C3102B1723A72C528AECE0E373471C59389D05FCA4D6C14713DA9776D4",
+   "targets": [
+    "MERCHANT:국내 43개 특급호텔"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r13",
+     "value_raw_txt": "5~40%",
+     "value_num": null,
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002086",
+    "20261104_002087",
+    "20261104_002088"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002086",
+    "card_doc_chunk_id": "20261104_000095",
+    "start_pos": 546,
+    "end_pos": 570,
+    "line_sha256": "7e88d6ecf8f02dfe8eabdd6c881c1a7c9b461151ca888da1474da38318e8b95b",
+    "value_key": [
+     "5~40%"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 PDF 2쪽 렌더 이미지와 값 대조 일치",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000488",
+   "bnft_nm_extracted": "국내 골프장 온라인 예약",
+   "identity": "BIZ_V1:GOLF/UNIONPAY_GOLF/ONLINE_BOOKING",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_8D3211151AA1CD686FC4F2F9814FC504B3BF7BE276E44813B79472DF80A8BC89",
+   "targets": [
+    "INDUSTRY:국내 골프장"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "r17",
+     "value_raw_txt": "온라인 예약",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002101",
+    "20261104_002102",
+    "20261104_002103"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002101",
+    "card_doc_chunk_id": "20261104_000095",
+    "start_pos": 743,
+    "end_pos": 755,
+    "line_sha256": "b34a9665986292c95a9a2c246152602d6b0d05bb32ba944c2aba1c59d7f73fe8",
+    "value_key": [
+     "온라인예약"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 PDF 2쪽 렌더 이미지와 값 대조 일치",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000489",
+   "bnft_nm_extracted": "국내 골프장 커피 할인",
+   "identity": "BIZ_V1:GOLF/GOLF_COURSE_COFFEE/DISCOUNT",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_7860241B587AEDE640E001756ADD14B79F366A3AA14324681BB711A1BB546D0B",
+   "targets": [
+    "MERCHANT:지정 골프장 클럽하우스 또는 스타트하우스"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r18",
+     "value_raw_txt": "30%",
+     "value_num": "30",
+     "value_unit_cd": "PERCENT"
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002104",
+    "20261104_002105",
+    "20261104_002106"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002104",
+    "card_doc_chunk_id": "20261104_000095",
+    "start_pos": 784,
+    "end_pos": 803,
+    "line_sha256": "88ebb56b3e32f6c3d8d782d2db7b3d6066eea1af6d49bccbac414229ef4d7b37",
+    "value_key": [
+     "30%"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 PDF 2쪽 렌더 이미지와 값 대조 일치",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000490",
+   "bnft_nm_extracted": "현대아울렛 무료 음료 및 우대 혜택",
+   "identity": "BIZ_V1:LIFE/HYUNDAI_OUTLET/FREE_DRINK",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_936154813E6916918DC1C2C266919DBA7C70267C63B15252A6A0D5D84DD3E61B",
+   "targets": [
+    "MERCHANT:현대아울렛"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "r19",
+     "value_raw_txt": "무료 음료 1잔",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002108",
+    "20261104_002109",
+    "20261104_002110"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002108",
+    "card_doc_chunk_id": "20261104_000095",
+    "start_pos": 832,
+    "end_pos": 853,
+    "line_sha256": "2c8aeeca431b5492e6dced8073395732d3d44ff240717bd7b8850bed8a927a48",
+    "value_key": [
+     "무료음료1잔"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 PDF 2쪽 렌더 이미지와 값 대조 일치",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000479",
+   "bnft_nm_extracted": "클록 액티비티 할인",
+   "identity": "BIZ_V1:TRAVEL/KLOOK/ACTIVITY",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_92ECC3EC3E788B387DC2BD29F6E7727CBF2606C9C6663AFB3D9BC67CE670439A",
+   "targets": [
+    "MERCHANT:클록(K|00k)"
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "values": [
+    {
+     "rule_key": "r8",
+     "value_raw_txt": "최대 $30 할인",
+     "value_num": "30",
+     "value_unit_cd": "UNKNOWN"
+    }
+   ],
+   "limits": [
+    "분기별 1회"
+   ],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002067",
+    "20261104_002068",
+    "20261104_002069",
+    "20261104_002070"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002067",
+    "card_doc_chunk_id": "20261104_000095",
+    "start_pos": 397,
+    "end_pos": 405,
+    "line_sha256": "37d10554601a2bcf3032c60efeb439ec93e77b74f99154e1bebb63b139931832",
+    "value_key": [
+     "최대$30할인"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 2차 검토: PDF 2쪽 '클록(Klook) 액티비티 $100 이상 결제 시, 최대 $30 할인 (분기별 1회)' 일치. 조건·횟수 저장 확인",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000477",
+   "bnft_nm_extracted": "DB손해보험 해외 여행자보험 무료 가입 서비스",
+   "identity": "BIZ_V1:TRAVEL/DB_INSURANCE/TRAVEL_INSURANCE",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_31A03181CF4C14F0BFBE98B3666605FCCD0A3015C5BA25804BA6F63CB382C242",
+   "targets": [
+    "MERCHANT:DB손해보험"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "r6",
+     "value_raw_txt": "무료 가입 서비스 제공",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [
+    "연 1회"
+   ],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002057",
+    "20261104_002058",
+    "20261104_002059",
+    "20261104_002060"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002057",
+    "card_doc_chunk_id": "20261104_000095",
+    "start_pos": 279,
+    "end_pos": 306,
+    "line_sha256": "69984043fa57feaa7fb0be428d7d17b8b92cc2a8d2a32934572dac782b95d93a",
+    "value_key": [
+     "무료가입서비스제공"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 2차 검토: PDF 2쪽 'DB손해보험 해외 여행자보험 무료 가입 서비스 제공 - 만 60세까지 최대 3일, 연 1회' 일치. '까지'는 연령 조건이며 기간 아님",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "card_extr_stg_id": "20261104_000486",
+   "bnft_nm_extracted": "싱가포르 마리나 베이 샌즈 호텔 멤버십 혜택",
+   "identity": "BIZ_V1:HOTEL/MARINA_BAY_SANDS/MEMBERSHIP",
+   "identity_kind": "BIZ_V1_MANUAL",
+   "bnft_cd": "BRAND_01744CD225543E66F126967267165FF6354493F3FE5216488EAFE58FA02FD45C",
+   "targets": [
+    "MERCHANT:싱가포르 마리나 베이 샌즈 호텔"
+   ],
+   "bnft_type_cd": "SERVICE",
+   "values": [
+    {
+     "rule_key": "r15",
+     "value_raw_txt": "샌즈 리우니드 라이프스타일 프레스티지 등급 멤버십 혜택\n3개월간제공",
+     "value_num": null,
+     "value_unit_cd": null
+    }
+   ],
+   "limits": [],
+   "selection_service_txt": null,
+   "certainty": "HIGH",
+   "service_type_cd": "COMMON",
+   "valid_from": "2026-01-01",
+   "valid_to_excl": "2027-01-01",
+   "evidence_ids": [
+    "20261104_002092",
+    "20261104_002093",
+    "20261104_002094"
+   ],
+   "anchor": {
+    "evidence_id": "20261104_002092",
+    "card_doc_chunk_id": "20261104_000095",
+    "start_pos": 630,
+    "end_pos": 666,
+    "line_sha256": "7d692c5d82bf1932c10ecea967d8d6abe982c2386b522a78f840b4830cb997b3",
+    "value_key": [
+     "샌즈리우니드라이프스타일프레스티지등급멤버십혜택3개월간제공"
+    ]
+   },
+   "pdf_image_check": "2026-11-05 2차 검토: PDF 2쪽 '샌즈 리우니드 라이프스타일 프레스티지 등급 멤버십 혜택 3개월간 제공' 일치. '3개월간'은 혜택 지속기간이며 제공기간 아님",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  }
+ ],
+ "excluded": [],
+ "review_note": "기존 규칙 + 추가 안전 게이트(certainty HIGH, 값 존재, OCR 이상 표기 없음, 자체 기간 표현 없음, PDF 이미지 대조) 통과분만 등록."
+}
