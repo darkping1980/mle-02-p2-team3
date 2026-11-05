@@ -264,6 +264,23 @@ class GraphTests(unittest.TestCase):
         data["rules"][0]["rule"]["rule_key"] = "first"
         self.assertTrue(any("금액 구간" in text for text in card_graphrag.find_unresolved([data])))
 
+    def test_rules_split_by_disjoint_targets_are_not_selection_unresolved(self):
+        """대상 묶음별로 나뉜 규칙은 대상이 규칙을 정하므로 미확정이 아니다(2026-11-05 DAILY 고정소비 회귀)."""
+        data = detail()
+        data["rules"] = [{"rule": {"rule_key": "food.delivery"}, "targets": ["배달의민족", "쿠팡이츠"]},
+                         {"rule": {"rule_key": "transit.taxi"}, "targets": ["택시 업종"]},
+                         {"rule": {"rule_key": "transit.kakaot"}, "targets": ["카카오T(택시)"]}]
+        self.assertFalse(any("금액 구간" in text for text in card_graphrag.find_unresolved([data])))
+        benefit = {"benefit_id": "B", "name": "고정소비", "rule_text": "5%", "conditions": [],
+                   "rules": [{"rule_key": r["rule"]["rule_key"], "value": 5, "unit": "PERCENT", "targets": r["targets"]}
+                             for r in data["rules"]]}
+        self.assertEqual(card_graphrag.rule_conflicts([benefit], 30000), [])
+        for shared in (["배달의민족"], []):     # 대상이 겹치거나 대상 없는 규칙이 있으면 기존처럼 미확정
+            data["rules"][1]["targets"] = shared
+            self.assertTrue(any("금액 구간" in text for text in card_graphrag.find_unresolved([data])))
+            benefit["rules"][1]["targets"] = shared
+            self.assertEqual(len(card_graphrag.rule_conflicts([benefit], 30000)), 1)
+
     def test_limit_intent_keeps_conditions_for_unresolved_items(self):
         search = FakeSearch()
         state, _, _ = run(search, interpret_llm("BENEFIT_LIMIT"))

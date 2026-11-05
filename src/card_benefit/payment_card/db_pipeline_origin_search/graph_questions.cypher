@@ -21,8 +21,10 @@ MATCH (c:dp_card_product)-[:dp_has_benefit]->(b:dp_card_bnft)
 WHERE NOT (b)-[:dp_same_as]->(:dp_card_common_bnft)
 OPTIONAL MATCH (b)-[:dp_has_rule]->(r:dp_bnft_rule)
 OPTIONAL MATCH (r)-[:dp_targets]->(t:dp_rule_target)
-OPTIONAL MATCH (r)-[:dp_has_expr]->(:dp_cond_expr)-[:dp_has_branch]->(:dp_cond_branch)
-      -[:dp_has_atom]->(a:dp_cond_atom {kind:'SPEND_REQ'})
+// 결제 금액 기준: 규칙의 SPEND_REQ와, 결제 건당 금액(cond_basis_cd TXN_AMT)으로 등록된 USAGE_REQ(예: 매출 건당 3만원 이상).
+// cond_basis_cd는 노드 속성이 아니라 source_json(정렬·공백 없는 JSON)에만 있어 문자열로 확인한다.
+OPTIONAL MATCH (r)-[:dp_has_expr]->(:dp_cond_expr)-[:dp_has_branch]->(:dp_cond_branch)-[:dp_has_atom]->(a:dp_cond_atom)
+WHERE a.kind = 'SPEND_REQ' OR (a.kind = 'USAGE_REQ' AND a.source_json CONTAINS '"cond_basis_cd":"TXN_AMT"')
 RETURN b.key AS key, b.name AS name, b.card_bnft_id AS id, b.verification_status AS status,
        c.source_json AS card_source, collect(DISTINCT t.target_nm) AS targets,
        collect(DISTINCT a.min_amt) AS payment_min_amounts

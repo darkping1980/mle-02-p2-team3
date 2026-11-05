@@ -15,7 +15,8 @@ Streamlit 실행 모델 (Java 개발자 참고)
     4. "질문하기" 제출 시:
          같은 질문·같은 모드·이전 오류 없음·강제 재실행 아님 → 이전 결과 재사용(LLM 미호출)
          그 외 → get_pipeline(search_mode).run(question) → 결과 State를 session_state.outcome에 저장
-    5. session_state.outcome이 있으면 show_outcome으로 답변·연회비 표·상세 문장·PDF 근거·(개발자) 진단 정보 출력
+    5. 검색 결과는 요청당 한 번 로그에 저장하고, 일반 화면에는 최종 답변만 출력
+       (개발자 모드에서는 기존 상세 내용·PDF 근거와 진단 정보도 표시)
 
 호출 관계
     get_pipeline → neo4j_search.connect, card_graphrag.create_llms, (B·C만) card_graphrag.create_benefit_search
@@ -37,21 +38,25 @@ from card_benefit.payment_card.db_pipeline_origin_search.benefit_search_service 
 from card_benefit.payment_card.db_pipeline_origin_search.neo4j_search import CARD_LOGGER_NAME, GRAPH_PREFIX, QUERIES, connect
 from card_benefit.payment_card.db_pipeline_origin_search.execution_log import (
     app_db_log_enabled, capture_request_queries, configure_application_logging, error_message,
-    log_event, persist_app_logs, request_pipeline, response_message,
+    log_event, outcome_detail_text, outcome_pdf_evidence_text, persist_app_logs, request_pipeline,
+    response_message,
 )
 import streamlit as st
 
 # region 화면 상수 (예시 질문, 상태·출처 표시 문구, 사용자 화면에서 지울 내부 표현 정규식)
-EXAMPLES = [
-    "ONE PICK STYLE 카드의 대중교통 혜택은?",
-    "전월 실적이 없어도 대중교통 캐시백을 받을 수 있어?",
-    "ONE PICK과 STYLE 혜택의 차이는?",
-    "놀이공원 할인율과 이용 횟수 제한은?",
-    "1만원 이상 결제하면 캐시백은 얼마인가?",
-    "JADE Classic의 브랜드별 연회비는?",
-    "세 카드의 본인 연회비를 비교해 줘.",
-    "우리카드 카드의정석 SHOPPING 온라인 쇼핑 10% 혜택과 연회비를 함께 알려줘.",
-]
+EXAMPLE_QUESTIONS = {
+    "ONE PICK 대중교통": "ONE PICK STYLE 카드의 대중교통 혜택은?",
+    "DAILY 배달앱": "카드의정석2 DAILY의 배달앱 5% 할인 조건은?",
+    "SIMPLE 제외 항목": "카드의정석2 SIMPLE의 0.8% 할인 제외 항목은?",
+    "DAILY 통합 한도": "DAILY 카드의 고정소비·정기결제 통합 할인한도는?",
+    "JADE 연회비": "JADE Classic의 브랜드별 연회비는?",
+    "연회비 비교": "ONE PICK STYLE과 JADE Classic의 연회비를 비교해 줘.",
+}
+EXAMPLES = list(EXAMPLE_QUESTIONS)
+SUPPORTED_CARDS = {
+    "하나카드": ["ONE PICK STYLE", "JADE Classic", "JADE First", "JADE Prime", "더 심플 하나카드"],
+    "우리카드": ["카드의정석 SHOPPING", "EVERY WON POINT", "카드의정석 POINT II", "카드의정석2 DAILY", "카드의정석2 SIMPLE"],
+}
 STATUS_LABELS = {"ANSWERED": "답변", "PARTIAL": "일부 답변 (검증 실패 문장 제외 또는 검토 필요 항목 포함)",
                  "NOT_ANSWERABLE": "답변 불가", "ERROR": "실행 오류"}   # 개발자 정보에서만 쓴다.
 # 사용자 화면 제목. 판정(status) 값은 바꾸지 않고 표시 문구만 고른다.
@@ -175,9 +180,9 @@ def dev_mode() -> bool:
 
 
 def use_example() -> None:
-    """예시 선택은 입력창만 채운다. LLM은 호출하지 않는다."""
+    """간단한 예시 버튼을 누르면 전체 질문 문장을 입력창에 채운다."""
     if st.session_state.example:
-        st.session_state.question = st.session_state.example
+        st.session_state.question = EXAMPLE_QUESTIONS[st.session_state.example]
 
 
 def show_evidence(item: dict) -> None:
@@ -242,16 +247,16 @@ def show_outcome(outcome: dict) -> None:
             주로 읽는 키: answer(status·message·answer_text·conclusion·points·fee_rows·uncertain),
             evidence, open_conditions, data_notices, search_parameters, (개발자) llm_calls·path·context 등.
 
-    출력 순서: 제목·질문 → 오류/안내 메시지 → 모호성 참고 → 답변 본문(answer_text, 없으면 conclusion)
-    → 연회비 표(fee_rows) → 혜택별 상세 문장(points)과 출처 → 확인이 필요한 사항 → PDF 근거(인용된 것 / 그 밖)
-    → (개발자 모드) 답변 생성 정보·개발자 정보.
+    일반 화면은 답변 본문(answer_text, 없으면 conclusion)과 실행 오류·답변 불가 안내만 표시한다.
+    개발자 모드에서는 기존 연회비·상세 내용·확인 필요 사항·PDF 근거와 진단 정보를 계속 표시한다.
     """
     answer = outcome["answer"]
     # evidence_id → 페이지 번호. 문장 출처와 근거 목록에 쪽수를 붙일 때 쓴다.
     evidence = outcome.get("evidence") or []
     pages = {item["evidence_id"]: item["page_no"] for item in evidence}
     st.subheader(CUSTOMER_TITLES.get(answer["status"], "검색 결과"), anchor=False)
-    st.caption(f"질문: {outcome['question']}")
+    if dev_mode():
+        st.caption(f"질문: {outcome['question']}")
     if answer["status"] == "ERROR":
         st.error(ERROR_TEXT)
     elif answer["message"]:
@@ -259,7 +264,7 @@ def show_outcome(outcome: dict) -> None:
         if message:
             st.info(plain(message))
     ambiguity = (outcome.get("search_parameters") or {}).get("ambiguity")
-    if ambiguity and answer["points"]:
+    if dev_mode() and ambiguity and answer["points"]:
         st.info("참고: " + plain(ambiguity))
     if answer.get("answer_text"):
         show_text(answer["answer_text"])
@@ -267,6 +272,8 @@ def show_outcome(outcome: dict) -> None:
         conclusion = customer_text(answer["conclusion"])
         if conclusion:
             st.markdown(f"**{plain(conclusion)}**")
+    if not dev_mode():
+        return
     if answer.get("fee_rows"):
         st.subheader("연회비", anchor=False)
         st.dataframe(answer["fee_rows"], hide_index=True)   # '상태' 열을 포함해 표는 그대로 보여 준다.
@@ -300,8 +307,6 @@ def show_outcome(outcome: dict) -> None:
         with st.expander(f"그 밖의 관련 원문 ({len(others)})"):
             for item in others:
                 show_evidence(item)
-    if not dev_mode():
-        return
     show_generation(outcome)
     with st.expander("개발자 정보"):
         st.markdown(f"**판정** `{answer['status']}` ({plain(STATUS_LABELS.get(answer['status'], answer['status']))}) · "
@@ -346,7 +351,15 @@ def show_outcome(outcome: dict) -> None:
 # region 페이지 본문 (Streamlit 재실행마다 위에서부터 실행되는 진입점)
 st.set_page_config(page_title="카드 혜택 안내", layout="wide")
 st.title("카드 혜택 안내", anchor=False)
-st.caption("카드 상품설명서(PDF)에 근거해 혜택과 연회비를 안내합니다. 실제 적용 조건은 카드사 안내를 함께 확인해 주세요.")
+st.caption("하나·우리카드 상품설명서의 근거로 혜택과 연회비를 안내합니다. 실제 적용 조건은 카드사 안내를 함께 확인해 주세요.")
+with st.expander("지원 카드 10종 보기", expanded=False):
+    card_columns = st.columns(2)
+    for column, (issuer, cards) in zip(card_columns, SUPPORTED_CARDS.items()):
+        with column:
+            st.markdown(f"**{issuer}**")
+            for card in cards:
+                st.markdown(f"- {card}")
+st.caption("카드를 선택하지 않아도 됩니다. 카드 혜택 추천·비교를 포함해 자유롭게 질문해 주세요.")
 
 with st.sidebar:
     st.toggle("개발자 모드", key="dev_mode", help="내부 검증 상태, LLM 호출 정보, 단계별 개발 검증 화면을 표시합니다.")
@@ -363,7 +376,7 @@ if run_mode == "개발 검증":
     st.stop()
 
 search_mode = st.radio("검색 방식", list(MODE_LABELS), format_func=lambda mode: f"{mode}: {MODE_LABELS[mode]}",
-                       horizontal=True, key="search_mode")
+                       horizontal=True, key="search_mode", index=2)
 st.pills("예시 질문", EXAMPLES, key="example", on_change=use_example)
 with st.form("question_form"):
     question = st.text_area("질문", key="question", max_chars=card_graphrag.MAX_QUESTION_CHARS, height=80,
@@ -388,7 +401,9 @@ if submitted:
         if APP_DB_LOG_ENABLED:
             events = [request_event,
                       log_event("RESPONSE", customer_response_for_log(st.session_state.outcome))]
-            persist_app_logs(session_id, request_id, events)
+            persist_app_logs(session_id, request_id, events,
+                             detail_text=outcome_detail_text(st.session_state.outcome),
+                             pdf_evidence_text=outcome_pdf_evidence_text(st.session_state.outcome))
     else:
         request_event = log_event("REQUEST", question)
         cleanup = lambda: None
@@ -421,7 +436,9 @@ if submitted:
                     events.append(log_event("ERROR", error))
                 else:
                     events.append(log_event("RESPONSE", customer_response_for_log(outcome_for_log or {})))
-                persist_app_logs(session_id, request_id, events)
+                persist_app_logs(session_id, request_id, events,
+                                 detail_text=outcome_detail_text(outcome_for_log),
+                                 pdf_evidence_text=outcome_pdf_evidence_text(outcome_for_log))
 
 # 재실행마다 저장된 마지막 결과를 다시 그린다(위젯 조작만 해도 결과가 화면에 남는 이유).
 if st.session_state.get("outcome"):

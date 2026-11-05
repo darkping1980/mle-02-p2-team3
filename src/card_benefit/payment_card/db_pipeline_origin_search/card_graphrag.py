@@ -253,6 +253,8 @@ answer_text 작성 규칙 (고객이 읽는 설명문):
 - uncertain에는 질문의 답에 영향을 주는데 검색 결과로 판단할 수 없는 카드 이용 조건만 쓴다. open_conditions의 내용은 쓰지 않는다.
 - 조건의 branches는 서로 OR, 같은 branch의 atoms는 서로 AND이며, negate=true는 해당 내용을 제외한다는 뜻이다.
 - rules는 계산 규칙이고 limits는 한도 원문이다. 둘을 섞지 않는다. limits가 비어 있으면 한도가 없다고 쓰지 말고 미확인이라고 쓴다.
+- limits에 이 혜택만의 한도와 여러 혜택이 함께 쓰는 통합(공유) 한도가 같이 적혀 있으면 둘을 구분해 모두 쓴다. 이 혜택만의 한도는 이 혜택 할인액의 상한이고, 통합 한도는 limits에 함께 적힌 혜택들의 할인액 합계 상한이다. 통합 한도를 이 혜택만의 한도라고 쓰지 않고, 두 한도를 더하지 않는다. 통합 한도를 쓸 때는 함께 쓰는 혜택 이름도 쓴다.
+- 한도가 실적 구간별로 적혀 있으면 구간과 값을 짝지어 쓴다. 모든 구간에서 같은 값은 구간마다 되풀이하지 않고 구간과 관계없이 같다고 쓴다.
 - open_conditions의 open은 결론을 내리지 않는다. 질문의 답을 바꾸는 내용은 conclusion에도 쓴다.
 - excluded_terms에 있는 낱말은 혜택 적용 대상이 아니다. 해당 혜택이 적용된다고 쓰지 않는다.
 - applied_cards가 비어 있는 공통 혜택은 특정 카드에 적용된다고 쓰지 않는다.
@@ -441,7 +443,10 @@ def find_exclusions(question: str, details: list[dict], read_source=None) -> lis
                 row, verified_by = original, "postgresql"
         tokens = excluded_tokens(row)
         targets = {target.get("target_nm", "").casefold() for rule in row.get("rule_list") or [] for target in rule.get("target_list") or []}
-        matched = [term for term in terms if term.casefold() in tokens and term.casefold() not in targets]
+        # 적용 대상 이름에 들어 있는 낱말(예: 대상 '카카오T(택시)'의 '카카오T')은 제외 문구에 있어도 제외로 보지 않는다.
+        # 후보 검색(BenefitSearchService._rank_with_graph)의 target_terms와 같은 부분 일치 기준이다.
+        matched = [term for term in terms if term.casefold() in tokens
+                   and not any(term.casefold() in target for target in targets)]
         if matched:
             found.append({"benefit_id": detail_ref(detail), "name": benefit.get("bnft_nm"), "terms": matched, "verified_by": verified_by})
     return found
@@ -820,6 +825,20 @@ def _evidence_ids(detail: dict, matches) -> list[str]:
     return list(dict.fromkeys(source(row["evidence"])["evidence_id"] for row in detail["evidence"] if matches(row)))
 
 
+def rule_selection_open(rules: list[dict]) -> bool:
+    """규칙이 둘 이상이고, 한 결제에 어느 규칙이 적용되는지 대상만으로 정해지지 않으면 True.
+
+    규칙마다 적용 대상(targets)이 있고 서로 겹치지 않으면(예: 영역·가맹점 묶음별 규칙) 대상이 규칙을 정하므로 미확정이 아니다.
+    대상이 없는 규칙이 있거나 같은 대상이 여러 규칙에 있으면(예: 결제 금액 구간별 규칙) 기존처럼 미확정이다.
+    """
+    if len(rules) < 2:
+        return False
+    targets = [set(rule.get("targets") or []) for rule in rules]
+    if not all(targets):
+        return True
+    return sum(len(names) for names in targets) != len(set().union(*targets))
+
+
 def unresolved_items(details: list[dict]) -> list[dict]:
     """조회 결과에 나타난 미확정 사항을 LLM 없이 판별한다. kind가 DATA면 자료 상태, CONDITION이면 카드 이용 조건이다."""
     found = [{"kind": "DATA", "text": DATA_STATUS_NOTICE}]
@@ -829,7 +848,7 @@ def unresolved_items(details: list[dict]) -> list[dict]:
         if detail["context"].get("common"):
             found.append({"kind": "DATA", "text": f"{name}: 공통 혜택에는 근거 직접 연결이 없어 동일성이 확인된 기존 행의 근거만 표시합니다."})
         keys = [item["rule"].get("rule_key") for item in detail["rules"]]
-        if len(keys) > 1:      # 여러 규칙의 적용 방식(중첩·택일)은 원문에 없으면 미확정으로 알린다
+        if rule_selection_open(detail["rules"]):      # 여러 규칙의 적용 방식(중첩·택일)은 원문에 없으면 미확정으로 알린다
             found.append({"kind": "CONDITION", "text": f"{name}: {TIER_OPEN}", "topic": TIER_NAME, "benefit": name, "open": TIER_OPEN,
                           "confirmed": benefit.get("bnft_rule_txt"), "intents": TIER_INTENTS, "words": TIER_WORDS,
                           "evidence_ids": _evidence_ids(detail, lambda row, keys=keys: row.get("rule_key") in keys)})
@@ -953,7 +972,7 @@ def rule_conflicts(benefits: list[dict], amount: int | None) -> list[dict]:
     """규칙이 둘 이상인 혜택의 금액 구간과, 결제 금액에 함께 해당하는 규칙을 찾는다(보상액은 계산하지 않는다)."""
     conflicts = []
     for benefit in benefits:
-        if len(benefit["rules"]) < 2:
+        if not rule_selection_open(benefit["rules"]):
             continue
         spends = {group["scope"]: atom for group in benefit["conditions"] for branch in group["branches"]
                   for atom in branch["atoms"] if atom["type"] == "SPEND_REQ" and atom["min_amt"] is not None}

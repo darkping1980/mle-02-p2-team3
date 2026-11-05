@@ -395,6 +395,31 @@ def test_graph_moves_excluded_candidate_back_and_marks_terms():
     assert hits[0].benefit_id == "T" and hits[0].target_terms == ["버스"] and not hits[0].excluded_terms
 
 
+def test_excluded_candidate_moves_back_only_within_top_k():
+    """2026-11-05 ONE PICK KTX 회귀: 제외 낱말이 맞은 후보도 top_k 안에 남아 제외 근거를 조회할 수 있어야 한다."""
+    item = BenefitSearchService(None, None, GraphStub())
+    hits = item._rank_with_graph("KTX도 대중교통 캐시백 돼?", [transit_hit(), other_hit(), other_hit()], [], top_k=2)
+    assert [hit.benefit_id for hit in hits[:2]] == ["O", "T"] and hits[1].excluded_terms == ["ktx"]
+    hits = item._rank_with_graph("버스 혜택", [other_hit(), other_hit(), transit_hit()], [], top_k=2)
+    assert hits[0].benefit_id == "T" and hits[0].target_terms == ["버스"]      # 대상 일치 후보는 창 밖에서도 앞으로 온다
+
+
+class TargetNamedInExclusionStub:
+    """대상 이름(괄호 표기 포함)이 그 대상 전용 제외 문구에도 나오는 혜택(2026-11-05 카카오T 회귀)."""
+    def candidate_relations(self, ids):
+        return {"card_product_item:1:T": {"key": '["card_bnft",1,"T"]', "id": "T", "cards": ["c"], "common_nm": None,
+                                          "targets": ["택시 업종", "카카오T(택시)"],
+                                          "exclusions": ["카카오T 앱 내 택시호출 이외의 서비스(주차, 대리, 해외택시, 펫택시 등)"]}}
+
+
+def test_term_matching_a_target_is_not_an_exclusion_even_if_exclusion_text_has_it():
+    item = BenefitSearchService(None, None, TargetNamedInExclusionStub())
+    hits = item._rank_with_graph("카카오T 택시 할인", [other_hit(), transit_hit()], [])
+    assert hits[0].benefit_id == "T" and hits[0].target_terms == ["카카오t", "택시"] and not hits[0].excluded_terms
+    hits = item._rank_with_graph("펫택시도 되나요", [transit_hit(), other_hit()], [])
+    assert hits[1].benefit_id == "T" and hits[1].excluded_terms == ["펫택시"]         # 대상이 아닌 제외 낱말은 그대로 뒤로
+
+
 def detail_with(rule_list, cond=None):
     benefit = {"card_bnft_id": "T", "bnft_nm": "대중교통", "rule_list": rule_list, "bnft_cond_expr": cond}
     return {"context": {"benefit": {"source_json": json.dumps(benefit, ensure_ascii=False)}}}
@@ -414,6 +439,16 @@ def test_exclusion_is_verified_from_postgres_row_when_available():
 def test_bus_target_is_not_excluded_by_substring():
     assert find_exclusions("버스 캐시백", [detail_with([TRANSIT_RULE])]) == []
     assert find_exclusions("KTX도 대중교통 캐시백 돼?", [detail_with([TRANSIT_RULE])])[0]["terms"] == ["KTX"]
+
+
+KAKAOT_RULE = rule("k", 5, "PERCENT", "PERCENT_OF_TXN", targets=("카카오T(택시)",), target_type="SERVICE",
+                   excl="카카오T 앱 내 택시호출 이외의 서비스(주차, 대리, 해외택시, 펫택시 등)")
+
+
+def test_term_inside_target_name_is_not_excluded_by_its_own_exclusion_text():
+    """2026-11-05 회귀: 대상 '카카오T(택시)'의 제외 문구에 '카카오T'가 있어도 카카오T 질문을 제외로 판정하지 않는다."""
+    assert find_exclusions("카카오T 택시 할인 조건", [detail_with([KAKAOT_RULE])]) == []
+    assert find_exclusions("카카오T 펫택시도 돼?", [detail_with([KAKAOT_RULE])])[0]["terms"] == ["펫택시"]
 
 
 def test_enforced_conclusion_blocks_positive_answer():

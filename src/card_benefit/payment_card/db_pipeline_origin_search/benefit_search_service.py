@@ -155,15 +155,21 @@ class BenefitSearchService:
         if self.neo4j_search is not None and mode in ("A", "C"):
             engines.append("neo4j_name")
         if use_graph and self.neo4j_search is not None:
-            hits = self._rank_with_graph(question, hits, warnings)
+            hits = self._rank_with_graph(question, hits, warnings, top_k)
             engines.append("neo4j_relations")
         unapplied = [hit.bnft_nm for hit in hits[:top_k] if not hit.applied]
         if unapplied:
             warnings.append(f"카드 적용 관계가 없는 공통 혜택: {unapplied}")
         return SearchOutcome(mode, hits[:top_k], (perf_counter() - started) * 1000, merged, warnings, engines)
 
-    def _rank_with_graph(self, question: str, hits: list[SearchHit], warnings: list[str]) -> list[SearchHit]:
-        """관계로 후보를 보강한다. 대상이 맞으면 앞으로, 제외 낱말이 맞으면 뒤로 보낸다. 적용 판단은 하지 않는다."""
+    def _rank_with_graph(self, question: str, hits: list[SearchHit], warnings: list[str],
+                         top_k: int | None = None) -> list[SearchHit]:
+        """관계로 후보를 보강한다. 대상이 맞으면 앞으로, 제외 낱말이 맞으면 뒤로 보낸다. 적용 판단은 하지 않는다.
+
+        ``top_k`` 가 있으면 제외 낱말이 맞은 후보는 상위 top_k 안에서만 뒤로 보낸다. 전체 목록 끝으로 보내면
+        top_k 자르기에서 빠져, "KTX도 대중교통 캐시백 돼?"처럼 제외 대상을 묻는 질문이 그 혜택과 제외 근거를 조회하지 못한다
+        (2026-11-05 ONE PICK KTX 회귀). top_k가 없으면 기존처럼 전체 목록 끝으로 보낸다.
+        """
         terms = [term.casefold() for term in search_terms(question)]
         try:
             relations = self.neo4j_search.candidate_relations([hit.benefit_id for hit in hits])
@@ -178,8 +184,14 @@ class BenefitSearchService:
             names = [name.casefold() for name in row["targets"]]
             excluded = set().union(*(exclusion_tokens(text) for text in row["exclusions"])) if row["exclusions"] else set()
             hit.target_terms = [term for term in terms if any(term in name for name in names)]
-            hit.excluded_terms = [term for term in terms if term in excluded and term not in names]
-        return sorted(hits, key=lambda hit: (bool(hit.excluded_terms), not hit.target_terms))
+            # 적용 대상과 맞은 낱말(target_terms와 같은 부분 일치 기준)은 제외 낱말로 보지 않는다.
+            # 예: 대상 '카카오T(택시)'의 혜택에서 제외 문구 '카카오T 앱 내 택시호출 이외의 서비스'의 '카카오T'.
+            hit.excluded_terms = [term for term in terms if term in excluded and term not in hit.target_terms]
+        if top_k is None:
+            return sorted(hits, key=lambda hit: (bool(hit.excluded_terms), not hit.target_terms))
+        ranked = sorted(hits, key=lambda hit: not hit.target_terms)
+        window, rest = ranked[:top_k], ranked[top_k:]
+        return sorted(window, key=lambda hit: bool(hit.excluded_terms)) + rest
 
     def _confirmed_duplicates(self, hits: list[SearchHit], warnings: list[str]) -> set[tuple[str, str]]:
         """결과에 기존 BRAND_SERVICE 행과 공통 혜택이 함께 있을 때만 동일성 판정을 읽는다."""

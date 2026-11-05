@@ -4,6 +4,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import lru_cache
+import json
 import logging
 import os
 import sys
@@ -27,6 +28,31 @@ _CYPHER_HANDLER_MARK = "card_app_query_capture"
 def log_event(log_type: str, message: str) -> LogEvent:
     """이벤트 발생 시각을 UTC로 찍어 DB 저장 지연과 분리한다."""
     return log_type, message, datetime.now(timezone.utc)
+
+
+def outcome_detail_text(outcome: dict | None) -> str | None:
+    """Serialize the complete result data used by the detail section without rerunning retrieval."""
+    if not outcome:
+        return None
+    answer = outcome.get("answer") or {}
+    detail = {
+        "status": answer.get("status"),
+        "fee_rows": answer.get("fee_rows") or [],
+        "points": answer.get("points") or [],
+        "open_conditions": outcome.get("open_conditions") or [],
+        "uncertain": answer.get("uncertain") or [],
+        "data_notices": outcome.get("data_notices") or [],
+    }
+    if not any(detail[key] for key in ("fee_rows", "points", "open_conditions", "uncertain", "data_notices")):
+        return None
+    return json.dumps(detail, ensure_ascii=False, indent=2, default=str)
+
+
+def outcome_pdf_evidence_text(outcome: dict | None) -> str | None:
+    """Serialize every PDF evidence item exactly from the final GraphRAG state."""
+    if not outcome or not outcome.get("evidence"):
+        return None
+    return json.dumps(outcome["evidence"], ensure_ascii=False, indent=2, default=str)
 
 
 def app_db_log_enabled() -> bool:
@@ -159,7 +185,13 @@ def request_pipeline(base_pipeline, search_mode: str):
     return pipeline, cleanup
 
 
-def persist_app_logs(session_id: str, request_id: str, events: list[LogEvent]) -> None:
+def persist_app_logs(
+    session_id: str,
+    request_id: str,
+    events: list[LogEvent],
+    detail_text: str | None = None,
+    pdf_evidence_text: str | None = None,
+) -> None:
     """요청의 이벤트를 요청당 한 행으로 모아 INSERT한다. 저장 예외는 검색으로 전파하지 않는다."""
     if not events:
         return
@@ -185,17 +217,19 @@ def persist_app_logs(session_id: str, request_id: str, events: list[LogEvent]) -
                 cursor.execute(
                     """INSERT INTO db_pipeline.app_log
                            (session_id, request_id, client_ip, request_text, execution_log,
-                            response_text, error_text, created_at)
-                       VALUES (%s, %s, NULL, %s, %s, %s, %s, %s)
+                            response_text, detail_text, pdf_evidence_text, error_text, created_at)
+                       VALUES (%s, %s, NULL, %s, %s, %s, %s, %s, %s, %s)
                        ON CONFLICT (session_id, request_id) DO UPDATE SET
                            client_ip = EXCLUDED.client_ip,
                            request_text = EXCLUDED.request_text,
                            execution_log = EXCLUDED.execution_log,
                            response_text = EXCLUDED.response_text,
+                           detail_text = EXCLUDED.detail_text,
+                           pdf_evidence_text = EXCLUDED.pdf_evidence_text,
                            error_text = EXCLUDED.error_text,
                            created_at = LEAST(db_pipeline.app_log.created_at, EXCLUDED.created_at)""",
                     (session_id, request_id, request_text, execution_log,
-                     response_text, error_text, created_at),
+                     response_text, detail_text, pdf_evidence_text, error_text, created_at),
                 )
     except Exception as error:
         LOG.warning("검색 로그 저장 실패 (%s); 검색 결과는 유지합니다.", type(error).__name__)
