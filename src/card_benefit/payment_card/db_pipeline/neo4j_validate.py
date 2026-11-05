@@ -28,6 +28,7 @@ COMPARED = {
     "condition_structure": ("owner_cd", "card_id", "rule_key", "branch_no", "atom_seq", "atom_key", "cond_type_cd", "negate_yn",
                             "cond_min_amt", "cond_raw_txt"),
     "evidence_links": ("ev_link_id", "ev_subject_cd", "rule_key", "ev_item_cd", "ev_item_key", "evidence_id", "start_pos", "end_pos"),
+    "common_evidence_links": ("card_common_id", "card_common_bnft_id", "evidence_id", "ev_subject_cd", "ev_item_key"),
     "common_applies": ("card_common_id", "card_common_bnft_id", "card_id"),
     "rule_targets": ("card_id", "card_bnft_id", "rule_key", "target_type_cd", "target_key", "target_nm"),
 }

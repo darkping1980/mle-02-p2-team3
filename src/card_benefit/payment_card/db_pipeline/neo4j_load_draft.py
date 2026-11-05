@@ -80,6 +80,8 @@ def node_properties(node):
     if node["label"] == PREFIX + "card_bnft":
         # 혜택도 카드 상품 항목이다. 기존 key·속성은 그대로 두고 항목 ID·유형만 더한다.
         props["card_product_item_id"], props["item_type_cd"] = row.get("card_bnft_id"), "BENEFIT"
+    # 검색 투영(임베딩·검색 텍스트·동일성 판정 상태). source_json이 아닌 변환기의 별도 값에서만 온다.
+    props.update(node.get("search") or {})
     return props
 
 
@@ -90,7 +92,7 @@ def prepare(graph):
     for n in graph.nodes.values():
         if n["label"] not in NODE_LABELS:
             raise ValueError("unexpected node scope")
-        nodes.append({"label": n["label"], "pk": n["pk"], "props": node_properties(n)})
+        nodes.append({"label": n["label"], "pk": n["pk"], "props": node_properties(n)})   # search 투영 속성 포함
     for k, e in graph.edges.items():
         if e["type"] not in REL_TYPES:
             raise ValueError("unexpected relationship scope")
@@ -106,6 +108,9 @@ def relationship_properties(edge):
               "approval_status_cd", "status", "bnft_cd")
     if edge["type"] == PREFIX + "related_to":
         fields += ("relation_key", "rel_type_cd", "rel_priority", "to_bnft_id")
+    if edge["type"] == PREFIX + "supported_by" and original.get("link_source"):
+        # 공통 혜택 근거(검색 투영). card_evidence_link 행이 아니므로 출처와 소유 공통 혜택·근거를 속성으로 둔다.
+        fields += ("link_source", "card_common_id", "card_common_bnft_id", "evidence_id")
     return {k: v for k, v in original.items() if k in fields and isinstance(v, (str, int, float, bool))}
 
 

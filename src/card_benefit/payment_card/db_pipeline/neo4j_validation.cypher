@@ -83,9 +83,17 @@ RETURN CASE WHEN owner:dp_card_product THEN 'CARD' WHEN owner:dp_bnft_rule THEN 
 
 // name: evidence_links
 // 근거 연결을 PostgreSQL card_evidence_link와 비교한다. 연결 행 하나가 관계 하나다.
+// 공통 혜택 근거(검색 투영, link_source 있음)는 card_evidence_link 행이 아니므로 common_evidence_links에서 따로 비교한다.
 MATCH (owner:dp_node)-[l:dp_supported_by]->(e:dp_card_source_evidence)
+WHERE l.link_source IS NULL
 RETURN l.ev_link_id AS ev_link_id, l.ev_subject_cd AS ev_subject_cd, owner.rule_key AS rule_key,
        l.ev_item_cd AS ev_item_cd, l.ev_item_key AS ev_item_key, e.evidence_id AS evidence_id, e.start_pos AS start_pos, e.end_pos AS end_pos
+
+// name: common_evidence_links
+// 공통 혜택 근거(검색 투영)를 PostgreSQL 추출 경로(neo4j_validation.sql 같은 이름)와 비교한다.
+MATCH (c:dp_card_common_bnft)-[l:dp_supported_by {link_source: 'COMMON_STG'}]->(e:dp_card_source_evidence)
+RETURN c.card_common_id AS card_common_id, c.card_common_bnft_id AS card_common_bnft_id, e.evidence_id AS evidence_id,
+       l.ev_subject_cd AS ev_subject_cd, l.ev_item_key AS ev_item_key
 
 // name: common_applies
 // 공통 혜택 적용 관계를 PostgreSQL card_common_bnft_apply와 비교한다.

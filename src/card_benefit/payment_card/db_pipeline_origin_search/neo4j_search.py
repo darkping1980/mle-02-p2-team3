@@ -94,6 +94,102 @@ SECTION_QUERIES = {"rules": RULE_QUERY, "conditions": CONDITION_QUERY, "limits":
                    "evidence": EVIDENCE_QUERY}
 ALL_SECTIONS = tuple(SECTION_QUERIES)
 
+# region 배치 조회 (P3, 2026-11-05) — 같은 named query를 한 문장으로 묶어 네트워크 왕복을 줄인다. 데이터 캐시는 없다.
+# 각 named query 본문을 그대로 CALL 서브쿼리에 넣고 ``$key``/``$keyword`` 만 바깥 변수로 바꾼다. 조회 조건·정렬은 원문 그대로다.
+# 반환 행은 원래 RETURN 열 순서대로 다시 만든다. 근거 행만 로직이 읽는 열(owner_labels, rule_key, link, evidence)로 줄인다.
+# 청크·페이지·문서의 전체 속성은 전송하지 않지만 MATCH 경로(근거→청크→페이지→문서)는 그대로라 같은 근거만 조회된다.
+CONTEXT_FIELDS = ("card", "benefit", "card_sources", "common", "common_docs", "card_labels", "benefit_labels")
+SECTION_FIELDS = {"rules": ("rule", "labels", "targets"),
+                  "conditions": ("owner_cd", "rule_key", "expression", "branch_no", "atom", "labels"),
+                  "limits": ("limit_text",),
+                  "evidence": ("owner_labels", "rule_key", "link", "evidence")}
+SECTION_PRESENT = {"rules": "rule", "conditions": "atom", "limits": "limit_text", "evidence": "evidence"}   # 항상 값이 있는 열
+LIST_FIELDS = ("key", "name", "id", "status")
+CATALOG_FIELDS = {"catalog": ("key", "name", "id", "status", "card_source", "targets", "payment_min_amounts"),
+                  "items": ("key", "name", "id", "status", "item_type", "item_source", "card_source"),
+                  "commons": ("key", "name", "id", "status", "common_nm", "cards")}
+
+
+def _subquery(query: str, variable: str | None = None) -> str:
+    """named query를 서브쿼리 본문으로 쓴다. ``$variable`` 파라미터만 같은 이름의 바깥 변수로 바꾼다."""
+    body = query.replace(f"${variable}", variable) if variable else query
+    if "$" in body:
+        raise ValueError("배치 서브쿼리에 바꾸지 않은 파라미터가 남았습니다")
+    return body
+
+
+def _map(fields: tuple[str, ...]) -> str:
+    return "{" + ", ".join(f"{field}: {field}" for field in fields) + "}"
+
+
+def evidence_query_for(key: str) -> str:
+    """get_detail과 같은 규칙으로 key 종류별 근거 Cypher를 고른다."""
+    return COMMON_EVIDENCE_QUERY if is_common_key(key) else ITEM_EVIDENCE_QUERY if is_item_key(key) else EVIDENCE_QUERY
+
+
+def detail_batch_query(evidence_query: str, sections: tuple[str, ...]) -> str:
+    """여러 혜택 key의 context + sections를 한 문장으로 조회한다(근거 Cypher가 같은 key끼리)."""
+    lines = ["UNWIND $keys AS key", "CALL (key) {", _subquery(CONTEXT_QUERY, "key"), "}",
+             f"WITH key, collect({_map(CONTEXT_FIELDS)}) AS context"]
+    carried = ["key", "context"]
+    for name, query in SECTION_QUERIES.items():
+        if name not in sections:
+            continue
+        query = evidence_query if name == "evidence" else query
+        lines += ["OPTIONAL CALL (key) {", _subquery(query, "key"), "}",
+                  f"WITH {', '.join(carried)}, [x IN collect({_map(SECTION_FIELDS[name])}) WHERE x.{SECTION_PRESENT[name]} IS NOT NULL] AS {name}"]
+        carried.append(name)
+    lines.append("RETURN " + ", ".join(carried))
+    return "\n".join(lines)
+
+
+LIST_BATCH_QUERY = "\n".join(["UNWIND $keywords AS keyword", "CALL (keyword) {", _subquery(LIST_QUERY, "keyword"), "}",
+                              "RETURN keyword, " + ", ".join(LIST_FIELDS)])
+CATALOG_BATCH_QUERY = "\n".join([
+    "OPTIONAL CALL () {", CATALOG_QUERY, "}",
+    f"WITH [x IN collect({_map(CATALOG_FIELDS['catalog'])}) WHERE x.key IS NOT NULL] AS catalog",
+    "OPTIONAL CALL () {", ITEM_CATALOG_QUERY, "}",
+    f"WITH catalog, [x IN collect({_map(CATALOG_FIELDS['items'])}) WHERE x.key IS NOT NULL] AS items",
+    "OPTIONAL CALL () {", COMMON_CATALOG_QUERY, "}",
+    f"WITH catalog, items, [x IN collect({_map(CATALOG_FIELDS['commons'])}) WHERE x.key IS NOT NULL] AS commons",
+    "RETURN catalog, items, commons"])
+
+
+def _ordered(row: dict, fields: tuple[str, ...]) -> dict:
+    """map으로 받은 행을 원래 RETURN 열 순서의 dict로 만든다."""
+    return {field: row[field] for field in fields}
+
+
+def _finish_context(context: dict) -> dict:
+    """get_detail·get_details 공통: 적용 카드가 없거나 여럿이면 표시용 카드 이름을 합친다."""
+    sources = context.get("card_sources")
+    if sources is not None and len(sources) != 1:
+        names = [source({"source_json": item}).get("product_nm") for item in sources]
+        context["card"] = {"source_json": json.dumps({"product_nm": ", ".join(names) or "적용 카드 미확인"}, ensure_ascii=False)}
+    return context
+
+
+def catalog_rows(catalog: list[dict], items: list[dict], commons: list[dict]) -> list[dict]:
+    """``list_catalog`` 의 행 처리. 세 카탈로그 Cypher 결과(행 순서 그대로)를 질문 해석용 한 목록으로 만든다."""
+    rows = catalog
+    for row in rows:
+        row["card"] = source({"source_json": row.pop("card_source")}).get("product_nm", "미확인")
+        row["item_type"] = "BENEFIT"
+    for row in items:
+        card = source({"source_json": row.pop("card_source")})
+        item = source({"source_json": row.pop("item_source")})
+        lines = (item.get("item_data") or {}).get("fee_lines") or []
+        rows.append({**row, "card": card.get("product_nm", "미확인"), "issuer": card.get("issuer"),
+                     "card_id": card.get("card_id"), "targets": [], "payment_min_amounts": [],
+                     # 같은 사실을 담은 기존 혜택 참조(예: 가족카드 연회비 면제). 답변에서 한 번만 쓴다.
+                     "same_fact_refs": [line["same_fact_item_ref"] for line in lines if line.get("same_fact_item_ref")]})
+    for row in commons:
+        cards = row.pop("cards")
+        rows.append({**row, "card": ", ".join(cards) or "적용 카드 미확인", "targets": [], "payment_min_amounts": [],
+                     "item_type": "COMMON_BENEFIT"})
+    return rows
+# endregion
+
 
 def source(props: dict) -> dict:
     """Decode the original JSON; never infer a missing value as approved."""
@@ -192,6 +288,10 @@ class Neo4jSearch:
             neo4j 드라이버 예외(연결·인증 등)를 그대로 전파한다. CardGraphRAG 노드가 잡아 NEO4J_FAILED로 바꾼다.
         """
         statement_id = STATEMENT_IDS.get(query, "card.unregistered")
+        return self._run(statement_id, query, STATEMENTS.get(statement_id, ("", "미등록"))[1], params)
+
+    def _run(self, statement_id: str, query: str, path: str, params: dict) -> list[dict]:
+        """``_query`` 의 실행부. 배치 문장(STATEMENTS에 없는 생성 문장)도 식별자·경로를 붙여 같은 방식으로 실행·기록한다."""
         label = f"{REQUEST_ID.get()}/{statement_id}"
         detail = DETAIL_LOG.get() or CARD_LOG.logger.isEnabledFor(logging.DEBUG)  # 전문과 레코드는 DEBUG·검증 모드에서만
         if detail:
@@ -200,8 +300,7 @@ class Neo4jSearch:
         started = perf_counter()
         with self.driver.session(database=self.database, default_access_mode=READ_ACCESS) as session:
             rows = session.execute_read(lambda tx: [record.data() for record in tx.run(query, **params)])
-        CARD_LOG.log_summary("CYPHER", label, params=CARD_LOG.sanitize(params), rows=len(rows),
-                             path=STATEMENTS.get(statement_id, ("", "미등록"))[1],
+        CARD_LOG.log_summary("CYPHER", label, params=CARD_LOG.sanitize(params), rows=len(rows), path=path,
                              elapsed_ms=(perf_counter() - started) * 1000)
         if detail:
             CARD_LOG.log_result_data(label, [flatten_record(row) for row in rows])
@@ -217,28 +316,49 @@ class Neo4jSearch:
             common_catalog 공통 혜택(dp_card_common_bnft) 전체와 적용 카드 이름 → item_type="COMMON_BENEFIT"
                            (적용 관계가 없으면 card="적용 카드 미확인")
         각 행의 key는 그래프 노드 key(JSON 배열 문자열)이며, retrieve의 get_detail 인자로 그대로 쓰인다.
+
+        세 Cypher는 서브쿼리로 묶어 한 문장(왕복 1회)으로 실행한다(P3). 조회 조건·정렬·행 처리는 기존과 같다.
         """
-        rows = self._query(CATALOG_QUERY)
-        for row in rows:
-            row["card"] = source({"source_json": row.pop("card_source")}).get("product_nm", "미확인")
-            row["item_type"] = "BENEFIT"
-        for row in self._query(ITEM_CATALOG_QUERY):
-            card = source({"source_json": row.pop("card_source")})
-            item = source({"source_json": row.pop("item_source")})
-            lines = (item.get("item_data") or {}).get("fee_lines") or []
-            rows.append({**row, "card": card.get("product_nm", "미확인"), "issuer": card.get("issuer"),
-                         "card_id": card.get("card_id"), "targets": [], "payment_min_amounts": [],
-                         # 같은 사실을 담은 기존 혜택 참조(예: 가족카드 연회비 면제). 답변에서 한 번만 쓴다.
-                         "same_fact_refs": [line["same_fact_item_ref"] for line in lines if line.get("same_fact_item_ref")]})
-        for row in self._query(COMMON_CATALOG_QUERY):
-            cards = row.pop("cards")
-            rows.append({**row, "card": ", ".join(cards) or "적용 카드 미확인", "targets": [], "payment_min_amounts": [],
-                         "item_type": "COMMON_BENEFIT"})
-        return rows
+        batch = self._run("card.catalog_batch", CATALOG_BATCH_QUERY, "card.catalog + card.item_catalog + card.common_catalog", {})[0]
+        return catalog_rows(*([_ordered(row, CATALOG_FIELDS[name]) for row in batch[name]] for name in ("catalog", "items", "commons")))
 
     def list_benefits(self, keyword: str = "") -> list[dict]:
         """혜택명에 keyword가 들어간 카드·공통 혜택을 찾는다(BenefitSearchService._keyword의 점수 보강용)."""
         return self._query(LIST_QUERY, keyword=keyword.strip())
+
+    def list_benefits_many(self, keywords: list[str]) -> dict[str, list[dict]]:
+        """``list_benefits`` 를 낱말 여러 개에 대해 한 문장으로 실행한다. 낱말 → list_benefits(낱말)와 같은 행 목록(P3)."""
+        terms = list(dict.fromkeys(keyword.strip() for keyword in keywords))
+        result = {term: [] for term in terms}
+        if not terms:
+            return result
+        for row in self._run("card.list_batch", LIST_BATCH_QUERY, "card.list × 낱말", {"keywords": terms}):
+            result[row["keyword"]].append(_ordered(row, LIST_FIELDS))
+        return result
+
+    def get_details(self, keys: list[str], sections: tuple[str, ...] = ALL_SECTIONS) -> dict[str, dict | None]:
+        """여러 혜택의 ``get_detail`` 을 근거 Cypher 종류별 한 문장으로 조회한다(P3). key → get_detail(key)와 같은 구조.
+
+        혜택 N개 × (context + sections) 문장을 1문장(혜택·연회비 항목·공통 혜택이 섞이면 종류 수만큼)으로 줄인다.
+        근거 행은 로직이 읽는 열(owner_labels, rule_key, link, evidence)만 담는다.
+        """
+        keys = list(dict.fromkeys(keys))
+        result: dict[str, dict | None] = {key: None for key in keys}
+        groups: dict[str, list[str]] = {}
+        for key in keys:
+            groups.setdefault(evidence_query_for(key), []).append(key)
+        names = [name for name in SECTION_QUERIES if name in sections]
+        for evidence_query, group in groups.items():
+            evidence_id = STATEMENT_IDS.get(evidence_query, "card.evidence")
+            path = "card.context + " + " + ".join(evidence_id if name == "evidence" else f"card.{name}" for name in names)
+            for row in self._run("card.detail_batch", detail_batch_query(evidence_query, sections), path, {"keys": group}):
+                if not row["context"]:
+                    continue
+                detail = {"context": _finish_context(_ordered(row["context"][0], CONTEXT_FIELDS))}
+                for name in SECTION_QUERIES:
+                    detail[name] = [_ordered(item, SECTION_FIELDS[name]) for item in row[name]] if name in sections else []
+                result[row["key"]] = detail
+        return result
 
     def candidate_relations(self, ids: list[str]) -> dict[str, dict]:
         """검색 후보별 카드·대상·제외 문구를 관계로 찾는다."""
@@ -270,11 +390,7 @@ class Neo4jSearch:
         context = self._query(CONTEXT_QUERY, key=key)
         if not context:
             return None
-        detail = {"context": context[0]}
-        sources = context[0].get("card_sources")
-        if sources is not None and len(sources) != 1:   # 적용 카드가 없거나 여럿이면 표시용 이름을 합친다.
-            names = [source({"source_json": item}).get("product_nm") for item in sources]
-            context[0]["card"] = {"source_json": json.dumps({"product_nm": ", ".join(names) or "적용 카드 미확인"}, ensure_ascii=False)}
+        detail = {"context": _finish_context(context[0])}
         for name, query in SECTION_QUERIES.items():
             if name == "evidence" and is_common_key(key):
                 query = COMMON_EVIDENCE_QUERY

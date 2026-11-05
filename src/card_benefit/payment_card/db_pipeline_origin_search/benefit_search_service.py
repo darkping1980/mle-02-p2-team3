@@ -222,8 +222,13 @@ class BenefitSearchService:
         scores = {entity_ref(hit.key): hit.keyword_score for hit in rows}      # 카드·공통 혜택 점수를 따로 센다.
         if self.neo4j_search is not None:
             try:
+                # 낱말별 혜택명 검색. 묶음 조회를 지원하면 한 문장(왕복 1회)으로 낱말 전체를 조회한다(P3). 점수 계산은 같다.
+                if getattr(type(self.neo4j_search), "list_benefits_many", None) is not None:
+                    by_term = self.neo4j_search.list_benefits_many(terms)
+                else:
+                    by_term = {term: self.neo4j_search.list_benefits(term) for term in terms}
                 for term in terms:
-                    for row in self.neo4j_search.list_benefits(term):
+                    for row in by_term.get(term, []):
                         ref = entity_ref(row["key"], row["id"])
                         if ref in scores:
                             scores[ref] += 1

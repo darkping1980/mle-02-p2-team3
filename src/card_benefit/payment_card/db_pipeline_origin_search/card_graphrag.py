@@ -338,6 +338,15 @@ def create_benefit_search(neo4j_search=None):
     return BenefitSearchService(session, OpenAIEmbedder(), neo4j_search)
 
 
+def create_neo4j_benefit_search(neo4j_search, embedder=None, **options):
+    """N(Neo4j 단일 하이브리드 검색)의 후보 검색. PostgreSQL에 접속하지 않는다. 질문 임베딩은 B·C와 같은 OpenAIEmbedder다."""
+    from card_benefit.payment_card.db_pipeline.embedding_service import OpenAIEmbedder
+    from .neo4j_hybrid_search import Neo4jBenefitSearch
+
+    load_project_environment()
+    return Neo4jBenefitSearch(neo4j_search, embedder if embedder is not None else OpenAIEmbedder(), **options)
+
+
 def card_model() -> str:
     """사용할 모델 ID를 한 곳에서 결정한다."""
     return os.getenv("CARD_SEARCH_MODEL") or DEFAULT_MODEL
@@ -1700,17 +1709,27 @@ class CardGraphRAG:
         CARD_LOG.log_summary("RETRIEVE START", request_id, statements=statements, benefit_ids=parameters["benefit_ids"])
         details, missing, trace = [], [], []
         try:
+            # 그래프 key 전체를 묶음 조회로 한 번에 읽는다(P3: 혜택 N개 × 상세 Cypher 5개 → 1문장). 지원하지 않으면 key마다 읽는다.
+            graph_keys = [key for key in parameters["benefit_keys"] if not key.startswith("pg:")]
+            batch = (self.search.get_details(graph_keys, sections)
+                     if graph_keys and getattr(type(self.search), "get_details", None) is not None else None)
             for key in parameters["benefit_keys"]:
                 # 그래프에 없는 혜택(공통 혜택 등)은 검색 후보의 pg: 키로 PostgreSQL에서 읽는다.
-                source_search = self.benefit_search if key.startswith("pg:") else self.search
-                detail = source_search.get_detail(key, sections)
+                if key.startswith("pg:"):
+                    detail = self.benefit_search.get_detail(key, sections)
+                elif batch is not None:
+                    detail = batch.get(key)
+                else:
+                    detail = self.search.get_detail(key, sections)
                 # 그래프의 공통 혜택 근거는 dp_same_as가 있을 때만 있다. 0건이면 같은 공통서비스·혜택 ID의 PostgreSQL 근거만 읽는다.
                 fallback = postgresql_common_key(key) if detail is not None and "evidence" in sections and not detail["evidence"] else None
                 if fallback and self.benefit_search is not None:
                     original = self.benefit_search.get_detail(fallback, ("evidence",))
                     detail["evidence"] = original["evidence"] if original else []
                     if detail["evidence"]:
-                        detail["evidence_source"] = "postgresql_fallback"
+                        # N(Neo4j 단일 검색)은 적재된 공통 혜택 근거 연결(COMMON_STG)을, B·C는 PostgreSQL 대체 조회를 쓴다.
+                        detail["evidence_source"] = ("neo4j_common_link" if getattr(self.benefit_search, "engine", None) == "neo4j"
+                                                     else "postgresql_fallback")
                 if detail is not None:
                     detail["entity_ref"] = entity_ref(key)
                 (details if detail is not None else missing).append(detail if detail is not None else key)
@@ -1724,7 +1743,8 @@ class CardGraphRAG:
                                                     "type": type(error).__name__}}
         evidence = collect_evidence(details, intent)
         read_source = None
-        if self.benefit_search is not None:
+        # N(Neo4j 단일 검색)은 질문 시점에 PostgreSQL을 읽지 않는다. 제외 판정은 적재 시 원장과 대조된 그래프 source_json으로 한다.
+        if self.benefit_search is not None and getattr(self.benefit_search, "reads_postgresql_source", True):
             read_source = lambda card_id, bnft_id: self.benefit_search.repository.one(  # noqa: E731
                 "select_card_bnft_detail", CARD_ID=card_id, BNFT_ID=bnft_id)
         try:

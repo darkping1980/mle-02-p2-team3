@@ -48,6 +48,40 @@ COMMON_LABEL = "dp_node"                                    # dp_ 전체를 가�
 SEARCH_COLUMNS = ("bnft_search_txt", "bnft_embedding")      # 그래프 원본이 아닌 검색용 컬럼
 MAPPER_ROOT = Path(__file__).resolve().parent
 
+# region 검색 투영 (2026-11-05) — Neo4j 단일 검색용. source_json(원본)은 그대로 두고 별도 속성·연결로 올린다.
+# 임베딩·검색 텍스트는 source_json에 넣지 않는다(SEARCH_COLUMNS 제거 정책 유지). 노드 entry의 "search" 속성으로 둔다.
+SEARCH_PROPS = ("embedding", "embedding_dim", "embedding_model", "embedding_run_id", "search_text")
+BRAND_PROPS = ("brand_compare_status", "brand_compare_issues", "brand_compare_common_key")
+PROJECTION_PROPS = SEARCH_PROPS + BRAND_PROPS
+EMBEDDING_DIM = 1536                       # card_product_item.item_embedding / card_common_bnft.bnft_embedding = vector(1536)
+# 공통 혜택 근거: GraphRAG의 PostgreSQL 대체 조회(embedding_repository.select_common_bnft_evidence)와 같은 경로·조건.
+# card_evidence_link가 공통 혜택을 담지 못해 문서 → 추출 스테이징(대표 혜택) → 원문 근거로 찾는다. 공통 혜택·근거 쌍마다 1행.
+COMMON_LINK_SOURCE = "COMMON_STG"
+COMMON_EVIDENCE_SQL = """
+SELECT DISTINCT b.card_common_id, b.card_common_bnft_id, e.evidence_id
+FROM db_pipeline.card_common_bnft b
+JOIN db_pipeline.card_common_doc d ON d.card_common_id = b.card_common_id
+JOIN db_pipeline.card_extr_stg s
+  ON s.card_doc_id = d.card_doc_id AND s.stg_kind_cd = 'BENEFIT' AND s.stg_raw_item->>'bnft_nm' = b.bnft_nm
+ AND s.stg_sql_check_cd IS NOT NULL AND s.stg_parent_card_extr_stg_id IS NULL
+JOIN db_pipeline.card_source_evidence e ON e.card_extr_stg_id = s.card_extr_stg_id
+ORDER BY b.card_common_id, b.card_common_bnft_id, e.evidence_id"""
+# 저장 벡터를 만든 실행. GraphRAG의 select_last_embedding_run(질문 모델 대조)과 같은 조건.
+EMBEDDING_RUN_SQL = """
+SELECT card_ai_run_id, run_model_nm FROM db_pipeline.card_ai_run
+WHERE run_stage_cd = 'EMBED' AND run_status IN ('SUCCEEDED', 'PARTIAL')
+ORDER BY run_start_date DESC, card_ai_run_id DESC LIMIT 1"""
+
+
+def parse_vector(value) -> list[float]:
+    """pgvector 값(문자열 '[...]', numpy 배열 등)을 float 목록으로 바꾼다. 값은 바꾸지 않는다."""
+    if isinstance(value, str):
+        return [float(item) for item in json.loads(value)]
+    if hasattr(value, "tolist"):
+        return [float(item) for item in value.tolist()]
+    return [float(item) for item in value]
+# endregion
+
 # 라벨별 식별 속성. 테이블은 PostgreSQL PK, JSONB에서 나온 노드는 소유자 PK와 JSON 내부 키로 만든다.
 PK_FIELDS = {
     "card_product": ("card_id",),
@@ -167,10 +201,20 @@ def load_snapshot(conn):
         for name, sql in queries.items():
             cur.execute(sql)
             out[name] = cur.fetchall()
-        for name in ("benefits", "common_benefits"):
+        # 검색 투영: 저장된 임베딩·검색 텍스트를 원본 행에서 떼어 따로 보관한다(재생성 없음). 원본 행에서는 기존대로 지운다.
+        projection = {"benefits": [], "common_benefits": []}
+        for name, keys in (("benefits", ("card_id", "card_bnft_id")), ("common_benefits", ("card_common_id", "card_common_bnft_id"))):
             for row in out[name]:
+                if row.get("bnft_embedding") is not None:
+                    projection[name].append({**{k: row[k] for k in keys}, "embedding": parse_vector(row["bnft_embedding"]),
+                                             "search_text": row.get("bnft_search_txt")})
                 for column in SEARCH_COLUMNS:
                     row.pop(column, None)
+        out["search_projection"] = projection
+        cur.execute(EMBEDDING_RUN_SQL)
+        out["embedding_run"] = cur.fetchone()
+        cur.execute(COMMON_EVIDENCE_SQL)
+        out["common_evidence_links"] = cur.fetchall()
         cur.execute(brand_sql)
         compared = []
         for row in cur.fetchall():
@@ -207,6 +251,11 @@ def linked_evidence(snapshot):
     return [row for row in snapshot["evidence"] if row["evidence_id"] in linked]
 
 
+def common_evidence_ids(snapshot) -> set:
+    """공통 혜택 근거 연결(검색 투영)이 가리키는 원문 근거 ID."""
+    return {link["evidence_id"] for link in snapshot.get("common_evidence_links", [])}
+
+
 def expected_counts(snapshot) -> tuple[dict, dict]:
     """그래프를 만들지 않고 원천 행만으로 예상 건수를 계산한다."""
     rules = [rule for row in snapshot["benefits"] for rule in row.get("rule_list") or []]
@@ -214,8 +263,9 @@ def expected_counts(snapshot) -> tuple[dict, dict]:
     expressions = [expression for _, expression in expressions_of(snapshot)]
     branches = [branch for expression in expressions for branch in expression.get("branches", [])]
     atoms = [atom for branch in branches for atom in branch.get("atoms", [])]
+    evidence_ids = {row["evidence_id"] for row in linked_evidence(snapshot)} | common_evidence_ids(snapshot)
     nodes = {"card_product": len(snapshot["products"]), "card_doc": len(snapshot["documents"]), "card_doc_page": len(snapshot["pages"]),
-             "card_doc_chunk": len(snapshot["chunks"]), "card_source_evidence": len(linked_evidence(snapshot)),
+             "card_doc_chunk": len(snapshot["chunks"]), "card_source_evidence": len(evidence_ids),
              "card_bnft": len(snapshot["benefits"]), "bnft_rule": len(rules),
              "rule_target": len({(t.get("target_type_cd"), t.get("target_key")) for t in targets}),
              "cond_expr": len(expressions), "cond_branch": len(branches), "cond_atom": len(atoms),
@@ -224,7 +274,8 @@ def expected_counts(snapshot) -> tuple[dict, dict]:
     relationships = {"has_document": len(snapshot["product_docs"]) + len(snapshot["common_docs"]),
                      "has_benefit": len(snapshot["benefits"]), "has_rule": len(rules), "targets": len(targets),
                      "has_expr": len(expressions), "has_branch": len(branches), "has_atom": len(atoms),
-                     "supported_by": len(snapshot["links"]), "in_chunk": len(linked_evidence(snapshot)),
+                     "supported_by": len(snapshot["links"]) + len(snapshot.get("common_evidence_links", [])),
+                     "in_chunk": len(evidence_ids),
                      "on_page": len(snapshot["chunks"]), "in_document": len(snapshot["pages"]),
                      "has_common_benefit": len(snapshot["common_applies"]), "belongs_to": len(snapshot["common_benefits"]),
                      "same_as": sum(row["status"] == "SAME" for row in snapshot["brand_compare"]),
@@ -407,6 +458,58 @@ def build(snapshot):
         g.edge("supported_by", owner, evidence[link["evidence_id"]], link)
     # endregion
 
+    # region 검색 투영: 공통 혜택 근거, 임베딩·검색 텍스트, 브랜드 동일성 판정 상태 (Neo4j 단일 검색용)
+    # 공통 혜택 근거는 GraphRAG가 질문 시점에 PostgreSQL로 대체 조회하던 것과 같은 연결이다. 근거 주체는 그 대체 조회와 같은
+    # 'BNFT'(혜택 자체의 근거)이고, card_evidence_link 행과 구분하려고 link_source를 둔다.
+    evidence_rows = {row["evidence_id"]: row for row in snapshot["evidence"]}
+    for link in snapshot.get("common_evidence_links", []):
+        pair = (link["card_common_id"], link["card_common_bnft_id"])
+        row = evidence_rows.get(link["evidence_id"])
+        if pair not in common_benefits or row is None:
+            errors.append(f"공통 혜택 근거 대상 없음: {pair}/{link['evidence_id']}")
+            continue
+        if link["evidence_id"] not in evidence:
+            chunk = (row["card_doc_id"], row["page_no"], row["card_doc_chunk_id"])
+            if chunk not in chunks:
+                errors.append(f"공통 혜택 근거의 청크 없음: {link['evidence_id']}")
+                continue
+            evidence[link["evidence_id"]] = g.node("card_source_evidence", [link["evidence_id"]], row)
+            g.edge("in_chunk", evidence[link["evidence_id"]], chunks[chunk], {})
+        g.edge("supported_by", common_benefits[pair], evidence[link["evidence_id"]],
+               {"link_source": COMMON_LINK_SOURCE, "ev_subject_cd": "BNFT", "ev_item_key": "-",
+                "card_common_id": pair[0], "card_common_bnft_id": pair[1], "evidence_id": link["evidence_id"]})
+    run = snapshot.get("embedding_run")
+    projection = snapshot.get("search_projection", {})
+    for name, owners, keys in (("benefits", benefits, ("card_id", "card_bnft_id")),
+                               ("common_benefits", common_benefits, ("card_common_id", "card_common_bnft_id"))):
+        for item in projection.get(name, []):
+            node_key = owners.get(tuple(item[k] for k in keys))
+            if node_key is None:
+                errors.append(f"임베딩 대상 노드 없음: {name} {[item[k] for k in keys]}")
+                continue
+            if len(item["embedding"]) != EMBEDDING_DIM or not item.get("search_text"):
+                errors.append(f"임베딩 차원·검색 텍스트 오류: {[item[k] for k in keys]}")
+                continue
+            if run is None:
+                errors.append("저장 벡터의 임베딩 실행 기록이 없습니다")
+                continue
+            g.nodes[node_key].setdefault("search", {}).update({
+                "embedding": item["embedding"], "embedding_dim": EMBEDDING_DIM, "embedding_model": run["run_model_nm"],
+                "embedding_run_id": run["card_ai_run_id"], "search_text": item["search_text"]})
+    # 브랜드 동일성 판정: SAME만 same_as 관계가 되고, 판정 상태(SAME·REVIEW·NO_COMMON 등)와 사유는 혜택 노드에 남긴다.
+    seen_compare = set()
+    for row in snapshot["brand_compare"]:
+        node_key = benefits.get((row["card_id"], row["card_bnft_id"]))
+        if node_key is None or node_key in seen_compare:
+            errors.append(f"동일성 판정 대상 없음 또는 중복: {row['card_bnft_id']}")
+            continue
+        seen_compare.add(node_key)
+        props = {"brand_compare_status": row["status"], "brand_compare_issues": canonical(row["issues"])}
+        if row.get("card_common_id") is not None:
+            props["brand_compare_common_key"] = key("card_common_bnft", row["card_common_id"], row["card_common_bnft_id"])
+        g.nodes[node_key].setdefault("search", {}).update(props)
+    # endregion
+
     # region 사후 검증: 끝점·건수·JSON 원본 대조
     stats = g.validate()
     node_counts, relationship_counts = expected_counts(snapshot)
@@ -427,7 +530,14 @@ def build(snapshot):
     stats["expected"] = {"nodes": node_counts, "relationships": relationship_counts}
     # 그래프에 올리지 않은 근거(등록 전 추출 후보의 인용). 건수와 ID만 보고한다.
     stats["unlinked_evidence"] = sorted({row["evidence_id"] for row in snapshot["evidence"]} - set(evidence))
-    stats["common_benefits_without_direct_evidence"] = [row["card_common_bnft_id"] for row in snapshot["common_benefits"]]
+    linked_commons = {(link["card_common_id"], link["card_common_bnft_id"]) for link in snapshot.get("common_evidence_links", [])}
+    stats["common_benefits_without_direct_evidence"] = [row["card_common_bnft_id"] for row in snapshot["common_benefits"]
+                                                        if (row["card_common_id"], row["card_common_bnft_id"]) not in linked_commons]
+    stats["search_projection"] = {
+        "benefit_embeddings": len(projection.get("benefits", [])), "common_embeddings": len(projection.get("common_benefits", [])),
+        "embedding_run": run, "common_evidence_links": len(snapshot.get("common_evidence_links", [])),
+        "common_evidence_only_nodes": len(common_evidence_ids(snapshot) - {row["evidence_id"] for row in linked_evidence(snapshot)}),
+        "brand_compare_props": len(snapshot["brand_compare"])}
     stats["brand_compare"] = [{name: row[name] for name in ("card_bnft_id", "card_common_bnft_id", "status", "issues")}
                               for row in snapshot["brand_compare"]]
     # endregion

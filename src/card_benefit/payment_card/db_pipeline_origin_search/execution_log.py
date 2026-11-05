@@ -146,7 +146,8 @@ def capture_request_queries():
 
 def request_pipeline(base_pipeline, search_mode: str):
     """B/C 검색에서만 요청 전용 PostgreSQL 세션을 사용해 쿼리 로그를 분리한다."""
-    if search_mode == "A" or base_pipeline.benefit_search is None:
+    if (search_mode == "A" or base_pipeline.benefit_search is None
+            or not isinstance(base_pipeline.benefit_search, BenefitSearchService)):   # N은 PostgreSQL 세션이 없다
         return base_pipeline, lambda: None
 
     logger = logging.Logger(f"card_search.sql.capture.{uuid4().hex}", level=logging.INFO)

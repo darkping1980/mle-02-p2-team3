@@ -82,7 +82,12 @@ OPTIONAL MATCH (c:dp_card_product)-[:dp_has_benefit|dp_has_common_benefit|dp_has
 OPTIONAL MATCH (b)-[:dp_belongs_to]->(s:dp_card_common)
 OPTIONAL MATCH (s)-[:dp_has_document]->(d:dp_card_doc)
 WITH b, s, collect(DISTINCT c) AS cards, collect(DISTINCT d.doc_title) AS common_docs
-RETURN properties(head(cards)) AS card, properties(b) AS benefit, [x IN cards | x.source_json] AS card_sources,
+// 검색 투영 속성(임베딩 1536차원 등)은 답변 문맥에 쓰지 않으므로 빼고 돌려준다. 기존 응답 계약(투영 전 속성)을 유지한다.
+// 목록은 neo4j_dry_run.PROJECTION_PROPS와 같아야 한다(test_neo4j_search_projection이 대조).
+RETURN properties(head(cards)) AS card,
+       apoc.map.removeKeys(properties(b), ['embedding', 'embedding_dim', 'embedding_model', 'embedding_run_id', 'search_text',
+                                           'brand_compare_status', 'brand_compare_issues', 'brand_compare_common_key']) AS benefit,
+       [x IN cards | x.source_json] AS card_sources,
        CASE WHEN s IS NULL THEN null ELSE properties(s) END AS common, common_docs,
        labels(head(cards)) AS card_labels, labels(b) AS benefit_labels
 

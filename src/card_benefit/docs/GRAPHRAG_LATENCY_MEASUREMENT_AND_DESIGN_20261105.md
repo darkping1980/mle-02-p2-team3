@@ -407,6 +407,83 @@ pipeline 측정 대상 5건은 keyword_card_bnft, keyword_common_bnft, select_la
 
 ---
 
+## 7. P3 구현 결과 — Neo4j 묶음 조회 (2026-11-05)
+
+> 최종 아키텍처가 "질문 처리 시 Neo4j만 조회"로 정정되었다(`GRAPHRAG_NEO4J_ONLY_SEARCH_PLAN_20261105.md`).
+> P3는 Neo4j 전용 개선이라 그 구조에 그대로 재사용한다. PostgreSQL 검색을 전제로 한 추가 최적화(P4의 PG pipeline 등)는 진행하지 않는다.
+
+### 7-1. 변경
+
+| 파일 | 함수 | 변경 |
+|---|---|---|
+| `neo4j_search.py` | `detail_batch_query`, `LIST_BATCH_QUERY`, `CATALOG_BATCH_QUERY`, `_subquery`, `_map`, `_ordered`, `evidence_query_for` (신규) | 기존 named query 본문을 그대로 `CALL (var) {…}` 서브쿼리로 넣어 한 문장으로 만든다. `$key`·`$keyword`만 바깥 변수로 바꾼다. 행은 원래 RETURN 열 순서로 다시 만든다 |
+| 〃 | `Neo4jSearch._run` (신규), `_query` | 실행부 분리. 배치 문장도 같은 로그·app_log 수집 경로를 탄다(STATEMENTS 등록 없음 → 기존 레지스트리 테스트 유지) |
+| 〃 | `list_catalog` | 3문장 → 1문장. 행 처리는 `catalog_rows`(기존 코드 그대로 분리) |
+| 〃 | `list_benefits_many`, `get_details` (신규) | 낱말 N개 → 1문장. 혜택 N개 × 상세 5문장 → 근거 Cypher 종류별 1문장. 근거 행은 로직이 읽는 `owner_labels·rule_key·link·evidence`만 전송(청크·페이지·문서 전체 속성 제외, MATCH 경로는 동일) |
+| 〃 | `get_detail`, `list_benefits` | **변경 없음**(`_finish_context`로 공통 처리만 분리) |
+| `benefit_search_service.py` | `_keyword` | `list_benefits_many`가 있으면 사용, 없으면 기존 낱말별 호출. 점수 계산 동일 |
+| `card_graphrag.py` | `retrieve` | 그래프 key 전체를 `get_details` 1회로 조회. 없으면 기존 key별 `get_detail` |
+| `tests/test_neo4j_batch_queries.py` (신규) | — | 12건: 읽기 전용·dp_ 범위, named query 원문 포함, 남은 파라미터 없음, 열 순서·누락 key·표시 처리, 대체 경로 |
+
+`graph_questions.cypher`, 적재기·관계 동기화, Pydantic 모델, P1 변경은 수정하지 않았다.
+
+### 7-2. 실데이터 전수 동등성 (운영 Aura 읽기 전용)
+
+| 대상 | 범위 | 결과 |
+|---|---|---|
+| `list_catalog` (1문장 vs 기존 3문장 + 같은 행 처리) | 118행 | 값·열 순서·행 순서 **동일** |
+| `get_details` vs `get_detail` | 그래프 key 118개 전부(혜택·연회비 항목·공통 혜택) × intent별 section 조합 3종 = 354건 | **불일치 0**(근거는 유지한 4개 열 기준, 행 순서 포함) |
+| `list_benefits_many` vs `list_benefits` | 실제 질문 낱말 30개 | 행·순서 **동일** |
+| 근거 전송량 (혜택 1개) | — | 52 KB → 8 KB |
+
+### 7-3. 트랜잭션 통합 vs 단일 문장 통합 (중앙값 5회)
+
+| 대상 | 문장별 트랜잭션(기존) | 트랜잭션 1개(같은 Cypher) | **단일 문장(P3)** |
+|---|---:|---:|---:|
+| 상세, 혜택 1개 | 1,837 ms | 999 ms | **283 ms** |
+| 상세, 혜택 4개 | 6,321 ms | 2,731 ms | **374 ms** |
+| 카탈로그 3종 | 802 ms | 454 ms | **285 ms** |
+| `card.list` 낱말 4개 | 1,059 ms | 534 ms | **267 ms** |
+| 하한 `RETURN 1` | | | 264 ms |
+
+트랜잭션 통합은 BEGIN·COMMIT 왕복만 없애 약 절반이 된다. 단일 문장은 RUN 자체가 1회라 왕복 하한(약 264 ms)에 거의 닿는다.
+
+### 7-4. 파이프라인 실측 (LLM·임베딩 stub, 질문별 5회 중앙값, app_log 실제 요청 재현)
+
+| 모드 | 질문 | Neo4j 문장 | Neo4j 시간 | 전송량 | 요청 전체(LLM 제외) | 결과 |
+|---|---|---:|---:|---:|---:|---|
+| A | ONE PICK STYLE 대중교통 (혜택 1) | 8 → **2** | 2,857 → **573 ms** | 416 → 127 KB | 2,884 → 596 ms | 동일 |
+| A | DAILY 통합 한도 (혜택 2) | 13 → 2 | 3,925 → 668 | 957 → 258 KB | 3,967 → 700 | 동일 |
+| A | ONE PICK STYLE 전월 실적 (혜택 4) | 19 → 2 | 5,850 → 751 | 1,351 → 289 KB | 5,917 → 788 | 동일 |
+| A | GS25 추천 (카드 간 혜택 2) | 13 → 2 | 3,649 → 571 | 406 → 128 KB | 3,682 → 594 | 동일 |
+| A | KTX 제외 | 7 → 2 | 2,074 → 570 | 416 → 127 KB | 2,110 → 602 | 동일 |
+| A | SIMPLE 제외 항목 | 7 → 2 | 1,904 → 563 | 132 → 76 KB | 1,936 → 585 | 동일 |
+| C | ONE PICK STYLE 대중교통 (혜택 1) | 13 → **4** | 3,978 → **1,893 ms** | 425 → 136 KB | 6,462 → 4,284 ms | 동일 |
+| C | DAILY 통합 한도 (혜택 2) | 19 → 4 | 6,155 → 1,555 | 962 → 262 KB | 9,076 → 4,224 | 동일 |
+| C | ONE PICK STYLE 전월 실적 (혜택 4) | 26 → 4 | 8,032 → 1,613 | 1,360 → 298 KB | 11,347 → 4,685 | 동일 |
+| C | GS25 추천 | 17 → 4 | 5,035 → 1,556 | 413 → 136 KB | 7,612 → 4,194 | 동일 |
+| C | KTX 제외 | 14 → 4 | 4,057 → 1,447 | 426 → 137 KB | 6,428 → 3,706 | 동일 |
+| C | SIMPLE 제외 항목 | 13 → 4 | 3,642 → 1,288 | 162 → 107 KB | 6,086 → 3,439 | 동일 |
+
+- 최초 요청(cold): A Neo4j 3,288 → 2,381 ms(문장 8 → 2), C 요청 전체 13,015 → 9,777 ms.
+- 문장 수가 혜택 수와 무관하게 A 2개·C 4개로 고정된다. 혜택이 많은 조합 질문일수록 절감이 크다(C 혜택 4개: Neo4j −6.4 s).
+- "동일" 기준은 다음이 모두 같다는 뜻이다:
+  - 해석·답변 LLM 프롬프트 **바이트 동일**, 답변 context SHA
+  - 상세 행(근거 4개 열 기준), PDF 근거(evidence_id·쪽·원문·주체·규칙), 제외 판정, open_conditions
+  - 미확정·자료 안내, 후보 hits·카드, 카탈로그, 검색 경로·경고
+  - 반복 실행 간에도 같음
+- A 모드의 해석 프롬프트는 약 9,250 토큰(C 약 1,250). A 실사용 약 18 s는 DB(P3 후 약 0.6 s)가 아니라 해석 LLM이 주원인으로 추정된다(미측정).
+
+### 7-5. 테스트
+
+| 묶음 | 결과 |
+|---|---|
+| 신규 `test_neo4j_batch_queries` | 12 통과 |
+| Neo4j·검색 관련(`test_neo4j_origin_search`, `test_benefit_embedding`, `test_neo4j_*`, `test_neo4j_relation_sync`) | 121 실행, 113 통과, 8 건너뜀 |
+| `test_card_graphrag` | 164 실행, 기존 Streamlit UI 테스트 9건 실패. **HEAD와 같은 목록**(이번 변경과 무관) |
+
+---
+
 ### 부록: 측정 원자료
 
 | 항목 | 값 |
