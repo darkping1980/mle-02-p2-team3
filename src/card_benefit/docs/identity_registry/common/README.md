@@ -10,11 +10,11 @@
 | card_doc_id | 공통서비스 | 추출 후보 | 등록 | 보류 | 카드 적용 | 상세 |
 |---|---|---:|---:|---:|---:|---|
 | `20261104_000024` | `WOORI_MASTERCARD_WORLD` | 40 | 1 | 39 | 0 | [README](20261104_000024/README.md) |
-| `20261104_000025` | `WOORI_MASTERCARD_PLATINUM` | 34 | 22 | 12 | 0 | [README](20261104_000025/README.md) |
+| `20261104_000025` | `WOORI_MASTERCARD_PLATINUM` | 34 | 23 | 11 | 0 | [README](20261104_000025/README.md) |
 | `20261104_000026` | `WOORI_VISA_INFINITE` | 34 | 0 | 34 | 0 | [README](20261104_000026/README.md) |
-| `20261104_000027` | `WOORI_VISA_PLATINUM` | 25 | 5 | 20 | 0 | [README](20261104_000027/README.md) |
-| `20261104_000028` | `WOORI_UPI_PLATINUM` | 21 | 10 | 11 | 0 | [README](20261104_000028/README.md) |
-| **합계** | | **154** | **38** | **116** | **0** | |
+| `20261104_000027` | `WOORI_VISA_PLATINUM` | 25 | 6 | 19 | 0 | [README](20261104_000027/README.md) |
+| `20261104_000028` | `WOORI_UPI_PLATINUM` | 21 | 13 | 8 | 0 | [README](20261104_000028/README.md) |
+| **합계** | | **154** | **43** | **111** | **0** | |
 
 ## 전체 공통 문서(DB 기준)
 
@@ -36,10 +36,10 @@
 | `20261103_000021` | 하나카드 | `HANA_VP001_20230727` | `17` VISA_PLATINUM | VISA / PLATINUM | 2 | 0 | 0 | [md](../../../data/markdown/common/20261103_000021/manifest.json) | — |
 | `20261103_000022` | 하나카드 | `HANA_VP001_20260317` | `17` VISA_PLATINUM | VISA / PLATINUM | 2 | 0 | 0 | [md](../../../data/markdown/common/20261103_000022/manifest.json) | — |
 | `20261104_000024` | 우리카드 | `WOORI_BRAND_260225_346dbaa50ad5` | `20` WOORI_MASTERCARD_WORLD | MASTERCARD / WORLD | 2 | 1 | 0 | [md](../../../data/markdown/common/20261104_000024/manifest.json) | [README](20261104_000024/README.md) |
-| `20261104_000025` | 우리카드 | `WOORI_BRAND_260225_b05e4c64ec0b` | `21` WOORI_MASTERCARD_PLATINUM | MASTERCARD / PLATINUM | 2 | 22 | 0 | [md](../../../data/markdown/common/20261104_000025/manifest.json) | [README](20261104_000025/README.md) |
+| `20261104_000025` | 우리카드 | `WOORI_BRAND_260225_b05e4c64ec0b` | `21` WOORI_MASTERCARD_PLATINUM | MASTERCARD / PLATINUM | 2 | 23 | 0 | [md](../../../data/markdown/common/20261104_000025/manifest.json) | [README](20261104_000025/README.md) |
 | `20261104_000026` | 우리카드 | `WOORI_BRAND_260313_2039d0154f17` | `22` WOORI_VISA_INFINITE | VISA / INFINITE | 2 | 0 | 0 | [md](../../../data/markdown/common/20261104_000026/manifest.json) | [README](20261104_000026/README.md) |
-| `20261104_000027` | 우리카드 | `WOORI_BRAND_260313_65f1ddecc9b2` | `23` WOORI_VISA_PLATINUM | VISA / PLATINUM | 2 | 5 | 0 | [md](../../../data/markdown/common/20261104_000027/manifest.json) | [README](20261104_000027/README.md) |
-| `20261104_000028` | 우리카드 | `WOORI_BRAND_260316_40819705fc4c` | `24` WOORI_UPI_PLATINUM | UPI / PLATINUM | 2 | 10 | 0 | [md](../../../data/markdown/common/20261104_000028/manifest.json) | [README](20261104_000028/README.md) |
+| `20261104_000027` | 우리카드 | `WOORI_BRAND_260313_65f1ddecc9b2` | `23` WOORI_VISA_PLATINUM | VISA / PLATINUM | 2 | 6 | 0 | [md](../../../data/markdown/common/20261104_000027/manifest.json) | [README](20261104_000027/README.md) |
+| `20261104_000028` | 우리카드 | `WOORI_BRAND_260316_40819705fc4c` | `24` WOORI_UPI_PLATINUM | UPI / PLATINUM | 2 | 13 | 0 | [md](../../../data/markdown/common/20261104_000028/manifest.json) | [README](20261104_000028/README.md) |
 
 - 등록 공통 혜택 수는 공통서비스(`card_common_id`) 단위다. 같은 공통서비스에 문서가 둘 이상이면 같은 숫자가 반복된다.
 - 상태 정의: **등록 완료** = `card_common_bnft` 행 있음. **검토 보류** = 후보만 있고 등록 안 함(기존 규칙 REVIEW, 추가 안전 게이트, OCR 문구 오류). **카드 적용** = `card_common_bnft_apply` 행.

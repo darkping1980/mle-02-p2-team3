@@ -143,6 +143,18 @@ class ParsedDocument:
         ]
 
 
+LAYOUT_CONTROL_CHARS = frozenset("")   # InDesign 레이아웃 표식(내용 없음). 외부 발급사 PDF에서만 공백으로 바꾼다
+
+
+def external_glyph(char: str) -> str:
+    """외부 발급사 PDF 문자 정규화. 같은 길이를 유지한다: 사설영역 장식 글리프 → '•', 레이아웃 제어문자 → ' '."""
+    if unicodedata.category(char) == "Co":
+        return "•"
+    if char in LAYOUT_CONTROL_CHARS:
+        return " "
+    return char
+
+
 def sha256_hex(data: bytes) -> str:
     """소문자 16진수 SHA-256. ``card_doc`` 과 ``card_doc_page`` 의 해시 형식이다."""
     return hashlib.sha256(data).hexdigest()
@@ -345,7 +357,10 @@ class DocumentService:
             if self.external_source is not None:
                 # Some Woori PDFs encode bullet/check icons as private-use font glyphs.
                 # Map only those decorative glyphs to a same-width bullet; keep all text positions stable.
-                text = "".join("•" if unicodedata.category(char) == "Co" else char for char in text)
+                # 2026-11-05: InDesign layout markers exported as C0 control characters (U+0007 "indent to here",
+                # U+0003 "end nested style") carry no text. Map them to one space; tab/newline/CR are kept.
+                # Other suspect characters are untouched, so the quality gate below still blocks real garbling.
+                text = "".join(external_glyph(char) for char in text)
                 quality = {**quality, **measure_pdf_text(text, quality["has_visual"])}
             pages.append(DocPage(
                 page_no=doc["page_no"],

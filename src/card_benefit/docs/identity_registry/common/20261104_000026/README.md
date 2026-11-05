@@ -2,7 +2,7 @@
 
 [← 공통 문서 목록](../README.md) · 대장: 없음(등록 대상 없음) · 원문 Markdown: [page_001](../../../../data/markdown/common/20261104_000026/page_001.md), [page_002](../../../../data/markdown/common/20261104_000026/page_002.md)
 
-> 이 문서는 PostgreSQL(`db_pipeline`) 읽기 전용 조회와 식별자 대장으로 2026-11-05에 생성했다. 원문 인용은 DB에 저장된 OCR 원문(`card_doc_page.page_raw_txt`) 그대로이며 OCR 오류를 고치지 않았다.
+> 이 문서는 PostgreSQL(`db_pipeline`) 읽기 전용 조회와 식별자 대장으로 2026-11-05에 생성했다(2차 검증 반영). 원문 인용은 DB에 저장된 OCR 원문(`card_doc_page.page_raw_txt`) 그대로이며 OCR 오류를 고치지 않았다.
 
 ## 문서 식별 정보
 

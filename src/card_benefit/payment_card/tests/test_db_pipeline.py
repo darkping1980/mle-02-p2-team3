@@ -338,3 +338,33 @@ class OnePickStyleTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExternalGlyphTest(unittest.TestCase):
+    """2026-11-05: 우리카드 상품안내장의 InDesign 레이아웃 제어문자(U+0003, U+0007) 정규화."""
+
+    def test_layout_markers_become_same_width_space(self):
+        from payment_card.db_pipeline.document_service import external_glyph
+        from common.document_reader import measure_pdf_text
+        raw = "• \u200c\x07가족카드 연회비는 청구하지 않습니다.\n*\t\u200c\x07공공요금 5% \x03할인"
+        text = "".join(external_glyph(ch) for ch in raw)
+        self.assertEqual(len(text), len(raw))
+        self.assertNotIn("\x07", text)
+        self.assertNotIn("\x03", text)
+        self.assertEqual([c for c in raw if c.isdigit()], [c for c in text if c.isdigit()])
+        self.assertIn("\t", text)
+        self.assertEqual(measure_pdf_text(raw, False)["status"], "SUSPECT")
+        self.assertEqual(measure_pdf_text(text, False)["status"], "OK")
+
+    def test_other_suspect_characters_are_not_masked(self):
+        from payment_card.db_pipeline.document_service import external_glyph
+        from common.document_reader import measure_pdf_text
+        raw = "할인 \x01 \ufffd 5%"
+        text = "".join(external_glyph(ch) for ch in raw)
+        self.assertEqual(text, raw)
+        self.assertNotEqual(measure_pdf_text(text, False)["status"], "OK")
+
+    def test_private_use_glyph_still_maps_to_bullet(self):
+        from payment_card.db_pipeline.document_service import external_glyph
+        self.assertEqual(external_glyph("\ue000"), "•")
+        self.assertEqual(external_glyph("가"), "가")

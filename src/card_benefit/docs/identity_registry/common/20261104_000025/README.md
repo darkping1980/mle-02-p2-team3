@@ -2,7 +2,7 @@
 
 [← 공통 문서 목록](../README.md) · 대장: [WOORI_BRAND_MC_PT.json](../../WOORI_BRAND_MC_PT.json) · 원문 Markdown: [page_001](../../../../data/markdown/common/20261104_000025/page_001.md), [page_002](../../../../data/markdown/common/20261104_000025/page_002.md)
 
-> 이 문서는 PostgreSQL(`db_pipeline`) 읽기 전용 조회와 식별자 대장으로 2026-11-05에 생성했다. 원문 인용은 DB에 저장된 OCR 원문(`card_doc_page.page_raw_txt`) 그대로이며 OCR 오류를 고치지 않았다.
+> 이 문서는 PostgreSQL(`db_pipeline`) 읽기 전용 조회와 식별자 대장으로 2026-11-05에 생성했다(2차 검증 반영). 원문 인용은 DB에 저장된 OCR 원문(`card_doc_page.page_raw_txt`) 그대로이며 OCR 오류를 고치지 않았다.
 
 ## 문서 식별 정보
 
@@ -24,9 +24,9 @@
 | 구분 | 건수 |
 |---|---:|
 | 추출 후보 | 34 |
-| 등록 완료 (`card_common_bnft`) | 22 |
+| 등록 완료 (`card_common_bnft`) | 23 |
 | 검토 보류 — 기존 검증 규칙 | 3 |
-| 검토 보류 — 추가 안전 게이트 | 6 |
+| 검토 보류 — 추가 안전 게이트 | 5 |
 | 검토 보류 — OCR 문구 오류(대장 excluded) | 3 |
 | 카드별 적용 관계 (`card_common_bnft_apply`) | 0 |
 
@@ -105,6 +105,31 @@
 | `20261104_002240` | 2 | `20261104_000089` | 103–108 | RULE | 10~20% |
 | `20261104_002241` | 2 | `20261104_000089` | 2541–2589 | APPLICABILITY | 별도 기간이 지정된 경우를 제외하고 2026년 1월 1일부터 2026년 12월 31일까지 |
 | `20261104_002242` | 2 | `20261104_000089` | 3010–3034 | APPLICABILITY | 본 서비스는 Mastercard가 제공합니다. |
+
+</details>
+
+### 하와이 특급호텔 및 리조트 할인 — `20261105_000319`
+
+| 항목 | 값 |
+|---|---|
+| card_common_bnft_id / bnft_cd | `20261105_000319` / `BRAND_CC0C743DCE50EF48…` |
+| 업무 식별자 | `BIZ_V1:HOTEL/HAWAII_LUXURY_HOTEL_RESORT/DISCOUNT` (DRAFT_PENDING_USER_REVIEW) |
+| card_extr_stg_id / 추출 실행 | `20261104_000539` / `20261104_000039` |
+| 유형 / 선택서비스 | DISCOUNT / COMMON |
+| 혜택 내용(bnft_rule_txt) | 10% |
+| 조건·한도(bnft_limit_txt) | — |
+| 기간 | 2026-01-01 ~ 2027-01-01 (종료 배타) |
+| 확인 | 2026-11-05 2차 검토: PDF 2쪽 '하와이 특급호텔 및 리조트 10% 할인' 일치. 인용의 '%。'는 DB 원문 OCR 표기이며 저장 문구(10%)에는 없음 |
+
+<details><summary>원문 근거 5건</summary>
+
+| evidence_id | 쪽 | chunk | 위치 | 용도 | 인용(OCR 원문) |
+|---|---|---|---|---|---|
+| `20261104_002247` | 2 | `20261104_000089` | 200–223 | BNFT | • 하와이 특급호텔 및 리조트 10%。 할인 |
+| `20261104_002248` | 2 | `20261104_000089` | 155–157 | RULE | 10% |
+| `20261104_002249` | 2 | `20261104_000089` | 225–270 | TARGET | - KA LA' &#124; Waikiki Beach, LXR Hotels &amp; Resorts |
+| `20261104_002250` | 2 | `20261104_000089` | 2541–2589 | APPLICABILITY | 별도 기간이 지정된 경우를 제외하고 2026년 1월 1일부터 2026년 12월 31일까지 |
+| `20261104_002251` | 2 | `20261104_000089` | 3010–3034 | APPLICABILITY | 본 서비스는 Mastercard가 제공합니다. |
 
 </details>
 
@@ -593,7 +618,7 @@
 
 ## 검토 보류
 
-총 12건. 사유별로 묶었다. 등록하지 않았으며 `card_extr_stg.stg_status`는 그대로 `PENDING_REVIEW`이다.
+총 11건. 사유별로 묶었다. 등록하지 않았으며 `card_extr_stg.stg_status`는 그대로 `PENDING_REVIEW`이다.
 
 <details><summary><b>기존 규칙: 제공 기간을 안전하게 해석할 수 없습니다 (검증코드 LINK_REVIEW)</b> — 3건</summary>
 
@@ -680,32 +705,6 @@
 
 </details>
 
-<details><summary><b>추가 게이트: 인용·값에 OCR 이상 표기 (%。&#124;)</b> — 1건</summary>
-
-| card_extr_stg_id | 혜택명(추출) | 값(추출) | 기간(추출) | 브랜드·등급(추출) | certainty |
-|---|---|---|---|---|---|
-| `20261104_000539` | 하와이 특급호텔 및 리조트 할인 | 10% | 2026년 1월 1일부터 2026년 12월 31일까지 | Mastercard / — | HIGH |
-
-<details><summary>후보별 원문 근거</summary>
-
-**`20261104_000539` 하와이 특급호텔 및 리조트 할인**
-
-<details><summary>원문 근거 5건</summary>
-
-| evidence_id | 쪽 | chunk | 위치 | 용도 | 인용(OCR 원문) |
-|---|---|---|---|---|---|
-| `20261104_002247` | 2 | `20261104_000089` | 200–223 | BNFT | • 하와이 특급호텔 및 리조트 10%。 할인 |
-| `20261104_002248` | 2 | `20261104_000089` | 155–157 | RULE | 10% |
-| `20261104_002249` | 2 | `20261104_000089` | 225–270 | TARGET | - KA LA' &#124; Waikiki Beach, LXR Hotels &amp; Resorts |
-| `20261104_002250` | 2 | `20261104_000089` | 2541–2589 | APPLICABILITY | 별도 기간이 지정된 경우를 제외하고 2026년 1월 1일부터 2026년 12월 31일까지 |
-| `20261104_002251` | 2 | `20261104_000089` | 3010–3034 | APPLICABILITY | 본 서비스는 Mastercard가 제공합니다. |
-
-</details>
-
-</details>
-
-</details>
-
 <details><summary><b>OCR_TEXT_GARBLED: 조건 문구 '제크카드만 적용(법인카드 적용 제에'(PDF: 체크카드만 적용(법인카드 적용 제외)). 숫자 값은 PDF 이미지와 일치. OCR 원문 보정 후 등록 검토</b> — 1건</summary>
 
 | card_extr_stg_id | 혜택명(추출) | 값(추출) | 기간(추출) | 브랜드·등급(추출) | certainty |
@@ -761,7 +760,7 @@
 
 </details>
 
-<details><summary><b>추가 게이트: 모델 확신도 LOW(사람 확인 필요)</b> — 1건</summary>
+<details><summary><b>2차 검토 보류: 제휴사(Hertz)명이 OCR('대ertz')로 훼손되어 저장 시 '해외 렌터카 전체'로 오인됨</b> — 1건</summary>
 
 | card_extr_stg_id | 혜택명(추출) | 값(추출) | 기간(추출) | 브랜드·등급(추출) | certainty |
 |---|---|---|---|---|---|
@@ -787,7 +786,7 @@
 
 </details>
 
-<details><summary><b>추가 게이트: 혜택 자체 기간·횟수 표현이 있어 기본 기간(2026년) 적용을 확정할 수 없음</b> — 1건</summary>
+<details><summary><b>2차 검토 보류: 저장될 혜택명 'AiraIo'(PDF: Airalo) OCR 오탈자</b> — 1건</summary>
 
 | card_extr_stg_id | 혜택명(추출) | 값(추출) | 기간(추출) | 브랜드·등급(추출) | certainty |
 |---|---|---|---|---|---|
@@ -869,7 +868,7 @@
 
 </details>
 
-<details><summary><b>추가 게이트: 인용·값에 OCR 이상 표기 (&#124;身)</b> — 1건</summary>
+<details><summary><b>2차 검토 보류: 골프장명 OCR 훼손, 객실 할인 수치 원문에도 없음</b> — 1건</summary>
 
 | card_extr_stg_id | 혜택명(추출) | 값(추출) | 기간(추출) | 브랜드·등급(추출) | certainty |
 |---|---|---|---|---|---|
