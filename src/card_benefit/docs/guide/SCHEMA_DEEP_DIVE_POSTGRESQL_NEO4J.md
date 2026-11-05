@@ -60,6 +60,294 @@ PostgreSQL은 카드 및 문서 원장, 검토 상태, JSONB 규칙·조건과 �
 
 ## Python 추출 MODEL → 검증 → 저장 흐름
 
+### 추출 스키마부터 DB까지: 실제 소스 추적
+
+> **이 장의 핵심:** 추출 스키마는 코드에 정의된 **Pydantic 클래스**다. 실행 시 그 클래스에서 LLM용 **JSON Schema**가 생성된다. **PostgreSQL의 테이블 스키마(DDL)**는 별도로 존재하며, DB에는 JSON Schema 정의가 아니라 **추출한 JSON 데이터(JSONB)**와 검증/등록 결과가 저장된다. 따라서 이 구조는 분석 불가능한 임의의 동적 스키마가 아니다.
+>
+> 검증 범위: 2026-11-05 팀 GitHub `main`의 Python/SQL 소스 및 Codex의 기존 운영 DB 조회 결과. 아래의 가상 JSON 예시는 구조를 이해하기 위한 것으로 실제 카드의 추출 원본이라고 주장하지 않는다. 운영 DB의 현재 제약조건 전문은 `pg_constraint` 조회로 별도 확인해야 한다.
+
+#### 1) 네 가지 서로 다른 '스키마'를 구분하기
+
+| 이름 | 정의/생성 위치 | 실제 역할 | DB 저장 여부 |
+|---|---|---|---|
+| **Pydantic 추출 MODEL** | `extraction_schema.py`의 `PageExtraction`, `BenefitItem`, `RuleItem` 등 | LLM에 요구할 필드, 타입, 허용 코드, 중첩 구조의 **고정된 Python 정의** | 정의 자체는 DB에 저장하지 않음 |
+| **LLM 응답용 JSON Schema** | `terra_client.py`에서 `to_strict_json_schema(PageExtraction)` 실행 | 위 Python MODEL을 OpenAI 응답 형식으로 변환, `strict=True` 지정 | 정의 자체를 업무 DB에 등록하는 코드가 아님 |
+| **추출 결과 JSON 데이터** | LLM 응답을 `_parse()`로 읽고 검증 | 페이지 응답 전체 또는 페이지에서 뽑은 BENEFIT/CONDITION 항목 | `card_ai_call.call_resp_json`, `card_extr_stg.stg_raw_item` 등의 **JSONB 값** |
+| **PostgreSQL 저장 스키마** | DDL 및 변경 마이그레이션 | 테이블·PK·CHECK·JSONB 계약 함수로 **저장 형태** 검증 | 실제 DB 객체로 존재 |
+
+Java로 비교하면 **Pydantic MODEL ≒ 추출용 DTO + Bean Validation**, `ExtractionService` ≒ Service, `ExtractionRepository` ≒ DAO, PostgreSQL DDL ≒ 테이블 및 제약조건이다. 다만 `model_validate()`는 DTO 형식 검증이고, **PDF 원문과 의미가 일치하는지 확인하는 별도 서비스 검증**을 대체하지 않는다.
+
+**확인 소스:** [로컬 MODEL](../../payment_card/db_pipeline/extraction_schema.py#L23) / [GitHub MODEL](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_schema.py#L23), [로컬 LLM 호출](../../payment_card/db_pipeline/terra_client.py#L82) / [GitHub LLM 호출](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/terra_client.py#L82)
+
+#### 2) LLM에게 어떤 JSON을 뽑으라고 정의했는가?
+
+모든 페이지 추출은 `PageExtraction`을 최상위 타입으로 사용한다. 원문을 구조화하는 **모델 간 포함 관계**는 아래와 같다.
+
+```text
+PageExtraction                       ← 페이지 1쪽의 LLM 응답
+├── page_no / page_role
+├── product: ProductMention?         ← 상품 표기(원본 응답용)
+├── benefits: BenefitItem[]
+│   ├── targets: TargetItem[]        ← 가맹점·업종·서비스 대상
+│   ├── rules: RuleItem[]            ← 할인율·금액 등 규칙
+│   │   └── conditions: ConditionItem[]
+│   ├── limits: LimitItem[]          ← 금액·횟수 한도
+│   ├── conditions: ConditionItem[]  ← 혜택 전체 조건
+│   ├── relations: RelationItem[]    ← 다른 혜택과의 관계
+│   └── evidence: EvidenceQuote[]    ← 혜택/규칙/한도/관계 인용
+├── card_conditions: ConditionItem[] ← 카드 공통 조건
+└── unresolved: UnresolvedItem[]     ← 해석하지 못한 원문
+ConditionItem
+└── evidence: EvidenceQuote[]        ← 조건 자체의 원문 인용
+```
+
+| Python 클래스 | 필드(실제 소스명) | 분석 시 읽어야 할 의미 |
+|---|---|---|
+| `PageExtraction` | `page_no`, `page_role`, `product`, `benefits`, `card_conditions`, `unresolved` | 페이지/상품 정보, 추출 혜택 목록, 카드 공통 조건, 해석 보류 목록 |
+| `BenefitItem` | `item_key`, `bnft_nm`, `bnft_type_cd`, `is_common_candidate`, `no_condition_stated`, `certainty`, `brand_txt`, `service_grade_txt`, `applicable_cards`, `selection_service_txt`, `excluded_cards`, `validity_period_txt`, `targets`, `rules`, `limits`, `conditions`, `relations`, `evidence`, `uncertainty_note` | 혜택 하나의 내용·분류·적용 범위·규칙·조건·원문 근거 |
+| `RuleItem` | `rule_key`, `value_num`, `value_raw_txt`, `value_unit_cd`, `min_txn_amt`, `min_txn_raw_txt`, `conditions`, `limit_keys` | 규칙 식별자, 5% 등의 수치, 원문 표기, 건당 최소 결제금액, 규칙별 조건 |
+| `TargetItem` | `target_type_cd`, `target_nm` | 적용 대상 종류/이름 |
+| `ConditionItem` | `cond_key`, `cond_type_cd`, `cond_basis_cd`, `cond_min_amt`, `cond_max_amt_excl`, `negate_yn`, `excl_raw_txt`, `cond_raw_txt`, `scope`, `target_benefit_nms`, `evidence` | 실적/제외/이용 조건의 종류·금액 구간·부정 여부·적용 범위·근거 |
+| `LimitItem` | `limit_key`, `period_cd`, `cap_unit_cd`, `limit_num`, `limit_raw_txt`, `shared_scope_txt`, `applies_to_benefit_nms` | 한도 주기·단위·숫자·원문 및 공유 범위 |
+| `RelationItem` | `relation_key`, `rel_type_cd`, `to_benefit_nm`, `trigger_limit_key` | 서로 다른 혜택 간 관계 |
+| `EvidenceQuote` | `quote_txt`, `supports`, `support_key`, `link_basis` | 인용 원문, 뒷받침하는 대상/키, 연결 근거 방식 |
+| `ProductMention` | `product_nm`, `issuer`, `card_kind_cd`, `brand_txts`, `annual_fee_txt`, `issue_target_txt` | 페이지에 등장한 상품 정보(이 MODEL 자체로 상품 등록을 자동 확정하지 않음) |
+| `UnresolvedItem` | `raw_txt`, `reason` | AI가 판단을 보류한 문구와 이유 |
+
+`Literal`은 `cond_type_cd`, `value_unit_cd`, `bnft_type_cd` 등의 **허용 코드 목록**을 고정한다. 예를 들어 `CondType`은 `SPEND_REQ`, `SPEND_EXCL`, `BNFT_EXCL`, `USAGE_REQ`, `PAYMENT_METHOD`, `MERCHANT_RULE`, `GRACE`, `ETC`, `UNKNOWN` 중 하나다. `UNKNOWN`은 형식상 허용하지만 **업무적으로 검토가 필요할 수 있는 값**이다.
+
+`ExtractionModel`은 Pydantic `BaseModel`을 상속하며 `extra="forbid"`로 정의 밖의 필드를 거부한다. `RuleItem`은 과거 응답의 `calc_method_cd`, `payout_unit_cd`를 `model_validator(mode="before")`에서 제거하는 호환 예외가 있다. `Decimal` 수치는 API 측 JSON Schema에 숫자로 노출되도록 `NumberValue`를 정의했다. **타입/필드 필수 여부는 실제 모델 선언과 생성된 strict 스키마를 각각 확인**해야 한다. `strict` 변환 과정에서는 nullable 필드의 JSON 표현이 Python의 기본값 처리 방식과 다르게 보일 수 있다.
+
+**확인 소스:** [공통 타입·Literal (GitHub)](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_schema.py#L23), [MODEL 계층 (GitHub)](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_schema.py#L49), [페이지 최상위 타입 (GitHub)](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_schema.py#L171)
+
+#### 3) 실행 시 JSON Schema가 만들어진다는 뜻
+
+```python
+# terra_client.py의 핵심 부분(발췌)
+text={
+    "format": {
+        "type": "json_schema",
+        "name": "page_extraction",
+        "strict": True,
+        "schema": to_strict_json_schema(PageExtraction),
+    }
+}
+```
+
+이 코드는 **PDF마다 필드 구성을 새로 설계하는 코드가 아니다.** 소스에 고정된 `PageExtraction` 타입을 LLM API가 이해하는 JSON Schema 형식으로 직렬화한다. 프롬프트(`extraction_service.py`의 `PROMPT_TXT`)는 **무엇을 어떤 근거로 추출할지** 지시하고, JSON Schema는 **어떤 형식으로 응답할지** 제한한다. 둘은 별개다.
+
+또한 API의 strict JSON 응답도 **정답 보장 기능이 아니다.** 적절한 필드와 자료형을 생성해도 원문 인용·수치·적용 대상이 틀릴 수 있어 다음 단계에서 다시 검증한다.
+
+원하는 경우 **DB 변경 없이** 현재 Python 환경에서 실제 전송되는 JSON Schema를 정적 스냅샷 파일로 확인할 수 있다. 아래는 설명용 명령이며 이 문서를 작성하면서 실행한 것은 아니다.
+
+```powershell
+# 프로젝트 루트에서 실행; 해당 환경의 openai/pydantic 버전에 따라 출력이 달라질 수 있음
+$env:PYTHONPATH = "src/card_benefit"
+@'
+import json
+from openai.lib._pydantic import to_strict_json_schema
+from payment_card.db_pipeline.extraction_schema import PageExtraction
+print(json.dumps(to_strict_json_schema(PageExtraction), ensure_ascii=False, indent=2))
+'@ | python > page_extraction_schema_snapshot.json
+```
+
+스냅샷을 확인할 때 `properties`, `$defs`, `required`, `type`, `enum`, `additionalProperties`를 읽으면 된다. 파일은 **LLM에 전달되는 계약을 관찰한 결과물**이지 별도의 두 번째 업무 스키마를 정의하는 원본이 아니다.
+
+#### 4) `ExtractionService.run()` 실제 호출 순서: 실패와 저장까지
+
+```mermaid
+flowchart TD
+    A["문서·청크 조회 / PDF 해시 확인"] --> B["ExtractionService.run"]
+    B --> C["청크별 _process_chunk"]
+    C --> D["TerraClient.extract<br/>Pydantic → strict JSON Schema → LLM"]
+    D --> E["_parse<br/>json.loads → PageExtraction.model_validate"]
+    E --> F["card_ai_call INSERT<br/>원본 응답·파싱 결과·상태 기록"]
+    E -->|PARSE_ERROR| X["호출 오류만 보관<br/>해당 청크 후보 저장 없음"]
+    F --> G["_store_page<br/>check_benefit / check_condition"]
+    G --> H["card_extr_stg<br/>BENEFIT / CONDITION 후보 JSONB"]
+    G --> I["card_source_evidence<br/>원문·쪽·청크·위치"]
+    H --> J["_store_merge<br/>문서 단위 대표/중복 연결·검증코드"]
+    J --> K["후보 검토 및 등록"]
+    K --> L["card_product_item<br/>BENEFIT 항목 + JSONB 조건/규칙"]
+    L --> M["Neo4j 투영/적재"]
+```
+
+1. `run()`이 대상 상품·문서·AI 입력 청크를 조회하고 입력/재사용 조건을 확인한다. 문서 전체를 무조건 한 번에 보내는 것이 아니라 **청크별 페이지 입력**을 구성한다.
+2. `_process_chunk()`가 입력 텍스트/페이지 이미지를 준비하고 `_call_llm()`을 호출한다.
+3. `TerraClient.extract()`는 프롬프트 및 페이지 내용을 API로 보내고 `to_strict_json_schema(PageExtraction)`를 응답 형식으로 지정한다.
+4. `_parse()`는 `json.loads(raw_text)` 뒤 `PageExtraction.model_validate(...)`를 호출한다. JSON 파싱 실패, Pydantic 검증 실패, 기대 페이지 번호 불일치면 `PARSE_ERROR`.
+5. `_call_llm()`은 성공/실패와 무관하게 `card_ai_call`에 호출 기록을 저장한다. 성공 시 `call_resp_raw`에 원문 응답, `call_resp_json`에 **페이지 응답 전체 JSON**이 들어간다.
+6. 검증된 페이지에 대해서만 `_store_page()`가 `BenefitItem`과 `ConditionItem`별로 `check_benefit()` / `check_condition()`을 수행한다.
+7. `_store_item()`은 추출 항목 **하나씩** `card_extr_stg.stg_raw_item`에 `model_dump(mode="json")`를 저장한다. 따라서 `call_resp_json`은 페이지 전체, `stg_raw_item`은 개별 후보라는 차이가 있다.
+8. 각 후보에서 찾은 인용은 `card_source_evidence`에 별도 행으로 저장되며 최초 상태는 `PENDING`이다. 위치를 못 찾은 인용도 NULL 위치로 남을 수 있다.
+9. `_store_merge()`는 여러 청크/페이지의 중복 후보를 묶어 대표 행 연결과 `stg_sql_check_cd`를 업데이트한다. **등록용 정규화 JSON 전체를 중간 테이블에 영구 저장하는 것이 아니라 등록 시 재생성한다.**
+10. 혜택 등록 서비스는 검토 결과가 허용하는 후보에 한해 `card_product_item` 및 `card_evidence_link`를 작성한다. 등록된 혜택 자체도 `PENDING_REVIEW`일 수 있다.
+
+**트랜잭션 경계:** `card_ai_call`의 호출 기록은 별도 즉시 커밋된다. 페이지 후보 저장은 **청크별 트랜잭션**, 문서 통합은 **문서별 트랜잭션**이다. 따라서 후보 저장이 실패해도 LLM 호출 이력이 남을 수 있다.
+
+**확인 소스:** [run (로컬)](../../payment_card/db_pipeline/extraction_service.py#L850) / [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L850), [_process_chunk](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L1065), [_call_llm](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L1093), [_parse](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L1137), [_store_page / _store_item](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L1150), [_store_merge](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L1210)
+
+#### 5) 검증은 세 층이며 서로 검사하는 것이 다르다
+
+| 검증 층 | 실제 함수/구조 | 검사 대상 | 이 검증만으로 보장하지 않는 것 |
+|---|---|---|---|
+| **① 응답 구조 검증** | `PageExtraction.model_validate()` | 중첩 필드 구조, 타입, `Literal`, 누락/초과 필드 등 | 혜택 내용이 PDF에서 사실인지 |
+| **② PDF 원문 검증** | `locate_evidence`, `check_values`, `check_benefit`, `check_condition`, `link_check` | 인용 위치, 원문 표기·숫자, 혜택/대상과 인용의 연결 | 사람이 보는 표 해석·복잡한 예외가 언제나 정확한지 |
+| **③ DB 저장 계약** | `fn_valid_cond_expr`, `fn_valid_rule_list`, `fn_valid_target_list`, 각 테이블 `CHECK` | 저장 JSONB의 구조, 코드·범위·중복 키, PK/제약조건 | 타 테이블 PDF 원문과 값이 정말 일치하는지 |
+
+원문 대조에서 `check_values()`는 다음과 같은 코드를 반환한다.
+
+- `NO_EVIDENCE`: 근거 인용이 없음
+- `QUOTE_NOT_FOUND`: 인용을 원문에서 찾지 못함
+- `VALUE_NOT_IN_QUOTE`: 원문 표기나 기대 숫자가 인용에서 확인되지 않음
+- `VALUE_PARSE_DIFF`: 숫자와 원문 표기의 파싱 결과가 다름
+- `OK`: 해당 검사 통과
+
+`link_check()`는 인용 연결이 `SAME_TEXT`이고 필요한 대상 이름이 확인될 때 `TEXT_CONFIRMED`, 그렇지 않으면 `NEEDS_REVIEW`를 준다. **숫자가 확인돼도 표의 어느 행·열에 속하는지 불명확하면 연결 검토가 남을 수 있다.** 문서 통합 시 `sql_check_code()`는 근거·계약·통합 충돌·연결 검토 여부를 `stg_sql_check_cd`로 요약한다(`CONTRACT_INVALID`, `MERGE_CONFLICT`, `SCOPE_UNRESOLVED`, `LINK_REVIEW` 등).
+
+다음 네 상태는 **서로 같은 뜻이 아니다.** `card_ai_call.call_status`(API 응답/파싱 성공 여부), `card_extr_stg.stg_sql_check_cd`(추출 후보 검증 결과), `card_source_evidence.approval_status_cd`(개별 근거 승인 상태), `card_product_item.verification_status_cd`(등록 항목 검토 상태). 현재 운영 조회에서 BENEFIT/TERMS가 `PENDING_REVIEW`였다고 해서 추출 JSON 파싱이 실패했다는 뜻은 아니다.
+
+**확인 소스:** [원문 위치·수치·연결 검증](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L284), [검증 코드 요약](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L531), [등록 검토 게이트](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/product_benefit_service.py#L256)
+
+#### 6) Pydantic 필드가 실제 어느 DB 컬럼으로 가는가?
+
+| 추출/정규화 출발점 | 중간 저장 | 최종 등록/변환 | 중요한 구분 |
+|---|---|---|---|
+| `PageExtraction` 전체 | `card_ai_call.call_resp_json` **JSONB** | 직접 등록 항목이 아님 | 페이지 응답 원형을 호출 이력으로 보존 |
+| `BenefitItem` 한 건 | `card_extr_stg.stg_raw_item` **JSONB** (`BENEFIT`) | 검토 후 `card_product_item` (`item_type_cd='BENEFIT'`) | 중간 JSON과 최종 JSON 계약이 다름 |
+| `PageExtraction.card_conditions[]` 한 건 | `card_extr_stg.stg_raw_item` **JSONB** (`CONDITION`) | 적용 범위 판단 후 혜택/상품 조건 정규화에 반영될 수 있음 | 조건 후보와 최종 등록 항목은 1:1이 아님 |
+| `EvidenceQuote.quote_txt`·`supports`·`support_key` | `card_source_evidence`의 원문·위치 및 후보 연결 | `card_evidence_link`로 등록 항목/규칙 등과 연결 | 근거는 텍스트 컬럼 하나에만 저장되는 것이 아님 |
+| `BenefitItem.bnft_nm` / `bnft_type_cd` | 혜택 후보 JSON | `card_product_item.item_nm` / `item_subtype_cd` 등 등록 매핑 | 등록 서비스·SQL Mapper에서 실제 컬럼명 재확인 |
+| `RuleItem.rule_key`·`value_num`·`value_unit_cd` | `stg_raw_item.rules[]` | `card_product_item.rule_list[]` **JSONB** | `build_rule()`이 등록용 JSON 구조 생성 |
+| `TargetItem.target_type_cd`·`target_nm` | `stg_raw_item.targets[]` | `rule_list[].target_list[]` | `normalize_benefit()`이 대상 키/이름으로 매핑 |
+| `ConditionItem.cond_*` / `negate_yn` | `stg_raw_item.conditions[]` 등 | `item_cond_expr.branches[].atoms[]` 또는 `rule_list[].cond_expr...` | `build_cond_expr()`이 branch/atom 계층 생성 |
+| `LimitItem.limit_raw_txt` 등 | `stg_raw_item.limits[]` | 주로 `item_limit_txt` 원문 설명, 검토 보정 시 일부 `item_data` | 모든 한도 항목이 별도 정규화 테이블/계산식으로 옮겨지는 것은 아님 |
+| `RelationItem` | `stg_raw_item.relations[]` | 해석·대상 식별 후 `relation_list` **JSONB** | 대상 혜택 미확정이면 검토 필요 |
+| `ProductMention` | 호출 응답 원형 등 | 상품 등록 자체를 자동 확정하지 않음 | 별도 `card_product` 원장/등록 과정 존재 |
+
+정규화 함수의 실제 동작은 다음과 같다.
+
+```python
+# extraction_service.py: build_cond_expr()의 핵심 구조(설명용 발췌)
+{
+    "expr_status_cd": "DRAFT",
+    "branches": [{
+        "branch_no": 1,
+        "atoms": [{
+            "atom_seq": 1,
+            "atom_key": condition.cond_key,
+            "negate_yn": condition.negate_yn,
+            "cond_type_cd": condition.cond_type_cd,
+            "cond_basis_cd": condition.cond_basis_cd,
+            "cond_min_amt": condition.cond_min_amt,
+            "cond_max_amt_excl": condition.cond_max_amt_excl,
+            "excl_raw_txt": condition.excl_raw_txt,
+            "cond_raw_txt": condition.cond_raw_txt,
+            "cond_status_cd": "DRAFT",
+        }],
+    }],
+}
+```
+
+이 단계에서는 **조건 목록을 하나의 branch에 원자 조건(AND)으로 배치**한다. 데이터 계약은 여러 branch(OR) 표현을 지원하지만, **LLM이 모든 OR 구조를 자동 추론해 완성한다고 읽어서는 안 된다.** `build_rule()`은 `min_txn_amt`가 있으면 건당 금액 조건 원자를 추가하고, 규칙별 적용 대상과 값을 `rule_list` 형태로 만든다.
+
+**확인 소스:** [조건식 생성](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L428), [규칙 생성](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L473), [혜택 정규화](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L608), [최종 BENEFIT 등록](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/product_benefit_service.py#L256)
+
+#### 7) JSON Schema와 JSONB 실제 저장 형식: 작은 예제로 비교
+
+다음 예시는 특정 카드 운영 데이터를 복사한 값이 아니라 **필드 대응을 설명하기 위한 부분 JSON**이다. `PageExtraction` 전체를 만족하는 완전한 LLM 응답 예시가 아니다.
+
+**추출 응답의 `ConditionItem` 일부(중간 후보 JSONB에 포함):**
+
+```json
+{
+  "cond_key": "C01",
+  "cond_type_cd": "SPEND_REQ",
+  "cond_basis_cd": "PREV_MONTH_SPEND",
+  "cond_min_amt": 500000,
+  "cond_raw_txt": "전월 이용실적 50만원 이상",
+  "negate_yn": false
+}
+```
+
+**`build_cond_expr()` 변환 후 최종 조건식 JSONB의 해당 부분:**
+
+```json
+{
+  "expr_status_cd": "DRAFT",
+  "branches": [
+    {
+      "branch_no": 1,
+      "atoms": [
+        {
+          "atom_seq": 1,
+          "atom_key": "C01",
+          "negate_yn": false,
+          "cond_type_cd": "SPEND_REQ",
+          "cond_basis_cd": "PREV_MONTH_SPEND",
+          "cond_min_amt": 500000,
+          "cond_max_amt_excl": null,
+          "excl_raw_txt": null,
+          "cond_raw_txt": "전월 이용실적 50만원 이상",
+          "cond_status_cd": "DRAFT"
+        }
+      ]
+    }
+  ]
+}
+```
+
+같은 조건이라도 **Pydantic MODEL의 JSON 필드 구조**(`cond_key`, `scope`, `evidence` 등)와 **최종 등록용 JSONB**(`expr_status_cd`, `branches`, `atoms`, `atom_key` 등)는 일치하지 않는다. Python의 `build_cond_expr()`가 둘 사이를 변환한다.
+
+이 때문에 **Pydantic MODEL과 DB 컬럼명만 기계적으로 1:1 대응시키면 설계를 잘못 이해하기 쉽다.** 변환 함수까지 봐야 데이터가 어디로 이동하고 어떤 항목이 사라지는지 분석할 수 있다.
+
+#### 8) PostgreSQL이 검사하는 것은 어떤 '스키마'인가?
+
+현재 `card_product_item`에는 `item_cond_expr`, `rule_list`, `relation_list`, `item_data`라는 **JSONB 컬럼**이 있다. 저장 JSONB의 내부 구조는 SQL 함수·CHECK로 제한한다. 주요 예는 다음과 같다.
+
+| DB 객체 | 검사 내용 | 소스 |
+|---|---|---|
+| `fn_valid_cond_expr(jsonb)` | 조건식의 branches/atoms 형식과 제한 | [DDL 소스](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/sql/db_pipeline_schemaV7_draft.sql#L70) |
+| `fn_valid_target_list(jsonb)` | 규칙 적용 대상 목록 구조 | [DDL 소스](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/sql/db_pipeline_schemaV7_draft.sql#L155) |
+| `fn_valid_rule_list(jsonb,text)` | 규칙·조건/대상 JSON의 구조 계약 | [DDL 소스](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/sql/db_pipeline_schemaV7_draft.sql#L196) |
+| `fn_valid_relation_list(jsonb,text)` | 관계 목록, 중복/자기참조 등 | [DDL 소스](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/sql/db_pipeline_schemaV7_draft.sql#L245) |
+| `card_product_item_cond_ck` / `_rule_ck` / `_rel_ck` | `item_cond_expr`, `rule_list`, `relation_list`가 위 계약을 따르는지 | [항목 테이블 DDL](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/sql/db_pipeline_card_product_item.sql#L74) |
+| `fn_valid_item_data(...,'TERMS')` 관련 변경 | TERMS가 도입된 후 `item_data`의 TERMS_V1 구조 검사 | [TERMS 마이그레이션](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/sql/db_pipeline_card_product_item_terms.sql#L12) |
+
+**주의: DDL 파일 하나가 운영 DB의 최신 스키마 전체를 의미하지 않는다.** 예를 들어 초기 `db_pipeline_card_product_item.sql`에는 유형 CHECK가 `BENEFIT`와 `ANNUAL_FEE`로 작성되어 있지만, 후속 `db_pipeline_card_product_item_terms.sql`이 기존 유형 CHECK를 제거하고 `TERMS_V1` 검사 로직을 추가했다. 실제 운영에는 BENEFIT 34건, TERMS 14건, ANNUAL_FEE 3건이 존재한다(기존 Codex 운영 조회). **마이그레이션의 실행 여부와 현재 DB `pg_constraint`/함수 본문을 최종 기준으로 확인해야 한다.**
+
+DB CHECK는 **동일 행의 JSON 구조·값 형식·정해진 논리 제약**을 검사할 뿐, 다른 테이블의 PDF 청크 내용과 인용 문자열이 완전히 일치하는지까지 자동 증명하지 못한다. TERMS 마이그레이션의 주석에도 원문과 청크 일치 여부는 등록 프로그램에서 확인한다고 명시돼 있다.
+
+#### 9) TERMS는 BENEFIT과 같은 추출 경로라고 단정하면 안 된다
+
+현재 확인된 우리카드 `TERMS`는 `terms_register.py`와 `docs/identity_registry/terms/WOORI_CARD2_SIMPLE.json`, `WOORI_CARD2_DAILY.json`의 **시드 데이터 및 검증·등록 절차**로 `card_product_item`에 들어간다. `PageExtraction.card_conditions`와 **TERMS 14건을 1:1로 직접 매핑하는 구조라고 간주하면 안 된다.**
+
+- BENEFIT: `ExtractionService`의 추출 후보, 검증, 정규화와 `product_benefit_service.py`의 등록 경로를 중심으로 분석.
+- TERMS: 실제 시드 JSON의 `TERMS_V1` 계약, `terms_register.py`, DDL 변경과 원문 근거 검증을 별도로 분석.
+- 둘 다 최종 `card_product_item`에서 **항목 유형(item_type_cd)**으로 구분되지만, **입력 생성·검증·등록 진입점**은 다를 수 있다.
+
+**확인 소스:** [TERMS 등록 서비스](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/terms_register.py#L347), [TERMS DDL 변경](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/sql/db_pipeline_card_product_item_terms.sql#L68)
+
+#### 10) 저장 SQL과 실제 소스를 클릭해 읽는 순서
+
+| 학습 순서 | 소스/위치 | 먼저 볼 내용 |
+|---|---|---|
+| ① MODEL 정의 | [로컬](../../payment_card/db_pipeline/extraction_schema.py#L49) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_schema.py#L49) | Pydantic 상속, Literal, 필드와 중첩 관계 |
+| ② strict JSON Schema | [로컬](../../payment_card/db_pipeline/terra_client.py#L82) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/terra_client.py#L82) | 실제 LLM API로 보내는 구조 |
+| ③ _parse() | [로컬](../../payment_card/db_pipeline/extraction_service.py#L1137) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L1137) | PageExtraction.model_validate, 실패 처리 |
+| ④ 원문 검증 | [로컬](../../payment_card/db_pipeline/extraction_service.py#L284) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L284) | 위치·숫자·조건 연결 |
+| ⑤ 중간 JSONB 저장 | [SQL Mapper](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_repository.sql#L108) · [Service](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L1169) | `call_resp_json` vs `stg_raw_item` vs evidence |
+| ⑥ 등록용 조건식 변환 | [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/extraction_service.py#L428) | ConditionItem → branches/atoms |
+| ⑦ 최종 BENEFIT 저장 | [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/product_benefit_service.py#L336) | `Jsonb(bnft_cond)`, `Jsonb(rules)`, `Jsonb(relations)` |
+| ⑧ DB CHECK | [로컬](../../sql/db_pipeline_card_product_item.sql#L112) · [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/sql/db_pipeline_card_product_item.sql#L112) | 저장 계약과 Pydantic 계약의 차이 |
+| ⑨ TERMS 별도 경로 | [GitHub](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/main/src/card_benefit/payment_card/db_pipeline/terms_register.py#L347) | 상품별 TERMS 시드·검증 |
+
+**로컬 Markdown 링크 주의:** 위 상대 경로는 이 문서(`src/card_benefit/docs/guide/`)를 기준으로 계산했다. `#L행번호`는 GitHub에서는 해당 줄로 이동하지만, VS Code Preview에서는 설치된 확장/열기 동작에 따라 파일만 열리고 행 이동이 보장되지 않을 수 있다. 로컬 링크가 원하는 행으로 가지 않으면 GitHub 링크를 함께 사용한다.
+
+**이 장의 결론:** `Pydantic MODEL(고정 소스)` → `strict JSON Schema(런타임 변환)` → `LLM 응답 JSON(페이지 전체)` → `Python 타입·원문 검증` → `중간 JSONB(개별 후보)` → `정규화 함수(등록용 데이터 계약)` → `PostgreSQL JSONB + CHECK` 순서다. **JSON Schema가 DB 테이블로 저장되는 게 아니며, DB CHECK가 PDF 의미의 정확성을 단독 보증하지도 않는다.**
+
+---
+
 ### 공통 추출·정규화
 
 `src/card_benefit/payment_card/db_pipeline/extraction_service.py`의 `ExtractionService.run`은 공통 추출 흐름을 수행한다. `normalize_benefit`은 모델 출력의 혜택 항목을 공통 형태로 맞추고, `build_rule`은 규칙을, `build_cond_expr`는 조건식을 만든다. 현재 확인한 공통 정규화 경로에서 카드 ID별 BENEFIT 변환 분기(`card_id == ...`)는 발견되지 않았다. 이는 조사한 모듈 기준의 사실이며 저장소 내 모든 실행 진입점을 뜻하지 않는다.
