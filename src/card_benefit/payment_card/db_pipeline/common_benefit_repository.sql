@@ -175,6 +175,17 @@ SELECT e.card_doc_id,e.page_no,e.card_doc_chunk_id,e.evidence_id,CAST(:CARD_ID A
 FROM db_pipeline.card_source_evidence e WHERE e.evidence_id=:EVIDENCE_ID
 ON CONFLICT ON CONSTRAINT card_evidence_link_natural_key DO NOTHING RETURNING evidence_link_id;
 
+-- name: insert_rel_evidence_link
+-- 2026-11-05: 혜택 간 관계(relation_list의 relation_key)의 원문 근거. 원문 근거의 문서·페이지·청크 ID는 card_source_evidence에서 승계한다.
+INSERT INTO db_pipeline.card_evidence_link (card_doc_id,page_no,card_doc_chunk_id,evidence_id,card_id,ev_subject_cd,card_product_item_id,relation_key,ev_item_cd,ev_item_key)
+SELECT e.card_doc_id,e.page_no,e.card_doc_chunk_id,e.evidence_id,CAST(:CARD_ID AS bigint),'REL',CAST(:BNFT_ID AS varchar),CAST(:RELATION_KEY AS varchar),'SELF','-'
+FROM db_pipeline.card_source_evidence e WHERE e.evidence_id=:EVIDENCE_ID
+ON CONFLICT ON CONSTRAINT card_evidence_link_natural_key DO NOTHING RETURNING evidence_link_id;
+
+-- name: select_stg_chunk
+-- 2026-11-05: 추출 후보 행의 문서·쪽·청크(보정 인용의 원문 위치 확인용).
+SELECT card_doc_id, page_no, card_doc_chunk_id FROM db_pipeline.card_extr_stg WHERE card_extr_stg_id=:STG_ID;
+
 -- name: insert_rule_evidence_link
 -- 원문 근거의 문서·페이지·청크 ID는 card_source_evidence에서 evidence_id로 읽어 승계한다. 원문 근거가 없으면 등록하지 않는다.
 INSERT INTO db_pipeline.card_evidence_link (card_doc_id,page_no,card_doc_chunk_id,evidence_id,card_id,ev_subject_cd,card_product_item_id,rule_key,ev_item_cd,ev_item_key)
@@ -195,9 +206,10 @@ WHERE s.card_ai_run_id=:RUN_ID AND s.card_id=:CARD_ID AND s.stg_kind_cd='BENEFIT
 ORDER BY s.page_no,s.card_doc_chunk_id,s.stg_item_seq;   -- 다중 청크는 청크마다 항목 순번이 1부터다
 
 -- name: insert_local_benefit
+-- 2026-11-05: 관계(:RELS, 대상 card_product_item_id로 변환된 값)와 item_data(:DATA, 사람 검토 보정 출처)를 받는다. 없으면 [] / {}.
 INSERT INTO db_pipeline.card_product_item (card_id,item_type_cd,item_cd,item_nm,item_subtype_cd,item_origin_cd,item_scope_cd,
-  item_cond_expr,rule_list,relation_list,verification_status_cd,item_rule_txt,item_limit_txt,create_user_id,update_user_id)
-VALUES (:CARD_ID,'BENEFIT',:BNFT_CD,:BNFT_NM,:BNFT_TYPE,'LOCAL','PRODUCT',:COND,:RULES,'[]'::jsonb,'PENDING_REVIEW',:RULE_TXT,:LIMIT_TXT,
+  item_cond_expr,rule_list,relation_list,item_data,verification_status_cd,item_rule_txt,item_limit_txt,create_user_id,update_user_id)
+VALUES (:CARD_ID,'BENEFIT',:BNFT_CD,:BNFT_NM,:BNFT_TYPE,'LOCAL','PRODUCT',:COND,:RULES,:RELS,:DATA,'PENDING_REVIEW',:RULE_TXT,:LIMIT_TXT,
         'PRODUCT_BENEFIT','PRODUCT_BENEFIT')
 ON CONFLICT (card_id,item_cd) DO NOTHING RETURNING card_product_item_id AS card_bnft_id;
 

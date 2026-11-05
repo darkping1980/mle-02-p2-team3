@@ -1,0 +1,275 @@
+{
+ "ledger_version": 1,
+ "kind": "TERMS_SEED",
+ "card_id": 42,
+ "card_doc_id": "20261105_000048",
+ "product_nm": "카드의정석2 DAILY",
+ "pdf_file": "woori_all/credit/상품안내장_카드의정석2 DAILY_260602.pdf",
+ "text_source": "PyMuPDF(텍스트 레이어, U+0007/U+0003 레이아웃 표식은 공백으로 정규화)",
+ "created_date": "2026-11-05",
+ "status": "DRAFT_PENDING_USER_REVIEW",
+ "note": "사람 검토 SEED(2026-11-05 작성, DRAFT_PENDING_USER_REVIEW). txt는 DB card_doc_page.page_raw_txt에서 잘라낸 원문 그대로다. OCR·추출 오탈자도 고치지 않았다. 위치는 등록기(terms_register.py)가 chunk 원문에서 다시 찾아 검증한다.",
+ "terms": [
+  {
+   "terms_key": "D01",
+   "status": "REGISTER",
+   "terms_kind_cd": "SPEND_BASIS",
+   "item_nm": "전월 실적 기준",
+   "scope": {
+    "scope_cd": "PERFORMANCE",
+    "item_ids": []
+   },
+   "provenance_stg_ids": [],
+   "source": {
+    "page_no": 2,
+    "txt": "• 전월 실적은 전월 국내외 가맹점 이용금액으로 관련 세부 기준은 '실적 산정방법 안내' 참고"
+   },
+   "entries": {
+    "mode": "NONE"
+   },
+   "footnotes": [],
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "terms_key": "D02",
+   "status": "REGISTER",
+   "terms_kind_cd": "SPEND_BASIS",
+   "item_nm": "전월 실적 산정 기간·기준",
+   "scope": {
+    "scope_cd": "PERFORMANCE",
+    "item_ids": []
+   },
+   "provenance_stg_ids": [],
+   "source": {
+    "page_no": 2,
+    "txt": "• ‌ 전월 실적은 전월 1일부터 말일(매출 승인일 기준)까지 카드별 이용실적이며, 해외 가맹점 이용금액, \n교통카드 이용금액 및 통신료 자동납부 금액은 매출표 접수일 기준으로 해당 월 이용금액에 합산 적\n용됩니다."
+   },
+   "entries": {
+    "mode": "NONE"
+   },
+   "footnotes": [],
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "terms_key": "D03",
+   "status": "REGISTER",
+   "terms_kind_cd": "SPEND_EXCL",
+   "item_nm": "전월 실적 제외",
+   "scope": {
+    "scope_cd": "PERFORMANCE",
+    "item_ids": []
+   },
+   "provenance_stg_ids": [
+    "20261105_000662"
+   ],
+   "source": {
+    "page_no": 2,
+    "txt": "• ‌ 전월 실적 제외 : 무이자할부금액, 정부지원금(보육료, 유치원보조비, 바우처 이용금액 등), 아파트 \n관리비, LH/SH/전북개발공사 등 공공임대료, 부동산임대료, 초·중·고 학교 납부금, 대학(대학\n원) 등록금, 국세, 지방세, 관세, 공공요금(공과금)*, 상품권(카카오톡 선물하기 등 모바일 상품권 포\n함)/선불카드(포인트, 사이버머니, 게임머니 등 전자지급수단 포함)/기프트카드 구매 및 충전금\n액, 환금성 업종 이용금액, 교통카드(모바일 포함) 구매 및 충전금액, 시외버스/고속버스 요금(차\n내 단말기 및 APP 결제 포함), 신차구매금액, 의약품 전용몰/제약회사 업종 이용금액, 각종 수수료 \n및 이자, 연회비, 단기카드대출(현금서비스), 장기카드대출(카드론), 매출취소금액"
+   },
+   "entries": {
+    "mode": "LIST_AFTER_PREFIX",
+    "prefix": "전월 실적 제외 :"
+   },
+   "footnotes": [
+    {
+     "footnote_key": "f1",
+     "marker": "*",
+     "page_no": 2,
+     "txt": "* ‌ 공공요금(공과금) 내역 : 4대보험(건강보험/국민연금/고용보험/산재보험), 전기요금, 우편요금, \n도시가스요금, 상하수도요금, 과태료·범칙금·벌금, 여권발급비용, 국가·공공기관·공공단체(지방\n자치단체 등)로 개설된 가맹점 이용금액",
+     "locate": "FIRST_AFTER_SOURCE"
+    }
+   ],
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "terms_key": "D04",
+   "status": "REGISTER",
+   "terms_kind_cd": "CANCEL_RULE",
+   "item_nm": "취소 매출 실적 차감",
+   "scope": {
+    "scope_cd": "PERFORMANCE",
+    "item_ids": []
+   },
+   "provenance_stg_ids": [],
+   "source": {
+    "page_no": 2,
+    "txt": "•  취소 매출은 취소 매출표 접수월 이용실적에서 차감합니다. \n \n(‌ 단, 국내 가맹점 취소 매출이 매월 1~2일 사이에 접수된 경우 전월 실적에서 차감합니다.)\n 예) ‌ 1월 31일 이용건 취소 시 2월 2일까지 취소 매출표가 카드사에 접수된 경우에는 1월 이용실적 \n에서 차감, 이후 접수된 경우는 2월 이용실적에서 차감"
+   },
+   "entries": {
+    "mode": "NONE"
+   },
+   "footnotes": [],
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "terms_key": "D05",
+   "status": "REGISTER",
+   "terms_kind_cd": "BNFT_EXCL",
+   "item_nm": "할인 제외",
+   "scope": {
+    "scope_cd": "ALL_BENEFITS",
+    "item_ids": []
+   },
+   "provenance_stg_ids": [
+    "20261105_000663"
+   ],
+   "source": {
+    "page_no": 2,
+    "txt": "• ‌ 할인 제외 : 무이자할부금액(부분무이자할부금액 포함), 정부지원금(보육료, 유치원보조비, 바우처 이\n용금액 등), 아파트 관리비, LH/SH/전북개발공사 등 공공임대료, 부동산임대료, 초·중·고 학교 납부\n금, 대학(대학원) 등록금, 국세, 지방세, 관세, 공공요금(공과금)*, 상품권(카카오톡 선물하기 등 모바\n일 상품권 포함)/선불카드(포인트, 사이버머니, 게임머니 등 전자지급수단 포함)/기프트카드 구매 및 \n충전금액, 환금성 업종 이용금액, 교통카드(모바일 포함) 구매 및 충전금액, 시외버스/고속버스 요금\n(차내 단말기 및 APP 결제 포함), 신차구매금액, 의약품 전용몰/제약회사 업종 이용금액, 각종 수수\n료 및 이자, 연회비, 단기카드대출(현금서비스), 장기카드대출(카드론), 매출취소금액"
+   },
+   "entries": {
+    "mode": "LIST_AFTER_PREFIX",
+    "prefix": "할인 제외 :"
+   },
+   "footnotes": [
+    {
+     "footnote_key": "f1",
+     "marker": "*",
+     "page_no": 2,
+     "txt": "* ‌ 공공요금(공과금) 내역 : 4대보험(건강보험/국민연금/고용보험/산재보험), 전기요금, 우편요금, \n도시가스요금, 상하수도요금, 과태료·범칙금·벌금, 여권발급비용, 국가·공공기관·공공단체(지방자\n치단체 등)로 개설된 가맹점 이용금액",
+     "locate": "FIRST_AFTER_SOURCE"
+    }
+   ],
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "terms_key": "D06",
+   "status": "REGISTER",
+   "terms_kind_cd": "MERCHANT_RULE",
+   "item_nm": "결제대행·간편결제 가맹점 할인 제외",
+   "scope": {
+    "scope_cd": "ALL_BENEFITS",
+    "item_ids": []
+   },
+   "provenance_stg_ids": [
+    "20261105_000664"
+   ],
+   "source": {
+    "page_no": 2,
+    "txt": "• ‌ 가맹점 정보가 해당 업체가 아닌 결제대행업체(PG) 또는 간편결제 전용 가맹점으로 확인되는 경우 '\n결제대행업체' 또는 '간편결제' 가맹점으로 분류되어 할인 대상에서 제외됩니다. 자세한 사항은 우리\n카드 고객센터(1588-9955)에 문의하시기 바랍니다.\n\t 예)\t‌ 이마트에서 네이버페이로 결제 시 가맹점명이 '네이버페이' 또는 '네이버파이낸셜'인 경우 이마\n트 가맹점이 아닌 '간편결제' 가맹점으로 분류"
+   },
+   "entries": {
+    "mode": "NONE"
+   },
+   "footnotes": [],
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "terms_key": "D07",
+   "status": "REGISTER",
+   "terms_kind_cd": "MERCHANT_RULE",
+   "item_nm": "할인 및 제외 업종 기준",
+   "scope": {
+    "scope_cd": "ALL_BENEFITS",
+    "item_ids": []
+   },
+   "provenance_stg_ids": [
+    "20261105_000665"
+   ],
+   "source": {
+    "page_no": 2,
+    "txt": "• 할인 및 제외 업종/가맹점은 우리카드 전산상 등록 기준입니다."
+   },
+   "entries": {
+    "mode": "NONE"
+   },
+   "footnotes": [],
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "terms_key": "D08",
+   "status": "REGISTER",
+   "terms_kind_cd": "LIMIT_APPLY",
+   "item_nm": "월 할인 한도 적용 기간·순서",
+   "scope": {
+    "scope_cd": "ALL_BENEFITS",
+    "item_ids": []
+   },
+   "provenance_stg_ids": [],
+   "source": {
+    "page_no": 2,
+    "txt": "• ‌ 월 할인 한도는 전월 이용실적에 따라 당월 1일~말일까지 적용됩니다. 단, 서비스 제공은 거래(매입) \n순서대로 적용됩니다."
+   },
+   "entries": {
+    "mode": "NONE"
+   },
+   "footnotes": [],
+   "occurrence_note": "'특별할인'의 같은 문장(D10)과 구분: 시작 문구가 '• ‌ 월 할인 한도는'인 곳",
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "terms_key": "D09",
+   "status": "REGISTER",
+   "terms_kind_cd": "PROMO_OVERLAP",
+   "item_nm": "다른 프로모션 중복 불가",
+   "scope": {
+    "scope_cd": "ALL_BENEFITS",
+    "item_ids": []
+   },
+   "provenance_stg_ids": [
+    "20261105_000666"
+   ],
+   "source": {
+    "page_no": 2,
+    "txt": "• ‌ 기타쿠폰, 할인혜택 등 다른 프로모션과 중복되지 않으며, 자세한 사항은 우리카드 고객센터(1588-\n9955)에 문의하시기 바랍니다."
+   },
+   "entries": {
+    "mode": "NONE"
+   },
+   "footnotes": [],
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "terms_key": "D10",
+   "status": "HELD",
+   "held_reason": "적용 대상이 '특별할인'(고정소비 5%·정기결제 50%)인데 두 혜택이 아직 등록되지 않아 NAMED_ITEMS 대상 ID를 정할 수 없음",
+   "terms_kind_cd": "LIMIT_APPLY",
+   "item_nm": "특별할인 월 할인 한도 적용 기간·순서",
+   "scope": {
+    "scope_cd": "NAMED_ITEMS",
+    "item_ids": []
+   },
+   "provenance_stg_ids": [],
+   "source": {
+    "page_no": 2,
+    "txt": "• ‌ '특별할인'의 월 할인 한도는 전월 이용실적에 따라 당월 1일~말일까지 적용됩니다. 단, 서비스 제\n공은 거래(매입) 순서대로 적용됩니다."
+   },
+   "entries": {
+    "mode": "NONE"
+   },
+   "footnotes": [],
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "terms_key": "D11",
+   "status": "HELD",
+   "held_reason": "적용 대상이 '특별할인'이며 두 혜택이 미등록. 각주(최초 발급 정의)도 함께 등록해야 함",
+   "terms_kind_cd": "GRACE",
+   "item_nm": "신규 발급 특별할인 실적 유예",
+   "scope": {
+    "scope_cd": "NAMED_ITEMS",
+    "item_ids": []
+   },
+   "provenance_stg_ids": [
+    "20261105_000661"
+   ],
+   "source": {
+    "page_no": 2,
+    "txt": "• ‌ '특별할인' 서비스는 최초발급*받은 '카드의정석2 DAILY' 카드 수령(사용)등록일과 사용개시일 중 \n빠른 날을 기준으로 다음 달 말일까지는 전월 실적 조건 미충족 시에도 최저 실적 구간 서비스를 제\n공합니다."
+   },
+   "entries": {
+    "mode": "NONE"
+   },
+   "footnotes": [
+    {
+     "footnote_key": "f1",
+     "marker": "*",
+     "page_no": 2,
+     "txt": "* ‌ 유효기간 만기 또는 카드 해지 후 동일 상품을 발급 받는 경우 최초 발급에 해당하지 않음",
+     "locate": "FIRST_AFTER_SOURCE"
+    }
+   ],
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  }
+ ]
+}

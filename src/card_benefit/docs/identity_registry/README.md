@@ -70,3 +70,7 @@ uv run python src/card_benefit/docs/identity_registry/simulate_ledger.py HANA_MP
 개선 방향(미적용):
 1. 최소안(SQL만): 혜택명이 같은 대표 후보 중 **가장 최근 실행 하나**로 한정한다. 33건 기준 483→151건, 대장 근거는 유지된다.
 2. 장기안(DB 구조 변경 필요, 별도 승인): 공통 혜택과 원문 근거를 직접 잇는 연결을 두고 Neo4j에도 `supported_by`로 올린다.
+
+## 개별 카드 혜택 (2026-11-05 추가)
+
+개별 카드 10종의 `card_product_item` 등록·보류 현황은 [product/README.md](product/README.md)에 있다. 공통 혜택 대장과 별개의 체계이다.

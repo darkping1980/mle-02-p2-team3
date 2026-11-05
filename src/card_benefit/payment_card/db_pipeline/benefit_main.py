@@ -36,6 +36,7 @@ from .common_benefit_service import CommonBenefitService
 from .document_repository import MAPPER_ROOT
 from .embedding_service import EMBEDDING_LOG_KEYS, EmbeddingService, OpenAIEmbedder
 from .product_benefit_service import ProductBenefitService
+from .benefit_review_patch import load_patches
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -48,6 +49,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--no-embed", action="store_true", help="임베딩을 만들지 않는다. embedding_main으로 나중에 처리")
     parser.add_argument("--apply", action="store_true", help="실제로 등록한다")
     parser.add_argument("--exclude-stg-id", action="append", default=[], help="Explicit product candidate exclusion; source staging is unchanged")
+    parser.add_argument("--patch", action="append", default=[],
+                        help="사람 검토 보정 대장 JSON(product). APPROVED 보정만 적용한다(2026-11-05)")
     args = parser.parse_args(argv)
     if args.kind != "brand-compare" and not args.run_id:
         parser.error("--run-id가 필요합니다")
@@ -84,7 +87,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         embedding = None if args.no_embed else EmbeddingService(session, OpenAIEmbedder())
         if args.kind == "product":
-            results = ProductBenefitService(session, embedding).register_run(
+            patches = load_patches(args.patch) if args.patch else []
+            results = ProductBenefitService(session, embedding, patches=patches).register_run(
                 args.card_id[0], args.run_id, exclude_stg_ids=set(args.exclude_stg_id))
         else:
             # --identity "추출항목ID=업무식별자" → {card_extr_stg_id: 식별자}. 공통 혜택 코드(bnft_cd) 생성에 쓰인다.

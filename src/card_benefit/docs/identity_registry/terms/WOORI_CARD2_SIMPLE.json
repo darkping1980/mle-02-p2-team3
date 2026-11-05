@@ -1,0 +1,89 @@
+{
+ "ledger_version": 1,
+ "kind": "TERMS_SEED",
+ "card_id": 24,
+ "card_doc_id": "20261105_000044",
+ "product_nm": "카드의정석2 SIMPLE",
+ "pdf_file": "woori_all/credit/상품안내장_카드의정석2 SIMPLE_out_게시용.pdf",
+ "text_source": "WindowsOCR",
+ "created_date": "2026-11-05",
+ "status": "DRAFT_PENDING_USER_REVIEW",
+ "note": "사람 검토 SEED(2026-11-05 작성, DRAFT_PENDING_USER_REVIEW). txt는 DB card_doc_page.page_raw_txt에서 잘라낸 원문 그대로다. OCR·추출 오탈자도 고치지 않았다. 위치는 등록기(terms_register.py)가 chunk 원문에서 다시 찾아 검증한다.",
+ "terms": [
+  {
+   "terms_key": "S01",
+   "status": "REGISTER",
+   "terms_kind_cd": "BNFT_EXCL",
+   "item_nm": "할인 제외",
+   "scope": {
+    "scope_cd": "ALL_BENEFITS",
+    "item_ids": []
+   },
+   "provenance_stg_ids": [
+    "20261105_000647"
+   ],
+   "source": {
+    "page_no": 2,
+    "txt": "• 할인 제외 : 무이자할부금액, 정부지원금(보육료, 유치원보조비, 바우저 이용금액 등), 아파트 관리\n비, 내/SH/전북개발공사 등 공공임대료, 부동산임대료, 초•중•고 학교 납부금 전체, 대학(대학\n원) 등록금, 국세, 지방세, 관세, 공공요금(공과금)*, 상품권(카카오톡 선물하기 등 모바일 상품권 포\n함)/선불카드(포인트, 사이버머니, 게임머니 등 전자지급 수단 포함)/기프트카드 구매 및 충전금\n액, 환금성 업종, 교통카드(모바일 포함) 구매 및 충전금액, 시외버스 및 고속버스업종, 각종 수수료\n및 이자, 연회비, 단기카드대출(현금서비스), 장기카드대출(카드론), 매출취소금액, 신자구매금액,\n의약품 전용몰/제약회사 업종"
+   },
+   "entries": {
+    "mode": "LIST_AFTER_PREFIX",
+    "prefix": "할인 제외 :"
+   },
+   "footnotes": [
+    {
+     "footnote_key": "f1",
+     "marker": "*",
+     "page_no": 2,
+     "txt": "* 공공요금(공과금)내역 : 4대보험(건강보험 / 국민연금 / 고용보험 / 산재보험), 전) l요금, 우편요금,\n도시가스요금, 상하수도요금, 과태료•범칙금•벌금, 여권발급비용, 국2卜공공기관•공공단체(지\n방자치단체 등)로 개설된 가맹점 이용금액",
+     "locate": "FIRST_AFTER_SOURCE"
+    }
+   ],
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "terms_key": "S02",
+   "status": "REGISTER",
+   "terms_kind_cd": "PROMO_OVERLAP",
+   "item_nm": "다른 프로모션 중복 불가",
+   "scope": {
+    "scope_cd": "ALL_BENEFITS",
+    "item_ids": []
+   },
+   "provenance_stg_ids": [
+    "20261105_000648"
+   ],
+   "source": {
+    "page_no": 2,
+    "txt": "• 기타 쿠폰, 할인 혜택 등 당사에서 제공하는 다른 프로모션과의 중복 적용 불가합니다 자세한 사항\n은 우리카드 고객센터(1588-9955)에 문의하시기 바랍니다"
+   },
+   "entries": {
+    "mode": "NONE"
+   },
+   "footnotes": [],
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  },
+  {
+   "terms_key": "S03",
+   "status": "REGISTER",
+   "terms_kind_cd": "MERCHANT_RULE",
+   "item_nm": "할인 및 제외 업종 기준",
+   "scope": {
+    "scope_cd": "ALL_BENEFITS",
+    "item_ids": []
+   },
+   "provenance_stg_ids": [
+    "20261105_000649"
+   ],
+   "source": {
+    "page_no": 2,
+    "txt": "• 할인 및 제외 업종/가맹점은 우리카드 전산상 등록 기준"
+   },
+   "entries": {
+    "mode": "NONE"
+   },
+   "footnotes": [],
+   "review_status": "DRAFT_PENDING_USER_REVIEW"
+  }
+ ]
+}

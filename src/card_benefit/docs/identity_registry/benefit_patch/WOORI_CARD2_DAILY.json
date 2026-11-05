@@ -1,0 +1,64 @@
+{
+ "ledger_version": 1,
+ "kind": "BENEFIT_REVIEW_PATCH",
+ "created_date": "2026-11-05",
+ "note": "사람 검토 보정(예외 수단). quote_txt는 DB 청크 원문에서 잘라낸 그대로. 상태가 APPROVED인 보정만 운영 등록에 적용된다.",
+ "card_doc_id": "20261105_000048",
+ "pdf_file": "woori_all/credit/상품안내장_카드의정석2 DAILY_260602.pdf",
+ "patches": [
+  {
+   "patch_id": "BP-20261105-0002",
+   "run_id": "20261105_000046",
+   "card_extr_stg_id": "20261105_000658",
+   "status": "DRAFT_PENDING_USER_REVIEW",
+   "reason": "최소 결제금액(매출 건당 1만원) 원문 인용이 할인율 근거에 빠져 값 검증이 실패함. 원문 인용 추가. 묶음 이름 대상 관계 2건은 특별할인 쪽 관계로 다시 표현하고 제외",
+   "pdf_check": "2쪽 '기본할인' 박스: 국내외 가맹점 1% 청구할인 / ※매출 건당 1만원 이상 결제 시 할인 제공 (2026-11-05 페이지 이미지 대조)",
+   "ops": [
+    {
+     "op": "ADD_EVIDENCE",
+     "supports": "RULE",
+     "support_key": "basic_rate",
+     "quote_txt": "※ 매출 건당 1만원 이상 결제 시 할인 제공"
+    },
+    {
+     "op": "DROP_RELATION",
+     "relation_key": "basic_special_exclusive",
+     "reason": "대상이 묶음 이름 '특별할인'이라 연결 불가. 같은 원문(139행)을 정기결제·고정소비 쪽 관계(OVERRIDES·MUTUALLY_EXCLUSIVE → 기본할인)로 다시 표현"
+    },
+    {
+     "op": "DROP_RELATION",
+     "relation_key": "special_over_basic",
+     "reason": "대상이 묶음 이름 '특별할인'이라 연결 불가. 같은 원문(139행)을 정기결제·고정소비 쪽 관계(OVERRIDES·MUTUALLY_EXCLUSIVE → 기본할인)로 다시 표현"
+    }
+   ]
+  },
+  {
+   "patch_id": "BP-20261105-0003",
+   "run_id": "20261105_000046",
+   "card_extr_stg_id": "20261105_000660",
+   "status": "DRAFT_PENDING_USER_REVIEW",
+   "reason": "기본할인 박스의 '특별할인과 중복 적용 불가, 특별할인 우선' 관계가 묶음 이름('특별할인') 때문에 연결되지 않음. 특별할인 쪽에서 기본할인으로 관계를 둔다",
+   "pdf_check": "2쪽 '기본할인' 박스 두 번째 항목 (2026-11-05 페이지 이미지 대조)",
+   "ops": [
+    {
+     "op": "ADD_RELATION",
+     "relation": {
+      "relation_key": "special_over_basic",
+      "rel_type_cd": "OVERRIDES",
+      "to_benefit_nm": "국내외 가맹점 1% 청구할인"
+     },
+     "quote_txt": "• 특별할인과 중복 적용이 불가하며, 특별할인 서비스 우선 적용"
+    },
+    {
+     "op": "ADD_RELATION",
+     "relation": {
+      "relation_key": "special_basic_exclusive",
+      "rel_type_cd": "MUTUALLY_EXCLUSIVE",
+      "to_benefit_nm": "국내외 가맹점 1% 청구할인"
+     },
+     "quote_txt": "• 특별할인과 중복 적용이 불가하며, 특별할인 서비스 우선 적용"
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,25 @@
+{
+ "ledger_version": 1,
+ "kind": "BENEFIT_REVIEW_PATCH",
+ "created_date": "2026-11-05",
+ "note": "사람 검토 보정(예외 수단). quote_txt는 DB 청크 원문에서 잘라낸 그대로. 상태가 APPROVED인 보정만 운영 등록에 적용된다.",
+ "card_doc_id": "20261105_000044",
+ "pdf_file": "woori_all/credit/상품안내장_카드의정석2 SIMPLE_out_게시용.pdf",
+ "patches": [
+  {
+   "patch_id": "BP-20261105-0001",
+   "run_id": "20261105_000044",
+   "card_extr_stg_id": "20261105_000646",
+   "status": "DRAFT_PENDING_USER_REVIEW",
+   "reason": "대상 종류 UNKNOWN('국내외 가맹점') 보완. 0.3% 규칙의 Two-in-One 결제 조건(b1-r2-c1)은 추출 결과에 이미 있어 추가하지 않음",
+   "pdf_check": "2쪽 'SIMPLE 할인 서비스' 박스: 국내외 가맹점 0.8% 청구할인 / ※Two-in-One 결제서비스(국내 체크 매출) 이용 시 0.3% 청구할인 (2026-11-05 페이지 이미지 대조)",
+   "ops": [
+    {
+     "op": "SET_TARGET_TYPE",
+     "target_nm": "국내외 가맹점",
+     "target_type_cd": "CHANNEL"
+    }
+   ]
+  }
+ ]
+}

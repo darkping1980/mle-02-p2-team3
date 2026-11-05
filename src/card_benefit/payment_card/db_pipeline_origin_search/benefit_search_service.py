@@ -327,6 +327,11 @@ class BenefitSearchService:
                 for item in evidence]
         return detail
 
+    def card_terms(self, card_ids: list[int]) -> list[dict]:
+        """카드들의 TERMS(할인 제공 유의사항·제외 목록) 항목과 원문 근거. 혜택 후보 검색에는 쓰지 않는다(2026-11-05)."""
+        ids = sorted({int(card_id) for card_id in card_ids})
+        return self.repository.rows("select_card_terms", CARD_IDS=ids) if ids else []
+
     @staticmethod
     def _conditions(row: dict) -> list[dict]:
         """카드·혜택·규칙의 조건식 JSON(branches → atoms)을 Neo4j 조건 조회 결과와 같은 행 목록으로 펼친다."""

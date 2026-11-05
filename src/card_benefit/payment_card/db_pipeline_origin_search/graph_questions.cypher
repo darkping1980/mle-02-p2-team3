@@ -30,8 +30,9 @@ ORDER BY name
 
 // name: item_catalog
 // 혜택이 아닌 카드 상품 항목(연회비 등). 금액 등 상세는 source_json의 item_data에 있다.
+// TERMS(할인 제공 유의사항)는 선택 후보가 아니라 선택된 혜택에 붙는 근거라 여기서 뺀다(2026-11-05).
 MATCH (c:dp_card_product)-[:dp_has_item]->(i:dp_card_product_item)
-WHERE i.item_type_cd <> 'BENEFIT'
+WHERE i.item_type_cd <> 'BENEFIT' AND i.item_type_cd <> 'TERMS'
 RETURN i.key AS key, i.name AS name, i.card_product_item_id AS id, i.verification_status AS status,
        i.item_type_cd AS item_type, i.source_json AS item_source, c.source_json AS card_source
 ORDER BY c.card_id, i.card_product_item_id

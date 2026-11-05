@@ -203,3 +203,20 @@ JOIN db_pipeline.card_source_evidence e ON e.card_extr_stg_id = s.card_extr_stg_
 WHERE b.card_common_id = :COMMON_ID AND b.card_common_bnft_id = :BNFT_ID
 ORDER BY e.page_no, e.evidence_id
 ;
+
+-- name: select_card_terms
+-- 카드의 TERMS(할인 제공 유의사항·제외 목록) 항목과 그 원문 근거(ITEM 근거). 2026-11-05 추가.
+-- GraphRAG가 선택된 혜택의 카드에 적용 범위(item_data.scope)가 맞는 TERMS만 근거로 붙인다. 혜택 후보로는 쓰지 않는다.
+SELECT i.card_id, i.card_product_item_id, i.item_cd, i.item_nm, i.item_data, i.item_rule_txt, i.verification_status_cd,
+       p.product_nm,
+       coalesce(jsonb_agg(jsonb_build_object('evidence_id', e.evidence_id, 'page_no', e.page_no, 'quote_txt', e.quote_txt,
+                                             'approval_status_cd', e.approval_status_cd) ORDER BY e.evidence_id)
+                FILTER (WHERE e.evidence_id IS NOT NULL), '[]'::jsonb) AS evidence
+FROM db_pipeline.card_product_item i
+JOIN db_pipeline.card_product p ON p.card_id = i.card_id
+LEFT JOIN db_pipeline.card_evidence_link l
+       ON l.card_id = i.card_id AND l.card_product_item_id = i.card_product_item_id AND l.ev_subject_cd = 'ITEM'
+LEFT JOIN db_pipeline.card_source_evidence e ON e.evidence_id = l.evidence_id
+WHERE i.item_type_cd = 'TERMS' AND i.card_id = ANY(CAST(:CARD_IDS AS bigint[]))
+GROUP BY i.card_id, i.card_product_item_id, i.item_cd, i.item_nm, i.item_data, i.item_rule_txt, i.verification_status_cd, p.product_nm
+ORDER BY i.card_id, i.card_product_item_id;
