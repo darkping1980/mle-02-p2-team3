@@ -154,6 +154,28 @@ class PreviewTests(unittest.TestCase):
         self.assertEqual(edge["start"], key("bnft_rule", 2, "benefit", "rule"))
         self.assertEqual(edge["end"], key("card_source_evidence", "ev"))
 
+    def test_relation_evidence_hangs_on_benefit_with_relation_key(self):
+        data = fixture()
+        data["benefits"][0]["relation_list"] = [{"relation_key": "fb", "to_bnft_id": "other", "rel_type_cd": "FALLBACK_AFTER_CAP"}]
+        data["links"].append({"card_id": 2, "ev_subject_cd": "REL", "card_bnft_id": "benefit", "relation_key": "fb",
+                              "evidence_id": "ev", "ev_link_id": "rel_link"})
+        graph, stats = build(data)
+        self.assertEqual(stats["relationships"]["dp_supported_by"], 2)
+        edge = next(e for e in graph.edges.values() if '"rel_link"' in e["source_json"])
+        self.assertEqual(edge["start"], key("card_bnft", 2, "benefit"))
+        self.assertIn('"relation_key":"fb"', edge["source_json"])
+        self.assertIn('"ev_subject_cd":"REL"', edge["source_json"])
+
+    def test_relation_evidence_without_stored_relation_is_rejected(self):
+        data = fixture()
+        data["benefits"][0]["relation_list"] = [{"relation_key": "fb", "to_bnft_id": "other", "rel_type_cd": "FALLBACK_AFTER_CAP"}]
+        for relation_key in ("missing", None):
+            bad = copy.deepcopy(data)
+            bad["links"].append({"card_id": 2, "ev_subject_cd": "REL", "card_bnft_id": "benefit", "relation_key": relation_key,
+                                 "evidence_id": "ev", "ev_link_id": "rel_link"})
+            with self.assertRaisesRegex(GraphValidationError, "근거 연결 대상 없음"):
+                build(bad)
+
     def test_rule_key_is_scoped_by_benefit(self):
         data = fixture()
         data["links"].append({"card_id": 2, "ev_subject_cd": "RULE", "card_bnft_id": "other", "rule_key": "rule",

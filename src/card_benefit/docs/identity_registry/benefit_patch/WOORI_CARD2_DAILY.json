@@ -10,7 +10,7 @@
    "patch_id": "BP-20261105-0002",
    "run_id": "20261105_000046",
    "card_extr_stg_id": "20261105_000658",
-   "status": "DRAFT_PENDING_USER_REVIEW",
+   "status": "APPROVED",
    "reason": "최소 결제금액(매출 건당 1만원) 원문 인용이 할인율 근거에 빠져 값 검증이 실패함. 원문 인용 추가. 묶음 이름 대상 관계 2건은 특별할인 쪽 관계로 다시 표현하고 제외",
    "pdf_check": "2쪽 '기본할인' 박스: 국내외 가맹점 1% 청구할인 / ※매출 건당 1만원 이상 결제 시 할인 제공 (2026-11-05 페이지 이미지 대조)",
    "ops": [
@@ -30,15 +30,17 @@
      "relation_key": "special_over_basic",
      "reason": "대상이 묶음 이름 '특별할인'이라 연결 불가. 같은 원문(139행)을 정기결제·고정소비 쪽 관계(OVERRIDES·MUTUALLY_EXCLUSIVE → 기본할인)로 다시 표현"
     }
-   ]
+   ],
+   "approved_date": "2026-11-05",
+   "approved_note": "사용자 승인: 보정 방향·DAILY 고정소비 5% 9개 규칙 구조(2026-11-05 최종 검증 보고 확인)"
   },
   {
    "patch_id": "BP-20261105-0003",
    "run_id": "20261105_000046",
    "card_extr_stg_id": "20261105_000660",
-   "status": "DRAFT_PENDING_USER_REVIEW",
-   "reason": "기본할인 박스의 '특별할인과 중복 적용 불가, 특별할인 우선' 관계가 묶음 이름('특별할인') 때문에 연결되지 않음. 특별할인 쪽에서 기본할인으로 관계를 둔다",
-   "pdf_check": "2쪽 '기본할인' 박스 두 번째 항목 (2026-11-05 페이지 이미지 대조)",
+   "status": "APPROVED",
+   "reason": "기본할인 박스의 '특별할인과 중복 적용 불가, 특별할인 우선' 관계가 묶음 이름('특별할인') 때문에 연결되지 않음. 특별할인 쪽에서 기본할인으로 관계를 둔다. 월 할인한도 표의 통합 할인한도(고정소비와 공유)가 추출에서 빠져 한도 구간으로 기록",
+   "pdf_check": "2쪽 '기본할인' 박스 두 번째 항목, 2쪽 '월 할인한도' 표(정기결제 5,000원은 세 구간 병합 칸, 통합 할인한도 8,000/11,000/17,000원) (2026-11-05 페이지 이미지 대조)",
    "ops": [
     {
      "op": "ADD_RELATION",
@@ -57,8 +59,487 @@
       "to_benefit_nm": "국내외 가맹점 1% 청구할인"
      },
      "quote_txt": "• 특별할인과 중복 적용이 불가하며, 특별할인 서비스 우선 적용"
+    },
+    {
+     "op": "SET_LIMIT_TIERS",
+     "table_quote": "월 할인한도\n전월실적\n고정소비 할인\n정기결제 할인\n통합 할인한도\n50만원 이상 100만원 미만\n3,000원\n5,000원\n8,000원\n100만원 이상 200만원 미만\n6,000원\n11,000원\n200만원 이상\n12,000원\n17,000원",
+     "basis_cd": "PREV_MONTH_SPEND",
+     "tiers": [
+      {
+       "tier_key": "t50",
+       "label": "50만원 이상 100만원 미만",
+       "min_amt": 500000,
+       "max_amt_excl": 1000000
+      },
+      {
+       "tier_key": "t100",
+       "label": "100만원 이상 200만원 미만",
+       "min_amt": 1000000,
+       "max_amt_excl": 2000000
+      },
+      {
+       "tier_key": "t200",
+       "label": "200만원 이상",
+       "min_amt": 2000000,
+       "max_amt_excl": null
+      }
+     ],
+     "columns": [
+      {
+       "column": "고정소비 할인",
+       "caps": {
+        "t50": "3,000원",
+        "t100": "6,000원",
+        "t200": "12,000원"
+       }
+      },
+      {
+       "column": "정기결제 할인",
+       "merged_cell": true,
+       "caps": {
+        "t50": "5,000원",
+        "t100": "5,000원",
+        "t200": "5,000원"
+       }
+      },
+      {
+       "column": "통합 할인한도",
+       "caps": {
+        "t50": "8,000원",
+        "t100": "11,000원",
+        "t200": "17,000원"
+       }
+      }
+     ],
+     "own_column": "정기결제 할인",
+     "shared": [
+      {
+       "group_key": "20261105_000048:통합 할인한도",
+       "column": "통합 할인한도",
+       "member_benefit_nms": [
+        "고정소비 영역 5% 청구할인",
+        "정기결제 50% 청구할인"
+       ]
+      }
+     ]
     }
-   ]
+   ],
+   "approved_date": "2026-11-05",
+   "approved_note": "사용자 승인: 보정 방향·DAILY 고정소비 5% 9개 규칙 구조(2026-11-05 최종 검증 보고 확인)"
+  },
+  {
+   "patch_id": "BP-20261105-0004",
+   "run_id": "20261105_000046",
+   "card_extr_stg_id": "20261105_000659",
+   "status": "APPROVED",
+   "reason": "영역별 상세 유의사항이 해당 가맹점 묶음에만 적용되도록 규칙을 묶음별로 나누고 조건을 옮김(다이소는 매출 건당 3만원 조건 제외). 전월실적 구간별로 복제된 규칙은 한도 구간으로 바꾸고, 혜택 공통 실적 조건(50만원 이상)과 통합 할인한도(정기결제와 공유)를 기록. 기본할인과의 관계(특별할인 우선·중복 불가)를 둠",
+   "pdf_check": "2쪽 '영역별 상세 유의사항'(식비·장보기·교통·통신, [ ] 묶음 단위), '특별할인' 고정소비 박스, '월 할인한도' 표 (2026-11-05 페이지 이미지 대조). [카카오T(택시)] 조건은 카카오T에만 적용되어 택시 업종은 별도 규칙(9개 규칙)",
+   "ops": [
+    {
+     "op": "DROP_RULE",
+     "rule_key": "fixed_rate_100",
+     "reason": "전월실적 구간별로 복제된 같은 5% 규칙. 구간은 한도 구간(SET_LIMIT_TIERS)으로 기록"
+    },
+    {
+     "op": "DROP_RULE",
+     "rule_key": "fixed_rate_200",
+     "reason": "전월실적 구간별로 복제된 같은 5% 규칙. 구간은 한도 구간(SET_LIMIT_TIERS)으로 기록"
+    },
+    {
+     "op": "SPLIT_RULE",
+     "rule_key": "fixed_rate_50",
+     "source_conditions": "DROP",
+     "reason": "원 규칙 조건(50만원 이상 100만원 미만)은 한도 구간 표기이며 할인율 적용 조건이 아님. 한도 구간과 혜택 공통 실적 조건(50만원 이상)으로 다시 표현",
+     "into": [
+      {
+       "rule_key": "food.dine",
+       "target_nms": [
+        "음식점/주점 업종"
+       ]
+      },
+      {
+       "rule_key": "food.delivery",
+       "target_nms": [
+        "배달의민족",
+        "쿠팡이츠",
+        "요기요"
+       ]
+      },
+      {
+       "rule_key": "grocery.online",
+       "target_nms": [
+        "쿠팡",
+        "컬리",
+        "SSG.COM"
+       ]
+      },
+      {
+       "rule_key": "grocery.offline",
+       "target_nms": [
+        "이마트",
+        "롯데마트"
+       ]
+      },
+      {
+       "rule_key": "grocery.daiso",
+       "target_nms": [
+        "다이소"
+       ]
+      },
+      {
+       "rule_key": "transit.taxi",
+       "target_nms": [
+        "택시 업종"
+       ]
+      },
+      {
+       "rule_key": "transit.kakaot",
+       "target_nms": [
+        "카카오T(택시)"
+       ]
+      },
+      {
+       "rule_key": "transit.fuel",
+       "target_nms": [
+        "주유",
+        "SK에너지",
+        "GS칼텍스",
+        "S-OIL",
+        "HD현대오일뱅크"
+       ]
+      },
+      {
+       "rule_key": "telecom",
+       "target_nms": [
+        "SKT",
+        "KT",
+        "LG U+"
+       ]
+      }
+     ]
+    },
+    {
+     "op": "MOVE_CONDITION",
+     "cond_key": "restaurant_exclusion",
+     "rule_keys": [
+      "food.dine"
+     ],
+     "for_targets": [
+      "음식점/주점 업종"
+     ]
+    },
+    {
+     "op": "MOVE_CONDITION",
+     "cond_key": "delivery_payment",
+     "rule_keys": [
+      "food.delivery"
+     ],
+     "for_targets": [
+      "배달의민족",
+      "쿠팡이츠",
+      "요기요"
+     ]
+    },
+    {
+     "op": "MOVE_CONDITION",
+     "cond_key": "delivery_direct_excl",
+     "rule_keys": [
+      "food.delivery"
+     ],
+     "for_targets": [
+      "배달의민족",
+      "쿠팡이츠",
+      "요기요"
+     ]
+    },
+    {
+     "op": "MOVE_CONDITION",
+     "cond_key": "delivery_items",
+     "rule_keys": [
+      "food.delivery"
+     ],
+     "for_targets": [
+      "배달의민족",
+      "쿠팡이츠",
+      "요기요"
+     ]
+    },
+    {
+     "op": "MOVE_CONDITION",
+     "cond_key": "online_shopping",
+     "rule_keys": [
+      "grocery.online"
+     ],
+     "for_targets": [
+      "쿠팡",
+      "컬리",
+      "SSG.COM"
+     ]
+    },
+    {
+     "op": "MOVE_CONDITION",
+     "cond_key": "online_delivery",
+     "rule_keys": [
+      "grocery.online"
+     ],
+     "for_targets": [
+      "쿠팡",
+      "컬리",
+      "SSG.COM"
+     ]
+    },
+    {
+     "op": "MOVE_CONDITION",
+     "cond_key": "shopping_services_excl",
+     "rule_keys": [
+      "grocery.online"
+     ],
+     "for_targets": [
+      "쿠팡",
+      "컬리",
+      "SSG.COM"
+     ]
+    },
+    {
+     "op": "MOVE_CONDITION",
+     "cond_key": "kakaot_payment",
+     "rule_keys": [
+      "transit.kakaot"
+     ],
+     "for_targets": [
+      "카카오T(택시)"
+     ]
+    },
+    {
+     "op": "MOVE_CONDITION",
+     "cond_key": "kakaot_excl",
+     "rule_keys": [
+      "transit.kakaot"
+     ],
+     "for_targets": [
+      "카카오T(택시)"
+     ]
+    },
+    {
+     "op": "MOVE_CONDITION",
+     "cond_key": "fuel_types",
+     "rule_keys": [
+      "transit.fuel"
+     ],
+     "for_targets": [
+      "주유",
+      "SK에너지",
+      "GS칼텍스",
+      "S-OIL",
+      "HD현대오일뱅크"
+     ]
+    },
+    {
+     "op": "MOVE_CONDITION",
+     "cond_key": "fuel_lpg",
+     "rule_keys": [
+      "transit.fuel"
+     ],
+     "for_targets": [
+      "주유",
+      "SK에너지",
+      "GS칼텍스",
+      "S-OIL",
+      "HD현대오일뱅크"
+     ]
+    },
+    {
+     "op": "MOVE_CONDITION",
+     "cond_key": "telecom_auto",
+     "rule_keys": [
+      "telecom"
+     ],
+     "for_targets": [
+      "SKT",
+      "KT",
+      "LG U+"
+     ]
+    },
+    {
+     "op": "MOVE_CONDITION",
+     "cond_key": "telecom_excl",
+     "rule_keys": [
+      "telecom"
+     ],
+     "for_targets": [
+      "SKT",
+      "KT",
+      "LG U+"
+     ]
+    },
+    {
+     "op": "MOVE_CONDITION",
+     "cond_key": "offline_shopping",
+     "rule_keys": [
+      "grocery.offline",
+      "grocery.daiso"
+     ],
+     "for_targets": [
+      "이마트",
+      "롯데마트",
+      "다이소"
+     ]
+    },
+    {
+     "op": "MOVE_CONDITION",
+     "cond_key": "offline_shopping_excl",
+     "rule_keys": [
+      "grocery.offline",
+      "grocery.daiso"
+     ],
+     "for_targets": [
+      "이마트",
+      "롯데마트",
+      "다이소"
+     ]
+    },
+    {
+     "op": "MOVE_CONDITION",
+     "cond_key": "fixed_min_txn",
+     "rule_keys": [
+      "food.dine",
+      "food.delivery",
+      "grocery.online",
+      "grocery.offline",
+      "transit.taxi",
+      "transit.kakaot",
+      "transit.fuel",
+      "telecom"
+     ],
+     "for_targets": [
+      "음식점/주점 업종",
+      "배달의민족",
+      "쿠팡이츠",
+      "요기요",
+      "쿠팡",
+      "컬리",
+      "SSG.COM",
+      "이마트",
+      "롯데마트",
+      "택시 업종",
+      "카카오T(택시)",
+      "주유",
+      "SK에너지",
+      "GS칼텍스",
+      "S-OIL",
+      "HD현대오일뱅크",
+      "SKT",
+      "KT",
+      "LG U+"
+     ]
+    },
+    {
+     "op": "ADD_CONDITION",
+     "condition": {
+      "scope": "THIS_BENEFIT",
+      "cond_key": "fixed_spend",
+      "negate_yn": false,
+      "cond_min_amt": 500000,
+      "cond_max_amt_excl": null,
+      "cond_raw_txt": "전월 실적 50만원 이상 시 청구할인 제공",
+      "cond_type_cd": "SPEND_REQ",
+      "excl_raw_txt": null,
+      "cond_basis_cd": "PREV_MONTH_SPEND",
+      "target_benefit_nms": [],
+      "evidence": [
+       {
+        "supports": "COND",
+        "quote_txt": "• 전월 실적 50만원 이상 시 청구할인 제공",
+        "link_basis": "SAME_TEXT",
+        "support_key": "fixed_spend"
+       }
+      ]
+     }
+    },
+    {
+     "op": "SET_LIMIT_TIERS",
+     "table_quote": "월 할인한도\n전월실적\n고정소비 할인\n정기결제 할인\n통합 할인한도\n50만원 이상 100만원 미만\n3,000원\n5,000원\n8,000원\n100만원 이상 200만원 미만\n6,000원\n11,000원\n200만원 이상\n12,000원\n17,000원",
+     "basis_cd": "PREV_MONTH_SPEND",
+     "tiers": [
+      {
+       "tier_key": "t50",
+       "label": "50만원 이상 100만원 미만",
+       "min_amt": 500000,
+       "max_amt_excl": 1000000
+      },
+      {
+       "tier_key": "t100",
+       "label": "100만원 이상 200만원 미만",
+       "min_amt": 1000000,
+       "max_amt_excl": 2000000
+      },
+      {
+       "tier_key": "t200",
+       "label": "200만원 이상",
+       "min_amt": 2000000,
+       "max_amt_excl": null
+      }
+     ],
+     "columns": [
+      {
+       "column": "고정소비 할인",
+       "caps": {
+        "t50": "3,000원",
+        "t100": "6,000원",
+        "t200": "12,000원"
+       }
+      },
+      {
+       "column": "정기결제 할인",
+       "merged_cell": true,
+       "caps": {
+        "t50": "5,000원",
+        "t100": "5,000원",
+        "t200": "5,000원"
+       }
+      },
+      {
+       "column": "통합 할인한도",
+       "caps": {
+        "t50": "8,000원",
+        "t100": "11,000원",
+        "t200": "17,000원"
+       }
+      }
+     ],
+     "own_column": "고정소비 할인",
+     "shared": [
+      {
+       "group_key": "20261105_000048:통합 할인한도",
+       "column": "통합 할인한도",
+       "member_benefit_nms": [
+        "고정소비 영역 5% 청구할인",
+        "정기결제 50% 청구할인"
+       ]
+      }
+     ]
+    },
+    {
+     "op": "ADD_RELATION",
+     "relation": {
+      "relation_key": "special_over_basic",
+      "rel_type_cd": "OVERRIDES",
+      "to_benefit_nm": "국내외 가맹점 1% 청구할인"
+     },
+     "quote_txt": "• 특별할인과 중복 적용이 불가하며, 특별할인 서비스 우선 적용"
+    },
+    {
+     "op": "ADD_RELATION",
+     "relation": {
+      "relation_key": "special_basic_exclusive",
+      "rel_type_cd": "MUTUALLY_EXCLUSIVE",
+      "to_benefit_nm": "국내외 가맹점 1% 청구할인"
+     },
+     "quote_txt": "• 특별할인과 중복 적용이 불가하며, 특별할인 서비스 우선 적용"
+    }
+   ],
+   "approved_date": "2026-11-05",
+   "approved_note": "사용자 승인: 보정 방향·DAILY 고정소비 5% 9개 규칙 구조(2026-11-05 최종 검증 보고 확인)"
   }
  ]
 }

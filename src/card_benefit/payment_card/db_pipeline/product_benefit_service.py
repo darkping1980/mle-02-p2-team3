@@ -34,7 +34,8 @@ from psycopg.types.json import Jsonb
 from .common_benefit_service import CommonBenefitRepository, compact, quote_text
 from .extraction_service import locate_quote, strip_calc_atoms, strip_calc_rule
 from .unresolved_review import APPROVED, BLOCK_REGISTRATION, PENDING, PENDING_SCOPE_NOTE, validate_review_sources
-from .benefit_review_patch import apply_patch, provenance, usable
+from .benefit_review_patch import (apply_patch, extracted_shared_members, limit_tiers_text, provenance,
+                                   restrict_rule_targets, shared_limit_problems, usable)
 from .extraction_schema import BenefitItem
 from .extraction_service import PageResult, check_benefit, normalize_stored_run, sql_check_code
 
@@ -98,13 +99,13 @@ class ProductBenefitService:
         """
         run_rows = self.repo.rows('list_run_items', RUN_ID=run_id)
         by_id = {row['card_extr_stg_id']: row for row in run_rows}
-        patched_quotes = {}
+        patched_quotes, patched_extras = {}, {}
         for stg_id, patch in patches.items():
             if stg_id not in by_id:
                 raise ValueError(f"보정 {patch['patch_id']}의 후보가 이 실행에 없습니다: {stg_id}")
-            raw, quotes = apply_patch(by_id[stg_id]['stg_raw_item'], patch)
+            raw, quotes, extras = apply_patch(by_id[stg_id]['stg_raw_item'], patch)
             by_id[stg_id] = {**by_id[stg_id], 'stg_raw_item': raw}
-            patched_quotes[stg_id] = quotes
+            patched_quotes[stg_id], patched_extras[stg_id] = quotes, extras
         stored = normalize_stored_run(list(by_id.values()))
         out = []
         for candidate in candidates:
@@ -123,10 +124,15 @@ class ProductBenefitService:
                               text=chunk['chunk_raw_txt'], extraction=None)
             check = check_benefit(BenefitItem.model_validate(raw), page)
             code = sql_check_code(check, item.conflicts, item.unresolved, item.invalid)
-            out.append({**candidate, 'stg_raw_item': raw, 'normalized': item.normalized, 'check_cd': code,
+            extras = patched_extras[stg_id]
+            normalized = item.normalized
+            if normalized is not None and extras['rule_targets']:
+                # 정규화는 혜택 대상을 모든 규칙에 넣는다. 보정이 정한 규칙별 대상만 남긴다.
+                normalized = {**normalized, 'rule_list': restrict_rule_targets(normalized['rule_list'], extras['rule_targets'])}
+            out.append({**candidate, 'stg_raw_item': raw, 'normalized': normalized, 'check_cd': code,
                         'source_cnt': item.source_cnt, 'conflicts': item.conflicts,
                         'review_patch': provenance(patches[stg_id]), 'patch_quotes': patched_quotes[stg_id],
-                        'patch_check_issues': check.issues})
+                        'limit_tiers': extras['limit_tiers'], 'patch_check_issues': check.issues})
         return out
 
     def _chunk_of(self, stg_id):
@@ -201,6 +207,8 @@ class ProductBenefitService:
             patches = usable(self.patches, run_id, self.allow_draft_patches)
             if patches:
                 candidates = self._apply_patches(run_id, candidates, patches)
+            # 공유 한도 누락·불일치 검출: 추출이 밝힌 공유 한도와 보정한 한도 구간을 같은 실행의 혜택끼리 대조한다.
+            candidates = self._mark_shared_limit_problems(candidates)
             # ③ 관계가 없는 후보를 먼저 등록한다. 같은 실행 안의 관계 대상 혜택이 먼저 생기게 한다(그 밖의 순서 유지).
             candidates = sorted(candidates, key=lambda c: bool((c.get('normalized') or {}).get('relation_list')))
             baseline = before
@@ -219,6 +227,23 @@ class ProductBenefitService:
         if inserted and self.embedding_service is not None:
             self.embedding_service.embed_new('card_bnft', inserted)
         return results
+
+    @staticmethod
+    def _mark_shared_limit_problems(candidates):
+        """공유 한도 문제가 있는 후보에 shared_limit_problem 사유를 붙인다(등록 단계에서 REVIEW로 남김)."""
+        declared, required = {}, []
+        for candidate in candidates:
+            name = (candidate.get('normalized') or {}).get('bnft_nm') or (candidate.get('stg_raw_item') or {}).get('bnft_nm')
+            if not name:
+                continue
+            declared[name] = candidate.get('limit_tiers')
+            required += [m for m in extracted_shared_members(candidate.get('stg_raw_item') or {}) if m not in required]
+        problems = shared_limit_problems(declared, required)
+        if not problems:
+            return candidates
+        return [{**c, 'shared_limit_problem': problems.get((c.get('normalized') or {}).get('bnft_nm')
+                                                            or (c.get('stg_raw_item') or {}).get('bnft_nm'))}
+                for c in candidates]
 
     def _errors(self):
         """v_card_integrity_issue의 현재 위반을 (gate_cd, issue_key) 개수로 센다. 등록 전후 차이 비교용."""
@@ -267,6 +292,8 @@ class ProductBenefitService:
             return review(f"후보 검증이 필요합니다: {candidate.get('check_cd')}")
         if norm.get('is_common_candidate'):
             return review('공통서비스 후보는 카드별 혜택으로 등록하지 않습니다')
+        if candidate.get('shared_limit_problem'):
+            return review(candidate['shared_limit_problem'])
         # ③ 혜택 간 관계: 대상이 같은 카드에 이미 등록된 혜택일 때만 등록한다(대상 키 → card_product_item_id).
         relations = []
         if norm.get('relation_list'):
@@ -299,11 +326,18 @@ class ProductBenefitService:
         all_notes = list(dict.fromkeys([*limit_notes, *pending_notes]))
         if all_notes:
             limit_txt = ' / '.join(item for item in (limit_txt, ' / '.join(all_notes)) if item)
+        data = {}
+        if candidate.get('review_patch'):
+            data = {'schema_ver': 'BENEFIT_V1', 'review_patch': candidate['review_patch']}
+        if candidate.get('limit_tiers'):
+            # 한도 구간(공유 한도 포함)은 item_data에 구조로, item_limit_txt에 원문 표기로 남긴다.
+            data = {**data, 'schema_ver': 'BENEFIT_V1', 'limit_tiers': candidate['limit_tiers']}
+            limit_txt = limit_tiers_text(candidate['limit_tiers'])
         # card_product_item INSERT. 조건식·규칙은 JSONB, 혜택 내용·한도는 원문 인용을 이어 붙인 TEXT다.
         inserted = self.repo.write(
             'insert_local_benefit', CARD_ID=card_id, BNFT_CD=code, BNFT_NM=norm['bnft_nm'], BNFT_TYPE=norm['bnft_type_cd'],
             COND=Jsonb(bnft_cond) if bnft_cond is not None else None, RULES=Jsonb(rules), RELS=Jsonb(relations),
-            DATA=Jsonb({'schema_ver': 'BENEFIT_V1', 'review_patch': candidate['review_patch']} if candidate.get('review_patch') else {}),
+            DATA=Jsonb(data),
             RULE_TXT=quote_text(evidence_items, 'RULE'), LIMIT_TXT=limit_txt)
         # ON CONFLICT DO NOTHING으로 빈 결과면 위 find_benefit 이후 다른 실행이 먼저 넣은 것이다.
         if not inserted:

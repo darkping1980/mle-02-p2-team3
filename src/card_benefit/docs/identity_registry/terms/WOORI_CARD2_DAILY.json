@@ -221,13 +221,20 @@
   },
   {
    "terms_key": "D10",
-   "status": "HELD",
-   "held_reason": "적용 대상이 '특별할인'(고정소비 5%·정기결제 50%)인데 두 혜택이 아직 등록되지 않아 NAMED_ITEMS 대상 ID를 정할 수 없음",
+   "status": "REGISTER",
    "terms_kind_cd": "LIMIT_APPLY",
    "item_nm": "특별할인 월 할인 한도 적용 기간·순서",
    "scope": {
     "scope_cd": "NAMED_ITEMS",
-    "item_ids": []
+    "item_ids": [],
+    "item_cds": [
+     "BNFT_CEE73DF61810",
+     "BNFT_6A34A8FB9B9E"
+    ],
+    "item_nms": [
+     "고정소비 영역 5% 청구할인",
+     "정기결제 50% 청구할인"
+    ]
    },
    "provenance_stg_ids": [],
    "source": {
@@ -238,17 +245,25 @@
     "mode": "NONE"
    },
    "footnotes": [],
-   "review_status": "DRAFT_PENDING_USER_REVIEW"
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "scope_note": "'특별할인' = 고정소비 영역 5%·정기결제 50% (2쪽 혜택 박스 구분). 두 혜택이 같은 카드에 BENEFIT으로 등록된 뒤에만 등록됨"
   },
   {
    "terms_key": "D11",
-   "status": "HELD",
-   "held_reason": "적용 대상이 '특별할인'이며 두 혜택이 미등록. 각주(최초 발급 정의)도 함께 등록해야 함",
+   "status": "REGISTER",
    "terms_kind_cd": "GRACE",
    "item_nm": "신규 발급 특별할인 실적 유예",
    "scope": {
     "scope_cd": "NAMED_ITEMS",
-    "item_ids": []
+    "item_ids": [],
+    "item_cds": [
+     "BNFT_CEE73DF61810",
+     "BNFT_6A34A8FB9B9E"
+    ],
+    "item_nms": [
+     "고정소비 영역 5% 청구할인",
+     "정기결제 50% 청구할인"
+    ]
    },
    "provenance_stg_ids": [
     "20261105_000661"
@@ -269,7 +284,8 @@
      "locate": "FIRST_AFTER_SOURCE"
     }
    ],
-   "review_status": "DRAFT_PENDING_USER_REVIEW"
+   "review_status": "DRAFT_PENDING_USER_REVIEW",
+   "scope_note": "'특별할인' = 고정소비 영역 5%·정기결제 50% (2쪽 혜택 박스 구분). 두 혜택이 같은 카드에 BENEFIT으로 등록된 뒤에만 등록됨"
   }
  ]
 }

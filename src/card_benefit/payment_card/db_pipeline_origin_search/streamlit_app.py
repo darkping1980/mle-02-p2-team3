@@ -25,6 +25,7 @@ Streamlit 실행 모델 (Java 개발자 참고)
 import re
 import sys
 from pathlib import Path
+from uuid import uuid4
 
 # Cloud dependency installs do not install the project in editable mode.
 _SRC_DIR = Path(__file__).resolve().parents[3]
@@ -33,7 +34,11 @@ if str(_SRC_DIR) not in sys.path:
 
 from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag, verify_view
 from card_benefit.payment_card.db_pipeline_origin_search.benefit_search_service import MODE_LABELS
-from card_benefit.payment_card.db_pipeline_origin_search.neo4j_search import GRAPH_PREFIX, QUERIES, connect
+from card_benefit.payment_card.db_pipeline_origin_search.neo4j_search import CARD_LOGGER_NAME, GRAPH_PREFIX, QUERIES, connect
+from card_benefit.payment_card.db_pipeline_origin_search.execution_log import (
+    app_db_log_enabled, capture_request_queries, configure_application_logging, error_message,
+    log_event, persist_app_logs, request_pipeline, response_message,
+)
 import streamlit as st
 
 # region 화면 상수 (예시 질문, 상태·출처 표시 문구, 사용자 화면에서 지울 내부 표현 정규식)
@@ -79,6 +84,9 @@ _FACT = re.compile(r"\d")
 # endregion
 
 card_graphrag.configure_card_logging()      # 재실행마다 호출해도 handler는 공통 함수가 한 번만 붙인다.
+APP_DB_LOG_ENABLED = app_db_log_enabled()
+configure_application_logging(APP_DB_LOG_ENABLED, CARD_LOGGER_NAME)
+st.session_state.setdefault("execution_log_session_id", str(uuid4()))
 
 
 # region 파이프라인 생성 (모드별 캐시)
@@ -136,6 +144,20 @@ def customer_text(text: str) -> str:
         if kept:
             lines.append(kept)
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
+def customer_response_for_log(outcome: dict) -> str:
+    """저장되는 응답 본문을 최종 답변 전체 우선으로 선택한다."""
+    answer = outcome.get("answer") or {}
+    if answer.get("status") == "ERROR":
+        return ""
+    final_text = answer.get("answer_text") or answer.get("conclusion")
+    if final_text:
+        return customer_text(str(final_text))
+    message = answer.get("message")
+    if message:
+        return CUSTOMER_MESSAGES.get(message) or customer_text(message)
+    return customer_text(response_message(outcome))
 
 
 def show_text(text: str) -> None:
@@ -351,28 +373,55 @@ with st.form("question_form"):
 # 질문 제출 처리. submitted는 폼 버튼을 누른 그 재실행에서만 True다.
 if submitted:
     question = question.strip()
+    session_id = st.session_state.execution_log_session_id
+    request_id = str(uuid4())
     last = st.session_state.get("outcome")
     if not question:
         st.warning("질문을 입력하세요.")
     # 분기: 직전과 같은 질문·모드이고 오류가 없었으면 LLM 비용을 쓰지 않고 이전 결과를 재사용한다.
     elif (last and last["question"] == question and last.get("search_mode") == search_mode
           and not last.get("error") and not force):
+        request_event = log_event("REQUEST", question)
         if dev_mode():
             st.info("같은 질문이라 API를 호출하지 않고 이전 결과를 표시합니다.")
         st.session_state.outcome = {**last, "reused": True}
+        if APP_DB_LOG_ENABLED:
+            events = [request_event,
+                      log_event("RESPONSE", customer_response_for_log(st.session_state.outcome))]
+            persist_app_logs(session_id, request_id, events)
     else:
+        request_event = log_event("REQUEST", question)
+        cleanup = lambda: None
+        query_events = []
+        outcome_for_log = None
         try:
-            pipeline = get_pipeline(search_mode)
+            base_pipeline = get_pipeline(search_mode)
+            if APP_DB_LOG_ENABLED:
+                pipeline, cleanup = request_pipeline(base_pipeline, search_mode)
+            else:
+                pipeline = base_pipeline
             with st.spinner("카드 혜택을 찾아 답변을 준비하고 있습니다..."):
                 # GraphRAG 실행: interpret → (retrieve → answer) → finish. 반환값은 최종 State(dict)다.
                 # 노드가 직접 잡는 실패(LLM·Neo4j·후보 검색)는 예외가 아니라 State의 error와 answer.status=ERROR로 돌아온다.
-                st.session_state.outcome = {**pipeline.run(question), "search_mode": search_mode}
+                with capture_request_queries() as query_events:
+                    st.session_state.outcome = {**pipeline.run(question), "search_mode": search_mode}
+                outcome_for_log = st.session_state.outcome
         except Exception:
             # get_pipeline 생성(Neo4j 드라이버·PostgreSQL 세션 준비) 실패나, 노드가 잡지 않은 예외가 여기로 온다.
             st.session_state.outcome = None
             st.error(ERROR_TEXT)
             if dev_mode():
                 st.caption("실행 준비에 실패했습니다. Neo4j 연결 설정을 확인하세요.")
+        finally:
+            cleanup()
+            if APP_DB_LOG_ENABLED:
+                events = [request_event, *query_events]
+                error = error_message(outcome_for_log)
+                if error:
+                    events.append(log_event("ERROR", error))
+                else:
+                    events.append(log_event("RESPONSE", customer_response_for_log(outcome_for_log or {})))
+                persist_app_logs(session_id, request_id, events)
 
 # 재실행마다 저장된 마지막 결과를 다시 그린다(위젯 조작만 해도 결과가 화면에 남는 이유).
 if st.session_state.get("outcome"):

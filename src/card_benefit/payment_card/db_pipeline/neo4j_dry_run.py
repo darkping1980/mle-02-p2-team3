@@ -23,6 +23,7 @@
 #     rule_list[] → dp_bnft_rule, target_list[] → dp_rule_target(카드 간 공유), cond_expr → dp_cond_expr/branch/atom
 #     card_product_doc·card_common_doc → has_document, card_common_bnft_apply → has_common_benefit,
 #     card_evidence_link → supported_by, brand_bnft_compare 결과 SAME → same_as
+#     (근거 주체 CARD→상품, BNFT·REL→혜택, RULE→규칙, ITEM→혜택 외 항목. REL은 혜택 relation_list의 relation_key가 있어야 한다)
 #
 # 호출하는 곳: neo4j_load_draft.py, neo4j_validate.py, test_neo4j_dry_run.py
 from __future__ import annotations
@@ -249,6 +250,7 @@ def build(snapshot):
     errors: list[str] = []
     products, docs, pages, chunks, evidence, benefits, rules, commons, common_benefits = {}, {}, {}, {}, {}, {}, {}, {}, {}
     items = {}
+    relations: dict[tuple, set] = {}     # 혜택별 relation_key(관계 근거 REL 연결 확인용)
 
     def expression(owner, owner_key, expr, label):
         if expr is None:
@@ -311,6 +313,7 @@ def build(snapshot):
             continue
         b = g.node("card_bnft", [card_id, bnft_id], row)
         benefits[(card_id, bnft_id)] = b
+        relations[(card_id, bnft_id)] = {rel.get("relation_key") for rel in row.get("relation_list") or []}
         g.edge("has_benefit", products[card_id], b, {})
         expression(b, ("BNFT", card_id, bnft_id), row.get("bnft_cond_expr"), f"benefit {bnft_id}")
         for rule in row.get("rule_list") or []:
@@ -378,6 +381,11 @@ def build(snapshot):
             owner = rules.get((link["card_id"], link["card_bnft_id"], link["rule_key"]))
         elif subject == "ITEM":
             owner = items.get((link["card_id"], link["card_bnft_id"]))
+        elif subject == "REL":
+            # 혜택 간 관계(relation_list)는 혜택 노드 source_json 안에 있고 별도 노드가 아니다. 관계 근거는 그 혜택 노드에
+            # 연결하고, 연결 행(relation_key 포함)을 관계 원본으로 둔다. 혜택에 없는 relation_key면 대상 없음으로 본다.
+            relation_keys = relations.get((link["card_id"], link["card_bnft_id"]), set())
+            owner = benefits.get((link["card_id"], link["card_bnft_id"])) if link.get("relation_key") in relation_keys else None
         else:
             errors.append(f"지원하지 않는 근거 주체: {subject} {link['ev_link_id']}")
             continue

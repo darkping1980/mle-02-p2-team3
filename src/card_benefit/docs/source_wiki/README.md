@@ -18,6 +18,7 @@
 6. [PostgreSQL 스키마](06_POSTGRESQL_SCHEMA.md)
 7. [Neo4j 동기화](07_NEO4J_SYNC.md)
 8. [GraphRAG 조회](08_GRAPHRAG_QUERY.md)
+- [PostgreSQL ↔ Neo4j 구조 비교](09_POSTGRESQL_NEO4J_STRUCTURE_COMPARISON.md)
 9. [답변 검증](09_ANSWER_VALIDATION.md)
 10. [실행·파일·SQL 참조](10_EXECUTION_REFERENCE.md)
 </details>

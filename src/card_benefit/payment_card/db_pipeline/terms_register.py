@@ -156,11 +156,14 @@ def build_terms(seed_terms: dict, chunks_by_page: dict[int, list[dict]]) -> tupl
         raise TermsError("본문 원문이 비어 있습니다")
     chunk, at = locate(chunks, src["txt"])
     source = make_span(chunk, at, src["txt"])
-    entries = []
+    source_review = reviewed_fields(source.txt, src)
+    entries, entry_reviews = [], []
     mode = (seed_terms.get("entries") or {}).get("mode", "NONE")
     if mode == "LIST_AFTER_PREFIX":
-        for piece, offset in split_list_entries(source.txt, seed_terms["entries"]["prefix"]):
+        pieces = split_list_entries(source.txt, seed_terms["entries"]["prefix"])
+        for (piece, offset), fixes in zip(pieces, entry_fixes(source.txt, src.get("ocr_fixes") or [], pieces)):
             entries.append(make_span(chunk, at + offset, piece))
+            entry_reviews.append(reviewed_fields(piece, {"ocr_fixes": fixes}))
     elif mode != "NONE":
         raise TermsError(f"알 수 없는 entries 방식: {mode}")
     footnotes = []
@@ -171,22 +174,82 @@ def build_terms(seed_terms: dict, chunks_by_page: dict[int, list[dict]]) -> tupl
         else:
             f_chunk, f_at = locate(note_chunks, note["txt"])
         footnotes.append(make_span(f_chunk, f_at, note["txt"]))
+    footnote_reviews = [reviewed_fields(span.txt, note) for note, span in zip(seed_terms.get("footnotes", []), footnotes)]
     scope = seed_terms.get("scope") or {}
     if scope.get("scope_cd") not in SCOPES:
         raise TermsError(f"적용 범위가 올바르지 않습니다: {scope.get('scope_cd')}")
     if (scope["scope_cd"] == "NAMED_ITEMS") != bool(scope.get("item_ids")):
         raise TermsError("NAMED_ITEMS일 때만 대상 항목 ID가 있어야 합니다")
+    scope_json = {"scope_cd": scope["scope_cd"], "item_ids": list(scope.get("item_ids") or [])}
+    if scope.get("item_cds"):
+        scope_json["item_cds"] = list(scope["item_cds"])
+    # 원문(txt)은 그대로 두고, 사람이 확인한 OCR 정정 표기는 reviewed_txt·ocr_fixes로 구간마다 따로 둔다.
     data = {
         "schema_ver": SCHEMA_VER, "terms_kind_cd": seed_terms["terms_kind_cd"],
-        "scope": {"scope_cd": scope["scope_cd"], "item_ids": list(scope.get("item_ids") or [])},
-        "source": source.as_json(),
-        "entries": [{"entry_key": f"e{n:02d}", **span.as_json()} for n, span in enumerate(entries, 1)],
-        "footnotes": [{"footnote_key": note["footnote_key"], "marker": note["marker"], **span.as_json()}
-                      for note, span in zip(seed_terms.get("footnotes", []), footnotes)],
+        "scope": scope_json,
+        "source": {**source.as_json(), **source_review},
+        "entries": [{"entry_key": f"e{n:02d}", **span.as_json(), **review}
+                    for n, (span, review) in enumerate(zip(entries, entry_reviews), 1)],
+        "footnotes": [{"footnote_key": note["footnote_key"], "marker": note["marker"], **span.as_json(), **review}
+                      for note, span, review in zip(seed_terms.get("footnotes", []), footnotes, footnote_reviews)],
         "provenance_stg_ids": list(seed_terms.get("provenance_stg_ids") or []),
         "seed_terms_key": seed_terms["terms_key"],
     }
     return data, source, entries, footnotes
+
+
+def apply_ocr_fixes(txt: str, fixes: list[dict]) -> str:
+    """사람이 확인한 OCR 정정(from → to)을 원문 사본에 적용한 검토 표기(reviewed_txt). 원문(txt)은 바꾸지 않는다.
+
+    from은 원문에 정확히 한 번 있어야 하고, 정정끼리 겹치면 안 된다.
+    """
+    marks = []
+    for fix in fixes:
+        source, target = fix.get("from") or "", fix.get("to") or ""
+        if not source or not target or source == target:
+            raise TermsError(f"OCR 정정 형식 오류: {fix}")
+        hits = find_all(txt, source)
+        if len(hits) != 1:
+            raise TermsError(f"OCR 정정 대상이 원문에 {len(hits)}번 나옵니다: {source!r}")
+        marks.append((hits[0], source, target))
+    marks.sort()
+    for (a, src, _), (b, _, _) in zip(marks, marks[1:]):
+        if a + len(src) > b:
+            raise TermsError("OCR 정정 구간이 겹칩니다")
+    out, cursor = [], 0
+    for at, src, target in marks:
+        out += [txt[cursor:at], target]
+        cursor = at + len(src)
+    return "".join(out + [txt[cursor:]])
+
+
+def reviewed_fields(txt: str, spec: dict) -> dict:
+    """SEED 구간의 ocr_fixes·reviewed_txt를 검사해 item_data 구간에 붙일 필드를 만든다. 정정이 없으면 빈 dict."""
+    fixes = spec.get("ocr_fixes") or []
+    if not fixes:
+        if spec.get("reviewed_txt"):
+            raise TermsError("reviewed_txt에는 ocr_fixes가 필요합니다")
+        return {}
+    reviewed = apply_ocr_fixes(txt, fixes)
+    if spec.get("reviewed_txt") is not None and spec["reviewed_txt"] != reviewed:
+        raise TermsError("reviewed_txt가 OCR 정정 결과와 다릅니다")
+    return {"reviewed_txt": reviewed, "ocr_fixes": [{"from": f["from"], "to": f["to"]} for f in fixes]}
+
+
+def entry_fixes(source_txt: str, fixes: list[dict], entry_offsets: list[tuple[str, int]]) -> list[list[dict]]:
+    """본문 정정을 목록 항목별로 나눈다. 정정이 항목 경계에 걸치면 오류(항목 밖 정정은 어느 항목에도 넣지 않음)."""
+    out = [[] for _ in entry_offsets]
+    for fix in fixes:
+        at = find_all(source_txt, fix["from"])[0]
+        end = at + len(fix["from"])
+        for n, (piece, offset) in enumerate(entry_offsets):
+            inside = offset <= at and end <= offset + len(piece)
+            overlap = at < offset + len(piece) and offset < end
+            if inside:
+                out[n].append(fix)
+            elif overlap:
+                raise TermsError(f"OCR 정정이 목록 항목 경계에 걸칩니다: {fix['from']!r}")
+    return out
 
 
 def strip_evidence_ids(data: dict) -> dict:
@@ -264,6 +327,23 @@ def verify_registered(cur, card_id: int, item_id: str) -> list[str]:
     return problems
 
 
+def resolve_scope(cur, card_id: int, seed: dict) -> dict:
+    """SEED 적용 범위의 item_cds(혜택 코드)를 같은 카드의 BENEFIT 항목 ID(item_ids)로 바꾼 사본. 하나라도 없으면 TermsError."""
+    scope = seed.get("scope") or {}
+    if not scope.get("item_cds"):
+        return seed
+    if scope.get("item_ids"):
+        raise TermsError("item_cds와 item_ids를 함께 쓸 수 없습니다")
+    ids = []
+    for code in scope["item_cds"]:
+        row = cur.execute("""SELECT card_product_item_id FROM db_pipeline.card_product_item
+                             WHERE card_id = %s AND item_cd = %s AND item_type_cd = 'BENEFIT'""", (card_id, code)).fetchone()
+        if not row:
+            raise TermsError(f"적용 대상 혜택이 이 카드에 아직 등록되지 않았습니다: {code}")
+        ids.append(row["card_product_item_id"])
+    return {**seed, "scope": {**scope, "item_ids": ids}}
+
+
 def register_seed(cur, ledger: dict) -> list[TermsResult]:
     """카드 SEED 1개를 등록한다. 호출자가 트랜잭션을 연다. 개별 TERMS 문제는 REVIEW로 남기고 계속한다."""
     card_id, card_doc_id = ledger["card_id"], ledger["card_doc_id"]
@@ -280,6 +360,7 @@ def register_seed(cur, ledger: dict) -> list[TermsResult]:
             results.append(TermsResult(key, "HELD", seed.get("held_reason", "SEED 보류")))
             continue
         try:
+            seed = resolve_scope(cur, card_id, seed)
             data, source, entries, footnotes = build_terms(seed, chunks)
             for target in data["scope"]["item_ids"]:
                 if not cur.execute("""SELECT 1 FROM db_pipeline.card_product_item WHERE card_id = %s

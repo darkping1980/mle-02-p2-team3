@@ -117,3 +117,90 @@ def test_merge_terms_evidence_adds_scope_without_duplicates():
                                    {"evidence_id": "E5", "benefit_ids": ["card_product_item:42:B1"]}])
     assert context == [{"evidence_id": "E1", "benefit_ids": ["card_product_item:42:B1", "card_product_item:42:B2"]},
                        {"evidence_id": "E5", "benefit_ids": ["card_product_item:42:B1"]}]
+
+
+# region OCR 정정 표기·적용 대상 코드·중복 표시(2026-11-05)
+OCR_LIST = "• 할인 제외 : 바우저 이용금액, 내/SH 공공임대료, 매출취소금액"
+OCR_PAGE = f"머리말\n{OCR_LIST}\n끝"
+
+
+def test_ocr_fixes_keep_original_and_store_reviewed_text_per_span():
+    rows = {2: [{"card_doc_id": "D1", "page_no": 2, "card_doc_chunk_id": "C1", "chunk_raw_txt": OCR_PAGE}]}
+    fixes = [{"from": "바우저", "to": "바우처"}, {"from": "내/SH", "to": "LH/SH"}]
+    data, source, entries, _ = build_terms(seed(source={"page_no": 2, "txt": OCR_LIST, "ocr_fixes": fixes,
+                                                        "reviewed_txt": "• 할인 제외 : 바우처 이용금액, LH/SH 공공임대료, 매출취소금액"},
+                                                footnotes=[]), rows)
+    assert data["source"]["txt"] == OCR_LIST == source.txt                        # 원문은 그대로(위치 검증도 원문 기준)
+    assert data["source"]["reviewed_txt"] == "• 할인 제외 : 바우처 이용금액, LH/SH 공공임대료, 매출취소금액"
+    assert [e.get("reviewed_txt") for e in data["entries"]] == ["바우처 이용금액", "LH/SH 공공임대료", None]
+    assert terms_item_cd("D1", "BNFT_EXCL", source.txt) == terms_item_cd("D1", "BNFT_EXCL", OCR_LIST)   # 코드는 원문 기준
+
+
+@pytest.mark.parametrize("fixes, reviewed", [
+    ([{"from": "없는말", "to": "x"}], None),                                       # 원문에 없음
+    ([{"from": "금액", "to": "x"}], None),                                         # 여러 번 나옴(위치 모호)
+    ([{"from": "바우저", "to": "바우저"}], None),                                   # 같은 값
+    ([{"from": "바우저", "to": "바우처"}], "틀린 검토 표기"),                        # reviewed_txt가 정정 결과와 다름
+    ([{"from": "바우저 이용", "to": "a"}, {"from": "이용금액,", "to": "b"}], None),  # 겹침
+    ([{"from": "금액, 내", "to": "금액, LH"}], None),                              # 목록 항목 경계에 걸침
+])
+def test_invalid_ocr_fixes_are_rejected(fixes, reviewed):
+    rows = {2: [{"card_doc_id": "D1", "page_no": 2, "card_doc_chunk_id": "C1", "chunk_raw_txt": OCR_PAGE}]}
+    src = {"page_no": 2, "txt": OCR_LIST, "ocr_fixes": fixes}
+    if reviewed:
+        src["reviewed_txt"] = reviewed
+    with pytest.raises(TermsError):
+        build_terms(seed(source=src, footnotes=[]), rows)
+
+
+class Cur:
+    def __init__(self, rows):
+        self.rows, self.last = rows, None
+
+    def execute(self, sql, params):
+        self.last = self.rows.get(params)
+        return self
+
+    def fetchone(self):
+        return self.last
+
+
+def test_named_scope_by_item_cd_resolves_only_registered_benefits():
+    from payment_card.db_pipeline.terms_register import resolve_scope
+    cur = Cur({(42, "BNFT_A"): {"card_product_item_id": "I1"}, (42, "BNFT_B"): {"card_product_item_id": "I2"}})
+    named = seed(scope={"scope_cd": "NAMED_ITEMS", "item_ids": [], "item_cds": ["BNFT_A", "BNFT_B"]})
+    assert resolve_scope(cur, 42, named)["scope"]["item_ids"] == ["I1", "I2"]
+    with pytest.raises(TermsError):                                                # 하나라도 미등록이면 등록하지 않음
+        resolve_scope(cur, 42, seed(scope={"scope_cd": "NAMED_ITEMS", "item_ids": [], "item_cds": ["BNFT_A", "BNFT_X"]}))
+    with pytest.raises(TermsError):                                                # 다른 카드의 같은 코드는 쓰지 않음
+        resolve_scope(cur, 7, named)
+
+
+def cond_detail(card_id, item_id, raw_texts):
+    conditions = [{"atom": {"source_json": json.dumps({"cond_type_cd": "GRACE", "cond_raw_txt": t})}} for t in raw_texts]
+    return {**detail(card_id, item_id), "conditions": conditions}
+
+
+def test_terms_text_already_in_benefit_conditions_is_not_repeated_but_evidence_stays():
+    grace = "• \u200c '특별할인' 서비스는 최초발급*받은 카드 수령일 기준\n다음 달 말일까지 최저 실적 구간 서비스를 제공합니다."
+    cond = "'특별할인' 서비스는 최초발급*받은 카드 수령일 기준 \n다음 달 말일까지 최저 실적 구간 서비스를 제공합니다."
+    row = terms_row(42, "T9", "NAMED_ITEMS", ["B1", "B2"], evidence=("E9", "E10"))
+    row["item_data"]["source"] = {"txt": grace}
+    row["item_data"]["footnotes"] = [{"txt": "* 최초 발급 정의"}]
+    both = attach_terms([cond_detail(42, "B1", [cond]), cond_detail(42, "B2", [cond])], [row])
+    assert both[0][0]["text"] is None and both[0][0]["text_in_conditions"] is True
+    assert both[0][0]["footnotes"] == ["* 최초 발급 정의"]                            # 각주는 유지
+    assert {e["evidence_id"] for e in both[1]} == {"E9", "E10"}                      # 원문 근거는 유지
+    one = attach_terms([cond_detail(42, "B1", [cond]), cond_detail(42, "B2", ["다른 조건"])], [row])[0][0]
+    assert one["text"] == grace and one["text_in_conditions_of"] == ["card_product_item:42:B1"]
+    partial = attach_terms([cond_detail(42, "B1", ["최초발급*받은 카드"]), cond_detail(42, "B2", [])], [row])[0][0]
+    assert partial["text"] == grace and "text_in_conditions_of" not in partial          # 짧은 일부 겹침은 중복 아님
+
+
+def test_attach_terms_shows_reviewed_text_when_present():
+    row = terms_row(42, "T1", "ALL_BENEFITS")
+    row["item_data"]["source"] = {"txt": "바우저", "reviewed_txt": "바우처"}
+    row["item_data"]["footnotes"] = [{"txt": "전) l요금", "reviewed_txt": "전기요금"}, {"txt": "그대로"}]
+    terms, _ = attach_terms([detail(42, "B1")], [row])
+    assert terms[0]["text"] == "바우처" and terms[0]["footnotes"] == ["전기요금", "그대로"]
+# endregion

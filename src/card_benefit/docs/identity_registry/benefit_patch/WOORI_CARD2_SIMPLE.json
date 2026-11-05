@@ -10,7 +10,7 @@
    "patch_id": "BP-20261105-0001",
    "run_id": "20261105_000044",
    "card_extr_stg_id": "20261105_000646",
-   "status": "DRAFT_PENDING_USER_REVIEW",
+   "status": "APPROVED",
    "reason": "대상 종류 UNKNOWN('국내외 가맹점') 보완. 0.3% 규칙의 Two-in-One 결제 조건(b1-r2-c1)은 추출 결과에 이미 있어 추가하지 않음",
    "pdf_check": "2쪽 'SIMPLE 할인 서비스' 박스: 국내외 가맹점 0.8% 청구할인 / ※Two-in-One 결제서비스(국내 체크 매출) 이용 시 0.3% 청구할인 (2026-11-05 페이지 이미지 대조)",
    "ops": [
@@ -19,7 +19,9 @@
      "target_nm": "국내외 가맹점",
      "target_type_cd": "CHANNEL"
     }
-   ]
+   ],
+   "approved_date": "2026-11-05",
+   "approved_note": "사용자 승인: 보정 방향·DAILY 고정소비 5% 9개 규칙 구조(2026-11-05 최종 검증 보고 확인)"
   }
  ]
 }
