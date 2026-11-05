@@ -1256,12 +1256,32 @@ def streamlit_error_text() -> str:
                 and getattr(node.targets[0], "id", None) == "ERROR_TEXT")
 
 
+class FakeNeo4jBenefitSearch:
+    """화면 기본 경로(N)의 Neo4jBenefitSearch 대역. 임베딩·Neo4j 없이 그래프 카탈로그 후보를 그대로 돌려준다."""
+    engine, reads_postgresql_source = "neo4j", False
+
+    def __init__(self):
+        self.calls = []
+
+    def catalog_rows(self, question, mode, graph_catalog, top_k=8):
+        from card_benefit.payment_card.db_pipeline_origin_search.benefit_search_service import SearchOutcome
+        self.calls.append((question, mode))
+        return list(graph_catalog), SearchOutcome(mode, [], 0.0, engines=["neo4j_hybrid"])
+
+    def get_detail(self, key, sections):
+        return None
+
+
 class StreamlitTests(unittest.TestCase):
     def setUp(self):
         st.cache_resource.clear()
         self.first, self.second = interpret_llm(), answer_llm()
+        self.neo_search = FakeNeo4jBenefitSearch()
         self.patches = [patch.object(neo4j_search, "connect", return_value=FakeSearch()),
                         patch.object(card_graphrag, "create_llms", return_value=(self.first, self.second)),
+                        patch.object(card_graphrag, "create_neo4j_benefit_search", return_value=self.neo_search),
+                        patch.object(card_graphrag, "create_benefit_search",
+                                     side_effect=AssertionError("화면 기본 경로는 PostgreSQL 검색을 만들지 않는다")),
                         patch.object(card_graphrag, "configure_card_logging")]
         for item in self.patches:
             item.start()
@@ -1286,6 +1306,20 @@ class StreamlitTests(unittest.TestCase):
         self.assertFalse(app.warning)
         self.assertEqual(self.first.prompts, [])
         neo4j_search.connect.assert_not_called()
+
+    def test_search_mode_radio_is_removed(self):
+        app = AppTest.from_file(APP).run(timeout=30)
+        self.assertFalse(any(item.key == "search_mode" or item.label == "검색 방식" for item in app.radio))
+        app = self.dev(app)
+        self.assertEqual([item.key for item in app.radio], ["run_mode"])     # 개발자 모드에도 검색 방식 선택은 없다
+
+    def test_question_uses_neo4j_only_search_by_default(self):
+        app = self.ask(AppTest.from_file(APP).run(timeout=30))
+        self.assertFalse(app.exception)
+        self.assertEqual(self.neo_search.calls, [("대중교통 혜택은?", "N")])
+        card_graphrag.create_benefit_search.assert_not_called()
+        self.assertEqual(app.session_state["outcome"]["search_mode"], "N")
+        self.assertEqual(app.session_state["outcome"]["candidate_search"]["engines"], ["neo4j_hybrid"])
 
     def test_default_view_hides_internal_status(self):
         self.second.parsed = card_answer([point("월 1000원 한도입니다.", ("E1",))], conclusion="월 1000원입니다.",

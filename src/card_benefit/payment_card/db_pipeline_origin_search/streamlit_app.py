@@ -11,15 +11,16 @@ Streamlit 실행 모델 (Java 개발자 참고)
 처리 흐름 (파일 맨 아래의 모듈 수준 코드)
     1. 사이드바: 개발자 모드 토글, (개발자 모드일 때) 실행 모드(자동 실행 / 개발 검증)와 강제 재실행 체크
     2. 실행 모드가 "개발 검증"이면 verify_view.render로 단계별 화면을 그리고 st.stop()
-    3. 검색 방식(A/B/C) 라디오, 예시 질문, 질문 폼
+    3. 예시 질문, 질문 폼 (검색 방식 선택 없음: 항상 N = Neo4j 단일 검색)
     4. "질문하기" 제출 시:
          같은 질문·같은 모드·이전 오류 없음·강제 재실행 아님 → 이전 결과 재사용(LLM 미호출)
-         그 외 → get_pipeline(search_mode).run(question) → 결과 State를 session_state.outcome에 저장
+         그 외 → get_pipeline(SEARCH_MODE).run(question) → 결과 State를 session_state.outcome에 저장
     5. 검색 결과는 요청당 한 번 로그에 저장하고, 일반 화면에는 최종 답변만 출력
        (개발자 모드에서는 기존 상세 내용·PDF 근거와 진단 정보도 표시)
 
 호출 관계
-    get_pipeline → neo4j_search.connect, card_graphrag.create_llms, (B·C만) card_graphrag.create_benefit_search
+    get_pipeline → neo4j_search.connect, card_graphrag.create_llms, (N) card_graphrag.create_neo4j_benefit_search
+                   (A/B/C 경로는 회귀 검증용으로 get_pipeline("A"|"B"|"C")에 남아 있으며 화면에서는 고를 수 없다)
     show_outcome → show_text / show_open_items / show_evidence / show_generation (화면 출력 전용, DB·LLM 미사용)
     화면 문구 정리(customer_text 등)는 표시만 바꾸며 결과 State의 값은 바꾸지 않는다.
 """
@@ -34,7 +35,6 @@ if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
 from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag, verify_view
-from card_benefit.payment_card.db_pipeline_origin_search.benefit_search_service import MODE_LABELS
 from card_benefit.payment_card.db_pipeline_origin_search.neo4j_search import CARD_LOGGER_NAME, GRAPH_PREFIX, QUERIES, connect
 from card_benefit.payment_card.db_pipeline_origin_search.execution_log import (
     app_db_log_enabled, capture_request_queries, configure_application_logging, error_message,
@@ -95,22 +95,27 @@ st.session_state.setdefault("execution_log_session_id", str(uuid4()))
 
 
 # region 파이프라인 생성 (모드별 캐시)
+SEARCH_MODE = "N"   # 화면 기본 검색 경로: Neo4j 단일 GraphRAG 검색
+
 @st.cache_resource(show_spinner=False)
-def get_pipeline(search_mode: str = "A"):
+def get_pipeline(search_mode: str = SEARCH_MODE):
     """재실행 사이에 모드별 드라이버와 그래프를 재사용한다. 예외는 캐시되지 않는다.
 
     ``search_mode`` 값마다 CardGraphRAG 인스턴스가 하나씩 캐시된다(인자가 캐시 키).
 
     Args:
-        search_mode: A(Neo4j 전체 카탈로그만), B(임베딩 후보), C(문자열+임베딩 하이브리드 후보).
+        search_mode: N(기본, Neo4j 단일 하이브리드 검색). A/B/C는 회귀 검증용으로만 남긴다.
 
     Returns:
-        CardGraphRAG. A는 benefit_search=None이라 PostgreSQL에 접속하지 않는다.
-        B·C는 BenefitSearchService(PostgreSQL + OpenAI 임베딩 + Neo4j)를 함께 넘긴다.
+        CardGraphRAG. N은 Neo4jBenefitSearch(Neo4j + 질문 임베딩)만 쓰고 PostgreSQL 업무 데이터를 조회하지 않는다.
+        A는 benefit_search=None이라 PostgreSQL에 접속하지 않는다. B·C는 BenefitSearchService(PostgreSQL + OpenAI 임베딩 + Neo4j)를 함께 넘긴다.
         OPENAI_API_KEY가 없으면 create_llms가 (None, None)을 돌려주고, 질문 시 LLM_NOT_CONFIGURED로 끝난다.
     """
     search = connect()
-    benefit_search = None if search_mode == "A" else card_graphrag.create_benefit_search(search)
+    if search_mode == "N":
+        benefit_search = card_graphrag.create_neo4j_benefit_search(search)
+    else:
+        benefit_search = None if search_mode == "A" else card_graphrag.create_benefit_search(search)
     return card_graphrag.CardGraphRAG(search, *card_graphrag.create_llms(), benefit_search=benefit_search,
                                       search_mode=search_mode)
 # endregion
@@ -375,8 +380,7 @@ if run_mode == "개발 검증":
     verify_view.render(get_pipeline, show_outcome)
     st.stop()
 
-search_mode = st.radio("검색 방식", list(MODE_LABELS), format_func=lambda mode: f"{mode}: {MODE_LABELS[mode]}",
-                       horizontal=True, key="search_mode", index=2)
+search_mode = SEARCH_MODE   # 화면에서 검색 방식을 고르지 않는다(Neo4j 단일 검색 고정)
 st.pills("예시 질문", EXAMPLES, key="example", on_change=use_example)
 with st.form("question_form"):
     question = st.text_area("질문", key="question", max_chars=card_graphrag.MAX_QUESTION_CHARS, height=80,

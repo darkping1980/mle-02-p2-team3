@@ -9,7 +9,7 @@
     3. DB 조회 실행    → verify_retrieve: 혜택 상세 Cypher 실행, 레코드 표 표시
     4. LLM 답변 생성   → verify_answer: 답변 LLM(유료 1회) → show_outcome으로 자동 실행과 같은 화면 출력
 State는 ``st.session_state.verify`` 에 저장되며, 질문이 바뀌면 지운다.
-주의: get_pipeline()을 인자 없이 부르므로 검증 모드는 항상 A 모드 파이프라인을 쓴다.
+주의: get_pipeline()을 인자 없이 부르므로 검증 모드도 기본 N 모드(Neo4j 단일 검색) 파이프라인을 쓴다.
 """
 import streamlit as st
 
