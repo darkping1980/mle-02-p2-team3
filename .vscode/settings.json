@@ -1,0 +1,6 @@
+﻿{
+  "markdown.styles": [
+    "./src/card_benefit/docs/source_wiki/source_wiki.css"
+  ],
+  "markdown.links.openLocation": "beside"
+}
