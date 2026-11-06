@@ -45,7 +45,40 @@ def outcome_detail_text(outcome: dict | None) -> str | None:
     }
     if not any(detail[key] for key in ("fee_rows", "points", "open_conditions", "uncertain", "data_notices")):
         return None
-    return json.dumps(detail, ensure_ascii=False, indent=2, default=str)
+    try:
+        from card_benefit.payment_card.db_pipeline_origin_search.neo4j_search import entity_ref
+
+        refs = {}
+        for item in outcome.get("retrieved_data") or []:
+            context = item.get("context") or {}
+            node = context.get("benefit") or {}
+            labels, key = context.get("benefit_labels"), node.get("key")
+            logical_id = item.get("entity_ref")
+            if not logical_id:
+                continue
+            if not key or not labels or entity_ref(key) != logical_id:
+                refs.setdefault(logical_id, []).append(None)
+                continue
+            ref = {"labels": labels, "key": key, "name": node.get("name")}
+            refs.setdefault(logical_id, []).append(ref)
+        points = []
+        for point in detail["points"]:
+            candidates = refs.get(point.get("benefit_id"), []) if point.get("benefit_id") else []
+            ref = candidates[0] if candidates and all(candidate == candidates[0] for candidate in candidates) else None
+            points.append({**point, "neo4j_ref": ref})
+        detail["points"] = points
+    except Exception:
+        LOG.exception("Detail provenance logging failed")
+        try:
+            detail["points"] = [{**point, "neo4j_ref": None} for point in detail["points"]]
+        except Exception:
+            LOG.exception("Detail points logging failed")
+            return None
+    try:
+        return json.dumps(detail, ensure_ascii=False, indent=2, default=str)
+    except Exception:
+        LOG.exception("Detail logging failed")
+        return None
 
 
 def outcome_pdf_evidence_text(outcome: dict | None) -> str | None:
