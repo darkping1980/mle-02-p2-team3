@@ -273,20 +273,43 @@ PostgreSQL에는 PDF 원문과 추출·검증 이력을 원장으로 관리하�
 - 오류 사례는 해결 완료로 단정하지 말고 실제 수정 및 회귀 검증 결과가 확인된 범위에서 설명함.
 ---
 
-## 슬라이드 14/17 — PostgreSQL 데이터 모델 설계
+## 슬라이드 14/17 — PostgreSQL 원장의 데이터·근거 관리 구조
 
 **구분:** 기술 구현 01  
-**제목:** PostgreSQL 데이터 모델 설계
+**제목:** PostgreSQL 원장의 데이터·근거 관리 구조
 
-| 원문 | AI 추출 이력 | 상품정보와 근거 |
+| 구분 | 주요 테이블 | 관리 내용 |
 |---|---|---|
-| `card_doc` | `card_ai_run` | `card_product_item` |
-| `card_doc_page` | `card_ai_call` | `card_evidence_link` |
-| `card_doc_chunk` | `card_extr_stg` |  |
+| 01. PDF 원문 | `card_doc` → `card_doc_page` → `card_doc_chunk` | 문서·페이지·청크 단위 원문 관리 |
+| 02. AI 추출 이력 | `card_ai_run` → `card_ai_call` → `card_extr_stg` | 실행·호출·추출 후보와 검증 상태 관리 |
+| 03. 상품·혜택 정보 | `card_product` → `card_product_item` | 카드 상품과 혜택·약관 등 상품 항목 관리 |
+| 04. 공식 근거 연결 | `card_source_evidence` + `card_evidence_link` | PDF 인용 근거 보존 및 상품정보와의 연결 |
 
 **하단 설계 핵심**  
-문서 → 추출 후보 → 혜택·조건 → 공식 근거를 다시 추적
+원문·AI 추출 이력·상품정보·공식 근거를 구분해 저장하고 추적
 
+**발표 설명 초안**
+
+PostgreSQL은 단순히 카드 혜택만 저장하는 데이터베이스가 아니라, 원본 PDF에서 어떤 정보가 추출됐고 최종 상품정보와 어떻게 연결됐는지 확인하기 위한 원장입니다.
+
+먼저 PDF 문서와 페이지·청크를 보존하고, AI의 실행과 호출, 추출 후보 및 검증 상태를 별도로 기록했습니다. 카드 상품은 `card_product`, 혜택·약관 등 상품 항목은 `card_product_item`에서 관리합니다. 상품 항목의 규칙과 조건은 별도 규칙 테이블로 일괄 분리한 구조가 아니라 `rule_list`, `item_cond_expr` 등 JSON 필드에도 보존됩니다.
+
+또한 PDF에서 인용한 실제 문구는 `card_source_evidence`에, 이를 카드나 상품 항목에 연결하는 정보는 `card_evidence_link`에 관리합니다. 그래서 값뿐 아니라 출처와 추출 과정을 다시 확인할 수 있도록 구성했습니다.
+
+**실제 구현 기준 보충**
+
+- 공통 서비스·공통 혜택 원장은 `card_common`과 `card_common_bnft`에 별도로 관리함. PPT 본문은 공간을 고려해 카드 상품 중심으로 표시함.
+- `card_product_item`에는 혜택뿐 아니라 TERMS, ANNUAL_FEE 등 상품 항목도 포함됨. '혜택 전용 테이블'로 설명하지 않음.
+- `card_evidence_link`는 원문 자체가 아니라 카드/상품 항목과 `card_source_evidence` 사이의 연결을 관리함.
+- `app_log`, `app_log_event_archive`는 질의·실행 로그 테이블로 PostgreSQL에 보존하며, 13페이지에서 설명함.
+- 확인된 PostgreSQL 기본 테이블 20개에는 선언된 FK가 없으므로, PPT의 화살표는 데이터 처리·참조 흐름을 요약한 것이며 실제 FK 제약조건이라고 설명하지 않음.
+- 추출 또는 근거 연결 중 검토 대기 상태가 존재하므로, 모든 항목의 원문 검증이 완료됐다고 표현하지 않음.
+
+**확인 근거**
+
+- `src/card_benefit/docs/guide/POSTGRESQL_TO_NEO4J_SCHEMA_MAPPING.md`
+- `src/card_benefit/docs/guide/POSTGRESQL_NEO4J_REBUILD_GUIDE.md`
+- `src/card_benefit/docs/guide/SCHEMA_DEEP_DIVE_POSTGRESQL_NEO4J.md`
 ---
 
 ## 슬라이드 15/17 — Pydantic 모델 스키마 기반 LLM 추출
@@ -368,9 +391,10 @@ GraphRAG로 공식 근거를 제공하고, 비교·분석과 상품 개선 검�
   - src/card_benefit/payment_card/db_pipeline/README.md
   - src/card_benefit/payment_card/db_pipeline/terra_client.py
 
-## 우선 검토 2 — 13페이지 반영·16페이지 상태 확인
+## 우선 검토 2 — 13·14페이지 반영·16페이지 상태 확인
 
 - **13페이지 반영:** 원장(PostgreSQL) → 검색 데이터(Neo4j) → 질의 로그(PostgreSQL) → 오류 원인 추적 관점으로 문구를 수정함.
+- **14페이지 반영:** PostgreSQL의 원문·AI 이력·상품정보·공식 근거 연결 구조를 실제 테이블에 맞게 수정함. `card_source_evidence`와 `card_evidence_link`의 역할을 구분함.
 - **16페이지:** 'Neo4j 단일 검색은 목표 구조'라는 표현을 실제 구현/검증 결과에 맞게 구체화할 필요
 - 구현 완료, 테스트 통과, 발견된 오류, 미완료 기능을 한 문장으로 묶지 말고 구분하는 것이 좋음
 
