@@ -1364,6 +1364,13 @@ class FakeNeo4jBenefitSearch:
 
 
 class StreamlitTests(unittest.TestCase):
+    def test_partial_answer_is_visible_in_default_streamlit_view(self):
+        self.second.parsed = card_answer([point("??? ?????.", ("E1",)), point("???? ?? ?????.", ("MISSING",))])
+        app = self.ask(AppTest.from_file(APP).run(timeout=30))
+        self.assertFalse(app.exception)
+        self.assertEqual(app.session_state["outcome"]["answer"]["status"], "PARTIAL")
+        self.assertTrue(any("????? ?????" in item.value for item in app.warning))
+
     def setUp(self):
         st.cache_resource.clear()
         self.first, self.second = interpret_llm(), answer_llm()
@@ -1552,6 +1559,55 @@ class StreamlitTests(unittest.TestCase):
         self.assertEqual(len(self.first.prompts), 1)
 
 
+class NewContractRegressionTests(unittest.TestCase):
+    def test_item_and_common_use_distinct_name_and_rule_fields(self):
+        item_detail = detail()
+        item = {"card_product_item_id": "I1", "item_nm": "???? ??", "item_rule_txt": "?? ??? ?? ??",
+                "source_json": js({"card_product_item_id": "I1", "item_nm": "???? ??",
+                                    "item_rule_txt": "?? ??? ?? ??"})}
+        item_detail["context"]["benefit"] = item
+        item_detail["rules"] = [
+            {"rule": {"rule_key": "low", "value_num": 1}, "targets": ["????"]},
+            {"rule": {"rule_key": "high", "value_num": 2}, "targets": []},
+        ]
+        unresolved = card_graphrag.unresolved_items([item_detail])
+        tier = next(row for row in unresolved if row.get("topic") == "?? ??")
+        self.assertEqual(tier["benefit"], "???? ??")
+        self.assertEqual(tier["confirmed"], "?? ??? ?? ??")
+        conditions, _, _ = card_graphrag.split_unresolved([item_detail], "????", "BENEFIT_LIMIT", None)
+        self.assertNotIn(None, conditions[0]["benefits"])
+
+        common_detail = detail()
+        common_detail["context"]["benefit"] = {"card_common_bnft_id": "C1", "bnft_nm": "?? ??",
+            "bnft_rule_txt": "?? ??", "source_json": js({"card_common_bnft_id": "C1", "bnft_nm": "?? ??",
+                                                                  "bnft_rule_txt": "?? ??"})}
+        self.assertEqual(card_graphrag.benefit_context(common_detail)["name"], "?? ??")
+
+    def test_only_disjoint_previous_month_ranges_are_proven_non_overlapping(self):
+        rules = [
+            {"rule": {"rule_key": "30_80", "value_num": 1,
+                       "cond_expr": {"branches": [{"atoms": [{"cond_type_cd": "SPEND_REQ", "cond_basis_cd": "PREV_MONTH_SPEND",
+                           "cond_min_amt": 300000, "cond_max_amt_excl": 800000}]}]}}, "targets": ["????"]},
+            {"rule": {"rule_key": "80_plus", "value_num": 2,
+                       "cond_expr": {"branches": [{"atoms": [{"cond_type_cd": "SPEND_REQ", "cond_basis_cd": "PREV_MONTH_SPEND",
+                           "cond_min_amt": 800000}]}]}}, "targets": ["????"]},
+        ]
+        self.assertFalse(card_graphrag.rule_selection_open(rules))
+        transaction_rules = [{**row, "rule": {**row["rule"], "cond_expr": {"branches": [{"atoms": [
+            {"cond_type_cd": "SPEND_REQ", "cond_basis_cd": "TXN_AMT", "cond_min_amt": 3000,
+             "cond_max_amt_excl": 8000 if row["rule"]["rule_key"] == "30_80" else None}]}]}}} for row in rules]
+        self.assertTrue(card_graphrag.rule_selection_open(transaction_rules))
+
+    def test_candidate_topic_matching_uses_conditions_and_targets_without_ids(self):
+        question = "???? ??? ?? ??? ?????? ???? ? ?? ??? ??? ?"
+        self.assertEqual(set(card_graphrag._requested_benefit_topics(question)), {"telecom", "subscription"})
+        telecom = {"name": "???? ?? 5% ????", "targets": ["SKT", "KT", "LG U+"],
+                   "condition_text": ["???? ???? ?? ??? ?? ??"]}
+        subscription = {"name": "???? 50% ????", "condition_text": ["?? ?? ??"]}
+        self.assertTrue(card_graphrag._candidate_matches_topic(telecom, "telecom"))
+        self.assertTrue(card_graphrag._candidate_matches_topic(subscription, "subscription"))
+
+
 @unittest.skipUnless(os.getenv("RUN_NEO4J_INTEGRATION") == "1", "실제 Neo4j 읽기 테스트는 명시적으로 켠다")
 class LiveAccuracyTests(unittest.TestCase):
     """실제 Neo4j 조회 + Mock LLM. A9-3 실제 응답을 Mock으로 재생해 검증기를 시험한다."""
@@ -1568,6 +1624,49 @@ class LiveAccuracyTests(unittest.TestCase):
 
     def benefit(self, word):
         return next(value for name, value in self.ids.items() if word in name)
+
+    def read_items(self, ids):
+        catalog = self.search.list_catalog()
+        rows = {row["id"]: row for row in catalog if row.get("id") in ids}
+        self.assertEqual(set(rows), set(ids))
+        return rows, self.search.get_details([rows[item]["key"] for item in ids])
+
+    def test_live_simple_tiers_are_linked_to_previous_month_spend(self):
+        ids = ["20261105_000099"]
+        rows, details = self.read_items(ids)
+        detail_row = details[rows[ids[0]]["key"]]
+        context = card_graphrag.benefit_context(detail_row)
+        tiers = context["limit_tiers"]
+        self.assertEqual([(tier["min_amt"], tier["max_amt"], tier["cap"]["amount"])
+                          for tier in tiers], [(300000, 800000, 10000), (800000, None, 15000)])
+        self.assertTrue(all(tier["basis"] == "PREV_MONTH_SPEND" for tier in tiers))
+        self.assertFalse(any(item.get("topic") == card_graphrag.TIER_NAME
+                             for item in card_graphrag.unresolved_items([detail_row])))
+        evidence = {item["evidence_id"]: item for item in card_graphrag.collect_evidence([detail_row], "BENEFIT_COMPARE")}
+        self.assertEqual(evidence["20261105_002681"]["page_no"], 1)
+        self.assertEqual(evidence["20261105_002682"]["page_no"], 1)
+
+    def test_live_daily_telecom_subscription_and_shared_tier_evidence(self):
+        ids = ["20261105_000179", "20261105_000180"]
+        rows, details_by_key = self.read_items(ids)
+        details = [details_by_key[rows[item]["key"]] for item in ids]
+        contexts = [card_graphrag.benefit_context(item) for item in details]
+        telecom, recurring = contexts
+        telecom_text = " ".join(atom["text"] or "" for group in telecom["conditions"]
+                                for branch in group["branches"] for atom in branch["atoms"])
+        recurring_text = " ".join(atom["text"] or "" for group in recurring["conditions"]
+                                  for branch in group["branches"] for atom in branch["atoms"])
+        self.assertIn("???? ????", telecom_text)
+        self.assertIn("????(??)", recurring_text)
+        self.assertEqual([tier["shared"][0]["amount"] for tier in recurring["limit_tiers"]], [8000, 11000, 17000])
+        self.assertEqual([tier["min_amt"] for tier in recurring["limit_tiers"]], [500000, 1000000, 2000000])
+        evidence = card_graphrag.collect_evidence(details, "BENEFIT_COMPARE")
+        answer_rows = card_graphrag.answer_evidence_rows(evidence, contexts)
+        by_id = {row["evidence_id"]: row for row in answer_rows}
+        self.assertIn("20261105_003034", by_id)
+        self.assertEqual(by_id["20261105_003034"]["page_no"], 2)
+        self.assertIn("8,000?", by_id["20261105_003034"]["quote"])
+        self.assertIn("17,000?", by_id["20261105_003034"]["quote"])
 
     def ask(self, question, intent, ids, parsed):
         return CardGraphRAG(self.search, interpret_llm(intent, ids), FakeLLM(parsed)).run(question)
