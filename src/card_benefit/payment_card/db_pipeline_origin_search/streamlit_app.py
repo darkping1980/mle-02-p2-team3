@@ -27,6 +27,7 @@ Streamlit 실행 모델 (Java 개발자 참고)
 import re
 import sys
 from pathlib import Path
+from time import perf_counter
 from uuid import uuid4
 
 # Cloud dependency installs do not install the project in editable mode.
@@ -35,7 +36,7 @@ if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
 from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag, verify_view
-from card_benefit.payment_card.db_pipeline_origin_search.neo4j_search import CARD_LOGGER_NAME, GRAPH_PREFIX, QUERIES, connect
+from card_benefit.payment_card.db_pipeline_origin_search.neo4j_search import CARD_LOG, CARD_LOGGER_NAME, GRAPH_PREFIX, QUERIES, connect
 from card_benefit.payment_card.db_pipeline_origin_search.execution_log import (
     app_db_log_enabled, capture_request_queries, configure_application_logging, error_message,
     log_event, outcome_detail_text, outcome_pdf_evidence_text, outcome_neo4j_summary,
@@ -390,6 +391,7 @@ with st.form("question_form"):
 
 # 질문 제출 처리. submitted는 폼 버튼을 누른 그 재실행에서만 True다.
 if submitted:
+    streamlit_request_started = perf_counter()
     question = question.strip()
     session_id = st.session_state.execution_log_session_id
     request_id = str(uuid4())
@@ -406,11 +408,14 @@ if submitted:
         if APP_DB_LOG_ENABLED:
             events = [request_event,
                       log_event("RESPONSE", customer_response_for_log(st.session_state.outcome))]
+            app_log_started = perf_counter()
             persist_app_logs(session_id, request_id, events,
                              detail_text=outcome_detail_text(st.session_state.outcome),
                              pdf_evidence_text=outcome_pdf_evidence_text(st.session_state.outcome),
                              neo4j_summary=outcome_neo4j_summary(st.session_state.outcome),
                              pdf_evidence_summary=outcome_pdf_evidence_summary(st.session_state.outcome))
+            CARD_LOG.log_summary("PERF", st.session_state.outcome.get("request_id", request_id), phase="app_log_save",
+                                 elapsed_ms=(perf_counter() - app_log_started) * 1000, reused=True)
     else:
         request_event = log_event("REQUEST", question)
         cleanup = lambda: None
@@ -445,13 +450,19 @@ if submitted:
                     events.append(log_event("ERROR", error))
                 else:
                     events.append(log_event("RESPONSE", customer_response_for_log(outcome_for_log or {})))
+                app_log_started = perf_counter()
                 persist_app_logs(session_id, request_id, events,
                                  detail_text=outcome_detail_text(outcome_for_log),
                                  pdf_evidence_text=outcome_pdf_evidence_text(outcome_for_log),
                                  neo4j_summary=outcome_neo4j_summary(outcome_for_log),
                                  pdf_evidence_summary=outcome_pdf_evidence_summary(outcome_for_log))
+                CARD_LOG.log_summary("PERF", (outcome_for_log or {}).get("request_id", request_id), phase="app_log_save",
+                                     elapsed_ms=(perf_counter() - app_log_started) * 1000, reused=False)
 
 # 재실행마다 저장된 마지막 결과를 다시 그린다(위젯 조작만 해도 결과가 화면에 남는 이유).
 if st.session_state.get("outcome"):
     show_outcome(st.session_state.outcome)
+if submitted:
+    CARD_LOG.log_summary("PERF", (st.session_state.get("outcome") or {}).get("request_id", request_id),
+                         phase="streamlit_request_total", elapsed_ms=(perf_counter() - streamlit_request_started) * 1000)
 # endregion

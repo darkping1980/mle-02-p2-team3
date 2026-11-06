@@ -63,8 +63,7 @@ from common.query_logger import DEFAULT_SENSITIVE_KEYS
 
 from .benefit_search_service import BenefitSearchService, search_terms
 from .neo4j_search import (
-    ALL_SECTIONS, CARD_LOG, CARD_LOGGER_NAME, DETAIL_LOG, REQUEST_ID, detail_plan, detail_statements, entity_ref, is_common_key, source,
-    statement_plan,
+    ALL_SECTIONS, CARD_LOG, CARD_LOGGER_NAME, DETAIL_LOG, REQUEST_ID, catalog_batch_plan, detail_plan, detail_statements, entity_ref, is_common_key, source,
 )
 
 # region 1. 설정과 출력 형식
@@ -82,8 +81,8 @@ MODEL_PRICES = {"gpt-6-luna": (0.10, 0.01, 0.50)}
 Intent = Literal["BENEFIT_DETAIL", "BENEFIT_CONDITION", "BENEFIT_LIMIT", "BENEFIT_COMPARE", "EVIDENCE_SEARCH", "UNKNOWN"]
 SECTIONS_BY_INTENT = {
     "BENEFIT_DETAIL": ALL_SECTIONS,
-    "BENEFIT_CONDITION": ("rules", "conditions", "evidence"),
-    "BENEFIT_LIMIT": ("rules", "conditions", "limits", "evidence"),  # 원문으로만 보존된 조건도 한도에 영향을 줄 수 있어 포함
+    "BENEFIT_CONDITION": ("evidence",),
+    "BENEFIT_LIMIT": ("evidence",),  # 규칙·조건·한도는 Benefit JSON 속성에서 항상 함께 가져온다.
     "BENEFIT_COMPARE": ALL_SECTIONS,
     "EVIDENCE_SEARCH": ("evidence",),
 }
@@ -202,6 +201,8 @@ INTERPRET_PROMPT = """카드 혜택 질문의 유형과 대상 혜택을 고른�
 
 규칙:
 - 카드 이름은 혜택 이름이 아니다. 카드 이름에 든 낱말만으로 혜택을 고르지 않는다.
+- 후보의 rule_text와 limit_text는 혜택 이름을 다르게 표현한 원문 설명일 수 있으므로 질문의 조건·한도 표현과 함께 비교한다.
+- 질문에 카드와 혜택 주제가 명시되고 해당 카드 후보의 rule_text 또는 limit_text가 이를 직접 뒷받침하면 그 후보를 선택한다.
 - 질문과 직접 관련된 혜택만 고른다. 관련이 불확실한 혜택을 덧붙이지 않는다.
 - 카드의 혜택 전체를 명시적으로 물을 때만 모든 혜택을 고른다.
 - 결제 금액 기준을 묻는 질문은 payment_min_amounts가 있는 혜택만 고른다.
@@ -228,6 +229,10 @@ answer_text 작성 규칙 (고객이 읽는 설명문):
 - 첫 문단은 질문의 핵심 답이다. 혜택 이름과 질문이 물은 값을 1~2문장으로 먼저 말한다.
 - 가능 여부를 묻는 질문이면 가능한지, 불가능한지, 조건에 따라 다른지를 첫 문장에 드러낸다.
 - 비교 질문이면 차이를 먼저 빠짐없이 쓰고 같은 점을 뒤에 쓴다.
+- 비교는 카드별 핵심 혜택과 조건을 간결하게 설명하고, 한 카드의 혜택을 다른 카드에 섞지 않는다.
+- 각 혜택의 points는 benefit_id당 최대 1개로 만들고, 그 혜택의 핵심 내용과 필요한 적용 조건을 한 문장으로 합친다.
+- 카드 비교에서는 benefits에 전달된 각 선택 혜택을 빠짐없이 한 번씩 points에 포함하고, 그 카드의 혜택만 설명한다.
+- 두 카드 비교의 answer_text는 카드별 핵심 혜택과 적용 조건을 포함해 최대 5문장으로 작성하며, points 문장을 장황하게 반복하지 않는다.
 - 둘째 문단은 혜택을 받을 때 알아야 할 내용이다. 횟수·금액 한도, 지난달 실적 같은 이용 조건, 제외 대상 순서로 쓴다.
 - 질문이 묻지 않았어도 혜택을 못 받게 하는 혜택별 조건은 빼지 않는다. 카드 공통 제외 문구는 질문과 직접 관련될 때만 쓴다.
 - 문단은 빈 줄로 나눈다. 전체 2~5문장으로 쓰고, 내용이 짧으면 한 문단으로 쓴다.
@@ -460,6 +465,62 @@ def collect_evidence(details: list[dict], intent: str) -> list[dict]:
     return sorted(merged.values(), key=lambda item: (item["page_no"] or 0, item["evidence_id"]))
 
 
+def answer_evidence_rows(evidence: list[dict], benefits: list[dict], per_benefit: int = 12) -> list[dict]:
+    """LLM에 혜택별 소량의 실제 인용 후보만 전달한다. 전체 evidence는 State와 로그에 보존한다."""
+    chosen: dict[str, dict] = {}
+    for benefit in benefits:
+        benefit_id = benefit.get("benefit_id")
+        candidates = [row for row in evidence if benefit_id in (row.get("benefit_ids") or [])]
+        if not candidates:
+            continue
+        source_terms = [benefit.get("name") or "", benefit.get("rule_text") or "", benefit.get("limit_text") or "",
+                        benefit.get("condition_text") or "", *(benefit.get("targets") or [])]
+        source_terms += [target for rule in benefit.get("rules") or [] for target in rule.get("targets") or []]
+        for tier in benefit.get("limit_tiers") or []:
+            cap = tier.get("cap") if isinstance(tier, dict) else None
+            source_terms.extend(text for text in (tier.get("label"), tier.get("condition"), tier.get("limit"),
+                                                   cap.get("raw") if isinstance(cap, dict) else None)
+                                if isinstance(text, str))
+        name_terms = {term.lower() for text in source_terms for term in re.findall(r"[가-힣A-Za-z0-9]+", text or "")
+                      if len(term) > 1}
+        def score(row: dict) -> tuple[int, int, str]:
+            quote = row.get("quote") or ""
+            lowered = quote.lower()
+            name_hits = sum(term in lowered for term in name_terms)
+            topic_hits = sum(term in lowered for term in ("전월 실적", "이용실적", "할인한도", "적립한도", "제외", "적용", "할인", "적립"))
+            return (name_hits * 4 + topic_hits, len(quote), row.get("evidence_id") or "")
+        required = {evidence_id for tier in benefit.get("limit_tiers") or []
+                    for evidence_id in tier.get("evidence_ids") or []}
+        top = [row for row in candidates if row.get("evidence_id") in required]
+        top_ids = {row.get("evidence_id") for row in top}
+        top.extend(row for row in sorted(candidates, key=score, reverse=True)
+                   if row.get("evidence_id") not in top_ids and len(top) < per_benefit)
+        for row in top:
+            chosen.setdefault(row["evidence_id"], row)
+    return sorted(chosen.values(), key=lambda row: (row.get("page_no") or 0, row.get("evidence_id") or ""))
+
+
+def compact_answer_context(context: dict) -> dict:
+    """LLM 전달 문맥에서 원문 구조는 남기고 중복 평문 투영만 뺀다. 검증용 context 원본은 수정하지 않는다."""
+    keep = ("benefit_id", "name", "card", "type", "rule_text", "rules", "conditions", "limit_tiers",
+            "limit_text", "common_service")
+    benefits = []
+    for benefit in context.get("benefits") or []:
+        compact = {key: benefit[key] for key in keep if key in benefit}
+        groups = []
+        for group in compact.get("conditions") or []:
+            branches = []
+            for branch in group.get("branches") or []:
+                atoms = [{key: atom[key] for key in ("type", "min_amt", "max_amt", "basis", "text", "negate", "status")
+                          if key in atom} for atom in branch.get("atoms") or []]
+                branches.append({"branch_no": branch.get("branch_no"), "atoms": atoms})
+            groups.append({"scope": group.get("scope"), "branches": branches})
+        if "conditions" in compact:
+            compact["conditions"] = groups
+        benefits.append(compact)
+    return {**{key: value for key, value in context.items() if key != "benefits"}, "benefits": benefits}
+
+
 def find_exclusions(question: str, details: list[dict], read_source=None) -> list[dict]:
     """질문 낱말이 혜택의 적용 제외 문구에 있는지 원본 규칙과 조건으로 판정한다.
 
@@ -489,7 +550,8 @@ def find_exclusions(question: str, details: list[dict], read_source=None) -> lis
         matched = [term for term in terms if term.casefold() in tokens
                    and not any(term.casefold() in target for target in targets)]
         if matched:
-            found.append({"benefit_id": detail_ref(detail), "name": benefit.get("bnft_nm"), "terms": matched, "verified_by": verified_by})
+            found.append({"benefit_id": detail_ref(detail), "name": benefit.get("item_nm") or benefit.get("bnft_nm"),
+                          "terms": matched, "verified_by": verified_by})
     return found
 
 
@@ -704,7 +766,8 @@ def drop_duplicate_benefits(details: list[dict]) -> tuple[list[dict], list[str]]
             if line.get("same_fact_item_ref")}
     kept = [detail for detail in details if is_fee_detail(detail) or detail_ref(detail) not in same]
     dropped = [(source(detail["context"]["benefit"]).get("item_nm")
-                or source(detail["context"]["benefit"]).get("bnft_nm"))
+                or source(detail["context"]["benefit"]).get("bnft_nm")
+                or source(detail["context"]["benefit"]).get("name"))
                for detail in details if detail not in kept]
     return kept, dropped
 
@@ -748,41 +811,13 @@ def benefit_context(detail: dict, previous_spend: int | None = None) -> dict:
         item_data = item_data if isinstance(item_data, dict) else {}
         rule_rows = benefit.get("rule_list") if is_item else []
         rule_rows = rule_rows if isinstance(rule_rows, list) else []
-        groups = []
-        expr = benefit.get("item_cond_expr") if is_item else None
-        if isinstance(expr, str):
-            try:
-                expr = json.loads(expr)
-            except ValueError:
-                expr = None
-        if isinstance(expr, dict) and expr.get("branches"):
-            branches = []
-            for index, branch in enumerate(expr.get("branches") or []):
-                atoms = []
-                for atom in branch.get("atoms", []):
-                    atoms.append({"atom_key": atom.get("atom_key"), "negate": atom.get("negate_yn"),
-                                  "type": atom.get("cond_type_cd"), "min_amt": atom.get("cond_min_amt"),
-                                  "max_amt": atom.get("cond_max_amt_excl"), "basis": atom.get("cond_basis_cd"),
-                                  "text": atom.get("cond_raw_txt") or atom.get("excl_raw_txt"),
-                                  "excl_raw_txt": atom.get("excl_raw_txt"), "status": atom.get("cond_status_cd")})
-                branches.append({"branch_no": branch.get("branch_no", index + 1), "atoms": atoms})
-            groups.append({"scope": "혜택", "branches": branches})
-        for rule in rule_rows:
-            atoms = []
-            for condition in rule.get("conditions", []):
-                atoms.append({"atom_key": condition.get("cond_key"), "negate": condition.get("negate_yn"),
-                              "type": condition.get("cond_type_cd"), "min_amt": condition.get("cond_min_amt"),
-                              "max_amt": condition.get("cond_max_amt_excl"), "basis": condition.get("cond_basis_cd"),
-                              "text": condition.get("cond_raw_txt") or condition.get("excl_raw_txt"),
-                              "excl_raw_txt": condition.get("excl_raw_txt"), "status": condition.get("cond_status_cd")})
-            if atoms:
-                groups.append({"scope": rule.get("rule_key") or "혜택", "branches": [{"branch_no": 1, "atoms": atoms}]})
+        groups = condition_groups(detail.get("conditions") or [])
         limits_text = benefit.get("item_limit_txt") if is_item else benefit.get("bnft_limit_txt")
         limits = [{"text": limits_text}] if limits_text else []
         targets = [target.get("target_nm") for rule in rule_rows for target in (rule.get("target_list") or [])
                    if isinstance(target, dict) and target.get("target_nm")]
-        exclusions = [atom.get("excl_raw_txt") for group in groups for branch in group["branches"]
-                      for atom in branch["atoms"] if atom.get("excl_raw_txt")]
+        exclusions = [atom.get("text") for group in groups for branch in group["branches"]
+                      for atom in branch["atoms"] if atom.get("text") and atom.get("type") in ("BNFT_EXCL", "SPEND_EXCL")]
         name = benefit.get("item_nm") if is_item else benefit.get("bnft_nm")
         card = source(detail["context"].get("card") or {}).get("product_nm")
         tier_view = limit_tier_view(item_data)
@@ -975,7 +1010,9 @@ def attach_terms(details: list[dict], terms_rows: list[dict]) -> tuple[list[dict
         card_item = _card_item(ref)
         if card_item is None or is_fee_detail(detail):
             continue
-        spend = "SPEND_REQ" in json.dumps(detail.get("conditions") or [], ensure_ascii=False)
+        spend = any(source(row.get("atom") or {}).get("cond_type_cd") == "SPEND_REQ"
+                    and source(row.get("atom") or {}).get("cond_basis_cd") not in ("TXN_AMT", "TRANSACTION_AMOUNT")
+                    for row in detail.get("conditions") or [])
         owners.setdefault(card_item[0], []).append((ref, card_item[1], spend))
         condition_texts[ref] = _condition_texts(detail)
     terms, evidence = [], []
@@ -1050,14 +1087,14 @@ def unresolved_items(details: list[dict]) -> list[dict]:
         name = benefit.get("bnft_nm")
         if detail["context"].get("common"):
             found.append({"kind": "DATA", "text": f"{name}: 공통 혜택에는 근거 직접 연결이 없어 동일성이 확인된 기존 행의 근거만 표시합니다."})
-        keys = [item["rule"].get("rule_key") for item in detail["rules"]]
+        keys = [item["rule"].get("rule_key") for item in detail.get("rules", [])]
         if rule_selection_open(detail["rules"]):      # 여러 규칙의 적용 방식(중첩·택일)은 원문에 없으면 미확정으로 알린다
             found.append({"kind": "CONDITION", "text": f"{name}: {TIER_OPEN}", "topic": TIER_NAME, "benefit": name, "open": TIER_OPEN,
                           "confirmed": benefit.get("bnft_rule_txt"), "intents": TIER_INTENTS, "words": TIER_WORDS,
                           "evidence_ids": _evidence_ids(detail, lambda row, keys=keys: row.get("rule_key") in keys)})
-        for row in detail["conditions"]:
-            key = row["atom"].get("key_name")
+        for row in detail.get("conditions", []):
             atom = source(row["atom"])
+            key = atom.get("atom_key") or atom.get("key_name")
             raw = " ".join((atom.get("cond_raw_txt") or atom.get("excl_raw_txt") or "").split())
             if key in UNRESOLVED_ATOMS:
                 found.append({"kind": "REVIEW", "text": UNRESOLVED_ATOMS[key], "topic": raw})
@@ -1804,7 +1841,7 @@ def plan_key(state: CardState) -> str:
 
 def catalog_plan() -> dict:
     """Interpret 전에 실행하는 카탈로그 Cypher."""
-    return statement_plan("card.catalog")
+    return catalog_batch_plan()
 
 
 def verification_plan(state: CardState) -> list[dict]:
@@ -1997,7 +2034,9 @@ class CardGraphRAG:
         # LLM과 서버가 같은 혜택을 가리키도록 ID 단독이 아닌 종류·소유자 포함 참조를 쓴다(카드·공통 혜택 ID 충돌 방지).
         catalog = [{**row, "id": entity_ref(row["key"], row["id"])} for row in catalog]
         rows = [{"id": row["id"], "name": row["name"], "card": row["card"], "type": row.get("item_type", "BENEFIT"),
-                 "targets": row["targets"], "payment_min_amounts": row.get("payment_min_amounts", [])} for row in catalog]
+                 "targets": row["targets"], "payment_min_amounts": row.get("payment_min_amounts", []),
+                 **({"rule_text": row["item_rule_txt"]} if row.get("item_rule_txt") else {}),
+                 **({"limit_text": row["item_limit_txt"]} if row.get("item_limit_txt") else {})} for row in catalog]
         update["catalog"] = rows
         prompt = INTERPRET_PROMPT.format(catalog=json.dumps(rows, ensure_ascii=False), question=question)
         try:
@@ -2032,6 +2071,7 @@ class CardGraphRAG:
                       "sections": list(SECTIONS_BY_INTENT.get(intent, ())),
                       "payment_amount": amount, "ambiguity": ambiguity}
         CARD_LOG.log_summary("INTERPRET", request_id, model=self.model, response_model=call["response_model"],
+                             llm_elapsed_ms=call.get("elapsed_ms"),
                              intent=intent, benefits=parameters["benefit_names"], sections=parameters["sections"],
                              dropped=dropped or None, filtered=filtered or None, payment_amount=amount,
                              ambiguity=repr(ambiguity) if ambiguity else None, **_token_fields(call))
@@ -2149,6 +2189,7 @@ class CardGraphRAG:
                       → 연회비도 함께 조회됐으면 LLM 문장 중 연회비 문장을 빼고 등록 값 문장·표를 뒤에 붙임
         """
         request_id, evidence = state["request_id"], state["evidence"]
+        REQUEST_ID.set(request_id)
         details, duplicates = drop_duplicate_benefits(state["retrieved_data"])
         fees = [detail for detail in details if is_fee_detail(detail)]
         details = [detail for detail in details if not is_fee_detail(detail)]
@@ -2171,12 +2212,14 @@ class CardGraphRAG:
                    "rule_selection_unresolved": rule_conflicts(benefits, amount), "open_conditions": state["open_conditions"],
                    "excluded_terms": state.get("exclusions", []),
                    "evidence": [{key: item[key] for key in ("evidence_id", "page_no", "approval_status", "quote", "benefit_ids")}
-                                for item in evidence]}
+                                for item in answer_evidence_rows(
+                                    evidence, benefits,
+                                    per_benefit=4 if state.get("intent") == "BENEFIT_COMPARE" and len(benefits) >= 4 else 12)]}
         # TERMS(할인 제공 유의사항·제외 목록): 선택된 카드 혜택에 적용 범위가 맞는 항목과 그 원문 근거만 붙인다.
         if self.benefit_search is not None and hasattr(self.benefit_search, "card_terms"):
             card_ids = sorted({item[0] for item in (_card_item(detail_ref(detail)) for detail in details) if item})
             try:
-                card_terms, terms_evidence = attach_terms(details, self.benefit_search.card_terms(card_ids))
+                card_terms, terms_evidence = attach_terms(details, self.benefit_search.card_terms(card_ids, details=details))
             except Exception as error:   # TERMS 조회 실패는 혜택 답변을 막지 않는다
                 card_terms, terms_evidence = [], []
                 notes.append(f"카드 유의사항(TERMS) 조회 실패: {type(error).__name__}")
@@ -2190,7 +2233,8 @@ class CardGraphRAG:
                 item["amount_note"] = f"이 문구의 {', '.join(labels)}은 이번 혜택의 실적 기준이 아니다."
         if fee:
             context["fee_notice"] = FEE_NOTICE
-        text = json.dumps(context, ensure_ascii=False)
+        prompt_context = compact_answer_context(context)
+        text = json.dumps(prompt_context, ensure_ascii=False)
         prompt = ANSWER_PROMPT.format(question=state["question"], context=text)
         update: CardState = {"path": ["answer"], "context": context}
         try:
@@ -2204,10 +2248,12 @@ class CardGraphRAG:
         # 근거 검증 단계: LLM 답변을 조회 결과와 대조(validate_answer)한 뒤, 제외 대상 판정(enforce_exclusions)을 덮어쓴다.
         # LLM에는 질문에 영향을 주는 조건만 보내고, 중복 문장 판별에는 미확정 사항 전체를 쓴다.
         topics = [item["topic"] for item in unresolved_items(state["retrieved_data"]) if item["kind"] == "CONDITION"]
+        validate_started = perf_counter()
         answer, warnings = validate_answer(parsed, {**context, "unresolved": state["unresolved"], "unresolved_topics": topics}, state["question"])
+        CARD_LOG.log_summary("PERF", request_id, phase="validate_answer", elapsed_ms=(perf_counter() - validate_started) * 1000)
         answer, guarded = enforce_exclusions(answer, state.get("exclusions", []), evidence)
         warnings = [*warnings, *guarded]
-        CARD_LOG.log_summary("ANSWER", request_id, model=self.model, response_model=call["response_model"],
+        CARD_LOG.log_summary("ANSWER", request_id, model=self.model, response_model=call["response_model"], llm_elapsed_ms=call.get("elapsed_ms"),
                              evidence_in=len(evidence), context_chars=len(text), status=answer["status"],
                              conflicts=[item["benefit_id"] for item in context["rule_selection_unresolved"]] or None,
                              conclusion=repr(answer["conclusion"]), points=len(answer["points"]),

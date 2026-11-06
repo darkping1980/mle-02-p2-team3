@@ -6,7 +6,7 @@ import re
 from time import perf_counter
 
 from .benefit_search_service import FETCH_PER_TABLE, RRF_K, SearchHit, SearchOutcome, search_terms
-from .neo4j_search import CARD_LOG, source
+from .neo4j_search import CARD_LOG, REQUEST_ID, source
 
 ENGINE = "neo4j"
 GENERIC_CARD_TOKENS = ["카드", "하나", "체크카드", "신용카드", "체크", "신용", "하나카드", "우리카드"]
@@ -41,10 +41,13 @@ PRODUCTS_QUERY = "MATCH (p:dp_card_product) RETURN p.card_id AS card_id,p.produc
 TERMS_QUERY = """
 MATCH (p:dp_card_product)-[:dp_has_item]->(i:dp_card_product_item {item_type_cd:'TERMS'})
 WHERE p.card_id IN $card_ids
+  AND ($item_ids IS NULL OR i.card_product_item_id IN $item_ids)
 OPTIONAL MATCH (i)-[l:dp_supported_by {ev_subject_cd:'ITEM'}]->(e:dp_card_source_evidence)
 WITH p,i,e ORDER BY e.evidence_id
 RETURN p.card_id AS card_id,p.product_nm AS product_nm,i.card_product_item_id AS card_product_item_id,
-       i.source_json AS item_source,[x IN collect(e.source_json) WHERE x IS NOT NULL] AS evidence
+        i.source_json AS item_source,i.item_data AS item_data,i.item_rule_txt AS item_rule_txt,
+        i.item_cd AS item_cd,i.verification_status_cd AS verification_status_cd,
+        [x IN collect(e.source_json) WHERE x IS NOT NULL] AS evidence
 ORDER BY card_id,card_product_item_id
 """
 STATEMENTS = {"card.hybrid_search": "(dp_card_product_item|dp_card_common_bnft) keyword/vector + RRF",
@@ -86,10 +89,16 @@ class Neo4jBenefitSearch:
 
     def search(self, question: str, mode: str = "N", top_k: int = 5, use_graph: bool = True) -> SearchOutcome:
         started = perf_counter()
+        embed_started = perf_counter()
         vector = self.embedder.embed([question])[0] if self.embedder is not None else None
+        CARD_LOG.log_summary("PERF", REQUEST_ID.get(), phase="question_embedding", elapsed_ms=(perf_counter() - embed_started) * 1000,
+                             calls=1 if self.embedder is not None else 0, dimensions=len(vector) if vector is not None else None)
         rows = self._run("card.hybrid_search", CANDIDATES_QUERY, qvec=vector)
         terms = [term.casefold() for term in search_terms(question)]
-        cards = self._run("card.products", PRODUCTS_QUERY)
+        cards = getattr(self.neo4j_search, "catalog_products", None)
+        if cards is None:
+            cards = self._run("card.products", PRODUCTS_QUERY)
+        transform_started = perf_counter()
         identified = []
         for card in cards:
             tokens = _name_tokens(card["product_nm"] or "")
@@ -146,6 +155,9 @@ class Neo4jBenefitSearch:
                 row.get("sim"), row["kw"], row.get("origin_cd"), item["channels"], [], [], []))
         self.last_trace = {"identified_cards": identified, "pool": len(candidates), "keyword_candidates": len(keyword),
                            "vector_candidates": len(vector_ranked), "completed_card": all_benefits and bool(identified)}
+        CARD_LOG.log_summary("PERF", REQUEST_ID.get(), phase="hybrid_python_merge", elapsed_ms=(perf_counter() - transform_started) * 1000,
+                             candidate_rows=len(rows), candidate_bytes=len(json.dumps(rows, ensure_ascii=False, default=str).encode("utf-8")),
+                             selected=len(hits), products=len(cards))
         engines = (["neo4j_keyword"] if terms else []) + (["neo4j_vector"] if vector is not None else []) + ["neo4j_rrf"]
         CARD_LOG.log_summary("HYBRID", "neo4j", identified=identified or None, hits=len(hits), pool=len(candidates))
         return SearchOutcome(mode, hits, (perf_counter()-started)*1000, [], [], engines)
@@ -171,14 +183,50 @@ class Neo4jBenefitSearch:
             key = json.dumps(["card_common_bnft", int(owner), benefit_id], ensure_ascii=False, separators=(",", ":"))
         return self.neo4j_search.get_detail(key, sections)
 
-    def card_terms(self, card_ids: list[int]) -> list[dict]:
+    def card_terms(self, card_ids: list[int], details: list[dict] | None = None) -> list[dict]:
         ids = sorted({int(value) for value in card_ids})
         if not ids:
             return []
-        rows = self._run("card.terms", TERMS_QUERY, card_ids=ids)
+        cached = getattr(self.neo4j_search, "catalog_terms", None)
+        item_ids = None
+        if cached is not None and details is not None:
+            selected = {}
+            for detail in details:
+                context = detail.get("context") or {}
+                benefit = source(context.get("benefit") or {})
+                card_id = benefit.get("card_id")
+                item_id = benefit.get("card_product_item_id")
+                if card_id is not None and item_id:
+                    selected.setdefault(int(card_id), []).append((str(item_id), detail))
+            item_ids = []
+            for card_id in ids:
+                for row in cached.get(card_id, []):
+                    data = row.get("item_data") if isinstance(row.get("item_data"), dict) else {}
+                    scope = data.get("scope") if isinstance(data.get("scope"), dict) else {}
+                    scope_cd = scope.get("scope_cd")
+                    for item_id, detail in selected.get(card_id, []):
+                        if scope_cd == "ALL_BENEFITS":
+                            item_ids.append(row["card_product_item_id"])
+                        elif scope_cd == "NAMED_ITEMS" and item_id in (scope.get("item_ids") or []):
+                            item_ids.append(row["card_product_item_id"])
+                        elif scope_cd == "PERFORMANCE":
+                            spend = any(source(condition.get("atom") or {}).get("cond_type_cd") == "SPEND_REQ"
+                                        and source(condition.get("atom") or {}).get("cond_basis_cd") not in ("TXN_AMT", "TRANSACTION_AMOUNT")
+                                        for condition in detail.get("conditions") or [])
+                            if spend:
+                                item_ids.append(row["card_product_item_id"])
+                        elif scope_cd not in {"ALL_BENEFITS", "NAMED_ITEMS", "PERFORMANCE"}:
+                            # Unknown scope is not discarded; retain it for review.
+                            item_ids.append(row["card_product_item_id"])
+            item_ids = sorted(set(item_ids))
+            if not item_ids:
+                return []
+        rows = self._run("card.terms", TERMS_QUERY, card_ids=ids, item_ids=item_ids)
         output = []
         for row in rows:
-            item = source({"source_json": row["item_source"]})
+            item = source({"source_json": row["item_source"], "item_data": row.get("item_data"),
+                           "item_rule_txt": row.get("item_rule_txt"), "item_cd": row.get("item_cd"),
+                           "verification_status_cd": row.get("verification_status_cd")})
             output.append({"card_id": row["card_id"], "card_product_item_id": row["card_product_item_id"],
                            "item_cd": item.get("item_cd"), "item_nm": item.get("item_nm"),
                            "item_data": item.get("item_data"), "item_rule_txt": item.get("item_rule_txt"),

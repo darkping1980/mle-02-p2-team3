@@ -284,7 +284,8 @@ class GraphTests(unittest.TestCase):
     def test_limit_intent_keeps_conditions_for_unresolved_items(self):
         search = FakeSearch()
         state, _, _ = run(search, interpret_llm("BENEFIT_LIMIT"))
-        self.assertIn("conditions", search.calls[1][1])
+        self.assertEqual(search.calls[1][1], ("evidence",))
+        self.assertTrue(state["retrieved_data"][0]["conditions"])
         self.assertTrue(any("제외 조건" in text for text in state["unresolved"]))
 
     def test_rule_evidence_merges_into_benefit_evidence(self):
@@ -1075,9 +1076,9 @@ class VerificationStepTests(unittest.TestCase):
     def test_plan_lists_catalog_and_detail_statements(self):
         state = self.pipeline().verify_interpret("대중교통 혜택은?")
         plan = card_graphrag.verification_plan(state)
-        self.assertEqual([p["statement_id"] for p in plan], ["card.context", "card.rules", "card.conditions", "card.limits", "card.evidence"])
-        self.assertEqual({p["parameters"]["key"] for p in plan}, {KEY})
-        self.assertEqual(card_graphrag.catalog_plan()["statement_id"], "card.catalog")
+        self.assertEqual([p["statement_id"] for p in plan], ["card.detail_batch"])
+        self.assertEqual(plan[0]["parameters"]["keys"], [KEY])
+        self.assertEqual(card_graphrag.catalog_plan()["statement_id"], "card.catalog_batch")
 
     def test_step_logs_detail_and_automatic_run_does_not(self):
         with self.assertLogs(neo4j_search.CARD_LOGGER_NAME, "INFO") as logs:
@@ -1189,6 +1190,90 @@ class ConditionGroupTests(unittest.TestCase):
     def test_scope_comes_from_owner_code(self):
         rows = self.rows("BNFT") + self.rows("CARD") + self.rows("RULE", "rule_1")
         self.assertEqual([group["scope"] for group in card_graphrag.condition_groups(rows)], ["혜택", "카드 공통", "rule_1"])
+
+
+class RebuiltGraphContractTests(unittest.TestCase):
+    def test_answer_evidence_is_capped_per_benefit_without_cross_owner_leak(self):
+        from card_benefit.payment_card.db_pipeline_origin_search.card_graphrag import answer_evidence_rows
+
+        rows = [{"evidence_id": f"a{i}", "page_no": 1, "quote": "혜택 적용 조건", "benefit_ids": ["A"]}
+                for i in range(18)]
+        rows += [{"evidence_id": f"b{i}", "page_no": 2, "quote": "월 할인한도", "benefit_ids": ["B"]}
+                 for i in range(18)]
+        answer_rows = answer_evidence_rows(rows, [{"benefit_id": "A", "name": "대중교통"},
+                                                  {"benefit_id": "B", "name": "정기결제"}])
+        self.assertEqual(len(answer_rows), 24)
+        self.assertEqual(sum("A" in row["benefit_ids"] for row in answer_rows), 12)
+        self.assertEqual(sum("B" in row["benefit_ids"] for row in answer_rows), 12)
+
+    def test_prompt_context_keeps_contract_and_omits_repeated_text_projections(self):
+        from card_benefit.payment_card.db_pipeline_origin_search.card_graphrag import compact_answer_context
+
+        benefit = {"benefit_id": "A", "name": "혜택", "rules": [{"rule_key": "r1", "value": 10}],
+                   "conditions": [{"scope": "r1", "branches": [{"branch_no": 1,
+                       "atoms": [{"type": "SPEND_REQ", "text": "전월 실적", "min_amt": 300000}]}]}],
+                   "limit_tiers": [{"label": "30만원 이상", "cap": {"amount": 10000}}],
+                   "limit_text": "30만원 이상 1만원", "limits": [{"text": "30만원 이상 1만원"}],
+                   "condition_text": "전월 실적", "exclusion_text": "제외", "targets": ["대상"]}
+        compact = compact_answer_context({"benefits": [benefit], "evidence": [{"evidence_id": "E1"}]})
+        row = compact["benefits"][0]
+        self.assertEqual(row["rules"], benefit["rules"])
+        self.assertEqual(row["conditions"][0]["branches"][0]["atoms"][0]["min_amt"], 300000)
+        self.assertEqual(row["limit_tiers"], benefit["limit_tiers"])
+        self.assertNotIn("condition_text", row)
+        self.assertNotIn("limits", row)
+        self.assertNotIn("exclusion_text", row)
+        self.assertNotIn("targets", row)
+
+    def detail(self, spend=True):
+        from card_benefit.payment_card.db_pipeline_origin_search import neo4j_search
+        rules = [{"rule_key": "r30", "value_num": 10000, "value_unit_cd": "KRW",
+                  "target_list": [{"target_nm": "같은 가맹점"}],
+                  "cond_expr": {"branches": [{"branch_no": 1, "atoms": [{
+                      "atom_key": "spend30", "cond_type_cd": "SPEND_REQ", "cond_basis_cd": "PREV_MONTH_SPEND",
+                      "cond_min_amt": 300000, "cond_raw_txt": "전월 30만원 이상"}]}]}},
+                 {"rule_key": "r60", "value_num": 20000, "value_unit_cd": "KRW",
+                  "target_list": [{"target_nm": "같은 가맹점"}],
+                  "cond_expr": {"branches": [{"branch_no": 1, "atoms": [{
+                      "atom_key": "spend60", "cond_type_cd": "SPEND_REQ", "cond_basis_cd": "PREV_MONTH_SPEND",
+                      "cond_min_amt": 600000, "cond_raw_txt": "전월 60만원 이상"}]}]}}] if spend else []
+        benefit = {"card_product_item_id": "20261105_000100", "card_id": 23, "item_type_cd": "BENEFIT",
+                   "item_nm": "특별·추가 적립", "item_rule_txt": "실적에 따라 적립", "item_limit_txt": "통합 월 한도",
+                   "source_json": "{}", "rule_list": json.dumps(rules, ensure_ascii=False), "item_data": "{}",
+                   "item_cond_expr": json.dumps({"branches": []}, ensure_ascii=False)}
+        context = {"benefit": benefit, "card": {"source_json": '{"product_nm":"카드의정석 POINT II"}'},
+                   "card_sources": [], "common": None, "extraction_sources": []}
+        detail = {"context": context, "evidence": [], "limits": [], "entity_ref": "card_product_item:23:20261105_000100"}
+        detail.update(neo4j_search._normalize_item_contract(neo4j_search.source(benefit)))
+        return detail
+
+    def test_new_rule_list_conditions_reach_answer_context_and_terms_scope(self):
+        detail = self.detail()
+        context = card_graphrag.benefit_context(detail, previous_spend=600000)
+        spend_atoms = [atom for group in context["conditions"] for branch in group["branches"] for atom in branch["atoms"]
+                       if atom["type"] == "SPEND_REQ"]
+        self.assertEqual({atom["min_amt"] for atom in spend_atoms}, {300000, 600000})
+        self.assertTrue(card_graphrag.unresolved_items([detail]))
+        terms, _ = card_graphrag.attach_terms([detail], [{
+            "card_id": 23, "card_product_item_id": "terms1", "item_nm": "이용 유의사항",
+            "product_nm": "카드의정석 POINT II", "item_data": {"terms_kind_cd": "NOTICE",
+                "scope": {"scope_cd": "PERFORMANCE"}, "source": {"txt": "전월 실적 안내"}, "footnotes": []},
+            "item_rule_txt": "전월 실적 안내", "evidence": []}])
+        self.assertEqual(len(terms), 1)
+        self.assertEqual(terms[0]["benefit_ids"], ["card_product_item:23:20261105_000100"])
+
+    def test_catalog_payment_filter_uses_only_explicit_transaction_minimums(self):
+        from card_benefit.payment_card.db_pipeline_origin_search import neo4j_search
+        rows = neo4j_search.catalog_rows([{
+            "key": '["card_product_item",2,"x"]', "name": "편의점", "id": "x", "status": None,
+            "card_source": '{"card_id":2,"product_nm":"ONE PICK STYLE"}',
+            "rule_list": json.dumps([{"rule_key": "r", "target_list": [], "cond_expr": {"branches": [
+                {"atoms": [{"cond_type_cd": "SPEND_REQ", "cond_basis_cd": "TXN_AMT", "cond_min_amt": 3000},
+                           {"cond_type_cd": "SPEND_REQ", "cond_basis_cd": "PREV_MONTH_SPEND", "cond_min_amt": 100000}]}]}}], ensure_ascii=False),
+            "item_cond_expr": "{}"}], [], [])
+        self.assertEqual(rows[0]["payment_min_amounts"], [3000])
+        selected, filtered = card_graphrag.filter_by_payment([rows[0]["key"]], {rows[0]["key"]: rows[0]}, 3000, "BENEFIT_DETAIL")
+        self.assertEqual((selected, filtered), ([rows[0]["key"]], []))
 
 
 class CreateLlmTests(unittest.TestCase):
@@ -1387,8 +1472,8 @@ class StreamlitTests(unittest.TestCase):
 
     def test_example_only_fills_input(self):
         app = AppTest.from_file(APP).run(timeout=30)
-        app.button_group[0].set_value("놀이공원 할인율과 이용 횟수 제한은?").run(timeout=30)
-        self.assertEqual(app.text_area(key="question").value, "놀이공원 할인율과 이용 횟수 제한은?")
+        app.button_group(key="example").set_value("ONE PICK 대중교통").run(timeout=30)
+        self.assertEqual(app.text_area(key="question").value, "ONE PICK STYLE 카드의 대중교통 혜택은?")
         self.assertEqual(self.first.prompts, [])
 
     def test_connection_failure_is_sanitized(self):
@@ -1423,7 +1508,8 @@ class StreamlitTests(unittest.TestCase):
         self.assertFalse(app.exception)
         self.assertEqual(search.calls, ["catalog"])
         codes = " ".join(block.value for block in app.code)
-        self.assertIn("MATCH (b:dp_card_bnft", codes)
+        self.assertIn("dp_card_product_item", codes)
+        self.assertNotIn("dp_card_bnft", codes)
         self.assertNotIn("$key", codes)
         self.assertEqual(self.second.prompts, [])
 
@@ -1493,19 +1579,23 @@ class LiveAccuracyTests(unittest.TestCase):
         rag = CardGraphRAG(self.search, first, second)
         state = rag.verify_interpret("대중교통 혜택은?")
         plan = card_graphrag.verification_plan(state)
-        self.assertEqual(len(plan), 5)
+        self.assertEqual(len(plan), 1)
         state = rag.verify_retrieve(state)
         detail_row = state["retrieved_data"][0]
-        self.assertEqual((len(detail_row["rules"]), len(detail_row["conditions"]), len(detail_row["limits"])), (1, 7, 1))
+        self.assertEqual((len(detail_row["rules"]), len(detail_row["conditions"]), len(detail_row["limits"])), (1, 4, 1))
+        condition_types = {neo4j_search.source(row["atom"]).get("cond_type_cd") for row in detail_row["conditions"]}
+        self.assertTrue({"SPEND_REQ", "SPEND_EXCL", "BNFT_EXCL", "GRACE"} <= condition_types)
         self.assertEqual(second.prompts, [])
         state = rag.verify_answer(state)
         self.assertEqual(state["answer"]["status"], "ANSWERED")
         self.assertEqual((len(first.prompts), len(second.prompts)), (1, 1))
 
-    def test_catalog_has_payment_minimums_only_for_tier_benefits(self):
+    def test_catalog_payment_minimums_come_only_from_transaction_spend_atoms(self):
         rows = {row["name"]: sorted(row["payment_min_amounts"]) for row in self.search.list_catalog()}
-        self.assertEqual({name: value for name, value in rows.items() if value},
-                         {name: [3000, 10000] for name in rows if "ONE PICK" in name or "STYLE" in name})
+        self.assertEqual(next(value for name, value in rows.items() if "ONE PICK" in name), [3000, 10000])
+        self.assertEqual(next(value for name, value in rows.items() if name.startswith("STYLE")), [3000, 10000])
+        self.assertEqual(next(value for name, value in rows.items() if "1%" in name), [10000])
+        self.assertTrue(all(amount > 0 for values in rows.values() for amount in values))
 
     def test_q5_replay(self):
         one_pick, style, transit = self.benefit("ONE PICK"), self.benefit("STYLE"), self.benefit("대중교통")

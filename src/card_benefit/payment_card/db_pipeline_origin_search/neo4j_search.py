@@ -54,16 +54,13 @@ LIST_QUERY = MAPPERS["graph_questions.list_benefits"]
 RELATION_QUERY = MAPPERS["graph_questions.candidate_relations"]
 BENEFIT_RELATIONS_QUERY = MAPPERS["graph_questions.benefit_relations"]
 CONTEXT_QUERY = MAPPERS["graph_questions.benefit_context"]
-RULE_QUERY = MAPPERS["graph_questions.benefit_rules"]
-CONDITION_QUERY = MAPPERS["graph_questions.benefit_conditions"]
-LIMIT_QUERY = MAPPERS["graph_questions.benefit_limits"]
 EVIDENCE_QUERY = MAPPERS["graph_questions.benefit_evidence"]
 COMMON_EVIDENCE_QUERY = MAPPERS["graph_questions.common_benefit_evidence"]
 HOP_QUERIES = {name: MAPPERS[f"graph_questions.{name}"] for name in
                ("hop1_card_benefits", "hop2_card_rules", "hop2_card_common", "hop3_card_targets", "hop3_common_docs", "hop3_target_cards")}
 QUERIES = {"카탈로그": CATALOG_QUERY, "항목 카탈로그": ITEM_CATALOG_QUERY, "항목 근거": ITEM_EVIDENCE_QUERY,
            "공통 카탈로그": COMMON_CATALOG_QUERY, "목록": LIST_QUERY, "후보 관계": RELATION_QUERY, "혜택 간 관계": BENEFIT_RELATIONS_QUERY,
-           "카드·혜택": CONTEXT_QUERY, "규칙·대상": RULE_QUERY, "조건식": CONDITION_QUERY, "한도": LIMIT_QUERY, "근거": EVIDENCE_QUERY,
+            "카드·혜택·규칙·조건·한도": CONTEXT_QUERY, "근거": EVIDENCE_QUERY,
            "공통 혜택 근거": COMMON_EVIDENCE_QUERY, **HOP_QUERIES}
 # 로그에 쓰는 Cypher 식별자와 그 쿼리가 지나가는 노드·관계 경로.
 STATEMENTS = {
@@ -76,9 +73,6 @@ STATEMENTS = {
     "card.relations": (RELATION_QUERY, "dp_card_product_item and dp_card_common_bnft application relationships"),
     "card.benefit_relations": (BENEFIT_RELATIONS_QUERY, "dp_card_product_item.relation_list (source JSON)"),
     "card.context": (CONTEXT_QUERY, "dp_card_product_item source row plus card/common ownership"),
-    "card.rules": (RULE_QUERY, "dp_card_product_item.rule_list source JSON"),
-    "card.conditions": (CONDITION_QUERY, "dp_card_product_item.item_cond_expr source JSON"),
-    "card.limits": (LIMIT_QUERY, "(혜택).limit_text"),
     "card.evidence": (EVIDENCE_QUERY, "(dp_card_product_item|dp_card_common_bnft)-[dp_supported_by]->(dp_card_source_evidence)"
                                       "-[dp_in_chunk]->(dp_card_doc_chunk)-[dp_on_page]->(dp_card_doc_page)-[dp_in_document]->(dp_card_doc)"),
     "card.common_evidence": (COMMON_EVIDENCE_QUERY, "(dp_card_common_bnft)-[dp_supported_by]->(dp_card_source_evidence)"
@@ -86,8 +80,7 @@ STATEMENTS = {
     **{f"card.{name}": (query, name) for name, query in HOP_QUERIES.items()},
 }
 STATEMENT_IDS = {query: statement_id for statement_id, (query, _) in STATEMENTS.items()}
-SECTION_QUERIES = {"rules": RULE_QUERY, "conditions": CONDITION_QUERY, "limits": LIMIT_QUERY,
-                   "evidence": EVIDENCE_QUERY}
+SECTION_QUERIES = {"evidence": EVIDENCE_QUERY}
 ALL_SECTIONS = tuple(SECTION_QUERIES)
 
 # region 배치 조회 (P3, 2026-11-05) — 같은 named query를 한 문장으로 묶어 네트워크 왕복을 줄인다. 데이터 캐시는 없다.
@@ -95,15 +88,14 @@ ALL_SECTIONS = tuple(SECTION_QUERIES)
 # 반환 행은 원래 RETURN 열 순서대로 다시 만든다. 근거 행만 로직이 읽는 열(owner_labels, rule_key, link, evidence)로 줄인다.
 # 청크·페이지·문서의 전체 속성은 전송하지 않지만 MATCH 경로(근거→청크→페이지→문서)는 그대로라 같은 근거만 조회된다.
 CONTEXT_FIELDS = ("card", "benefit", "card_sources", "common", "common_docs", "card_labels", "benefit_labels", "extraction_sources")
-SECTION_FIELDS = {"rules": ("rule", "labels", "targets"),
-                  "conditions": ("owner_cd", "rule_key", "expression", "branch_no", "atom", "labels"),
-                  "limits": ("limit_text",),
-                  "evidence": ("owner_labels", "owner", "evidence_labels", "rule_key", "link", "evidence", "chunk", "page", "document")}
-SECTION_PRESENT = {"rules": "rule", "conditions": "atom", "limits": "limit_text", "evidence": "evidence"}   # 항상 값이 있는 열
+SECTION_FIELDS = {"evidence": ("owner_labels", "owner", "evidence_labels", "rule_key", "link", "evidence", "chunk", "page", "document")}
+SECTION_PRESENT = {"evidence": "evidence"}
 LIST_FIELDS = ("key", "name", "id", "status")
-CATALOG_FIELDS = {"catalog": ("key", "name", "id", "status", "card_source", "targets", "payment_min_amounts"),
-                  "items": ("key", "name", "id", "status", "item_type", "item_source", "card_source"),
-                  "commons": ("key", "name", "id", "status", "common_nm", "cards")}
+CATALOG_FIELDS = {"catalog": ("key", "name", "id", "status", "card_source", "rule_list", "item_cond_expr",
+                              "item_rule_txt", "item_limit_txt"),
+                  "items": ("key", "name", "id", "status", "item_type", "card_id", "item_source", "item_data", "item_rule_txt", "item_cd", "card_source"),
+                  "commons": ("key", "name", "id", "status", "common_nm", "cards"),
+                  "products": ("card_id", "product_nm")}
 
 
 def _subquery(query: str, variable: str | None = None) -> str:
@@ -148,7 +140,9 @@ CATALOG_BATCH_QUERY = "\n".join([
     f"WITH catalog, [x IN collect({_map(CATALOG_FIELDS['items'])}) WHERE x.key IS NOT NULL] AS items",
     "OPTIONAL CALL () {", _subquery(COMMON_CATALOG_QUERY), "}",
     f"WITH catalog, items, [x IN collect({_map(CATALOG_FIELDS['commons'])}) WHERE x.key IS NOT NULL] AS commons",
-    "RETURN catalog, items, commons"])
+    "OPTIONAL CALL () {", "MATCH (p:dp_card_product) RETURN p.card_id AS card_id,p.product_nm AS product_nm ORDER BY card_id", "}",
+    f"WITH catalog, items, commons, [x IN collect({_map(CATALOG_FIELDS['products'])}) WHERE x.card_id IS NOT NULL] AS products",
+    "RETURN catalog, items, commons, products"])
 
 
 def _ordered(row: dict, fields: tuple[str, ...]) -> dict:
@@ -160,7 +154,7 @@ def _finish_context(context: dict) -> dict:
     """get_detail·get_details 공통: 적용 카드가 없거나 여럿이면 표시용 카드 이름을 합친다."""
     sources = context.get("card_sources")
     if sources is not None and len(sources) != 1:
-        names = [source({"source_json": item}).get("product_nm") for item in sources]
+        names = [item.get("product_nm") or source({"source_json": item}).get("product_nm") for item in sources]
         context["card"] = {"source_json": json.dumps({"product_nm": ", ".join(names) or "적용 카드 미확인"}, ensure_ascii=False)}
     return context
 
@@ -170,13 +164,20 @@ def catalog_rows(catalog: list[dict], items: list[dict], commons: list[dict]) ->
     rows = catalog
     for row in rows:
         card = source({"source_json": row.pop("card_source")})
+        rules = _decode_json(row.pop("rule_list", None), [])
+        item_expr = _decode_json(row.pop("item_cond_expr", None), {})
         row["card"] = card.get("product_nm", "미확인")
         row["card_id"] = card.get("card_id")
         row["issuer"] = card.get("issuer")
         row["item_type"] = "BENEFIT"
+        row["targets"] = list(dict.fromkeys(
+            target.get("target_nm") for rule in rules if isinstance(rule, dict)
+            for target in rule.get("target_list") or [] if isinstance(target, dict) and target.get("target_nm")))
+        row["payment_min_amounts"] = _payment_minimums(rules, item_expr)
     for row in items:
         card = source({"source_json": row.pop("card_source")})
-        item = source({"source_json": row.pop("item_source")})
+        item = source({"source_json": row.pop("item_source"), "item_data": row.pop("item_data", None),
+                       "item_rule_txt": row.pop("item_rule_txt", None), "item_cd": row.pop("item_cd", None)})
         lines = (item.get("item_data") or {}).get("fee_lines") or []
         rows.append({**row, "card": card.get("product_nm", "미확인"), "issuer": card.get("issuer"),
                      "card_id": card.get("card_id"), "targets": [], "payment_min_amounts": [],
@@ -191,9 +192,93 @@ def catalog_rows(catalog: list[dict], items: list[dict], commons: list[dict]) ->
 
 
 def source(props: dict) -> dict:
-    """Decode the original JSON; never infer a missing value as approved."""
+    """Decode source_json and overlay actual Neo4j columns; Neo4j projection wins."""
+    if not isinstance(props, dict):
+        return {}
     value = props.get("source_json")
-    return json.loads(value) if value else {}
+    try:
+        decoded = json.loads(value) if isinstance(value, str) and value else value
+    except (TypeError, ValueError):
+        decoded = {}
+    result = dict(decoded) if isinstance(decoded, dict) else {}
+    for name, item in props.items():
+        if name == "source_json":
+            continue
+        result[name] = _decode_json(item, item) if name in {"rule_list", "item_cond_expr", "item_data", "relation_list"} else item
+    for name in ("rule_list", "item_cond_expr", "item_data", "relation_list"):
+        if name in result:
+            result[name] = _decode_json(result[name], result[name])
+    return result
+
+
+def _decode_json(value, fallback=None):
+    if not isinstance(value, str):
+        return value if value is not None else fallback
+    try:
+        return json.loads(value)
+    except (TypeError, ValueError):
+        return fallback if fallback is not None else value
+
+
+def _condition_expressions(benefit: dict) -> list[tuple[str, str | None, dict]]:
+    """Yield item-level and rule-scoped condition expressions without losing their owner."""
+    result = []
+    item_expr = _decode_json(benefit.get("item_cond_expr"), {})
+    if isinstance(item_expr, dict) and item_expr:
+        result.append(("BENEFIT", None, item_expr))
+    rules = _decode_json(benefit.get("rule_list"), [])
+    if isinstance(rules, list):
+        for rule in rules:
+            if not isinstance(rule, dict):
+                continue
+            expr = _decode_json(rule.get("cond_expr"), {})
+            if isinstance(expr, dict) and expr:
+                result.append(("RULE", rule.get("rule_key"), expr))
+            # Compatibility with extracted rows that store conditions directly on a rule.
+            conditions = _decode_json(rule.get("conditions"), [])
+            if isinstance(conditions, list) and conditions:
+                result.append(("RULE", rule.get("rule_key"), {"branches": [{"branch_no": 1, "atoms": conditions}]}))
+    return result
+
+
+def _normalize_item_contract(benefit: dict) -> dict:
+    """Project table-faithful rule_list/item_cond_expr JSON into the stable Python detail contract."""
+    raw_rules = _decode_json(benefit.get("rule_list"), [])
+    rules = []
+    for rule in raw_rules if isinstance(raw_rules, list) else []:
+        if not isinstance(rule, dict):
+            continue
+        targets = [target.get("target_nm") for target in rule.get("target_list") or []
+                   if isinstance(target, dict) and target.get("target_nm")]
+        rules.append({"rule": rule, "targets": targets})
+    condition_rows = []
+    for owner_cd, rule_key, expr in _condition_expressions(benefit):
+        expr_key = expr.get("key") or expr.get("expr_key") or f"{owner_cd}:{rule_key or 'item'}"
+        for branch_index, branch in enumerate(expr.get("branches") or [], start=1):
+            if not isinstance(branch, dict):
+                continue
+            for atom in branch.get("atoms") or []:
+                if isinstance(atom, dict):
+                    condition_rows.append({"owner_cd": owner_cd, "rule_key": rule_key,
+                                           "expression": {"key": expr_key},
+                                           "branch_no": branch.get("branch_no", branch_index), "atom": atom})
+    return {"rules": rules, "conditions": condition_rows}
+
+
+def _payment_minimums(rules: list, item_expr: dict | None = None) -> list[int]:
+    """Return only explicit per-transaction SPEND_REQ minima used by payment amount filtering."""
+    values = []
+    synthetic = {"rule_list": rules, "item_cond_expr": item_expr or {}}
+    for _, _, expr in _condition_expressions(synthetic):
+        for branch in expr.get("branches") or []:
+            for atom in branch.get("atoms") or []:
+                if (atom.get("cond_type_cd") == "SPEND_REQ" and atom.get("cond_basis_cd") == "TXN_AMT"
+                        and atom.get("cond_min_amt") is not None):
+                    try:
+                        values.append(int(atom["cond_min_amt"]))
+                    except (TypeError, ValueError):
+                        continue
+    return sorted(set(values))
 
 
 def flatten_record(row: dict) -> dict:
@@ -261,14 +346,30 @@ def statement_plan(statement_id: str, **params) -> dict:
 
 
 def detail_statements(sections: tuple[str, ...] = ALL_SECTIONS) -> list[str]:
-    """``get_detail`` 이 실행하는 순서대로 Cypher 식별자를 돌려준다."""
-    return ["card.context", *(f"card.{name}" for name in SECTION_QUERIES if name in sections)]
+    """상세 데이터와 PDF 근거는 물리적으로 하나의 배치 Cypher로 조회된다."""
+    return ["card.detail_batch"] if sections else []
 
 
 def detail_plan(keys: list[str], sections: tuple[str, ...]) -> list[dict]:
-    """혜택 키별로 ``get_detail`` 이 실행할 Cypher 목록을 만든다."""
-    return [statement_plan("card.common_evidence" if statement_id == "card.evidence" and is_common_key(key) else statement_id, key=key)
-            for key in keys for statement_id in detail_statements(sections)]
+    """실제 detail_batch 요청 단위와 동일한 Browser용 조회 계획을 만든다."""
+    plans = []
+    groups: dict[str, list[str]] = {}
+    for key in dict.fromkeys(keys):
+        groups.setdefault(evidence_query_for(key), []).append(key)
+    for evidence_query, group in groups.items():
+        query = detail_batch_query(evidence_query, sections)
+        params = {"keys": group}
+        inline, _ = render_cypher_inline(CARD_LOG, query, params)
+        plans.append({"statement_id": "card.detail_batch", "path": "card.context + " + STATEMENT_IDS.get(evidence_query, "card.evidence"),
+                      "cypher": query, "parameters": params, "browser_cypher": inline or query})
+    return plans
+
+
+def catalog_batch_plan() -> dict:
+    """Return the single physical catalog query used by ``list_catalog``."""
+    inline, _ = render_cypher_inline(CARD_LOG, CATALOG_BATCH_QUERY, {})
+    return {"statement_id": "card.catalog_batch", "path": "card.catalog + card.item_catalog + card.common_catalog + card.products",
+            "cypher": CATALOG_BATCH_QUERY, "parameters": {}, "browser_cypher": inline or CATALOG_BATCH_QUERY}
 
 
 class Neo4jSearch:
@@ -299,8 +400,14 @@ class Neo4jSearch:
         started = perf_counter()
         with self.driver.session(database=self.database, default_access_mode=READ_ACCESS) as session:
             rows = session.execute_read(lambda tx: [record.data() for record in tx.run(query, **params)])
+        query_elapsed_ms = (perf_counter() - started) * 1000
+        serialization_started = perf_counter()
+        returned_bytes = len(json.dumps(rows, ensure_ascii=False, default=str).encode("utf-8"))
         CARD_LOG.log_summary("CYPHER", label, params=CARD_LOG.sanitize(params), rows=len(rows), path=path,
-                             elapsed_ms=(perf_counter() - started) * 1000)
+                             elapsed_ms=query_elapsed_ms)
+        CARD_LOG.log_summary("PERF", REQUEST_ID.get(), phase=f"{statement_id}_result_size", rows=len(rows),
+                             returned_bytes=returned_bytes,
+                             size_measure_ms=(perf_counter() - serialization_started) * 1000)
         if detail:
             CARD_LOG.log_result_data(label, [flatten_record(row) for row in rows])
         return rows
@@ -317,8 +424,26 @@ class Neo4jSearch:
 
         세 Cypher는 서브쿼리로 묶어 한 문장(왕복 1회)으로 실행한다(P3). 조회 조건·정렬·행 처리는 기존과 같다.
         """
-        batch = self._run("card.catalog_batch", CATALOG_BATCH_QUERY, "card.catalog + card.item_catalog + card.common_catalog", {})[0]
-        return catalog_rows(*([_ordered(row, CATALOG_FIELDS[name]) for row in batch[name]] for name in ("catalog", "items", "commons")))
+        batch = self._run("card.catalog_batch", CATALOG_BATCH_QUERY, "card.catalog + card.item_catalog + card.common_catalog + card.products", {})[0]
+        started = perf_counter()
+        self.catalog_products = [_ordered(row, CATALOG_FIELDS["products"]) for row in batch.get("products", [])]
+        item_rows = [_ordered(row, CATALOG_FIELDS["items"]) for row in batch["items"]]
+        self.catalog_terms = {}
+        for row in item_rows:
+            if row.get("item_type") != "TERMS":
+                continue
+            card = source({"source_json": row.get("card_source")})
+            item = source({"source_json": row.get("item_source"), "item_data": row.get("item_data"),
+                           "item_rule_txt": row.get("item_rule_txt"), "item_cd": row.get("item_cd")})
+            card_id = row.get("card_id", card.get("card_id"))
+            if card_id is not None:
+                self.catalog_terms.setdefault(int(card_id), []).append({**item, "card_id": int(card_id),
+                    "card_product_item_id": row.get("id"), "product_nm": card.get("product_nm")})
+        rows = catalog_rows([_ordered(row, CATALOG_FIELDS["catalog"]) for row in batch["catalog"]],
+                            item_rows, [_ordered(row, CATALOG_FIELDS["commons"]) for row in batch["commons"]])
+        CARD_LOG.log_summary("PERF", REQUEST_ID.get(), phase="catalog_python_transform",
+                             elapsed_ms=(perf_counter() - started) * 1000, catalog_rows=len(rows), product_rows=len(self.catalog_products))
+        return rows
 
     def list_benefits(self, keyword: str = "") -> list[dict]:
         """혜택명에 keyword가 들어간 카드·공통 혜택을 찾는다(BenefitSearchService._keyword의 점수 보강용)."""
@@ -349,13 +474,21 @@ class Neo4jSearch:
         for evidence_query, group in groups.items():
             evidence_id = STATEMENT_IDS.get(evidence_query, "card.evidence")
             path = "card.context + " + " + ".join(evidence_id if name == "evidence" else f"card.{name}" for name in names)
-            for row in self._run("card.detail_batch", detail_batch_query(evidence_query, sections), path, {"keys": group}):
-                if not row["context"]:
+            rows = self._run("card.detail_batch", detail_batch_query(evidence_query, sections), path, {"keys": group})
+            transform_started = perf_counter()
+            for row in rows:
+                if not row.get("context"):
                     continue
                 detail = {"context": _finish_context(_ordered(row["context"][0], CONTEXT_FIELDS))}
-                for name in SECTION_QUERIES:
-                    detail[name] = [_ordered(item, SECTION_FIELDS[name]) for item in row[name]] if name in sections else []
+                benefit = source(detail["context"]["benefit"])
+                detail.update(_normalize_item_contract(benefit))
+                detail["limits"] = ([{"limit_text": benefit.get("item_limit_txt") or benefit.get("bnft_limit_txt")}]
+                                     if benefit.get("item_limit_txt") or benefit.get("bnft_limit_txt") else [])
+                detail["evidence"] = [_ordered(item, SECTION_FIELDS["evidence"]) for item in row.get("evidence", [])] if "evidence" in sections else []
                 result[row["key"]] = detail
+            CARD_LOG.log_summary("PERF", REQUEST_ID.get(), phase="detail_python_transform",
+                                 elapsed_ms=(perf_counter() - transform_started) * 1000, requested_keys=len(group),
+                                 detail_rows=len(rows), returned_bytes=len(json.dumps(rows, ensure_ascii=False, default=str).encode("utf-8")))
         return result
 
     def candidate_relations(self, ids: list[str]) -> dict[str, dict]:
@@ -384,17 +517,7 @@ class Neo4jSearch:
         Returns:
             ``{"context": ..., "rules": [...], "conditions": [...], "limits": [...], "evidence": [...]}`` 또는 None.
         """
-        context = self._query(CONTEXT_QUERY, key=key)
-        if not context:
-            return None
-        detail = {"context": _finish_context(context[0])}
-        for name, query in SECTION_QUERIES.items():
-            if name == "evidence" and is_common_key(key):
-                query = COMMON_EVIDENCE_QUERY
-            elif name == "evidence" and is_item_key(key):
-                query = ITEM_EVIDENCE_QUERY
-            detail[name] = self._query(query, key=key) if name in sections else []
-        return detail
+        return self.get_details([key], sections).get(key)
 
 
 def connect() -> Neo4jSearch:

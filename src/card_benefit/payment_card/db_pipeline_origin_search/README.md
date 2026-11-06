@@ -184,13 +184,12 @@ Streamlit → LangGraph → neo4j_search.py → graph_questions.cypher → Neo4j
 
 | statement | Python 상수 | 호출 함수 | 로그 식별자 |
 |---|---|---|---|
-| `graph_questions.catalog` | `CATALOG_QUERY` | `list_catalog` | `card.catalog` |
+| `graph_questions.catalog` | `CATALOG_QUERY` | `list_catalog` / `list_catalog_batch` | `card.catalog_batch` |
 | `graph_questions.list_benefits` | `LIST_QUERY` | `list_benefits` | `card.list` |
-| `graph_questions.benefit_context` | `CONTEXT_QUERY` | `get_detail` | `card.context` |
-| `graph_questions.benefit_rules` | `RULE_QUERY` | `get_detail` | `card.rules` |
-| `graph_questions.benefit_conditions` | `CONDITION_QUERY` | `get_detail` | `card.conditions` |
-| `graph_questions.benefit_limits` | `LIMIT_QUERY` | `get_detail` | `card.limits` |
-| `graph_questions.benefit_evidence` | `EVIDENCE_QUERY` | `get_detail` | `card.evidence` |
+| `graph_questions.benefit_context` | `CONTEXT_QUERY` | `get_details` | `card.detail_batch` |
+| `graph_questions.benefit_evidence` | `EVIDENCE_QUERY` | `get_details` | `card.detail_batch` |
+
+규칙·조건·한도는 `card_product_item` 속성의 `rule_list`, `item_cond_expr`, `item_limit_txt`, `item_data`에서 반환 경계에서 정규화합니다. 별도 RULE/COND 쿼리나 `LIMIT 0` 호환 결과는 없습니다. 카드명 목록은 `catalog_batch`에서 같이 가져와 `card.products` 중복 왕복을 피합니다.
 
 파일은 공통 `Neo4jDbSession(mapper_root=...).mappers`로 읽습니다. 드라이버 없이 동작하며 별도 로더는 없습니다. 파일명이 namespace이고 `// name:`이 statement입니다.
 

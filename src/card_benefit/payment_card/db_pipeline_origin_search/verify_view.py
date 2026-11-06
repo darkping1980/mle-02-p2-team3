@@ -63,10 +63,12 @@ def _show_plan(state: dict) -> None:
     names = dict(zip(state["search_parameters"]["benefit_keys"], state["search_parameters"]["benefit_names"]))
     current = None
     for item in plan:
-        key = item["parameters"]["key"]
-        if key != current:
-            st.markdown(f"#### {names[key]}")
-            current = key
+        keys = item["parameters"].get("keys") or [item["parameters"].get("key")]
+        keys = [key for key in keys if key in names]
+        group = tuple(keys)
+        if group != current:
+            st.markdown(f"#### {' / '.join(names[key] for key in keys)}")
+            current = group
         _show_statement(item)
 
 

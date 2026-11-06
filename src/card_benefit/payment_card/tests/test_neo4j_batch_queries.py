@@ -43,13 +43,13 @@ class GeneratedCypherTests(unittest.TestCase):
     def test_batches_are_read_only_and_dp_scoped(self):
         for query in self.all_batches():
             self.assertNotRegex(query.upper(), WRITE)
-            self.assertNotRegex(query, r"fp_|A8|df_")
+            self.assertNotRegex(query, r"(?:^|[(:\[])fp_|(?:^|[(:\[])A8|(?:^|[(:\[])df_")
             labels = set(re.findall(r"[(\[]\w*:(\w+)", query))
             self.assertTrue(labels and all(label.startswith("dp_") for label in labels), labels)
 
     def test_batches_embed_named_queries_verbatim(self):
         detail = n.detail_batch_query(n.EVIDENCE_QUERY, n.ALL_SECTIONS)
-        for query in (n.CONTEXT_QUERY, n.RULE_QUERY, n.CONDITION_QUERY, n.LIMIT_QUERY, n.EVIDENCE_QUERY):
+        for query in (n.CONTEXT_QUERY, n.EVIDENCE_QUERY):
             self.assertIn(query.replace("$key", "key").rstrip().removesuffix(";"), detail)
         self.assertIn(n.LIST_QUERY.replace("$keyword", "keyword").rstrip().removesuffix(";"), n.LIST_BATCH_QUERY)
         for query in (n.CATALOG_QUERY, n.ITEM_CATALOG_QUERY, n.COMMON_CATALOG_QUERY):
@@ -66,7 +66,7 @@ class GeneratedCypherTests(unittest.TestCase):
 
     def test_unrequested_sections_are_not_queried(self):
         query = n.detail_batch_query(n.EVIDENCE_QUERY, ("evidence",))
-        self.assertNotIn(n.RULE_QUERY.replace("$key", "key"), query)
+        self.assertNotIn("LIMIT 0", query)
         self.assertIn("AS evidence", query)
 
     def test_evidence_projection_preserves_chunk_page_document(self):
@@ -84,7 +84,11 @@ class GeneratedCypherTests(unittest.TestCase):
 class BatchMappingTests(unittest.TestCase):
     def test_get_details_maps_rows_like_get_detail(self):
         bnft, common, missing = '["card_product_item",2,"B"]', '["card_common_bnft",1,"C"]', '["card_product_item",2,"X"]'
-        context = {field: None for field in n.CONTEXT_FIELDS} | {"benefit": {"name": "b"}, "card_sources": ['{"product_nm":"P"}']}
+        context = {field: None for field in n.CONTEXT_FIELDS} | {
+            "benefit": {"card_product_item_id": "B", "source_json": '{"item_nm":"b","item_limit_txt":"월 1천원"}',
+                        "rule_list": '[{"rule_key":"r1","target_list":[{"target_nm":"x"}]}]',
+                        "item_cond_expr": '{"branches":[]}'},
+            "card_sources": ['{"product_nm":"P"}']}
         common_context = {**context, "card_sources": []}
 
         def rows(params):
@@ -93,8 +97,6 @@ class BatchMappingTests(unittest.TestCase):
                 if key == missing:
                     continue
                 out.append({"key": key, "context": [common_context if key == common else context],
-                            "rules": [{"targets": [], "labels": ["dp_card_product_item"], "rule": {"rule_key": "r1"}}],
-                            "conditions": [], "limits": [{"limit_text": "월 1천원"}],
                             "evidence": [{**{field: None for field in n.SECTION_FIELDS["evidence"]}, "evidence": {"source_json": "{}"}, "link": {}, "rule_key": None, "owner_labels": ["x"]}]})
             return out
         driver = FakeDriver({"detail": rows})
@@ -102,7 +104,9 @@ class BatchMappingTests(unittest.TestCase):
         self.assertEqual(set(result), {bnft, common, missing})
         self.assertIsNone(result[missing])
         self.assertEqual(len(driver.calls), 2)                       # 근거 Cypher 종류(혜택·공통)별 1문장
-        self.assertEqual(list(result[bnft]["rules"][0]), ["rule", "labels", "targets"])   # 원래 RETURN 열 순서
+        self.assertEqual(result[bnft]["rules"][0]["rule"]["rule_key"], "r1")
+        self.assertEqual(result[bnft]["rules"][0]["targets"], ["x"])
+        self.assertEqual(result[bnft]["limits"], [{"limit_text": "월 1천원"}])
         self.assertEqual(list(result[bnft]["evidence"][0]), list(n.SECTION_FIELDS["evidence"]))
         self.assertEqual(n.source(result[common]["context"]["card"]), {"product_nm": "적용 카드 미확인"})   # get_detail과 같은 표시 처리
         self.assertIn(n.COMMON_EVIDENCE_QUERY.replace("$key", "key").rstrip().removesuffix(";"),
@@ -125,10 +129,10 @@ class BatchMappingTests(unittest.TestCase):
         self.assertEqual(n.Neo4jSearch(FakeDriver({})).list_benefits_many([]), {})
 
     def test_list_catalog_uses_one_statement_and_same_row_processing(self):
-        catalog = [{"key": "a", "name": "A", "id": "1", "status": None, "card_source": '{"product_nm":"P"}', "targets": [],
-                    "payment_min_amounts": []}]
+        catalog = [{"key": "a", "name": "A", "id": "1", "status": None, "card_source": '{"product_nm":"P"}',
+                    "rule_list": "[]", "item_cond_expr": "{}", "item_rule_txt": "룰", "item_limit_txt": "한도"}]
         commons = [{"key": "c", "name": "C", "id": "2", "status": None, "common_nm": "S", "cards": []}]
-        driver = FakeDriver({"catalog": [{"catalog": catalog, "items": [], "commons": commons}]})
+        driver = FakeDriver({"catalog": [{"catalog": catalog, "items": [], "commons": commons, "products": [{"card_id": 1, "product_nm": "P"}]}]})
         rows = n.Neo4jSearch(driver).list_catalog()
         self.assertEqual(len(driver.calls), 1)
         expected = n.catalog_rows([dict(r) for r in catalog], [], [dict(r) for r in commons])

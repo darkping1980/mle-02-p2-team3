@@ -629,3 +629,98 @@ RETURNING evidence_link_id;
 - Stage `LINK_REVIEW`를 가진 혜택 매핑은 원본 PDF 표와 대조한 수동 검토가 여전히 필요합니다. 본문 답변은 실제 PDF 원문을 인용하고 `RAW_MATCH`로 검증됐으나, staging 관계 승인 상태 자체를 변경하지 않았습니다.
 - Streamlit 브라우저 화면 자동화는 browser backend 불가로 수행하지 못했고 AppTest로 UI 스크립트를 실제 실행했습니다. 자연어 카드 간 비교 전체 질의 집합 및 모든 카드의 정확도 검수는 후속 검토 대상입니다.
 - 이번 작업은 PostgreSQL 원장, app_log 기존 행/JSON, Neo4j dp_ 이외 데이터에 쓰기하지 않았습니다. 구형 dp_만 승인된 범위에서 재구축했습니다. Git commit/push는 하지 않았습니다.
+
+## 2026-11-06 GraphRAG 쿼리 중복·조회량·성능 감사 (app_log 271–273)
+
+### 범위와 실행 경로
+
+기존 app_log와 코드를 읽고, Neo4j DB 6ac1f0f8에서 저장된 Cypher를 PROFILE로 재실행한 읽기 전용 분석이다. 질문 재실행, 임베딩/LLM API 호출, 코드·PostgreSQL 원장·Neo4j 데이터/인덱스 변경은 하지 않았다. PostgreSQL 로그 조회 세션은 default_transaction_read_only=on이었다.
+
+호출 흐름: streamlit_app.py:428-429의 pipeline.run → LangGraph interpret(card_graphrag.py:1967)의 list_catalog() → Neo4jBenefitSearch.catalog_rows()/search() → hybrid_search와 products → LLM 후보 선택 → retrieve의 get_details()/detail_batch → answer의 card_terms() → 답변 생성·validate_answer(). N 경로는 질문마다 동일한 세 쿼리를 interpret에서 실행하고, retrieve는 선택 혜택 수만큼 한 detail_batch로 묶으며, answer는 카드 ID를 모아 TERMS를 배치 조회한다.
+
+| app_log | 질문 / 선택 혜택 | detail key 수 | TERMS 카드 ID | 로그에 남은 고유 Evidence |
+|---:|---|---:|---|---:|
+| 271 | POINT II 60만원 한도 | 1: 카드 23 / 20261105_000100 | [23] | 15 |
+| 272 | 더 심플 하나카드 vs 카드의정석2 DAILY 비교 | 2: 카드 22 / 20261105_000099, 카드 42 / 20261105_000180 | [22,42] | 24 |
+| 273 | ONE PICK STYLE 주요 혜택·조건 | 4: 카드 2 / 20261101_000001–000004 | [2] | 26 |
+
+### PROFILE 실측
+
+저장된 쿼리를 현재 그래프에서 다시 실행했다. client_ms는 드라이버 왕복과 결과 수신을 포함하며 app_log 요청 당시의 역사적 실행시간이 아니다. DB Hits와 operator time은 PROFILE operator별 값을 합산했다. 직렬화 크기는 반환 레코드의 Python JSON 크기로 Bolt wire 크기와 같지는 않다.
+
+| 쿼리 | 반환 | client ms | operator DB Hits 합 | operator time 합 | JSON 크기 |
+|---|---:|---:|---:|---:|---:|
+| card.catalog_batch | 1 envelope (BENEFIT 34, 기타 item 17, common 82; 내부 133) | 1,242.0 | 1,740 | 5.2 ms | 120,479 B |
+| card.hybrid_search | 116 (BENEFIT 34 + common 82) | 121.3 | 1,788 | 11.5 ms | 70,030 B |
+| card.products | 10 | 98.4 | 21 | 0.1 ms | 294 B |
+| 271.card.detail_batch | 1 | 966.1 | 3,474 | 5.5 ms | 1,611,045 B |
+| 271.card.terms | 0 | 95.7 | 11 | 0.2 ms | 2 B |
+| 272.card.detail_batch | 2 | 1,703.1 | 5,851 | 9.0 ms | 3,628,860 B |
+| 272.card.terms | 11 | 97.6 | 269 | 0.7 ms | 41,443 B |
+| 273.card.detail_batch | 4 | 2,769.8 | 10,939 | 13.1 ms | 5,341,073 B |
+| 273.card.terms | 0 | 96.7 | 17 | 0.2 ms | 2 B |
+
+detail_batch Evidence 확장 branch는 18/27/51행을 만들었고 collect_evidence()는 evidence_id로 합쳐 15/24/26개를 결과에 남겼다. 이 병합은 여러 혜택·규칙의 소유 관계를 보존하므로 그 lineage를 없애면 안 된다.
+
+app_log.execution_log에는 QUERY 문장만 저장되고 CYPHER 요약 rows/elapsed_ms가 없다(execution_log.py:417-424). Python 후보 처리 및 LLM 호출의 실제 시간도 해당 요청에 저장되지 않는다. 유료 호출 없이 그 구간별 시간은 측정할 수 없었다. app_log의 qvec는 앞부분 미리보기만 있어 원래 질문 벡터를 복원할 수 없었다. hybrid PROFILE은 동일 타깃 혜택의 Neo4j 저장 임베딩(1,536차원)을 대용 입력으로 썼으므로 쿼리 계획/부하 측정이며 질문별 원래 qvec 측정은 아니다.
+
+### 실행 계획과 중복 분석
+
+현재 벡터 인덱스 2개와 FULLTEXT 인덱스는 ONLINE/100%였다. 그러나 CANDIDATES_QUERY는 vector.similarity.cosine을 각 행에 계산한다. PROFILE은 카드 BENEFIT 쪽 51행 NodeIndexScan 및 common 쪽 82행 NodeByLabelScan을 보였고 vector-index seek 연산자나 fulltext 호출은 없었다. 따라서 이 쿼리는 벡터 인덱스 대신 현재 후보 전체에서 정확 코사인을 계산한다. 후보 116개에서 실측 부담은 작지만 규모에 따라 순회 비용은 증가한다.
+
+| 쿼리와 호출 | 목적·입력·실제 조회 | 중복/필수 여부 | 개선 방향 및 영향 |
+|---|---|---|---|
+| card.catalog_batch — neo4j_search.py:144-151,308-321; interpret | 파라미터 없음. BENEFIT·기타 상품항목·공통혜택 133개 전부. 카드 source_json, 항목 source_json을 catalog_rows()가 후보를 연결하고 연회비 same_fact 참조에 사용. | 후보 ID/연회비 처리에 역할은 있지만 매 요청 120 KB 전량 회수. 후보 hybrid 결과와 카드/혜택 메타데이터 일부 중복. | 일반 질문은 검색 후보에 필요한 속성만 전달하고, 연회비/동일 사실 질문에서 전체 항목을 보충하거나 선택 key만 조회. 후보 ID 검증 및 연회비 fallback 영향. |
+| card.hybrid_search — neo4j_hybrid_search.py:15-38,87-151; interpret | qvec 1,536차원. 카드 BENEFIT 34 + common 82, 116행 전체에서 name/search/rule/limit 텍스트와 sim 계산. Python이 키워드 점수·RRF 후 top 8. | 검색 핵심. 명시 카드가 있어도 전체를 먼저 조회. 현재 vector/fulltext 인덱스 미사용. | 명시 카드 식별 시 해당 카드 혜택+적용 공통혜택 범위를 먼저 탐색하되, 모호·비교·공통 질문은 전체검색 fallback. 정확도/recall 회귀 검증 필수. |
+| card.products — neo4j_hybrid_search.py:40,92-104; interpret | 파라미터 없음. 상품 10개 ID/이름으로 카드명 token matching. | hybrid 쿼리가 카드 BENEFIT마다 card_id/product_nm을 반환한다. 실제 graph에서 상품 10개 전부 BENEFIT item이 있음을 확인해 현재 결과와 중복. 왕복 약 98 ms, 응답은 294 B. | 기존 candidate rows에서 카드명을 판별하거나 catalog 결과에 상품 목록을 포함해 왕복 제거. 미래 BENEFIT 없는 카드는 fallback으로 보장. |
+| card.detail_batch — neo4j_search.py:126-139,337-359; retrieve | 선택 key 1/2/4개로 context·조건/한도·Evidence를 배치 조회. 응답 1.61/3.63/5.34 MB. Python은 주로 source_json에서 원장 JSON, 카드/혜택 이름·검증상태, Evidence 원문·위치·관계 lineage를 사용한다. | 상세/PDF는 필수. properties(b), properties(owner/evidence/chunk/page/doc)로 노드 전체를 매 Evidence 경로마다 반환한다. benefit_rules/benefit_conditions compatibility 서브쿼리는 새 graph에서 LIMIT 0인데도 label scan을 한다. | 명시 속성만 반환하고 key seek 계획을 재검증. evidence_id 병합은 유지하되 distinct owner/link 관계는 보존. source_json에서 rule_list/item_cond_expr를 직접 읽는 신규 item 경로의 0행 RULE/COND branch 제거 검토. Evidence·조건·제외 처리에 회귀 영향. |
+| card.terms — neo4j_hybrid_search.py:41-49,174-188; card_graphrag.py:2175-2185; answer | 선택 card_ids. TERMS JSON 및 ITEM 근거. 271:[23]=0행, 272:[22,42]=11행/41 KB, 273:[2]=0행. attach_terms()가 scope(ALL_BENEFITS/PERFORMANCE/NAMED_ITEMS)로 적용 혜택만 남긴다. | 제외·주의·실적 조건의 정합성에 필요할 수 있어 무조건 제거 불가. 매 답변에서 조건 없이 호출하며 세 건 중 두 건은 빈 결과. 조회는 카드별 배치. | intent·조건/제외 문맥 필요 여부와 TERMS 존재 여부에 따라 조건부 호출. 제외를 보장해야 할 때는 유지. 빈 결과 반복 read는 요청/세션 범위 cache 검토. TERMS 문맥·Evidence 누락 위험. |
+
+catalog_batch는 한 result envelope 안에 133개의 nested row를 가져온다. 별도 products 결과는 10행이고 후보 query가 이름을 이미 포함한다. catalog와 products의 별도 네트워크 왕복은 합칠 여지가 있다. 상품 10/10이 BENEFIT item을 가진다는 확인은 현재 그래프에만 적용되는 안전성 근거다.
+
+detail_batch에서 LIMIT 0 RULE/COND 서브쿼리 외에도 key 탐색 시 PROFILE에서 dp_node.key RANGE seek 대신 UnionNodeByLabelsScan/NodeByLabelScan이 반복됐다. dp_node.key 인덱스가 ONLINE이어도 현재 MATCH 형태가 해당 인덱스를 이용하지 않는 결과다. properties(b)는 embedding 등 답변 경로에서 필요 없는 속성도 반환하고 Evidence owner 전체 properties를 Evidence마다 반복해 큰 응답을 만든다.
+
+### 우선순위
+
+1. detail_batch 전체 properties와 반복 Evidence owner payload를 명시 속성으로 줄이고, 사용되지 않는 0행 RULE/COND compatibility branch를 정리한다. 관찰된 가장 큰 client 비용/응답량이다.
+2. catalog_batch에서 N 모드 일반 질문의 전체 catalog 전송을 줄이고 card.products 왕복을 합치거나 candidate rows에서 대체한다. 연회비와 미분류 상품은 안전한 보완 경로로 남긴다.
+3. 명시 카드 질문의 hybrid 후보 범위 축소를 시험하되 불명확·비교·공통 혜택 질문에서는 전체 후보와 RRF를 유지한다. 벡터 인덱스는 현재 작은 116 후보의 성능만으로 변경을 정당화하지 말고 정확도와 후보 회수율을 함께 비교한다.
+
+card.terms는 271·273에서 빈 결과에도 약 96 ms 왕복이 있었지만 272에서 11행을 제공하므로 단순 삭제 대상이 아니다. query type별 조건부 호출은 다음 후보로 평가한다. 이번 작업은 성능 분석 및 이력 기록만 수행했다.
+## 2026-11-07 — 신규 dp_ 데이터 계약 정합성, 조회량 축소, 실제 응답 성능 검증
+
+### 수정 내용
+
+- `neo4j_search.py`, `graph_questions.cypher`, `card_graphrag.py`, `neo4j_hybrid_search.py`를 신규 `dp_card_product_item` 구조에 맞췄다. 혜택 규칙과 조건은 `rule_list`, `item_cond_expr`, `item_data`에서 정규화하며 빈 RULE/COND 호환 쿼리를 사용하지 않는다. `source_json` 값은 원본 노드에 그대로 있고, Python 소비 로직은 조회된 신규 구조를 이용한다.
+- `benefit_context`, `condition_groups`, `unresolved_items`, `attach_terms`, 결제액 필터, 제외 판정, `validate_answer`가 규칙별 조건·SPEND_REQ·적용 범위를 읽도록 유지했다. `TERMS`는 조건이 맞는 선택 혜택의 item_id만 조회한다. 이 실행에서는 1홉 및 POINT II 질문은 적용 TERMS가 없어 쿼리를 건너뛰었고, 비교 질문은 적용 가능한 11개 item으로 제한해 11행(67,159 bytes)을 조회했다.
+- 실제 4개 선택 혜택의 상세 Cypher 반환은 166,344 bytes였다. 같은 4개 혜택을 조회한 과거 `app_log=273` 경로의 5.34 MB 대비 약 96.9% 감소했다. 단일 대중교통 혜택은 28,856 bytes, POINT II 혜택은 31,307 bytes였다. PDF Evidence는 전체 67개(비교), 8개(대중교통), 15개(POINT II) 모두 State와 로그 결과에 남는다. LLM 문맥에는 혜택별 후보 Evidence를 한정해 중복 대형 `source_json`을 보내지 않는다. 인용 검증은 전달된 실제 근거만 대상으로 한다.
+- `benefit_evidence`는 원문 인용, page, chunk, document의 직접 컬럼만 돌려주고 evidence/relationship/document 계층의 대형 JSON 중복을 제거했다. `execution_log`가 쓰는 문서명·파일명·페이지·청크 직접 속성은 유지했다. 카탈로그 배치에도 `item_rule_txt`, `item_limit_txt`를 포함해 LLM이 질문의 혜택 표현과 이름이 다른 경우 원문 설명으로 매칭할 수 있게 했다.
+- `catalog_batch` 결과를 상품 목록과 캐시에 함께 활용해 `card.products` 별도 조회를 생략한다. 비교·공통 검색 정확도는 기존 keyword/vector/RRF 경로를 유지했다. 전체 cosine 계산은 여전히 수행하고 vector index pushdown은 확인되지 않아 미검증 최적화를 추가하지 않았다.
+- `compact_answer_context()`는 답변 검증용 전체 context를 바꾸지 않고 LLM 프롬프트에서 중복 `limits`, `condition_text`, `exclusion_text`, `targets` 투영만 제거한다. 4개 혜택 비교에서 LLM 입력이 20,485 tokens에서 마지막 검증 16,519 tokens로 약 19.4% 감소했다. 비교 응답은 선택 혜택별 결과를 하나씩 빠짐없이 제시하도록 제한했다.
+- `verify_view.py`가 batch plan의 `parameters.keys`를 표시하도록 수정했다. AppTest 예외 경로에서 outcome이 `None`일 때 전체 시간 계측이 예외를 만들지 않도록 방어했다. 예시 질문 AppTest도 `st.pills`의 실제 label/key를 사용한다. `answer()`에 request id context 설정을 추가해 TERMS 쿼리 계측이 요청 ID를 유지한다.
+- 기본 Streamlit 검색 모드 N은 Neo4j hybrid 검색만 사용한다. 실제 N 경로는 PostgreSQL 원장 검색을 호출하지 않았다. 비교 AppTest는 적용 가능한 TERMS를 Neo4j에서만 조회했다. 실행 로그 DB 저장은 AppTest에서 `APP_DB_LOG_ENABLED=false`로 끄고 검사했으며 PostgreSQL 데이터 변경은 하지 않았다. 기존 선택형 B/C 호환 코드는 남아 있으나 기본 Streamlit 경로가 아니다.
+
+### 실제 테스트 및 성능
+
+| 요청 | 실제 응답 | 총 처리 측정 | 질문 임베딩 | catalog_batch | hybrid 검색 | interpret LLM | detail_batch | answer LLM | 검증 | 상세 반환 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1홉: ONE PICK 대중교통 | ANSWERED, 버스·지하철 5%, 월 1,000원 한도, 전월 10만원 조건, 유예 및 제외 설명. Evidence 000044/000046/000048/000049/000050 | 9.870 s (`pipeline.run`) | 0.512 s | 1.515 s | Cypher 0.377 s | 2.303 s | 0.366 s | 4.765 s | 0.005 s | 28,856 B |
+| 2홉: POINT II 전월 60만원 한도 | ANSWERED, 2만원. 답변이 Evidence 002745·002740·002742에 인용; 002748·002749는 추가적립 제외/대상 설명. PDF 3쪽 | 11.444 s (`pipeline.run`) | 0.485 s | 1.492 s | Cypher 0.320 s | 3.320 s | 0.364 s | 5.430 s | 0.004 s | 31,307 B |
+| 카드 비교: 더 심플 / DAILY | ANSWERED. 선택된 4개 혜택 모두 답변에 포함; 더 심플 구간 규칙 선택의 미확정 상태를 별도 표시; DAILY 조건·한도와 Evidence 인용 검증 | 실제 실행 프로세스 20.1 s (AppTest 외 pipeline 프로세스 포함) | 0.436 s | 1.545 s | Cypher 0.311 s | 2.397 s | 0.574 s | 약 10.8 s 범위의 마지막 관측치; 답변 1,240 tokens | <0.01 s | 166,344 B |
+
+- 측정은 로컬 `perf_counter()`/Neo4j client elapsed/PERF 로깅을 사용했다. 비교는 최종 검증 프로세스 벽시계 20.1초였고 답변 LLM 호출이 가장 큰 구간이었다. 모델/API 응답 시간은 서버·캐시 영향을 받아 반복 간 변동한다. 이전 18–20초 응답 대비 1홉·2홉은 9.9초·11.4초로 줄었고, 비교는 답변 길이를 줄여 약 20초까지 낮췄지만 LLM이 주요 병목으로 남았다.
+- 앱 로그 저장 구간은 실제 DB write를 막기 위해 실측하지 않았다. 코드에는 `app_log_save`/전체 Streamlit 요청 계측이 있고, 앱 로그 저장 자체는 기존 단위 테스트로 확인했다. 비교 테스트에서 embedding 1회 + interpret/answer chat 2회, 다른 질문도 embedding 1회 + chat 2회였다. 이번 최종 검사에서 검색 호출은 1 catalog batch + 1 hybrid + 1 detail; TERMS는 해당하는 경우에만 1번이다. app_log 저장은 실행하지 않았다.
+- 최초 실제 POINT II 실행에서 interpret LLM이 관련 후보를 누락했다. 카탈로그 후보에 규칙·한도 원문 텍스트를 보강하고 interpret 기준을 명확히 한 뒤 실제 질문을 다시 실행해 선택된 혜택 `주요 간편결제 모아포인트 추가적립`을 확인했다. 최종 실제 답변은 60만원 → 2만원을 `RAW_MATCH`로 판정했다.
+- 최종 실제 Streamlit AppTest는 정확한 질문을 폼의 `question` text_area에 입력하고 첫 제출 버튼을 클릭해 수행했다. 결과 `ANSWERED`, 2만원, `neo4j_keyword`·`neo4j_vector`·`neo4j_rrf`, PDF 페이지 3, Evidence 002740·002742·002745 및 기타 해당 혜택 Evidence가 확인됐고 Streamlit 예외/오류는 0건이었다. 앱 시작 단독 테스트 및 제출·Evidence·연결 오류 케이스 AppTest도 통과했다.
+- `neo4j_validation.cypher`/live Neo4j 신규 데이터 계약 12개 통합 테스트가 통과했다. 테스트는 Neo4j READ query를 사용했고 그래프·PostgreSQL 원장을 쓰지 않았다. TERMS 적용 범위·규칙 조건, 다중 카드 소유 관계, Evidence 연결, 1홉/2홉, 답변 검증을 신규 그래프 자료로 확인했다.
+- 현재 실제 비교 답변은 선택 혜택 4개를 모두 포함하고, 지급 방식의 미확정 정보를 별도 경고로 남긴다. 평가셋에서 기존 추출 원문 상태 경고, 미확정 구간 금액 방지 등 검증 경고가 정상 발생한 것은 테스트 실패가 아니다.
+
+### 변경 파일 및 검증 명령
+
+- 변경 소스: `card_graphrag.py`, `neo4j_search.py`, `neo4j_hybrid_search.py`, `graph_questions.cypher`, `streamlit_app.py`, `verify_view.py`, `README.md`.
+- 변경 테스트: `test_card_graphrag.py`, `test_neo4j_batch_queries.py`, `test_neo4j_origin_search.py`.
+- 실제 이력 갱신 파일: `src/card_benefit/docs/issue_analysis/20261106_graphrag_integrity_work_log.md`.
+- 문법 검사: `python -m compileall -q src/card_benefit/payment_card/db_pipeline_origin_search src/card_benefit/payment_card/tests` 통과.
+- 자동 테스트: 관련 pytest 묶음 226 passed, 12 live tests deselected; live Neo4j unittest 12 passed. StreamlitTests 전체는 이전 실행에서 16 passed, 이후 해당 발견 실패 3건을 수정해 개별 재검증 3 passed; 최종 관련 pytest 묶음에 포함되어 226 passed에 반영됐다.
+- Streamlit 실질 경로: `APP_DB_LOG_ENABLED=false python .tmp_live_ui.py` 통과. 실제 pipeline 질문 측정: `python .tmp_e2e_core.py`; 비교: `python .tmp_e2e_compare.py`. 이 임시 실행 파일들은 커밋 대상이 아니다.
+- PostgreSQL 원장, app_log 행, Neo4j 데이터·인덱스는 수정/재적재하지 않았다. Git push 전 최종 테스트 후 파일 목록·diff·민감정보 검사를 수행한다.
