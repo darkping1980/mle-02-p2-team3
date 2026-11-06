@@ -107,6 +107,13 @@ TIER_INTENTS = ("BENEFIT_DETAIL", "BENEFIT_COMPARE")
 TIER_WORDS = r"얼마|금액|구간"
 TIER_OPEN = "여러 금액 구간이 함께 해당할 때 어떤 금액이 적용되는지는 아직 확정되지 않았습니다."
 TIER_PAYMENT_BASIS = "TXN_AMT"      # 결제 1건의 금액을 비교하는 기준(공통코드 COND_BASIS).
+POINT2_SHARED_CAP_BENEFIT_REF = "card_product_item:23:20261105_000100"
+POINT2_SHARED_CAP_TIERS = (
+    {"min_amt": 300000, "cap_amount": 10000},
+    {"min_amt": 600000, "cap_amount": 20000},
+    {"min_amt": 1200000, "cap_amount": 50000},
+)
+PREVIOUS_MONTH_SPEND = re.compile(r"전월\s*(?:국내\s*)?(?:가맹점\s*)?(?:이용\s*)?실적|지난달\s*실적")
 MESSAGES = {
     "EMPTY_QUESTION": "질문을 입력하세요.",
     "QUESTION_TOO_LONG": f"질문은 {MAX_QUESTION_CHARS}자 이내로 입력하세요.",
@@ -142,6 +149,11 @@ INTERNAL_FIELD = re.compile(r"(?<![A-Za-z0-9_])[a-z]+(?:_[a-z0-9]+)+|\d{8}_\d{6}
 UNRESOLVED_WORDS = re.compile(r"미확정|확정할 수 없|확정되지")
 # 자연어 답변의 미확정·데이터 상태 표현. 전달받은 미확정 주제를 말하는 문장만 허용한다.
 UNBACKED_STATUS = re.compile(UNRESOLVED_WORDS.pattern + r"|개발용|검토 대기|담당자 검토|시험 가정")
+LIMIT_QUESTION_WORDS = re.compile(r"한도|몇\s*(?:회|번)|횟수|통합")
+LIMIT_TIER_UNCERTAINTY = re.compile(
+    r"(?:구간(?:별)?|각\s*구간)[^.!?。]{0,60}(?:미확정|확정할 수 없|확정되지)"
+    r"|한도[^.!?。]{0,40}(?:미확정|확정할 수 없|확정되지)"
+)
 TIER_TOPIC = r"금액|구간|지급|적용 방식|선택 방식|규칙"
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 # 규칙 선택이 미확정인 혜택에서 데이터에 없는 적용 방식을 말하는 표현.
@@ -247,6 +259,7 @@ answer_text 작성 규칙 (고객이 읽는 설명문):
 - rule_selection_unresolved에 있는 혜택은 지급액을 하나로 정하지 않는다. tiers의 금액 구간을 모두 쓰고, 적용 방식이 미확정임을 분리해서 쓴다.
 - 금액 구간은 기준 금액과 지급액을 짝지어 모두 쓴다. "A원 또는 B원"처럼 줄이지 않는다.
 - 혜택에 limit_tiers가 있으면 구간별 한도는 limit_tiers의 구간(label)과 cap(공유 한도는 shared)을 짝지어 쓴다. 한 구간의 한도 금액을 다른 구간에 쓰지 않는다. 한도는 지급액(rules의 value)이 아니다.
+- benefit에 program_cap_policy가 있고 source가 PROGRAM_DERIVED이면 이 정책을 해당 혜택에만 적용한다. selected가 있으면 그 cap을 답하고, 조건의 원문 하한·cond_max_amt_excl은 바꾸지 않는다. 이 정책은 POINT II 특별·추가 적립의 공유 월 한도이며 기본 적립이나 다른 카드 한도가 아니다.
 - tiers의 payout_known이 false인 구간은 지급액이 조회 자료에 없다. 그 구간의 지급액을 쓰지 말고 기준 금액(구간)만 쓴다. 한도(limits) 금액을 그 구간의 지급액으로 옮겨 쓰지 않는다.
 - 결제 금액을 물었는데 여러 구간이 함께 해당하면 rule_selection_unresolved의 rule_text를 그대로 옮긴 뒤 "이 금액은 여러 구간에 모두 해당하는데, 어떤 금액이 적용되는지는 아직 확정되지 않았습니다."처럼 쓴다. 이때 answer_text는 3문장 이내로 쓰고 한도와 공통 제외는 points에만 쓴다.
 - points의 금액 구간 문장에는 구간 사실만 쓴다. 적용 방식이 미확정이라는 말은 conclusion과 answer_text에만 쓴다.
@@ -399,6 +412,49 @@ def detail_ref(detail: dict) -> str | None:
         return detail["entity_ref"]
     stored = source(detail["context"]["benefit"])
     return stored.get("card_bnft_id") or stored.get("card_common_bnft_id")
+
+
+def previous_month_spend(question: str) -> int | None:
+    """질문에 명시된 전월 실적 금액만 추출한다. 결제 금액 parser와 분리한다."""
+    match = PREVIOUS_MONTH_SPEND.search(question or "")
+    if not match:
+        return None
+    for kind, amount, period in value_tokens((question or "")[match.end():]):
+        if kind == "MONEY" and period is None:
+            return int(amount)
+    return None
+
+
+def point2_shared_cap_policy(benefit_id: str | None, spend: int | None) -> dict | None:
+    """POINT II 카드 23/100 전용 파생 cap 정책. source conditions의 값은 변경하지 않는다."""
+    if benefit_id != POINT2_SHARED_CAP_BENEFIT_REF:
+        return None
+    derived_tiers = []
+    for index, tier in enumerate(POINT2_SHARED_CAP_TIERS):
+        next_min = POINT2_SHARED_CAP_TIERS[index + 1]["min_amt"] if index + 1 < len(POINT2_SHARED_CAP_TIERS) else None
+        derived_tiers.append({
+            **tier,
+            "derived_max_amt_excl": next_min,
+            "max_basis": "NEXT_TIER_MIN" if next_min is not None else None,
+        })
+    selected = None
+    if isinstance(spend, int) and not isinstance(spend, bool) and spend >= 0:
+        eligible = [tier for tier in derived_tiers if spend >= tier["min_amt"]]
+        if eligible:
+            tier = max(eligible, key=lambda item: item["min_amt"])
+            selected = {key: tier[key] for key in ("min_amt", "cap_amount", "derived_max_amt_excl", "max_basis")}
+    return {
+        "policy_id": "POINT2_SPECIAL_ADDITIONAL_SHARED_MONTHLY_CAP_V1",
+        "source": "PROGRAM_DERIVED",
+        "scope": "SPECIAL_AND_ADDITIONAL_ACCRUAL_SHARED_MONTHLY_CAP",
+        "basis_cd": "PREV_MONTH_SPEND",
+        "selection": "HIGHEST_QUALIFYING_MINIMUM",
+        "source_conditions": [{"min_amt": tier["min_amt"], "cond_max_amt_excl": None} for tier in derived_tiers],
+        "tiers": derived_tiers,
+        "previous_month_spend": spend if isinstance(spend, int) and not isinstance(spend, bool) and spend >= 0 else None,
+        "selected": selected,
+        "basic_accrual_cap": None,
+    }
 
 
 def collect_evidence(details: list[dict], intent: str) -> list[dict]:
@@ -711,7 +767,7 @@ def resolve_fee_choice(question: str, chosen: list[str], by_id: dict, catalog: l
 
 
 # region 2-2. 답변 LLM 문맥 구성과 미확정 사항 판별 (retrieve·answer 노드)
-def benefit_context(detail: dict) -> dict:
+def benefit_context(detail: dict, previous_spend: int | None = None) -> dict:
     """Neo4j 상세 조회에서 답변에 필요한 필드만 추린다."""
     benefit = source(detail["context"]["benefit"])
     rules = []
@@ -730,11 +786,13 @@ def benefit_context(detail: dict) -> dict:
         "common_service": {"name": common.get("common_nm"), "brand": common.get("brand_cd"), "grade": common.get("service_grade_cd")},
         "applied_cards": [source({"source_json": item}).get("product_nm") for item in detail["context"].get("card_sources", [])],
         "valid_from": benefit.get("bnft_valid_from"), "valid_to_excl": benefit.get("bnft_valid_to_excl")}
+    program_cap_policy = point2_shared_cap_policy(detail_ref(detail), previous_spend)
     return {**extra, "benefit_id": detail_ref(detail), "name": benefit.get("bnft_nm"),
             "card": source(detail["context"]["card"]).get("product_nm"), "type": benefit.get("bnft_type_cd"),
             "verification_status": benefit.get("verification_status_cd"),
             "rule_text": benefit.get("bnft_rule_txt"), "rules": rules,
-            "conditions": condition_groups(detail["conditions"]), "limits": limits, **extra_limits}
+            "conditions": condition_groups(detail["conditions"]), "limits": limits, **extra_limits,
+            **({"program_cap_policy": program_cap_policy} if program_cap_policy else {})}
 
 
 def limit_tier_view(item_data) -> list[dict]:
@@ -942,6 +1000,8 @@ def find_unresolved(details: list[dict]) -> list[str]:
 
 def affects_question(item: dict, question: str, intent: str, amount: int | None) -> bool:
     """미확정 조건이 이번 질문의 답에 영향을 주는지 판정한다. 금액 구간은 결제 금액이나 그 구간의 값을 묻는 질문에도 영향을 준다."""
+    if item.get("topic") == TIER_NAME and intent == "BENEFIT_LIMIT":
+        return False
     if intent in item["intents"] or re.search(item["words"], question):
         return True
     if item["topic"] != TIER_NAME:
@@ -1110,6 +1170,10 @@ def known_values(context: dict, question: str, benefit_id: str | None) -> set[tu
             known.add(("MONEY", float(tier["min_amt"]), None))
             known.update(("MONEY", float(amount), None) for amount in
                          [tier["cap"]["amount"], *[group["amount"] for group in tier.get("shared", [])]])
+        policy = benefit.get("program_cap_policy") or {}
+        for tier in policy.get("tiers") or []:
+            known.add(("MONEY", float(tier["min_amt"]), None))
+            known.add(("MONEY", float(tier["cap_amount"]), None))
         for group in benefit["conditions"]:
             for branch in group["branches"]:
                 for atom in branch["atoms"]:
@@ -1192,7 +1256,15 @@ def distorts_limit_tier(text: str, benefits: list[dict]) -> bool:
     한도(이 혜택 cap 또는 공유 cap)로만 쓰이는 금액이 나오면 잘못 배정한 것이다. 다음 "M원 이상"이 나오면 구간을 바꾼다.
     구간 경계 금액, 다른 혜택에만 있는 금액, 구간 표가 없는 혜택은 판정하지 않는다(규칙 지급값 검증은 distorts_tier가 맡는다).
     """
-    views = [(benefit["benefit_id"], benefit.get("limit_tiers") or []) for benefit in benefits]
+    views = []
+    for benefit in benefits:
+        tiers = list(benefit.get("limit_tiers") or [])
+        policy = benefit.get("program_cap_policy") or {}
+        if policy.get("source") == "PROGRAM_DERIVED":
+            tiers.extend({"min_amt": tier["min_amt"], "max_amt": tier.get("derived_max_amt_excl"),
+                          "cap": {"amount": tier["cap_amount"]}, "shared": []}
+                         for tier in policy.get("tiers") or [])
+        views.append((benefit["benefit_id"], tiers))
     views = [(bid, tiers) for bid, tiers in views if tiers]
     if not views:
         return False
@@ -1346,6 +1418,12 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
         text = point.text.strip()
         if not text:
             continue
+        benefit_id = point.benefit_id if point.benefit_id in benefits else None
+        if benefit_id is not None:
+            limit_problem = limit_tier_answer_problem(text, context, question, benefits[benefit_id])
+            if limit_problem:
+                drop(limit_problem, text)
+                continue
         if STATUS_SENTENCE.search(text):
             moved.append(text)
             warnings.append(f"상태 문장을 미확정 항목으로 옮겼습니다: {text[:60]}")
@@ -1499,12 +1577,62 @@ def unbacked_status(text: str, context: dict) -> str | None:
     return None
 
 
+def _has_structured_limit_tiers(benefit: dict) -> bool:
+    if benefit.get("limit_tiers"):
+        return True
+    policy = benefit.get("program_cap_policy") or {}
+    return policy.get("source") == "PROGRAM_DERIVED" and bool(policy.get("tiers"))
+
+
+def _unstructured_limit_pair_claim(text: str) -> bool:
+    for sentence in SENTENCE_END.split(text):
+        if not re.search(r"한도|할인|적립", sentence):
+            continue
+        amounts = [match for match in VALUE_PATTERN.finditer(sentence)
+                   if value_tokens(match.group(0))[0][0] == "MONEY"]
+        thresholds = [match for match in amounts
+                      if re.match(r"\s*(?:이상|초과|이하|미만)", sentence[match.end():])]
+        cap_amounts = [match for match in amounts if match not in thresholds]
+        if thresholds and cap_amounts:
+            return True
+    return False
+
+
+def limit_tier_answer_problem(text: str, context: dict, question: str, benefit: dict | None = None) -> str | None:
+    """Do not infer tier-to-cap pairs without structure or call known pairs unresolved."""
+    if not LIMIT_QUESTION_WORDS.search(question):
+        return None
+    if benefit is not None:
+        targets = [benefit]
+    else:
+        candidates = context.get("benefits", [])
+        if len(candidates) == 1:
+            targets = candidates
+        else:
+            targets = [item for item in candidates
+                       if any(name and name in question for name in (item.get("card"), item.get("name")))]
+    if not targets:
+        return None
+
+    structured = [_has_structured_limit_tiers(item) for item in targets]
+    if all(structured):
+        if LIMIT_TIER_UNCERTAINTY.search(text):
+            return "structured limit tiers were incorrectly marked unresolved"
+        return None
+    if not any(structured) and _unstructured_limit_pair_claim(text):
+        return "tier-to-cap mapping is unavailable in retrieved structured data"
+    return None
+
+
 def answer_text_problem(text: str, context: dict, question: str, known: set, numbers: set) -> str | None:
     """LLM 자연어 답변을 그대로 보여 줄 수 없는 사유. points와 같은 값·규칙 검증을 적용한다."""
     if not text:
         return "자연어 답변이 없습니다"
     if INTERNAL_PATTERN.search(text) or INTERNAL_FIELD.search(text):
         return "내부 코드가 있습니다"
+    limit_problem = limit_tier_answer_problem(text, context, question)
+    if limit_problem:
+        return limit_problem
     unknown = unknown_values(text, known, numbers)
     if unknown:
         return f"조회 결과에 없는 값 {unknown}이 있습니다"
@@ -1911,7 +2039,8 @@ class CardGraphRAG:
         # LLM 문맥 구성: 답변 대상 혜택에 연결된 근거만 남기고, 혜택 상세는 benefit_context로 필요한 필드만 추린다.
         refs = {detail_ref(detail) for detail in details}
         evidence = [item for item in evidence if set(item.get("benefit_ids", [])) & refs]
-        benefits = [benefit_context(detail) for detail in details]
+        monthly_spend = previous_month_spend(state["question"])
+        benefits = [benefit_context(detail, monthly_spend) for detail in details]
         amount = state["search_parameters"].get("payment_amount")
         context = {"benefits": benefits, "payment_amount": amount,
                    "rule_selection_unresolved": rule_conflicts(benefits, amount), "open_conditions": state["open_conditions"],

@@ -731,6 +731,12 @@ class UnresolvedScopeTests(unittest.TestCase):
         self.assertEqual(conditions[0]["evidence_ids"], ["E34"])
         self.assertEqual(others, [])
 
+    def test_tier_payout_uncertainty_is_not_shown_for_monthly_limit_question(self):
+        question = "더 심플 하나카드의 월 할인 한도는 실적 구간에 따라 어떻게 달라져?"
+        conditions, _, others = card_graphrag.split_unresolved(self.tier_details(), question, "BENEFIT_LIMIT", None)
+        self.assertEqual(conditions, [])
+        self.assertTrue(any(card_graphrag.TIER_OPEN in text for text in others))
+
     def test_tier_issue_is_not_shown_for_count_limit_question(self):
         conditions, _, others = card_graphrag.split_unresolved(self.tier_details(), "ONE PICK 월 몇 번?", "BENEFIT_LIMIT", None)
         self.assertEqual(conditions, [])

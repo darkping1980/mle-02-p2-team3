@@ -173,6 +173,79 @@ class TestLimitTierContext:
             (500000, 3000, [8000]), (1000000, 6000, [11000]), (2000000, 12000, [17000])]
 
 
+class TestPoint2SharedCapPolicy:
+    def test_highest_qualifying_threshold_boundaries(self):
+        expected = [
+            (299999, None, None),
+            (300000, 300000, 10000),
+            (599999, 300000, 10000),
+            (600000, 600000, 20000),
+            (1199999, 600000, 20000),
+            (1200000, 1200000, 50000),
+        ]
+        for spend, minimum, cap in expected:
+            policy = g.point2_shared_cap_policy(g.POINT2_SHARED_CAP_BENEFIT_REF, spend)
+            selected = policy["selected"]
+            assert (selected["min_amt"], selected["cap_amount"]) == (minimum, cap) if minimum else selected is None
+            assert policy["source"] == "PROGRAM_DERIVED"
+            assert policy["selection"] == "HIGHEST_QUALIFYING_MINIMUM"
+
+    def test_policy_does_not_change_source_conditions_and_marks_derived_bounds(self):
+        case = STRUCT["23/20261105_000100"]
+        before = copy.deepcopy(case["rule_list"])
+        policy = g.point2_shared_cap_policy(g.POINT2_SHARED_CAP_BENEFIT_REF, 600000)
+        assert case["rule_list"] == before
+        assert all(atom["cond_max_amt_excl"] is None
+                   for rule in case["rule_list"]
+                   for branch in rule["cond_expr"]["branches"]
+                   for atom in branch["atoms"])
+        assert [tier["derived_max_amt_excl"] for tier in policy["tiers"]] == [600000, 1200000, None]
+        assert [tier["max_basis"] for tier in policy["tiers"]] == ["NEXT_TIER_MIN", "NEXT_TIER_MIN", None]
+        assert all(item["cond_max_amt_excl"] is None for item in policy["source_conditions"])
+        assert policy["basic_accrual_cap"] is None
+
+    def test_policy_is_limited_to_exact_point2_benefit_and_valid_spend(self):
+        for ref in ("card_product_item:22:20261105_000099", "card_product_item:20:20261105_000092",
+                    "card_product_item:23:another_item"):
+            assert g.point2_shared_cap_policy(ref, 1200000) is None
+        for spend in (None, -1, True, 1.5):
+            policy = g.point2_shared_cap_policy(g.POINT2_SHARED_CAP_BENEFIT_REF, spend)
+            assert policy["selected"] is None
+            assert policy["previous_month_spend"] is None
+
+    def test_program_derived_point2_tiers_count_as_structured_limit_data(self):
+        benefit = {"benefit_id": g.POINT2_SHARED_CAP_BENEFIT_REF,
+                   "program_cap_policy": g.point2_shared_cap_policy(g.POINT2_SHARED_CAP_BENEFIT_REF, 600000)}
+        assert g._has_structured_limit_tiers(benefit)
+
+    def test_previous_month_spend_parser_is_separate_from_payment_amount(self):
+        assert g.previous_month_spend("전월 실적 60만원이면 통합 한도는?") == 600000
+        assert g.previous_month_spend("전월 국내가맹점 이용 실적 120만원일 때") == 1200000
+        assert g.previous_month_spend("60만원 결제하면?") is None
+
+    def test_policy_enters_context_only_for_exact_benefit(self):
+        case = STRUCT["23/20261105_000100"]
+        item = detail("카드의정석 POINT II", "20261105_000100", "주요 간편결제 추가적립", {},
+                      case["rule_list"], limit_text=case["item_limit_txt"])
+        item["entity_ref"] = g.POINT2_SHARED_CAP_BENEFIT_REF
+        benefit = g.benefit_context(item, previous_spend=600000)
+        assert benefit["program_cap_policy"]["selected"]["min_amt"] == 600000
+        assert benefit["program_cap_policy"]["selected"]["cap_amount"] == 20000
+        assert "limit_tiers" not in benefit  # program-derived policy stays separate from source item_data tiers.
+
+        other = detail("Other card", "20261105_000100", "주요 간편결제 추가적립", {},
+                       case["rule_list"], limit_text=case["item_limit_txt"])
+        other["entity_ref"] = "card_product_item:22:20261105_000100"
+        assert "program_cap_policy" not in g.benefit_context(other, previous_spend=600000)
+
+    def test_selected_policy_cap_pair_is_validated_without_changing_source_tiers(self):
+        policy = g.point2_shared_cap_policy(g.POINT2_SHARED_CAP_BENEFIT_REF, 600000)
+        benefit = {"benefit_id": g.POINT2_SHARED_CAP_BENEFIT_REF,
+                   "program_cap_policy": policy, "limit_tiers": []}
+        assert not g.distorts_limit_tier("전월 실적 60만원 이상 특별·추가 적립 통합 월 한도는 2만원입니다.", [benefit])
+        assert g.distorts_limit_tier("전월 실적 60만원 이상 특별·추가 적립 통합 월 한도는 1만원입니다.", [benefit])
+
+
 class TestDistortsLimitTier:
     def test_simple_monthly_correct_and_swapped_pairs(self):
         benefits = [simple_context_benefit()]
@@ -223,6 +296,53 @@ class TestValidateAnswerWithLimitTiers:
         texts = [p["text"] for p in answer["points"]]
         assert good in texts and bad not in texts
         assert any("한도 금액의 짝" in w for w in warnings)
+
+    def test_structured_simple_monthly_limit_tiers_accept_correct_pairs(self):
+        context, bid = self.context()
+        question = "더 심플 하나카드의 월납 요금 할인 한도는 지난달 이용액 구간에 따라 어떻게 달라져?"
+        text = "전월 실적 30만원 이상 80만원 미만이면 월 할인 한도는 10,000원이고, 80만원 이상이면 15,000원입니다."
+        known = g.known_values(context, question, None)
+        numbers = g.numbers_in(json.dumps(context, ensure_ascii=False)) | g.numbers_in(question)
+        assert g.answer_text_problem(text, context, question, known, numbers) is None
+        raw = CardAnswer(answer_text=text, conclusion="", uncertain=[], cannot_answer_reason=None,
+                         points=[AnswerPoint(text=text, evidence_ids=["E81", "E82", "E85", "E86"], benefit_id=bid)])
+        answer, _ = g.validate_answer(raw, context, question)
+        assert answer["answer_source"] == "llm"
+        assert answer["points"] and answer["points"][0]["text"] == text
+
+    def test_structured_limit_tiers_reject_unresolved_answer(self):
+        context, bid = self.context()
+        uncertain = "각 실적 구간의 월 할인 한도는 아직 미확정입니다."
+        raw = CardAnswer(answer_text=uncertain, conclusion="", uncertain=[], cannot_answer_reason=None,
+                         points=[AnswerPoint(text=uncertain, evidence_ids=["E81", "E85"], benefit_id=bid)])
+        answer, warnings = g.validate_answer(
+            raw, context, "더 심플 하나카드의 월납 요금 할인 한도는 지난달 이용액 구간에 따라 어떻게 달라져?")
+        assert answer["points"] == []
+        assert answer["answer_text"] == ""
+        assert any("structured limit tiers" in warning for warning in warnings)
+
+    def test_missing_limit_tiers_rejects_unverified_threshold_cap_pair(self):
+        context, _ = self.context()
+        context["benefits"][0].pop("limit_tiers")
+        known = g.known_values(context, "", None)
+        numbers = g.numbers_in(json.dumps(context, ensure_ascii=False))
+        question = "더 심플 하나카드의 월납 요금 할인 한도는 지난달 이용액 구간에 따라 어떻게 달라져?"
+        for text in ("전월 실적 80만원 이상이면 월 할인 한도 10,000원입니다.",
+                     "월 할인 한도는 10,000원이며 전월 실적 80만원 이상 구간에 적용됩니다."):
+            problem = g.answer_text_problem(text, context, question, known, numbers)
+            assert problem == "tier-to-cap mapping is unavailable in retrieved structured data"
+
+    def test_missing_limit_tiers_allows_separate_amounts_and_uncertainty(self):
+        context, _ = self.context()
+        context["benefits"][0].pop("limit_tiers")
+        text = "조회된 월 할인 한도는 10,000원과 15,000원입니다. 실적 구간별 연결은 아직 미확정입니다."
+        known = g.known_values(context, "", None)
+        numbers = g.numbers_in(json.dumps(context, ensure_ascii=False))
+        assert g.answer_text_problem(text, context,
+            "더 심플 하나카드의 월납 요금 할인 한도는 지난달 이용액 구간에 따라 어떻게 달라져?", known, numbers) is None
+        bounds_only = "전월 실적 30만원 이상 80만원 미만 구간의 월 할인 한도 매핑은 미확정입니다."
+        assert g.answer_text_problem(bounds_only, context,
+            "더 심플 하나카드의 월납 요금 할인 한도는 지난달 이용액 구간에 따라 어떻게 달라져?", known, numbers) is None
 
     def test_answer_text_problem_reports_wrong_pair(self):
         context, _ = self.context()
