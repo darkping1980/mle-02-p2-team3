@@ -210,3 +210,332 @@ Aura Free는 “backup 파일을 만들 수 있다”와 “새 인스턴스에 
 - Git HEAD는 시작점 `1fcd3e636aa66a284117b6bcf200616ca5133c0a` 그대로이며 commit/push는 수행하지 않았다. 변경 파일은 이 실행기, 해당 테스트, 본 문서다.
 - 미완료: 격리 PostgreSQL restore/실행기 리허설, Aura snapshot/export 및 별도 restore 확인, 운영 DB 보정, Neo4j의 부분 반영 대 전체 reload 선택, 실제 Streamlit 재질문, 50문항 QA의 19 답변 오류 및 4 실행 오류 별도 처리.
 
+## 8. PostgreSQL 기존 데이터 보정 — 읽기 전용 최종 사전 점검
+
+### 8.1 시작 시점 Git 및 안전 조건
+
+- 작업 시작 HEAD/branch: `840b28d2b88d2b129a721804854a9101c40dd0e5` / `main`, commit 제목 `GraphRAG 데이터 보정 실행기 및 작업 이력 문서화`.
+- `git status --short`는 출력이 없어 시작 시 working tree clean이었다. 앞선 작업의 실행기·테스트·work log가 이 HEAD에 포함되어 있다. 이번 변경을 commit/push하지 않는다.
+- 전체 PostgreSQL 백업 파일이 있고 기존 기록상 PostgreSQL 17.11, 20 tables/4,864 rows, backup compare `VERIFY OK`다. **격리 DB restore rehearsal 성공 기록은 없다.** 백업 파일 검증과 데이터 복원 검증을 같은 것으로 취급하지 않는다.
+- 사용자가 명시한 제한에 따라, 이 restore gap은 실제 운영 쓰기 전에 멈춰야 하는 사유다. 아래는 읽기 전용 사전 점검과 예상 계획일 뿐이며 적용 승인을 요청/실행하는 단계까지 진행하지 않는다.
+
+### 8.2 실제 읽기 전용 접속 식별 정보
+
+읽기 전용 psycopg 연결에서 `options='-c default_transaction_read_only=on'`을 설정하고 `SET default_transaction_read_only = on` 후 식별 SELECT와 타깃/evidence SELECT를 수행했다. 접속 문자열이나 인증 정보는 기록하지 않는다.
+
+접속 식별/상세 SELECT를 한 줄 `python -c`로 실행하려던 초반 2회는 PowerShell 인용부호가 SQL/Python 문자열을 잘라 Python SyntaxError로 종료되어 DB 연결 전에 실패했다. 이어 임시 읽기 전용 helper `tmp/codex_readonly_backfill_preflight.py`로 동일 조회를 성공적으로 마쳤고, 조회 후 이 helper 파일은 삭제했다. 두 번의 구문 오류에서 DB 쿼리나 변경은 실행되지 않았다.
+
+| 항목 | 실제 결과 |
+|---|---|
+| PostgreSQL | `PostgreSQL 17.11 on aarch64-unknown-linux-gnu`, 64-bit |
+| `current_database()` | `postgres` |
+| `inet_server_addr()` | `2a05:d018:cb1:bb01:8ebd:ef70:d08:18a0/128` |
+| `inet_server_port()` | `5432` |
+| session | `default_transaction_read_only=on`; 이 확인에서는 SELECT만 실행 |
+
+서버 주소는 향후 writer의 `--expected-server-address` guard에 정확히 입력할 식별값이다. 실제 쓰기 경로는 별도 승인 전 실행하지 않는다.
+
+### 8.3 현재 행 및 제안 변경 요약
+
+실행 명령은 `src/card_benefit` 작업 디렉터리에서 실행한 `..\\..\\.venv\\Scripts\\python.exe -m payment_card.db_pipeline.limit_struct_backfill`이다. 옵션이 없는 기본 dry-run이 `READ_ONLY_DRY_RUN`, `database_writes=0`을 반환했다. 추가로 아래 타깃/evidence SELECT를 읽기 전용 transaction으로 수행했다. 세 대상 행 모두 실제 현재 `item_data={}`이고, BENEFIT 타입과 fixture 이름/`rule_list` 해시가 현재 실행기의 검증을 통과했다. 기존 RULE/COND link는 0건, 제안 8개 link는 모두 `already_exists=false`, 즉 현재 조회상 추가 대상 8건이다.
+
+| PK (card_id, card_product_item_id) | 실제 현재 item name / `item_data` | 변경 예정 | 변경 수 |
+|---|---|---|---|
+| `(22, '20261105_000099')` | `월납 요금 청구할인` / `{}` | `limits` 2개, `rule_limits` r1/r2/r3, 추출 근거로 구조화한 `limit_tiers` 2구간 | UPDATE 1 |
+| `(23, '20261105_000100')` | `주요 간편결제 모아포인트 추가적립` / `{}` | 특별·추가 적립 공유 `limits` 3개 및 `rule_limits` 3개. 원본 조건 상한 null 유지. `PROGRAM_DERIVED` 구간/상한을 원본 `item_data`에 추가하지 않음 | UPDATE 1 |
+| `(20, '20261105_000092')` | `골프/프리미엄 아울렛 50% 청구 할인` / `{}` | 누적 base 100,000 및 추가 100,000 limits/rule mapping. `limit_tiers` 생성 안 함 | UPDATE 1 |
+
+전 행에서 기존 `rule_list`와 `value_num`, `cond_max_amt_excl`, `item_limit_txt`, 검색 텍스트·embedding은 유지한다. 특히 22/099의 지급 `value_num=null`을 보정하지 않는다. 23/100 행은 추가 적립 혜택 대상이며 기본 적립 제한 없음은 공식 상품정책이다. 이 JSON patch에는 특별/추가 적립 공유 한도만 담고 기본 적립에 임의 한도/규칙을 만들지 않는다.
+
+실제 현재 `rule_list`의 조건/지급 값 요약은 다음과 같다. dry-run fixture의 `rule_list` hash와 실시간 값이 맞아 기존 규칙을 수정하지 않는 전제가 확인되었다.
+
+| PK | 기존 rule | 실제 `cond_min_amt` / `cond_max_amt_excl` | 실제 `value_num` / unit | 보정 시 처리 |
+|---|---|---|---|---|
+| 22/099 | r1 / c1 | 300,000 / 800,000 | null / null | 유지 |
+| 22/099 | r2 / c2 | 800,000 / null | null / null | 유지 |
+| 22/099 | r3 / c3 (`TXN_AMT`) | null / null | null / null | 유지 |
+| 23/100 | r1/r2/r3 / c1/c2/c3 | 300,000 / null; 600,000 / null; 1,200,000 / null | 3 / `PERCENT` 각각 | 유지. 공식 원문에 없는 상한 추가 금지 |
+| 20/092 | `bonus_base_discount` / `bonus_spend_24m` | 24,000,000 / null (`ROLLING_MONTHS`) | 50 / `PERCENT` | 유지 |
+| 20/092 | `bonus_additional_cap_discount` / `bonus_spend_36m` | 36,000,000 / null (`ROLLING_MONTHS`) | 50 / `PERCENT` | 유지 |
+
+### 8.4 정확한 제안 JSON
+
+아래는 live dry-run의 `item_data_after_preview`에서 추린 JSON이다. 변경 전 JSON은 각 타깃에서 실제로 조회한 `{}`다. 이는 아직 DB에 저장된 변경 후 값이 아니다.
+
+#### 22/099 — 제안 `item_data`
+
+```json
+{
+  "schema_ver": "BENEFIT_V1",
+  "limits": [
+    {"limit_key":"l1","limit_num":10000,"cap_unit_cd":"KRW","period_cd":"MONTH","limit_raw_txt":"10,000원","shared_scope_txt":"횟수 제한 없이 월 할인 한도 내에서 합산 할인","applies_to_benefit_nms":["월납 요금 청구할인"],"evidence_ids":["20261105_002681"]},
+    {"limit_key":"l2","limit_num":15000,"cap_unit_cd":"KRW","period_cd":"MONTH","limit_raw_txt":"15,000원","shared_scope_txt":"횟수 제한 없이 월 할인 한도 내에서 합산 할인","applies_to_benefit_nms":["월납 요금 청구할인"],"evidence_ids":["20261105_002682"]}
+  ],
+  "rule_limits": {"r1":["l1"],"r2":["l2"],"r3":["l1","l2"]},
+  "limit_tiers": {
+    "schema_ver":"LIMIT_TIERS_V1","source":"EXTRACTION","basis_cd":"PREV_MONTH_SPEND",
+    "tiers":[
+      {"tier_key":"r1","rule_key":"r1","label":"30만원 이상 80만원 미만","min_amt":300000,"max_amt_excl":800000,"evidence_ids":["20261105_002685"]},
+      {"tier_key":"r2","rule_key":"r2","label":"80만원 이상","min_amt":800000,"max_amt_excl":null,"evidence_ids":["20261105_002686"]}
+    ],
+    "own":{"column":"월 한도","column_source":"PERIOD_CD","merged_cell":false,
+      "caps":{"r1":{"raw":"10,000원","amount":10000,"limit_key":"l1"},"r2":{"raw":"15,000원","amount":15000,"limit_key":"l2"}}},
+    "shared":[]
+  }
+}
+```
+
+#### 23/100 — 제안 `item_data`
+
+```json
+{
+  "schema_ver":"BENEFIT_V1",
+  "limits":[
+    {"limit_key":"l1","limit_num":10000,"cap_unit_cd":"KRW","period_cd":"MONTH","limit_raw_txt":"1만원","shared_scope_txt":"특별/추가 적립","applies_to_benefit_nms":[],"evidence_ids":["20261105_002739"]},
+    {"limit_key":"l2","limit_num":20000,"cap_unit_cd":"KRW","period_cd":"MONTH","limit_raw_txt":"2만원","shared_scope_txt":"특별/추가 적립","applies_to_benefit_nms":[],"evidence_ids":["20261105_002740"]},
+    {"limit_key":"l3","limit_num":50000,"cap_unit_cd":"KRW","period_cd":"MONTH","limit_raw_txt":"5만원","shared_scope_txt":"특별/추가 적립","applies_to_benefit_nms":[],"evidence_ids":["20261105_002741"]}
+  ],
+  "rule_limits":{"r1":["l1"],"r2":["l2"],"r3":["l3"]}
+}
+```
+
+#### 20/092 — 제안 `item_data`
+
+```json
+{
+  "schema_ver":"BENEFIT_V1",
+  "limits":[
+    {"limit_key":"bonus_base_cap","limit_num":100000,"cap_unit_cd":"KRW","period_cd":"UNKNOWN","limit_raw_txt":"보너스 할인 한도 10만원 제공","shared_scope_txt":null,"applies_to_benefit_nms":["골프/프리미엄 아울렛 50% 청구 할인"],"evidence_ids":["20261105_002447"]},
+    {"limit_key":"bonus_additional_cap","limit_num":100000,"cap_unit_cd":"KRW","period_cd":"UNKNOWN","limit_raw_txt":"보너스 할인 한도 10만원 추가 제공","shared_scope_txt":null,"applies_to_benefit_nms":["골프/프리미엄 아울렛 50% 청구 할인"],"evidence_ids":["20261105_002448"]}
+  ],
+  "rule_limits":{"bonus_base_discount":["bonus_base_cap"],"bonus_additional_cap_discount":["bonus_additional_cap"]}
+}
+```
+
+### 8.5 근거 연결 예정 8건과 원본 근거 검증
+
+현재 `card_source_evidence`를 읽기 전용으로 조회한 결과, 8개 evidence ID가 모두 존재했다. 각 source row의 문서·페이지·청크·추출 staging ID·원문 위치/인용은 다음과 같다. 이들은 source evidence 실재 확인이며, 아래 RULE/COND link는 아직 INSERT되지 않았다.
+
+| 카드 / rule / condition key | evidence ID | 문서 ID / page / chunk | extraction staging ID | start–end | 실제 quote |
+|---|---|---|---|---|---|
+| 22/099 r1 / c1 | `20261105_002685` | `20261105_000042` / 1 / `20261105_000173` | `20261105_000619` | 3727–3741 | `30만원 이상\n80만원 미만` |
+| 22/099 r2 / c2 | `20261105_002686` | `20261105_000042` / 1 / `20261105_000173` | `20261105_000619` | 3743–3757 | `80만원 이상\n15,000원` |
+| 22/099 r3 / c3 | `20261105_002687` | `20261105_000042` / 1 / `20261105_000173` | `20261105_000619` | 3182–3223 | `월납 요금 승인 금액이 할인 한도보다 적을 경우 승인 금액만큼 할인 적용` |
+| 23/100 r1 / c1 | `20261105_002744` | `20261105_000043` / 3 / `20261105_000176` | `20261105_000636` | 362–383 | `전월 국내가맹점 이용실적 \n30만원 이상` |
+| 23/100 r2 / c2 | `20261105_002745` | `20261105_000043` / 3 / `20261105_000176` | `20261105_000636` | 419–440 | `전월 국내가맹점 이용실적 \n60만원 이상` |
+| 23/100 r3 / c3 | `20261105_002746` | `20261105_000043` / 3 / `20261105_000176` | `20261105_000636` | 476–498 | `전월 국내가맹점 이용실적 \n120만원 이상` |
+| 20/092 bonus_base_discount / bonus_spend_24m | `20261105_002453` | `20261105_000040` / 3 / `20261105_000159` | `20261105_000571` | 684–710 | `서비스 실적 기간 내 2,400만원 이상 이용 시` |
+| 20/092 bonus_additional_cap_discount / bonus_spend_36m | `20261105_002454` | `20261105_000040` / 3 / `20261105_000159` | `20261105_000571` | 733–747 | `3,600만원 이상 이용 시` |
+
+실행기가 만들 link의 자연키는 각 행의 `(card_id, card_product_item_id, ev_subject_cd='RULE', rule_key, ev_item_cd='COND', ev_item_key, evidence_id)` 조합이다. 현재 대상에 기존 RULE/COND link가 없으므로 preview상 중복은 0, 신규 제안은 8이다. commit 뒤의 실제 `evidence_link_id`는 DB가 발급하며 아직 알 수 없다.
+
+### 8.6 실행기·SQL·preimage·rollback 확인
+
+- 실제 실행한 DB 쓰기 SQL: **없음**. 실행한 프로그램 명령은 기본 read-only dry-run뿐이다. 읽기 전용으로 실행한 식별 SQL은 `SELECT version(), current_database(), inet_server_addr()::text, inet_server_port()`이고, 현재 PK 행·RULE/COND 관계·`card_source_evidence` 8건을 SELECT했다.
+- 읽기 전용 쿼리(실제 실행, 접속에는 `default_transaction_read_only=on` 설정):
+
+```sql
+SELECT version(), current_database(), inet_server_addr()::text, inet_server_port();
+
+SELECT card_id, card_product_item_id, item_type_cd, item_nm, item_data, rule_list, item_limit_txt
+FROM db_pipeline.card_product_item
+WHERE (card_id, card_product_item_id) IN
+  ((22, '20261105_000099'), (23, '20261105_000100'), (20, '20261105_000092'));
+
+SELECT card_id, card_product_item_id, rule_key, ev_subject_cd, relation_key,
+       ev_item_cd, ev_item_key, evidence_id, evidence_link_id
+FROM db_pipeline.card_evidence_link
+WHERE (card_id, card_product_item_id) IN
+  ((22, '20261105_000099'), (23, '20261105_000100'), (20, '20261105_000092'))
+  AND ev_subject_cd = 'RULE' AND ev_item_cd = 'COND';
+
+SELECT evidence_id, card_doc_id, page_no, card_doc_chunk_id, card_extr_stg_id,
+       start_pos, end_pos, quote_txt
+FROM db_pipeline.card_source_evidence
+WHERE evidence_id = ANY(ARRAY[
+  '20261105_002685','20261105_002686','20261105_002687',
+  '20261105_002744','20261105_002745','20261105_002746',
+  '20261105_002453','20261105_002454'
+]);
+```
+- writer 구현상 적용 명령(아직 미실행, `src/card_benefit`에서):
+
+```powershell
+..\..\.venv\Scripts\python.exe -m payment_card.db_pipeline.limit_struct_backfill `
+  --apply `
+  --confirm-write APPLY_GRAPH_LIMIT_BACKFILL_22_23_20 `
+  --expected-database postgres `
+  --expected-server-address '2a05:d018:cb1:bb01:8ebd:ef70:d08:18a0/128' `
+  --preimage-out 'C:\myproject\workspace\mle-02-p2-team3\src\data\backup\pre_calc_cleanup_20261106_140723\graphrag_limit_backfill_preimage_20261106_postgres.json'
+```
+
+- 제안된 preimage 경로의 부모 백업 디렉터리는 존재하고 `.gitignore`의 `/src/data/backup/pre_calc_cleanup_*/`에 의해 ignore되는 것을 확인했다. 해당 preimage 파일은 **아직 생성하지 않았다**. 실행기는 이미 존재하는 preimage를 덮어쓰지 않으므로 실제 승인 후 고유하고 없는 파일명을 다시 확인해야 한다.
+- 적용 시 실행기는 대상 3행을 `FOR UPDATE`로 잠그고 DB/server/read-write를 검증한다. `item_data`는 before JSON 조건까지 넣은 compare-and-swap UPDATE이고, evidence는 기존 source evidence에서 문서/page/chunk를 가져오는 `INSERT ... SELECT ... ON CONFLICT ... DO NOTHING RETURNING`이다. 3행 JSON과 8개 자연키 확인이 모두 끝나야 transaction commit한다. 실패 시 context rollback.
+- rollback 적용 경로는 적용 run의 committed preimage, 별도 `ROLLBACK_GRAPH_LIMIT_BACKFILL_22_23_20` 확인 문자열, 동일 DB/server를 요구한다. 현재 `item_data`가 기록한 after-image인 경우에만 before-image로 복구하고 이 run에서 INSERT된 `evidence_link_id`와 자연키가 모두 맞는 link만 삭제한다. 기존 link는 지우지 않는다. COMMIT 직후 manifest 마킹이 끊기면 DB를 read-only로 먼저 대조해야 하고, 자동 재실행하지 않는다.
+- fake PostgreSQL transaction 테스트는 12 passed, 한도/P2 관련 테스트는 42 passed. 실제 DB transaction/rollback은 시험하지 않았다.
+
+### 8.7 적용 중단 결정 및 사용자 판단 필요
+
+운영 백업 파일은 존재하지만 격리 환경에서 복원된 적이 없다. target preimage는 대상 세 행과 이 실행이 새로 넣는 link를 되돌리는 데 유용하지만, DB 전체 상태·FK 관계 또는 장애 복구를 대신하지 않는다. 요청에 명시된 조건에 따라 현재는 **운영 UPDATE 3행 / INSERT 8건을 실행하지 않고 중단**했다. 따라서 PostgreSQL COMMIT/ROLLBACK은 모두 미실행이며 변경 행·link 수는 0이다.
+
+사용자가 판단할 선택지는 다음과 같다.
+
+1. 먼저 격리 PostgreSQL 17 환경을 마련해 백업 복원 rehearsal을 완료하고, PK/FK, 20개 테이블·4,864행, JSON 및 evidence link를 검증한 뒤 운영 적용 계획을 다시 승인한다. 권장 경로.
+2. 전체 restore rehearsal 없이 row-level preimage/transaction만으로 진행할 예외를 명시적으로 승인한다. 이 선택은 전체 백업 복구 가능성을 검증하지 않은 상태에서 운영 데이터를 변경하는 위험을 수용한다. 현재 지시는 별도 판단 없이는 이 선택을 허용한 것으로 간주하지 않는다.
+
+### 8.8 Neo4j 후속 범위 (미실행)
+
+- 이번에 바꿀 Neo4j node/relationship 수: 0. PostgreSQL만 승인 후 수정하더라도 Neo4j `source_json.item_data`와 graph RULE/COND relationships는 기존 상태라 양 DB가 일시적으로 불일치한다.
+- 후보 변경: BENEFIT key `card_product_item` + `(card_id, item_id)` 3개 노드의 `source_json.item_data`와 8개 RULE/COND evidence relationship. 추가 evidence 노드는 PostgreSQL에 이미 존재하며 현재 Neo4j에 존재하는지/추가 생성이 필요한지는 이번 단계에서 확인하지 않았다.
+- 기존 인스턴스 수 1,635 nodes/2,702 relationships는 이전 read-only 확인값이지 이번 실행 시점에 재검증한 수치가 아니다. 1,643/2,718은 옛 예상치일 뿐 실제값으로 사용하지 않는다.
+- Neo4j 임베딩·인덱스 보존, 전체 MERGE의 중복/잔존 관계 정리, 부분 동기화가 가능한지, 실패 시 복원은 아직 검증되지 않았다. AuraDB Free snapshot/export 및 별도 인스턴스 restore가 미확인이고 restore rehearsal도 없으므로 Neo4j 적재는 별도 백업·복원 준비와 승인 후에만 검토한다.
+- 후속 검증은 PostgreSQL에서 3개 JSON과 8개 관계를 SELECT, Neo4j에서 동일한 node key의 source JSON 및 owner–evidence relationship을 read-only 조회해 양방향 비교한다. Neo4j 전후 노드/관계 수와 embedding/index metadata는 재적재 방식이 확정되면 별도 검증 SQL/Cypher 문서에 정한다.
+
+### 8.9 이번 사전 점검 종료 상태
+
+| 항목 | 상태 |
+|---|---|
+| 현재 DB 식별/세 행/근거 8개 SELECT | 완료, read-only |
+| 제안 JSON·natural key·중복 상태 확인 | 완료, dry-run; 신규 link 8, 기존 0 |
+| fresh durable preimage 생성 | 미실행 (쓰기 승인 전 생성 금지) |
+| PostgreSQL UPDATE/INSERT/COMMIT/rollback | 미실행, 0 행/0 link 변경 |
+| PostgreSQL backup restore rehearsal | 미완료, 적용 중단 조건 |
+| Neo4j write/reload | 미실행, 별도 승인 대상 |
+| Git | 이번 작업 시작 HEAD `840b28d2b88d2b129a721804854a9101c40dd0e5`; 이번 기록 외 변경사항은 후속 승인 이후만 수행. preimage/backup은 Git에 추가하지 않음 |
+
+
+## 9. 격리 PostgreSQL 복원 → 보정 적용 → 원복 리허설 (2026-11-06)
+
+### 9.1 범위와 안전 경계
+
+- 목적: JSON+DDL 백업을 격리 PostgreSQL 17에 복원하고, 기존 limit_struct_backfill 실행기의 기본 dry-run·적용·멱등 재실행·실패 rollback·preimage 원복을 실제 PostgreSQL에서 검증했다.
+- 시작 시 Git HEAD 840b28d2b88d2b129a721804854a9101c40dd0e5. 추적 파일은 깨끗했다. 작업 중 이 문서만 수정했고 임시 검증 도구는 tmp에 생성했다. 운영 소스 수정, commit/push는 없었다.
+- 운영 PostgreSQL은 읽기 전용 catalog 확인 외에 접속/쓰기하지 않았다. Neo4j 미접속·미변경, Streamlit 미배포.
+- 테스트 DB는 독립 로컬 Docker 인스턴스이며 운영 DB 접속정보를 재사용하지 않았다.
+
+### 9.2 격리 환경
+
+- Windows에서 Docker Desktop/PostgreSQL 서비스를 찾지 못해 기존 WSL Ubuntu 24.04.5의 Docker Engine 29.9.2를 사용했다. 새 외부 DB 인스턴스는 만들지 않았다.
+- 컨테이너: graphrag-pg17-restore-rehearsal; DB graphrag_restore; 역할 restore_admin; host port 127.0.0.1:55432; 별도 volume graphrag-pg17-restore-data-20261106.
+- 이미지 pgvector/pgvector:0.8.2-pg17-bookworm, digest sha256:feb68f4f15446397d8cac7f4fe48fe4586de83160d1fc48b46283312d1a33966. 실제 PostgreSQL 17.10 (Debian 17.10-1)이며 운영 17.11과 patch 버전 차이가 남는다.
+- 컨테이너가 WSL idle 종료 때 멈춰 리허설 중 keepalive를 사용했다. 테스트 포트는 localhost에 바인딩했다. 테스트 DB만 trust 인증이며 Docker bridge 안의 다른 컨테이너에서 접근 가능할 수 있어 장기 유지 시 인증 전환이 필요하다.
+- 구축 중 첫 Docker quoting 시도는 생성 실패, 인자 전달을 고쳐 성공했다. ALTER ROLE의 parameterized password 변경은 PostgreSQL utility statement가 bind parameter를 지원하지 않아 실패해 별도 테스트 암호 설정을 생략했다. WSL idle 종료는 keepalive로 해결했다. 초기 harness의 tuple 결과를 dict로 읽던 테스트 오류도 tuple 인덱싱으로 고쳐 재실행했다. 운영 소스는 수정하지 않았다.
+- 격리 접속 값: host=127.0.0.1 port=55432 dbname=graphrag_restore user=restore_admin. 운영 연결정보가 아니다.
+
+### 9.3 JSON+DDL 복원 결과와 제한
+
+- 백업 경로 src/data/backup/pre_calc_cleanup_20261106_140723/의 schema_ddl.sql, postgres_db_pipeline.json, catalog.json을 사용했다. JSON+DDL이므로 pg_restore는 사용하지 않았고 DDL 실행 후 JSON 행을 테이블별로 적재했다.
+- 복원 결과는 20개 테이블, 4,864행이며 각 테이블 행 수와 백업 행 데이터 비교가 일치했다.
+
+| 테이블 | 행 | 테이블 | 행 |
+|---|---:|---|---:|
+| app_log | 127 | app_log_event_archive | 97 |
+| backup_card_bnft | 16 | card_ai_call | 122 |
+| card_ai_run | 43 | card_common | 14 |
+| card_common_bnft | 82 | card_common_bnft_apply | 1 |
+| card_common_doc | 19 | card_doc | 30 |
+| card_doc_chunk | 95 | card_doc_page | 86 |
+| card_evidence_link | 250 | card_extr_stg | 686 |
+| card_product | 10 | card_product_doc | 11 |
+| card_product_item | 51 | card_source_evidence | 2,959 |
+| common_cd | 132 | common_code_grp | 33 |
+
+- 제약조건은 PK 20, UNIQUE 16, CHECK 41, 선언 FK 0. 백업 catalog에 FK가 없으므로 FK 0개를 확인했다. 논리 evidence 참조는 별도로 조인 검사했고 source evidence 누락 0건, document/page/chunk metadata 불일치 0건이었다.
+- extensions schema에 vector, pgcrypto, uuid-ossp, pg_stat_statements를 구성했다. Supabase Vault는 DDL에서 참조되지 않아 복원하지 않았으므로 해당 extension 복원은 미검증이다.
+- 백업 DDL은 card_product_item.item_ref를 다른 열 참조 DEFAULT로 표현해 PostgreSQL이 거부했다. 운영 catalog의 read-only 확인으로 실제 열이 stored generated column(attgenerated='s')임을 확인했다. 격리 리허설에서만 DDL을 GENERATED ALWAYS AS (...) STORED로 고쳤고, JSON 로더에서 item_ref를 제외해 PostgreSQL이 계산했다. 백업 파일 및 운영 DB는 변경하지 않았다.
+- 세 대상 PK (22,20261105_000099), (23,20261105_000100), (20,20261105_000092)는 각 1행, 기존 item_data={} 및 RULE/COND link 0건으로 복원됐다.
+- backup_db_pipeline.verify()는 FAIL을 반환했다. 행 지문과 행 비교 문제는 출력되지 않았고 catalog.columns, catalog.views, catalog.functions만 불일치였다. 상세 비교에서 columns 차이는 일부 ordinal position(물리 열 순서), views/functions 차이는 owner가 postgres 대 테스트 역할인 환경 차이 및 함수 정의 개행이었다. strict catalog 검증은 통과하지 못했으므로 전체 복원을 VERIFY OK로 기록하지 않는다. 행 데이터는 일치했으나 catalog 전체 metadata 동등성은 미완료다.
+- 격리 복원 자체는 성공했지만 백업 DDL의 generated column 표현을 보정해야 했고, PostgreSQL 17.11 patch-level 검증은 남아 있다.
+
+### 9.4 보정 실행기 통합 테스트
+
+- 기존 모듈 src/card_benefit/payment_card/db_pipeline/limit_struct_backfill.py의 read_live_rows(), compose_preview(), apply_corrections(), rollback_corrections()를 사용했다. Fixture는 src/card_benefit/payment_card/tests/fixtures_limit_struct.json. 추적 코드 변경은 없다.
+- 기본 dry-run: READ_ONLY_DRY_RUN, database_writes=0, 대상 3행, 예정 link 8, 기등록 0, 추가 예정 8.
+- 실패 rollback: 테스트 DB에만 임시 BEFORE INSERT trigger를 두고 INSERT에서 injected isolated rehearsal failure를 일으켰다. 앞서 UPDATE된 대상 item_data와 link가 전부 rollback되어 item_data 변경 0건, link 증가 0건이었다. 임시 trigger/function은 제거했다.
+- 실제 apply: UPDATE 3행, INSERT 8건. 실행기 내부에서 preimage 작성, 대상/규칙 비교, evidence 원본 quote·start/end/staging 검증, 적용 후 JSON 및 RULE/COND natural key 검증이 통과했다.
+- 삽입 evidence ID: 20261105_002685, 20261105_002686, 20261105_002687, 20261105_002744, 20261105_002745, 20261105_002746, 20261105_002453, 20261105_002454.
+- 멱등 재실행은 UPDATE 0행, INSERT 0건, 이미 존재 link 8건이었다.
+- apply가 만든 preimage로 rollback하여 item_data 3행은 원래 {}로, link 8건은 삭제하여 초기 상태로 돌아왔다. 원복 뒤 다시 dry-run한 결과도 세 행/여덟 link 제안이었다.
+- PostgreSQL sequence는 트랜잭션 rollback되지 않아 seq_card_evidence_link가 721에서 730으로 증가했다. 행과 link만 원복됐고 sequence는 최초 값으로 돌아가지 않았다.
+- 임시 harness는 tmp/run_pg17_restore_rehearsal.py, catalog 비교 도구는 tmp/compact_restore_diff.py 및 tmp/diff_test_restore_catalog.py였다. 이들은 임시 산출물이며 Git 추적 대상이 아니다.
+
+### 9.5 실제 실행 SQL 형태 (격리 DB 전용)
+
+UPDATE db_pipeline.card_product_item
+SET item_data = %s::jsonb
+WHERE card_id = %s AND card_product_item_id = %s AND item_data = %s::jsonb
+RETURNING card_id, card_product_item_id;
+
+INSERT INTO db_pipeline.card_evidence_link
+  (card_doc_id, page_no, card_doc_chunk_id, evidence_id, card_id,
+   ev_subject_cd, card_product_item_id, rule_key, ev_item_cd, ev_item_key)
+SELECT e.card_doc_id, e.page_no, e.card_doc_chunk_id, e.evidence_id, %s,
+       'RULE', %s, %s, 'COND', %s
+FROM db_pipeline.card_source_evidence e WHERE e.evidence_id = %s
+ON CONFLICT ON CONSTRAINT card_evidence_link_natural_key DO NOTHING
+RETURNING evidence_link_id;
+
+허용 PK는 (22,'20261105_000099'), (23,'20261105_000100'), (20,'20261105_000092')였다. 이 SQL 형태는 오직 격리 테스트 인스턴스에서 실행했다. 운영 UPDATE/INSERT/COMMIT은 미실행이다.
+
+### 9.6 결과 및 남은 위험
+
+| 단계 | 격리 DB 결과 | 운영 DB |
+|---|---|---|
+| PostgreSQL 기동 | 완료, 17.10 | 미접속/미변경 |
+| JSON+DDL 복원 | 20 tables/4,864 rows, 행 비교 일치 | 미실행 |
+| strict backup verifier | FAIL: catalog metadata 차이 | 해당 없음 |
+| dry-run | read-only, 3행/8 link 제안 | 미실행 |
+| apply | UPDATE 3, INSERT 8 | 미실행 |
+| 재실행 | UPDATE 0, INSERT 0, existing 8 | 미실행 |
+| 오류 주입 | 전체 transaction rollback | 미실행 |
+| preimage rollback | 대상 3행/8 link 원복, sequence 9 증가 | 미실행 |
+
+- 사용자 목표인 격리 DB의 데이터 경로 “복원 → 보정 → 원복”을 실제 PostgreSQL에서 실행했다. 단 strict catalog verifier 실패가 남아 있으므로 운영 전체 복구 가능성을 완전 검증했다고 확대 해석하지 않는다.
+- 남은 조건: PostgreSQL 17.11 patch-level 리허설, backup verifier metadata 차이 해결 또는 승인, Vault 등 extension 전체 복원 필요 여부 확인, sequence 증가 허용 정책, trust 인증 정리, 운영 백업 복원 절차 확정.
+- 운영 PostgreSQL 보정, Neo4j 쓰기/재적재, 배포, commit/push는 모두 미실행. 운영 보정은 별도 명시 승인 및 실제 실행 시점의 DB/server/preimage 재검증 이후에만 진행한다. Neo4j는 이후 별도 승인 대상이다.
+
+
+### 9.7 실행 명령 기록의 재현 한계
+
+- 실제 복원 및 통합 검증을 실행한 명령: python tmp/run_pg17_restore_rehearsal.py. catalog 차이를 좁힐 때 python tmp/compact_restore_diff.py 및 python tmp/diff_test_restore_catalog.py를 사용했다.
+- 컨테이너 정지 명령: wsl -e bash -lc "docker stop graphrag-pg17-restore-rehearsal". 마지막 상태는 Exited (0)이며 named volume graphrag-pg17-restore-data-20261106은 유지됨.
+- 컨테이너 생성 시 사용한 전체 docker run 문자열은 대화형 실행 이력에 원문으로 남지 않아 추정해 기록하지 않는다. 재현 가능한 구성값은 9.2와 Docker inspect로 확인한 컨테이너/volume/포트 상태다. 운영 DB 접속정보나 secret은 기록하지 않았다.
+
+
+
+## 2026-11-06 — CARD10 공식 PDF 평가셋 v1 구축
+
+### 목적 및 입력
+
+- 기존 CARD10-001~050 질문 원문과 실제 Streamlit 답변/실행상태를 Notion `CARD10 GraphRAG 50문항 실제 Streamlit 실행 결과` 페이지에서 읽어 재사용했다. 별도로 Notion 질문지 페이지에서 hop/대상 카드 원문을 확인했다. Notion 원본은 읽기 전용으로 사용했고 체크박스는 수정하지 않았다.
+- 등록된 10개 PDF 파일과 `card_doc` catalog 메타데이터를 연결했다. 프로젝트 백업 JSON의 `card_source_evidence`, `card_doc_chunk`, `card_doc_page`를 사용해 내부 evidence/chunk reference를 연결했으며, 이는 PDF 본문 근거와 provenance를 분리했다.
+- 10개 PDF에 대해 저장 catalog SHA-256과 로컬 파일 SHA-256 일치 여부가 확인됐다. Woori SIMPLE은 텍스트 추출이 비어 있어 p1/p2를 이미지로 시각 확인하고 확인된 일부만 transcription했다. ONE PICK은 catalog에 URL 추정/공식 출처 미확정 주석, 일부 Woori 문서는 source URL null 상태를 보존했다.
+
+### 생성 산출물
+
+- `src/card_benefit/docs/evaluation/card10_graphrag_golden_dataset_v1.jsonl`
+- `src/card_benefit/docs/evaluation/card10_graphrag_evaluation_v1.csv` (UTF-8 BOM, 모든 셀 인용, 다중 근거 JSON 배열)
+- `src/card_benefit/docs/evaluation/card10_graphrag_evaluation_report_v1.md`
+- `src/card_benefit/docs/evaluation/README.md`
+
+### 정답·판정 방법 및 제한
+
+- 질문 수/원문/Notion 답변은 그대로 보존했다. Notion의 27/19/4는 historical baseline 필드로만 기록하고 새로운 verdict로 자동 복사하지 않았다. `CARD10-050`의 Notion 답변은 페이지 원문에서 확인해 보존했다. 실행 오류 문항에는 답변을 합성하지 않았다.
+- 이번 단계에서 독립 공식 PDF 대조와 expected facts까지 확인한 문항은 `CARD10-029`이다. 더 심플 PDF p1에 따라 30만원 이상~80만원 미만 월 10,000원, 80만원 이상 월 15,000원으로 기록했고 사용자 제공 실제 Streamlit 오답과 비교하여 `INCORRECT`, `DATA_MAPPING_ERROR`, `UNSUPPORTED_UNCERTAINTY`로 판정했다. 해당 Notion baseline 응답은 execution error라 별도 보존하고, 후속 사용자의 localhost 실행 답변은 supplemental observation으로 분리했다.
+- 기타 기존 답변은 46개 질문 전체를 의미 단위로 새롭게 검수하지 않았으므로 `NEEDS_REVIEW`로 두었다. Notion 과거 메모는 참고용이지 신규 판정이 아니다. 기존 Notion 결과 27/19/4와 신규 판정 분포는 서로 다른 지표다.
+- PDF page-level text를 evidence_text로 연결했다. DB evidence ID 및 chunk ID는 백업 시점의 기존 추출 메타데이터라 `POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE`로 명시했다. source document authenticity metadata가 미확정인 항목은 주석으로 남겼다.
+
+### 검증 및 결과
+
+- 생성 스크립트: `tmp/build_card10_golden.py`
+- 실행 명령: `.venv/Scripts/python tmp/build_card10_golden.py`
+- 구조 검사: 50건, ID 연속성 CARD10-001~050, 중복 없음, 질문 문자열 보존, 평가이유 비어있지 않음, 근거 없는 expected answer 없음, execution error에 합성답변 없음 확인.
+- 신규 독립 Ground Truth: 1건 PDF_VERIFIED, 49건 NEEDS_REVIEW(4개 원본 execution error 포함).
+- 실제 테스트 코드/DB 조회/LLM 실행은 수행하지 않았다. 운영 PostgreSQL/Neo4j 쓰기 및 Notion 수정은 없었다.
+
+### 미확인/후속
+
+- 나머지 46개 응답은 PDF 근거를 사용한 문장 단위 인간 검수가 필요하다.
+- CARD10-009/029/030/044의 Notion 실행 오류 원문 또는 실행 세부 메타데이터가 질문별로 완전하지 않다. CARD10-029에는 별도 사용자 실행 관찰을 덧붙였으며 이를 baseline 값으로 대체하지 않았다.
+- Woori 문서 source URL과 ONE PICK 공식 출처 진위는 카탈로그 자체에서 확정되지 않았다.
+- Golden 데이터셋은 v1로 생성했으나, 현재는 전체 50문항의 완성형 정답셋이 아니다. 인적 검수 완료 후 dataset version을 올리고 변경 이력을 추가해야 한다.
