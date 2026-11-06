@@ -312,23 +312,47 @@ PostgreSQL은 단순히 카드 혜택만 저장하는 데이터베이스가 아�
 - `src/card_benefit/docs/guide/SCHEMA_DEEP_DIVE_POSTGRESQL_NEO4J.md`
 ---
 
-## 슬라이드 15/17 — Pydantic 모델 스키마 기반 LLM 추출
+## 슬라이드 15/17 — PostgreSQL 원장 기반 Neo4j 그래프 구성
 
 **구분:** 기술 구현 02  
-**제목:** Pydantic 모델 스키마 기반 LLM 추출
+**제목:** PostgreSQL 원장 기반 Neo4j 그래프 구성
 
-**추출 구조**  
-`PDF 페이지 텍스트·이미지 → LLM → PageExtraction`
+**변환 흐름**  
+`PostgreSQL 원장 → 테이블·키·참조 관계 매핑 → Neo4j 노드·관계 적재 → 원장 대조 검증`
 
-**추출 모델의 주요 구성**
-- `BenefitItem` · 혜택
-- `RuleItem` · 규칙
-- `ConditionItem` · 조건
-- `LimitItem` · 한도
-- `EvidenceQuote` · 원문 근거
+| 항목 | PPT 적용 문구 |
+|---|---|
+| 원장 구조 확인 | PostgreSQL 테이블·PK·참조 컬럼을 기준으로 변환 구조 정의 |
+| 노드·관계 구성 | 상품·혜택·문서 등을 노드로, 연결 테이블과 참조 관계를 그래프 관계로 변환 |
+| 원본 정보 보존 | 원본 키·행 정보·혜택 규칙 JSON을 보존하고 기존 임베딩 재사용 |
+| 적재 후 검증 | PostgreSQL 원장과 Neo4j의 노드·관계·속성을 대조 |
 
-**하단 메시지**  
-strict JSON Schema로 출력 지정 → Pydantic `model_validate`로 형식 검증
+**하단 핵심 메시지**  
+독립적인 업무 그래프 모델을 새로 설계하기보다, 기존 PostgreSQL 원장을 검색용 그래프로 변환
+
+**발표 설명 초안**
+
+이번 프로젝트는 처음부터 Neo4j 전용 그래프 모델을 따로 설계한 방식은 아닙니다. PostgreSQL에 문서, 카드 상품, 혜택, 원문 근거를 관리하는 원장을 먼저 구축했습니다.
+
+그 원장의 테이블과 키, 실제 참조 컬럼을 기준으로 Neo4j 노드와 관계를 만들었습니다. 특히 상품 혜택의 규칙과 조건은 별도 그래프 노드로 모두 쪼개지 않고, PostgreSQL의 JSON 데이터를 원본 그대로 보존했습니다. 검색에는 원장에 저장된 임베딩도 재사용했습니다.
+
+이 변환·적재 과정에는 LLM을 사용하지 않았습니다. Python 매핑 코드와 Cypher 적재 로직으로 처리하고, 적재 후에는 PostgreSQL과 Neo4j의 데이터가 일치하는지 검증했습니다.
+
+**용어·구현 기준 참고**
+
+- **PDF 추출과 구분:** PDF의 혜택·조건 구조화 단계에서는 LLM과 Pydantic `PageExtraction`을 사용했지만, **PostgreSQL → Neo4j 적재 단계에는 LLM을 사용하지 않았음**.
+- **그래프 스키마가 없는 것은 아님:** 노드 라벨·관계 유형·제약조건·인덱스는 존재함. 별도 도메인 그래프 모델을 완전히 재설계하지 않았다는 의미임.
+- **FK 주의:** PostgreSQL 원장에는 선언된 FK 제약조건이 없으므로, 연결은 실제 참조 컬럼과 대상 PK를 대조한 명시적 매핑임.
+- **규칙 구조:** `card_product_item`의 `rule_list`, `item_cond_expr` 등은 JSON으로 보존했고, RULE·COND 등 별도 파생 노드를 만들지 않았음.
+- **2026-11-06 재구축 검증 기록:** Neo4j 4,359노드·8,648관계, 원장 대조에서 누락·초과·속성 차이 0. 발표 시점 최신 상태는 별도 확인 필요.
+
+**확인 근거**
+
+- `src/card_benefit/payment_card/db_pipeline/neo4j_relational_model.py`
+- `src/card_benefit/payment_card/db_pipeline/neo4j_load_draft.py`
+- `src/card_benefit/docs/guide/POSTGRESQL_TO_NEO4J_SCHEMA_MAPPING.md`
+- `src/card_benefit/docs/guide/POSTGRESQL_NEO4J_REBUILD_GUIDE.md`
+- `src/card_benefit/payment_card/db_pipeline/extraction_service.py`
 
 ---
 
@@ -395,7 +419,9 @@ GraphRAG로 공식 근거를 제공하고, 비교·분석과 상품 개선 검�
 
 - **13페이지 반영:** 원장(PostgreSQL) → 검색 데이터(Neo4j) → 질의 로그(PostgreSQL) → 오류 원인 추적 관점으로 문구를 수정함.
 - **14페이지 반영:** PostgreSQL의 원문·AI 이력·상품정보·공식 근거 연결 구조를 실제 테이블에 맞게 수정함. `card_source_evidence`와 `card_evidence_link`의 역할을 구분함.
+- **15페이지 반영:** Pydantic/LLM 추출 설명 대신, 실제 PostgreSQL 원장 → Neo4j의 규칙 기반 변환·적재·검증 과정으로 수정함. LLM은 PDF 추출 단계에서만 사용했음을 구분.
 - **16페이지:** 'Neo4j 단일 검색은 목표 구조'라는 표현을 실제 구현/검증 결과에 맞게 구체화할 필요
+- **16페이지 추가 검토:** 기존의 '모델 스키마 출력' 제목은 변경된 15페이지와 연결이 약하므로, 다음 수정 시 '원장·그래프 정합성 및 근거 검증' 방향으로 조정 권장.
 - 구현 완료, 테스트 통과, 발견된 오류, 미완료 기능을 한 문장으로 묶지 말고 구분하는 것이 좋음
 
 ## 우선 검토 3 — 활용 방안과 실제 구현 구분
