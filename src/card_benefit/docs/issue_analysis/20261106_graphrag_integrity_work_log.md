@@ -724,3 +724,10 @@ card.terms는 271·273에서 빈 결과에도 약 96 ms 왕복이 있었지만 2
 - 자동 테스트: 관련 pytest 묶음 226 passed, 12 live tests deselected; live Neo4j unittest 12 passed. StreamlitTests 전체는 이전 실행에서 16 passed, 이후 해당 발견 실패 3건을 수정해 개별 재검증 3 passed; 최종 관련 pytest 묶음에 포함되어 226 passed에 반영됐다.
 - Streamlit 실질 경로: `APP_DB_LOG_ENABLED=false python .tmp_live_ui.py` 통과. 실제 pipeline 질문 측정: `python .tmp_e2e_core.py`; 비교: `python .tmp_e2e_compare.py`. 이 임시 실행 파일들은 커밋 대상이 아니다.
 - PostgreSQL 원장, app_log 행, Neo4j 데이터·인덱스는 수정/재적재하지 않았다. Git push 전 최종 테스트 후 파일 목록·diff·민감정보 검사를 수행한다.
+
+### Commit 및 Push 결과
+
+- 코드 및 테스트 변경 commit: `ef72bae3e9b0ba04f91f5f9f7e0456cc9f916252` (`fix: align GraphRAG queries with rebuilt Neo4j schema and optimize retrieval`).
+- 푸시 전 `origin/main` 비교: 본 브랜치 1 commit 앞서, 뒤처짐 0; 충돌 없음.
+- `git push origin main`: 성공 (`9ecbbe8..ef72bae`, `main -> main`).
+- 스테이지된 11개 파일에서 비밀번호/토큰 형태 문자열 검사 매칭 없음; 임시 파일 및 인증 파일 미포함.
