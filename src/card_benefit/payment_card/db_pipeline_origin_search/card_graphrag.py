@@ -202,11 +202,13 @@ INTERPRET_PROMPT = """카드 혜택 질문의 유형과 대상 혜택을 고른�
 규칙:
 - 카드 이름은 혜택 이름이 아니다. 카드 이름에 든 낱말만으로 혜택을 고르지 않는다.
 - 후보의 rule_text와 limit_text는 혜택 이름을 다르게 표현한 원문 설명일 수 있으므로 질문의 조건·한도 표현과 함께 비교한다.
+- condition_text는 신규 그래프의 원문 조건이다. 혜택명만으로 구분되지 않아도 이 조건과 targets가 질문 주제에 맞으면 후보로 고려한다.
 - 질문에 카드와 혜택 주제가 명시되고 해당 카드 후보의 rule_text 또는 limit_text가 이를 직접 뒷받침하면 그 후보를 선택한다.
 - 질문과 직접 관련된 혜택만 고른다. 관련이 불확실한 혜택을 덧붙이지 않는다.
 - 카드의 혜택 전체를 명시적으로 물을 때만 모든 혜택을 고른다.
 - 결제 금액 기준을 묻는 질문은 payment_min_amounts가 있는 혜택만 고른다.
 - 비교 질문은 비교 대상 혜택을 모두 고른다.
+- 질문이 여러 영역(예: 통신요금과 구독)을 명시하면 각 카드에서 후보 목록에 있는 해당 영역의 혜택을 모두 고른다.
 - 후보를 좁힐 수 없으면 benefit_ids를 비우고, ambiguity에 무엇이 불명확한지 쓴다.
 - 후보가 여럿이라 대상이 정해지지 않으면 후보를 고르고, ambiguity에 무엇이 불명확한지 쓴다.
 - type이 ANNUAL_FEE인 항목은 그 카드의 연회비다. 연회비를 물으면 질문에 나온 카드의 ANNUAL_FEE 항목을 고른다.
@@ -483,12 +485,18 @@ def answer_evidence_rows(evidence: list[dict], benefits: list[dict], per_benefit
                                 if isinstance(text, str))
         name_terms = {term.lower() for text in source_terms for term in re.findall(r"[가-힣A-Za-z0-9]+", text or "")
                       if len(term) > 1}
+        table_quotes = [tier.get("table_quote") for tier in benefit.get("limit_tiers") or []
+                        if isinstance(tier, dict) and tier.get("table_quote")]
         def score(row: dict) -> tuple[int, int, str]:
             quote = row.get("quote") or ""
             lowered = quote.lower()
             name_hits = sum(term in lowered for term in name_terms)
-            topic_hits = sum(term in lowered for term in ("전월 실적", "이용실적", "할인한도", "적립한도", "제외", "적용", "할인", "적립"))
-            return (name_hits * 4 + topic_hits, len(quote), row.get("evidence_id") or "")
+            topic_hits = sum(term in lowered for term in ("?? ??", "????", "????", "????", "????", "????", "??", "??", "??", "??"))
+            normalized_quote = " ".join(quote.split()).casefold()
+            table_hits = sum(" ".join(table.split()).casefold() in normalized_quote
+                             or normalized_quote in " ".join(table.split()).casefold()
+                             for table in table_quotes)
+            return (table_hits * 100 + name_hits * 4 + topic_hits, len(quote), row.get("evidence_id") or "")
         required = {evidence_id for tier in benefit.get("limit_tiers") or []
                     for evidence_id in tier.get("evidence_ids") or []}
         top = [row for row in candidates if row.get("evidence_id") in required]
@@ -798,6 +806,38 @@ def resolve_fee_choice(question: str, chosen: list[str], by_id: dict, catalog: l
                 continue
         result.append(item)
     return list(dict.fromkeys(result)), warnings
+
+
+def _requested_benefit_topics(question: str) -> dict[str, tuple[str, ...]]:
+    """Identify broad benefit topics explicitly named by the user for comparison coverage."""
+    topics = {}
+    if re.search(r"통신|휴대전화|휴대폰|이동통신", question, re.I):
+        topics["telecom"] = ("통신", "휴대전화", "휴대폰", "이동통신", "skt", "kt", "lg u+")
+    if re.search(r"구독|정기결제|정기 납부|정기납부", question, re.I):
+        topics["subscription"] = ("구독", "정기결제", "정기 납부", "정기납부", "자동납부")
+    return topics
+
+
+def _card_is_named(question: str, card_name: str) -> bool:
+    """Match a candidate card to a named card using its distinctive name tokens."""
+    ignored = {"카드", "하나", "우리", "신용", "체크", "더"}
+    tokens = [token.casefold() for token in re.findall(r"[0-9A-Za-z가-힣]+", card_name or "")
+              if len(token) > 1 and token.casefold() not in ignored]
+    folded_question = question.casefold()
+    return bool(tokens) and all(token in folded_question for token in tokens)
+
+
+def _candidate_matches_topic(row: dict, topic: str) -> bool:
+    """Match only explicit catalog facts; no product identifiers or card names are hard-coded."""
+    text = " ".join(str(value) for value in (
+        row.get("name"), row.get("rule_text"), row.get("limit_text"),
+        row.get("condition_text"), *(row.get("targets") or [])) if value).casefold()
+    if topic == "telecom":
+        carrier_or_phone = any(term in text for term in ("통신", "휴대전화", "휴대폰", "이동통신", "skt", "kt", "lg u+"))
+        return carrier_or_phone and any(term in text for term in ("요금", "자동납부", "청구", "skt", "kt", "lg u+"))
+    if topic == "subscription":
+        return any(term in text for term in ("구독", "정기결제", "정기 납부", "정기납부"))
+    return False
 # endregion
 
 
@@ -940,7 +980,7 @@ def limit_tier_view(item_data) -> list[dict]:
         return []
     own = tiers.get("own") or {}
     out = []
-    for tier in tiers["tiers"]:
+    for tier_index, tier in enumerate(tiers["tiers"]):
         key = tier.get("tier_key")
         cap = (own.get("caps") or {}).get(key) or {}
         if cap.get("amount") is None or tier.get("min_amt") is None:
@@ -951,7 +991,8 @@ def limit_tier_view(item_data) -> list[dict]:
                     "shared": [{"column": group.get("column"), "raw": ((group.get("caps") or {}).get(key) or {}).get("raw"),
                                 "amount": ((group.get("caps") or {}).get(key) or {}).get("amount"),
                                 "members": group.get("member_benefit_nms") or []}
-                               for group in tiers.get("shared") or [] if ((group.get("caps") or {}).get(key) or {}).get("amount") is not None]})
+                               for group in tiers.get("shared") or [] if ((group.get("caps") or {}).get(key) or {}).get("amount") is not None],
+                    **({"table_quote": tiers.get("table_quote")} if tier_index == 0 and tiers.get("table_quote") else {})})
     return out
 
 
@@ -1065,18 +1106,79 @@ def _evidence_ids(detail: dict, matches) -> list[str]:
     return list(dict.fromkeys(source(row["evidence"])["evidence_id"] for row in detail["evidence"] if matches(row)))
 
 
-def rule_selection_open(rules: list[dict]) -> bool:
-    """규칙이 둘 이상이고, 한 결제에 어느 규칙이 적용되는지 대상만으로 정해지지 않으면 True.
+def _rule_parts(row: dict) -> tuple[dict, set[str]]:
+    rule = row.get("rule") if isinstance(row.get("rule"), dict) else row
+    targets = row.get("targets") or [item.get("target_nm") for item in rule.get("target_list") or []
+                                       if isinstance(item, dict) and item.get("target_nm")]
+    return source(rule), set(target for target in targets if target)
 
-    규칙마다 적용 대상(targets)이 있고 서로 겹치지 않으면(예: 영역·가맹점 묶음별 규칙) 대상이 규칙을 정하므로 미확정이 아니다.
-    대상이 없는 규칙이 있거나 같은 대상이 여러 규칙에 있으면(예: 결제 금액 구간별 규칙) 기존처럼 미확정이다.
-    """
-    if len(rules) < 2:
+
+def _rule_ranges(rule: dict, rule_key: str, conditions: list[dict] | None) -> list[tuple[str | None, float, float | None]]:
+    atoms = []
+    expression = rule.get("cond_expr") or {}
+    for branch in expression.get("branches") or []:
+        atoms.extend(branch.get("atoms") or [])
+    for row in conditions or []:
+        if row.get("rule_key", row.get("scope")) != rule_key:
+            continue
+        atom = row.get("atom")
+        if atom is not None:
+            atoms.append(source(atom))
+        else:
+            for branch in row.get("branches") or []:
+                atoms.extend(branch.get("atoms") or [])
+    ranges = []
+    for atom in atoms:
+        if atom.get("cond_type_cd", atom.get("type")) != "SPEND_REQ":
+            continue
+        lower = atom.get("cond_min_amt", atom.get("min_amt"))
+        upper = atom.get("cond_max_amt_excl", atom.get("max_amt"))
+        if lower is None:
+            continue
+        try:
+            ranges.append((atom.get("cond_basis_cd", atom.get("basis")), float(lower),
+                           float(upper) if upper is not None else None))
+        except (TypeError, ValueError):
+            continue
+    return ranges
+
+
+def _ranges_are_disjoint(left: list[tuple], right: list[tuple]) -> bool:
+    """Only prove disjointness for numeric bands on the same explicit condition basis."""
+    if not left or not right:
         return False
-    targets = [set(rule.get("targets") or []) for rule in rules]
-    if not all(targets):
-        return True
-    return sum(len(names) for names in targets) != len(set().union(*targets))
+    return all(a[0] == b[0] and ((a[2] is not None and a[2] <= b[1]) or
+                                 (b[2] is not None and b[2] <= a[1]))
+               for a in left for b in right)
+
+
+def rule_selection_open(rules: list[dict], conditions: list[dict] | None = None) -> bool:
+    """Mark overlapping targets open unless their explicit spend bands are disjoint."""
+    normalized = []
+    for row in rules:
+        rule, targets = _rule_parts(row)
+        key = rule.get("rule_key") or row.get("rule_key")
+        ranges = _rule_ranges(rule, key, conditions) if key else []
+        has_payout = rule.get("value_num", rule.get("value")) is not None
+        has_condition_data = bool((rule.get("cond_expr") or {}).get("branches")) or any(
+            row.get("rule_key", row.get("scope")) == key for row in conditions or [])
+        # Condition-only ETC/exclusion notes do not represent alternative payout branches.
+        # Unknown legacy branches without condition data remain unresolved for safety.
+        if targets and not has_payout and not ranges and has_condition_data:
+            continue
+        normalized.append((targets, ranges))
+    if len(normalized) < 2:
+        return False
+    for index, (left_targets, left_ranges) in enumerate(normalized):
+        for right_targets, right_ranges in normalized[index + 1:]:
+            if left_targets and right_targets and not left_targets.intersection(right_targets):
+                continue
+            if (left_ranges and right_ranges
+                    and all(item[0] == "PREV_MONTH_SPEND" for item in [*left_ranges, *right_ranges])
+                    and _ranges_are_disjoint(left_ranges, right_ranges)):
+                continue
+            return True
+    return False
 
 
 def unresolved_items(details: list[dict]) -> list[dict]:
@@ -1084,13 +1186,15 @@ def unresolved_items(details: list[dict]) -> list[dict]:
     found = [{"kind": "DATA", "text": DATA_STATUS_NOTICE}]
     for detail in details:
         benefit = source(detail["context"]["benefit"])
-        name = benefit.get("bnft_nm")
+        is_item = benefit.get("card_product_item_id") is not None
+        name = benefit.get("item_nm") if is_item else benefit.get("bnft_nm")
         if detail["context"].get("common"):
             found.append({"kind": "DATA", "text": f"{name}: 공통 혜택에는 근거 직접 연결이 없어 동일성이 확인된 기존 행의 근거만 표시합니다."})
         keys = [item["rule"].get("rule_key") for item in detail.get("rules", [])]
-        if rule_selection_open(detail["rules"]):      # 여러 규칙의 적용 방식(중첩·택일)은 원문에 없으면 미확정으로 알린다
+        if rule_selection_open(detail["rules"], detail.get("conditions")):      # 여러 규칙의 적용 방식(중첩·택일)은 원문에 없으면 미확정으로 알린다
             found.append({"kind": "CONDITION", "text": f"{name}: {TIER_OPEN}", "topic": TIER_NAME, "benefit": name, "open": TIER_OPEN,
-                          "confirmed": benefit.get("bnft_rule_txt"), "intents": TIER_INTENTS, "words": TIER_WORDS,
+                          "confirmed": (benefit.get("item_rule_txt") if is_item else benefit.get("bnft_rule_txt")),
+                          "intents": TIER_INTENTS, "words": TIER_WORDS,
                           "evidence_ids": _evidence_ids(detail, lambda row, keys=keys: row.get("rule_key") in keys)})
         for row in detail.get("conditions", []):
             atom = source(row["atom"])
@@ -1099,7 +1203,7 @@ def unresolved_items(details: list[dict]) -> list[dict]:
             if key in UNRESOLVED_ATOMS:
                 found.append({"kind": "REVIEW", "text": UNRESOLVED_ATOMS[key], "topic": raw})
             elif atom.get("cond_type_cd") == RAW_ONLY_COND_TYPE and raw:
-                rule_text = benefit.get("bnft_rule_txt") or ""
+                rule_text = (benefit.get("item_rule_txt") if is_item else benefit.get("bnft_rule_txt")) or ""
                 found.append({"kind": "CONDITION", "text": f"'{raw}'의 적용 범위는 아직 확정되지 않았습니다.", "topic": raw, "benefit": name,
                               "open": f"조회된 근거에는 '{raw}'라고만 표기되어 있고, 구체적인 적용 기준은 확인되지 않습니다.",
                               "confirmed": rule_text if raw in rule_text else raw, "intents": RAW_ONLY_INTENTS,
@@ -1155,7 +1259,8 @@ def split_unresolved(details: list[dict], question: str, intent: str, amount: in
         elif item["kind"] == "CONDITION" and affects_question(item, question, intent, amount):
             merged = conditions.setdefault((item["topic"], item["open"]), {
                 "topic": item["topic"], "benefits": [], "confirmed": item["confirmed"], "open": item["open"], "evidence_ids": []})
-            merged["benefits"] = list(dict.fromkeys([*merged["benefits"], item["benefit"]]))
+            if item.get("benefit"):
+                merged["benefits"] = list(dict.fromkeys([*merged["benefits"], item["benefit"]]))
             merged["evidence_ids"] = list(dict.fromkeys([*merged["evidence_ids"], *item["evidence_ids"]]))
         else:
             others.append(item["text"])
@@ -1214,7 +1319,7 @@ def rule_conflicts(benefits: list[dict], amount: int | None) -> list[dict]:
     """규칙이 둘 이상인 혜택의 금액 구간과, 결제 금액에 함께 해당하는 규칙을 찾는다(보상액은 계산하지 않는다)."""
     conflicts = []
     for benefit in benefits:
-        if not rule_selection_open(benefit["rules"]):
+        if not rule_selection_open(benefit["rules"], benefit.get("conditions")):
             continue
         spends = {group["scope"]: atom for group in benefit["conditions"] for branch in group["branches"]
                   for atom in branch["atoms"] if atom["type"] == "SPEND_REQ" and atom["min_amt"] is not None}
@@ -2017,7 +2122,8 @@ class CardGraphRAG:
                                  merged=outcome.merged_duplicates or None, elapsed_ms=outcome.elapsed_ms)
             update["candidate_search"] = {
                 "mode": outcome.mode, "elapsed_ms": outcome.elapsed_ms, "merged_duplicates": outcome.merged_duplicates,
-                "hits": [{"source": hit.source, "bnft_nm": hit.bnft_nm, "similarity": hit.similarity,
+                "hits": [{"source": hit.source, "key": hit.key, "benefit_id": hit.benefit_id,
+                          "id": entity_ref(hit.key, hit.benefit_id), "bnft_nm": hit.bnft_nm, "similarity": hit.similarity,
                           "cards": [card["product_nm"] for card in hit.cards], "applied": hit.applied,
                           "graph_targets": hit.graph_targets, "target_terms": hit.target_terms, "excluded_terms": hit.excluded_terms}
                          for hit in outcome.hits]}
@@ -2035,8 +2141,11 @@ class CardGraphRAG:
         catalog = [{**row, "id": entity_ref(row["key"], row["id"])} for row in catalog]
         rows = [{"id": row["id"], "name": row["name"], "card": row["card"], "type": row.get("item_type", "BENEFIT"),
                  "targets": row["targets"], "payment_min_amounts": row.get("payment_min_amounts", []),
-                 **({"rule_text": row["item_rule_txt"]} if row.get("item_rule_txt") else {}),
-                 **({"limit_text": row["item_limit_txt"]} if row.get("item_limit_txt") else {})} for row in catalog]
+                 **({"condition_text": row["condition_text"]} if row.get("condition_text") else {}),
+                 **({"rule_text": row.get("item_rule_txt") or row.get("bnft_rule_txt")}
+                    if row.get("item_rule_txt") or row.get("bnft_rule_txt") else {}),
+                 **({"limit_text": row.get("item_limit_txt") or row.get("bnft_limit_txt")}
+                    if row.get("item_limit_txt") or row.get("bnft_limit_txt") else {})} for row in catalog]
         update["catalog"] = rows
         prompt = INTERPRET_PROMPT.format(catalog=json.dumps(rows, ensure_ascii=False), question=question)
         try:
@@ -2052,6 +2161,42 @@ class CardGraphRAG:
         chosen = list(dict.fromkeys(item for item in parsed.benefit_ids if item in by_id))
         dropped = [item for item in parsed.benefit_ids if item not in by_id]
         warnings = [f"혜택 목록에 없는 ID를 버렸습니다: {dropped}"] if dropped else []
+        requested_topics = _requested_benefit_topics(question) if parsed.intent == "BENEFIT_COMPARE" else {}
+        named_cards = list(dict.fromkeys(row.get("card") for row in catalog
+                                         if row.get("card") and _card_is_named(question, row["card"])))
+        supplemented = []
+        coverage_gaps = []
+        if requested_topics and len(named_cards) >= 2:
+            for card_name in named_cards:
+                for topic in requested_topics:
+                    matches = [row for row in catalog if row.get("card") == card_name
+                               and _candidate_matches_topic(row, topic)]
+                    if not matches:
+                        coverage_gaps.append({"card": card_name, "topic": topic,
+                                              "reason": "hybrid candidate set contains no matching benefit"})
+                    for row in matches:
+                        if row["id"] not in chosen:
+                            chosen.append(row["id"])
+                            supplemented.append(row["id"])
+            if supplemented:
+                warnings.append("??? ?? ??? ?? ??? ?? ??????.")
+            if coverage_gaps:
+                warnings.append("?? ?? ? ?? ???? ?? ??? ?? ?? ??? ????.")
+        selected_ids = list(chosen)
+        if update.get("candidate_search"):
+            hit_ids = [hit["id"] for hit in update["candidate_search"]["hits"]]
+            update["candidate_search"].update({
+                "named_cards": named_cards,
+                "requested_topics": list(requested_topics),
+                "selected_ids": selected_ids,
+                "supplemented_ids": supplemented,
+                "coverage_gaps": coverage_gaps,
+                "unselected_candidate_ids": [item for item in hit_ids if item not in selected_ids],
+            })
+            CARD_LOG.log_summary("CANDIDATE_SELECTION", request_id, candidate_ids=hit_ids,
+                                 selected_ids=selected_ids, supplemented_ids=supplemented,
+                                 omitted_candidate_ids=[item for item in hit_ids if item not in selected_ids],
+                                 requested_topics=list(requested_topics), coverage_gaps=coverage_gaps or None)
         chosen, fee_warnings = resolve_fee_choice(question, chosen, by_id, catalog)
         warnings += fee_warnings
         intent = parsed.intent
@@ -2253,6 +2398,24 @@ class CardGraphRAG:
         CARD_LOG.log_summary("PERF", request_id, phase="validate_answer", elapsed_ms=(perf_counter() - validate_started) * 1000)
         answer, guarded = enforce_exclusions(answer, state.get("exclusions", []), evidence)
         warnings = [*warnings, *guarded]
+        candidate_search = state.get("candidate_search") or {}
+        coverage_gaps = candidate_search.get("coverage_gaps") or []
+        answered_benefits = {point.get("benefit_id") for point in answer.get("points") or [] if point.get("benefit_id")}
+        missing_benefits = sorted(ref for ref in refs if ref not in answered_benefits) if state.get("intent") == "BENEFIT_COMPARE" else []
+        if coverage_gaps:
+            answer["status"] = "PARTIAL" if answer["status"] != "NOT_ANSWERABLE" else answer["status"]
+            warnings.append("?? ?? ?? ? ?? ???? ?? ??? ?? ?? ??? ?? ??? ??????.")
+        if missing_benefits:
+            answer["status"] = "PARTIAL" if answer["status"] != "NOT_ANSWERABLE" else answer["status"]
+            warnings.append(f"?? ???? ??? ?? ? ??? ??? ?? ??: {missing_benefits}")
+        raw_points = [{"benefit_id": point.benefit_id, "text": point.text, "evidence_ids": list(point.evidence_ids)}
+                      for point in parsed.points]
+        diagnostics = {"raw": {"conclusion": parsed.conclusion, "answer_text": parsed.answer_text, "points": raw_points},
+                       "validated": {"status": answer["status"], "conclusion": answer["conclusion"],
+                                     "answer_text": answer["answer_text"], "points": answer["points"]},
+                       "validation_warnings": warnings, "coverage_gaps": coverage_gaps,
+                       "missing_benefit_ids": missing_benefits}
+        update["answer_diagnostics"] = diagnostics
         CARD_LOG.log_summary("ANSWER", request_id, model=self.model, response_model=call["response_model"], llm_elapsed_ms=call.get("elapsed_ms"),
                              evidence_in=len(evidence), context_chars=len(text), status=answer["status"],
                              conflicts=[item["benefit_id"] for item in context["rule_selection_unresolved"]] or None,

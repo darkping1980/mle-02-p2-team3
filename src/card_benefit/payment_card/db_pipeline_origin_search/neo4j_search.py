@@ -166,6 +166,15 @@ def catalog_rows(catalog: list[dict], items: list[dict], commons: list[dict]) ->
         card = source({"source_json": row.pop("card_source")})
         rules = _decode_json(row.pop("rule_list", None), [])
         item_expr = _decode_json(row.pop("item_cond_expr", None), {})
+        conditions = []
+        for _, _, expression in _condition_expressions({"rule_list": rules, "item_cond_expr": item_expr}):
+            for branch in expression.get("branches") or []:
+                for atom in branch.get("atoms") or []:
+                    if not isinstance(atom, dict):
+                        continue
+                    text = atom.get("cond_raw_txt") or atom.get("excl_raw_txt")
+                    if text and text not in conditions:
+                        conditions.append(text)
         row["card"] = card.get("product_nm", "미확인")
         row["card_id"] = card.get("card_id")
         row["issuer"] = card.get("issuer")
@@ -174,6 +183,8 @@ def catalog_rows(catalog: list[dict], items: list[dict], commons: list[dict]) ->
             target.get("target_nm") for rule in rules if isinstance(rule, dict)
             for target in rule.get("target_list") or [] if isinstance(target, dict) and target.get("target_nm")))
         row["payment_min_amounts"] = _payment_minimums(rules, item_expr)
+        # Compact conditions distinguish similar benefit names without returning source JSON.
+        row["condition_text"] = conditions
     for row in items:
         card = source({"source_json": row.pop("card_source")})
         item = source({"source_json": row.pop("item_source"), "item_data": row.pop("item_data", None),

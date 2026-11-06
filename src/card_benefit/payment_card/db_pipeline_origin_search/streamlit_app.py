@@ -266,6 +266,8 @@ def show_outcome(outcome: dict) -> None:
         st.caption(f"질문: {outcome['question']}")
     if answer["status"] == "ERROR":
         st.error(ERROR_TEXT)
+    elif answer["status"] == "PARTIAL":
+        st.warning("일부 혜택이나 조건을 확인하지 못해 부분적으로 안내합니다. 확인된 근거와 미확인 항목을 함께 살펴봐 주세요.")
     elif answer["message"]:
         message = CUSTOMER_MESSAGES.get(answer["message"]) or customer_text(answer["message"])
         if message:
@@ -335,8 +337,11 @@ def show_outcome(outcome: dict) -> None:
         st.caption(f"추정 비용 합계 USD {total:.6f}")
         if outcome.get("candidate_search"):
             st.markdown("**후보 검색 결과** (유사도는 후보 선정에만 사용)")
-            st.dataframe(outcome["candidate_search"]["hits"], hide_index=True)
+            st.json(outcome["candidate_search"], expanded=False)
             st.caption(f"엔진 {outcome['candidate_search'].get('engines')} · {outcome['candidate_search']['elapsed_ms']:.0f} ms")
+        if outcome.get("answer_diagnostics"):
+            st.markdown("**LLM 원본 구조화 응답과 검증 결과** (현재 세션 진단용; 로그 DB에는 저장하지 않음)")
+            st.json(outcome["answer_diagnostics"], expanded=False)
         if outcome.get("retrieval_trace"):
             st.markdown("**혜택별 상세 조회 엔진**")
             st.dataframe(outcome["retrieval_trace"], hide_index=True)
