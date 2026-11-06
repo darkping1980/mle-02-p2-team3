@@ -2084,7 +2084,8 @@ class CardGraphRAG:
                     detail = batch.get(key)
                 else:
                     detail = self.search.get_detail(key, sections)
-                # 그래프의 공통 혜택 근거는 dp_same_as가 있을 때만 있다. 0건이면 같은 공통서비스·혜택 ID의 PostgreSQL 근거만 읽는다.
+                # N 경로의 공통 혜택 Evidence는 dp_supported_by로 적재된 exact source lineage를 사용한다.
+                # PostgreSQL fallback은 구형 비교 경로가 그래프 Evidence를 갖지 못했을 때만 사용한다.
                 fallback = postgresql_common_key(key) if detail is not None and "evidence" in sections and not detail["evidence"] else None
                 if fallback and self.benefit_search is not None and getattr(self.benefit_search, "engine", None) != "neo4j":
                     original = self.benefit_search.get_detail(fallback, ("evidence",))

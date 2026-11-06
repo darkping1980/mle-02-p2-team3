@@ -26,21 +26,21 @@ MATCH (p:dp_card_product)-[:dp_has_item]->(i:dp_card_product_item {key:$key})
 OPTIONAL MATCH (i)-[l:dp_supported_by]->(e:dp_card_source_evidence)
 OPTIONAL MATCH (e)-[:dp_in_chunk]->(chunk:dp_card_doc_chunk)-[:dp_on_page]->(page:dp_card_doc_page)-[:dp_in_document]->(doc:dp_card_doc)
 RETURN labels(i) AS owner_labels,properties(i) AS owner,labels(e) AS evidence_labels,properties(l) AS link,
-       properties(e) AS evidence,properties(chunk) AS chunk,properties(page) AS page,properties(doc) AS document
+       l.rule_key AS rule_key,properties(e) AS evidence,properties(chunk) AS chunk,properties(page) AS page,properties(doc) AS document
 ORDER BY e.page_no,e.evidence_id;
 
 // name: list_benefits
 MATCH (b:dp_card_product_item)
 WHERE b.item_type_cd='BENEFIT' AND toLower(coalesce(b.item_nm,'')) CONTAINS toLower($keyword)
 OPTIONAL MATCH (p:dp_card_product)-[:dp_has_item]->(b)
-RETURN b.key AS key,b.item_nm AS name,b.card_product_item_id AS id,b.item_cd AS bnft_cd,
+RETURN b.key AS key,b.item_nm AS name,b.card_product_item_id AS id,b.verification_status_cd AS status,b.item_cd AS bnft_cd,
        b.item_subtype_cd AS bnft_type_cd,b.search_text AS search_text,b.item_origin_cd AS origin_cd,
        p.card_id AS card_id,p.product_nm AS product_nm,'CARD_BNFT' AS source
 UNION ALL
 MATCH (b:dp_card_common_bnft)
 WHERE toLower(coalesce(b.bnft_nm,'')) CONTAINS toLower($keyword)
 OPTIONAL MATCH (b)-[:dp_applies_to]->(p:dp_card_product)
-RETURN b.key AS key,b.bnft_nm AS name,b.card_common_bnft_id AS id,b.bnft_cd AS bnft_cd,
+RETURN b.key AS key,b.bnft_nm AS name,b.card_common_bnft_id AS id,b.verification_status_cd AS status,b.bnft_cd AS bnft_cd,
        b.bnft_type_cd AS bnft_type_cd,b.search_text AS search_text,'COMMON' AS origin_cd,
        p.card_id AS card_id,p.product_nm AS product_nm,'CARD_COMMON_BNFT' AS source
 ORDER BY name,key;

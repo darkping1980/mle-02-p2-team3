@@ -87,3 +87,14 @@ MERGE (p)-[:dp_has_item {key:$relationship_key}]->(i);
 ```
 
 실제 실행은 `neo4j_load_draft.py`가 테이블별 제약조건과 인덱스를 만들고 노드·관계 행을 일괄 적재합니다. 각 소스 PK와 원본 행은 `neo4j_validate.py`로 비교합니다.
+
+## 실제 재구축 결과 (2026-11-06)
+
+- 원천 PostgreSQL `postgres` / PostgreSQL 17.11: 기본 테이블 20개, 뷰 8개, 선언 FK 0개. 실행 로그 테이블 2개를 제외한 18개 테이블, 4,359행을 그래프 변환 대상으로 사용했습니다.
+- 결과 그래프: 4,359 노드(공통 `dp_node` 포함 테이블별 14 Label), 8,648 관계, 18 Relationship 종류.
+- 제약조건 15개, 인덱스 19개. 모든 인덱스가 ONLINE이며, Fulltext 검색 인덱스와 기존 1,536차원 cosine 벡터 인덱스가 준비됐습니다.
+- `neo4j_validate.py` 대조 결과 노드·관계·속성의 누락/초과/차이 0, 외부 프로젝트 관계 0으로 전체 통과했습니다.
+- 로컬 회귀 테스트 65 passed, 3 skipped. 실제 Neo4j 읽기 통합 테스트 25 passed.
+- 5개 고립 `card_ai_run`은 `run_target_card_doc_id`가 NULL 또는 미매칭인 원장 행입니다. 임의로 문서 관계를 생성하지 않고 원본 노드로 보존했습니다.
+
+예전 그래프 backup JSON은 `tmp/neo4j_dp_backup_20261106.json.gz`에 보관했습니다(1,635 노드, 2,702 관계). 재구축 방법과 실시간 Streamlit 검증 결과는 `POSTGRESQL_NEO4J_REBUILD_GUIDE.md`에 있습니다.

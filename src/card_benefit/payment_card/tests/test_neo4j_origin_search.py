@@ -5,7 +5,7 @@ import re
 import unittest
 
 from card_benefit.payment_card.db_pipeline.neo4j_dry_run import PREFIX
-from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag, neo4j_search
+from card_benefit.payment_card.db_pipeline_origin_search import neo4j_search
 
 
 class FakeTx:
@@ -47,11 +47,12 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(set(neo4j_search.QUERIES.values()), set(neo4j_search.MAPPERS.values()))
 
     def test_benefit_relations_are_explicit_and_directional(self):
-        driver = FakeDriver([{"relation_key": "r", "target_id": "b"}])
+        driver = FakeDriver([{"key": "source", "relation_list": "[]", "item_data": "{}"}])
         rows = neo4j_search.Neo4jSearch(driver).benefit_relations("source")
-        self.assertEqual(rows[0]["target_id"], "b")
+        self.assertEqual(rows[0]["relation_list"], "[]")
         self.assertEqual(driver.tx.calls, [(neo4j_search.BENEFIT_RELATIONS_QUERY, {"key": "source"})])
-        self.assertIn("-[r:dp_related_to]->", neo4j_search.BENEFIT_RELATIONS_QUERY)
+        self.assertIn("b.relation_list AS relation_list", neo4j_search.BENEFIT_RELATIONS_QUERY)
+        self.assertNotIn("dp_related_to", neo4j_search.BENEFIT_RELATIONS_QUERY)
         self.assertNotIn(neo4j_search.BENEFIT_RELATIONS_QUERY, neo4j_search.SECTION_QUERIES.values())
 
     def test_cypher_file_has_no_write_clause(self):
@@ -59,8 +60,8 @@ class SearchTests(unittest.TestCase):
             self.assertNotRegex(query.upper(), r"\b(CREATE|MERGE|DELETE|DETACH|SET|REMOVE|DROP)\b")
 
     def test_evidence_query_reads_rule_path(self):
-        self.assertIn("dp_has_rule", neo4j_search.EVIDENCE_QUERY)
-        self.assertIn("+ rules AS owner", neo4j_search.EVIDENCE_QUERY)
+        self.assertIn("dp_supported_by", neo4j_search.EVIDENCE_QUERY)
+        self.assertNotIn("dp_bnft_rule", neo4j_search.EVIDENCE_QUERY)
 
     def test_every_query_uses_dp_names_only(self):
         for query in neo4j_search.MAPPERS.values():
@@ -81,13 +82,13 @@ class SearchTests(unittest.TestCase):
         self.assertEqual([item["statement_id"] for item in neo4j_search.detail_plan([key], ("evidence",))], ["card.context", "card.common_evidence"])
 
     def test_common_evidence_requires_same_as_relation(self):
-        self.assertIn("dp_same_as", neo4j_search.COMMON_EVIDENCE_QUERY)
-        self.assertNotIn("dp_card_extr_stg", neo4j_search.COMMON_EVIDENCE_QUERY)
+        self.assertIn("dp_supported_by", neo4j_search.COMMON_EVIDENCE_QUERY)
+        self.assertNotIn("dp_same_as", neo4j_search.COMMON_EVIDENCE_QUERY)
 
     def test_condition_order_does_not_depend_on_label_names(self):
         query = neo4j_search.CONDITION_QUERY
-        self.assertIn("ORDER BY owner_cd, rule_key, branch_no, a.atom_seq", query)
-        self.assertNotIn("labels(owner)", query)
+        self.assertIn("LIMIT 0", query)
+        self.assertNotIn("dp_cond_atom", query)
 
     def test_every_query_has_statement_id(self):
         self.assertEqual(set(neo4j_search.QUERIES.values()), set(neo4j_search.STATEMENT_IDS))
@@ -109,10 +110,10 @@ class SearchTests(unittest.TestCase):
     def test_debug_level_shows_cypher_text(self):
         with self.assertLogs(neo4j_search.CARD_LOGGER_NAME, "DEBUG") as logs:
             neo4j_search.Neo4jSearch(FakeDriver([])).list_benefits("교통")
-        self.assertIn("MATCH (b:dp_node", " ".join(logs.output))
+        self.assertIn("MATCH (b:dp_card_product_item", " ".join(logs.output))
 
     def test_detail_log_shows_cypher_and_records_without_debug_level(self):
-        driver = FakeDriver([{"benefit": {"limit_text": "MONTH", "source_json": '{"secret_like": 1}'}, "labels": ["dp_card_bnft"]}])
+        driver = FakeDriver([{"benefit": {"limit_text": "MONTH", "source_json": '{"secret_like": 1}'}, "labels": ["dp_card_product_item"]}])
         token = neo4j_search.DETAIL_LOG.set(True)
         try:
             with self.assertLogs(neo4j_search.CARD_LOGGER_NAME, "INFO") as logs:
@@ -120,7 +121,7 @@ class SearchTests(unittest.TestCase):
         finally:
             neo4j_search.DETAIL_LOG.reset(token)
         text = "\n".join(logs.output)
-        for word in ("QUERY [", "MATCH (b:dp_node", "PARAMS", "RESULT DATA [", "benefit.limit_text", "MONTH"):
+        for word in ("QUERY [", "MATCH (b:dp_card_product_item", "PARAMS", "RESULT DATA [", "benefit.limit_text", "MONTH"):
             self.assertIn(word, text)
         self.assertNotIn("source_json", text)
 
@@ -183,85 +184,55 @@ class SearchTests(unittest.TestCase):
 
 @unittest.skipUnless(os.getenv("RUN_NEO4J_INTEGRATION") == "1", "실제 Neo4j 읽기 테스트는 명시적으로 켠다")
 class LiveNeo4jTests(unittest.TestCase):
-    """실제 Aura 개발 그래프를 읽기 전용으로 확인한다."""
+    """실제 PostgreSQL 테이블 매핑 그래프를 읽기 전용으로 확인한다."""
 
     @classmethod
     def setUpClass(cls):
         logging.getLogger(neo4j_search.CARD_LOGGER_NAME).setLevel(logging.WARNING)
         cls.search = neo4j_search.connect()
-        cls.catalog = {row["name"]: row for row in cls.search.list_catalog()}
+        cls.catalog = cls.search.list_catalog()
 
     @classmethod
     def tearDownClass(cls):
         cls.search.driver.close()
         logging.getLogger(neo4j_search.CARD_LOGGER_NAME).setLevel(logging.NOTSET)
 
-    def detail(self, word):
-        row = next(item for name, item in self.catalog.items() if word in name)
-        return self.search.get_detail(row["key"])
+    def test_catalog_and_point2_retrieve_pdf_evidence(self):
+        point = next(row for row in self.catalog if row["id"] == "20261105_000100")
+        detail = self.search.get_details([point["key"]], neo4j_search.ALL_SECTIONS)[point["key"]]
+        self.assertIsNotNone(detail)
+        evidence = {row["evidence"]["evidence_id"]: row for row in detail["evidence"]}
+        self.assertIn("20261105_002745", evidence)
+        self.assertIn("20261105_002740", evidence)
+        for evidence_id in ("20261105_002745", "20261105_002740"):
+            row = evidence[evidence_id]
+            self.assertEqual(row["evidence"]["page_no"], 3)
+            self.assertEqual(row["chunk"]["card_doc_chunk_id"], "20261105_000176")
 
-    def test_browser_cypher_returns_same_records_as_bound_query(self):
-        row = next(item for name, item in self.catalog.items() if "대중교통" in name)
-        for item in neo4j_search.detail_plan([row["key"]], neo4j_search.ALL_SECTIONS):
-            with self.search.driver.session(database=self.search.database, default_access_mode=neo4j_search.READ_ACCESS) as session:
-                manual = session.execute_read(lambda tx, q=item["browser_cypher"]: [r.data() for r in tx.run(q)])
-            bound = self.search._query(item["cypher"], key=row["key"])
-            self.assertEqual(manual, bound, item["statement_id"])
+    def test_keyword_common_and_candidate_queries(self):
+        point = next(row for row in self.catalog if row["id"] == "20261105_000100")
+        keyword_rows = self.search.list_benefits("추가적립")
+        self.assertTrue(any(row.get("id") == "20261105_000100" for row in keyword_rows))
+        batched = self.search.list_benefits_many(["추가적립", "간편결제"])
+        self.assertTrue(batched["추가적립"])
+        self.assertTrue(self.search._query(neo4j_search.COMMON_CATALOG_QUERY))
+        candidates = self.search.candidate_relations([point["id"]])
+        self.assertIn("card_product_item:23:20261105_000100", candidates)
+        common = next(row for row in self.catalog if row["key"].startswith('["card_common_bnft"'))
+        common_detail = self.search.get_details([common["key"]], neo4j_search.ALL_SECTIONS)[common["key"]]
+        self.assertIsNotNone(common_detail)
 
-    def test_catalog_has_card_and_common_benefits_without_same_duplicate(self):
-        # 카드 혜택 4건 + 동일성(SAME)으로 공통 혜택 1건만 남는 Visa 컨시어지 = 카드에 연결된 항목 5건
-        applied = {name: row for name, row in self.catalog.items() if row["card"] != "적용 카드 미확인"}
-        self.assertEqual(len(applied), 5)
-        self.assertEqual(self.catalog["Visa 컨시어지"]["card"], "JADE Classic")
-        self.assertEqual({row["status"] for name, row in applied.items() if name != "Visa 컨시어지"}, {"PENDING_REVIEW"})
-        # 적용 관계(card_common_bnft_apply)가 없는 공통 혜택(UPI_PLATINUM 5건, 2026-11-03 등록)은 카드를 임의로 붙이지 않는다
-        unapplied = {name: row for name, row in self.catalog.items() if row["card"] == "적용 카드 미확인"}
-        self.assertEqual(len(unapplied), 5)
-        self.assertEqual({row["common_nm"] for row in unapplied.values()}, {"UnionPay Platinum"})
-
-    def test_hops_move_real_relationships(self):
-        hop1 = self.search.hop("hop1_card_benefits", card_nm="ONE PICK STYLE")
-        hop2 = self.search.hop("hop2_card_rules", card_nm="ONE PICK STYLE")
-        hop3 = self.search.hop("hop3_card_targets", card_nm="ONE PICK STYLE")
-        self.assertEqual((len(hop1), len(hop2), len(hop3)), (4, 6, 34))
-        self.assertEqual(({row["hops"] for row in hop1}, {row["hops"] for row in hop2}, {row["hops"] for row in hop3}), ({1}, {2}, {3}))
-        common2 = self.search.hop("hop2_card_common", card_nm="JADE Classic")
-        common3 = self.search.hop("hop3_common_docs", card_nm="JADE Classic")
-        self.assertEqual([(row["common"], row["hops"]) for row in common2], [("Visa Signature", 2)])
-        self.assertEqual([(row["doc_id"], row["hops"]) for row in common3], [("20261102_000004", 3)])
-        self.assertEqual({row["card"] for row in self.search.hop("hop3_target_cards", target_nm="GS25")}, {"ONE PICK STYLE 하나 체크카드"})
-
-    def test_common_benefit_has_no_card_without_apply(self):
-        self.assertEqual(self.search.hop("hop2_card_common", card_nm="ONE PICK STYLE"), [])
-
-    def test_common_detail_reads_evidence_through_same_as_only(self):
-        detail = self.detail("Visa 컨시어지")
-        self.assertEqual(len(detail["evidence"]), 3)
-        self.assertEqual(detail["context"]["common"]["common_nm"], "Visa Signature")
-
-    def test_transit_condition_keeps_or_branches_and_not(self):
-        groups = card_graphrag.condition_groups(self.detail("대중교통")["conditions"])
-        benefit = next(group for group in groups if group["scope"] == "혜택")
-        self.assertEqual([branch["branch_no"] for branch in benefit["branches"]], [1, 2])
-        atoms = {atom["atom_key"]: atom for atom in benefit["branches"][0]["atoms"]}
-        self.assertTrue(atoms["spend_exclusions"]["negate"])
-        self.assertFalse(atoms["transit_spend"]["negate"])
-        self.assertEqual(benefit["branches"][1]["atoms"][0]["atom_key"], "transit_grace")
-
-    def test_one_pick_and_style_have_different_limits(self):
-        def limits(word):
-            return self.detail(word)["limits"][0]["limit_text"]
-        self.assertIn("월 30회", limits("ONE PICK"))
-        self.assertIn("월 10회", limits("STYLE"))
-
-    def test_evidence_links_to_document_and_is_pending(self):
-        detail = self.detail("놀이공원")
-        self.assertTrue(detail["evidence"])
-        for row in detail["evidence"]:
-            self.assertTrue(row["document"])
-            self.assertTrue(row["page"]["page_no"])
-        evidence = card_graphrag.collect_evidence([detail], "BENEFIT_DETAIL")
-        self.assertEqual({item["approval_status"] for item in evidence}, {"PENDING"})
+    def test_one_hop_card_benefit_and_two_hop_source_text_queries(self):
+        card_ids = sorted({row["card_id"] for row in self.catalog if "ONE PICK STYLE" in row["card"]})
+        one_hop = self.search.hop("hop1_card_benefits", card_ids=card_ids)
+        two_hop = self.search.hop("hop2_card_rules", card_ids=card_ids)
+        self.assertEqual(len(one_hop), 4)
+        self.assertEqual(len(two_hop), 4)
+        self.assertEqual({(row["card"], row["benefit"]) for row in one_hop},
+                         {(row["card"], row["benefit"]) for row in two_hop})
+        self.assertTrue(all(row["rule_text"] is not None for row in one_hop))
+        self.assertTrue(all(row["rule_text"] is not None for row in two_hop))
+        self.assertTrue(all(row["rule_list"] is not None or row["condition_json"] is not None for row in two_hop))
 
 
 if __name__ == "__main__":

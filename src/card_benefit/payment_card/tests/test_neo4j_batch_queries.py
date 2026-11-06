@@ -50,10 +50,15 @@ class GeneratedCypherTests(unittest.TestCase):
     def test_batches_embed_named_queries_verbatim(self):
         detail = n.detail_batch_query(n.EVIDENCE_QUERY, n.ALL_SECTIONS)
         for query in (n.CONTEXT_QUERY, n.RULE_QUERY, n.CONDITION_QUERY, n.LIMIT_QUERY, n.EVIDENCE_QUERY):
-            self.assertIn(query.replace("$key", "key"), detail)
-        self.assertIn(n.LIST_QUERY.replace("$keyword", "keyword"), n.LIST_BATCH_QUERY)
+            self.assertIn(query.replace("$key", "key").rstrip().removesuffix(";"), detail)
+        self.assertIn(n.LIST_QUERY.replace("$keyword", "keyword").rstrip().removesuffix(";"), n.LIST_BATCH_QUERY)
         for query in (n.CATALOG_QUERY, n.ITEM_CATALOG_QUERY, n.COMMON_CATALOG_QUERY):
-            self.assertIn(query, n.CATALOG_BATCH_QUERY)
+            self.assertIn(query.rstrip().removesuffix(";"), n.CATALOG_BATCH_QUERY)
+            self.assertFalse(n.CATALOG_BATCH_QUERY.endswith(";"))
+
+    def test_subqueries_remove_standalone_cypher_terminators(self):
+        for query in self.all_batches():
+            self.assertNotRegex(query, r";\s*\n\s*}\s*")
 
     def test_only_batch_parameters_remain(self):
         for query in self.all_batches():
@@ -78,7 +83,7 @@ class GeneratedCypherTests(unittest.TestCase):
 
 class BatchMappingTests(unittest.TestCase):
     def test_get_details_maps_rows_like_get_detail(self):
-        bnft, common, missing = '["card_bnft",2,"B"]', '["card_common_bnft",1,"C"]', '["card_bnft",2,"X"]'
+        bnft, common, missing = '["card_product_item",2,"B"]', '["card_common_bnft",1,"C"]', '["card_product_item",2,"X"]'
         context = {field: None for field in n.CONTEXT_FIELDS} | {"benefit": {"name": "b"}, "card_sources": ['{"product_nm":"P"}']}
         common_context = {**context, "card_sources": []}
 
@@ -88,7 +93,7 @@ class BatchMappingTests(unittest.TestCase):
                 if key == missing:
                     continue
                 out.append({"key": key, "context": [common_context if key == common else context],
-                            "rules": [{"targets": [], "labels": ["dp_bnft_rule"], "rule": {"rule_key": "r1"}}],
+                            "rules": [{"targets": [], "labels": ["dp_card_product_item"], "rule": {"rule_key": "r1"}}],
                             "conditions": [], "limits": [{"limit_text": "월 1천원"}],
                             "evidence": [{**{field: None for field in n.SECTION_FIELDS["evidence"]}, "evidence": {"source_json": "{}"}, "link": {}, "rule_key": None, "owner_labels": ["x"]}]})
             return out
@@ -100,7 +105,8 @@ class BatchMappingTests(unittest.TestCase):
         self.assertEqual(list(result[bnft]["rules"][0]), ["rule", "labels", "targets"])   # 원래 RETURN 열 순서
         self.assertEqual(list(result[bnft]["evidence"][0]), list(n.SECTION_FIELDS["evidence"]))
         self.assertEqual(n.source(result[common]["context"]["card"]), {"product_nm": "적용 카드 미확인"})   # get_detail과 같은 표시 처리
-        self.assertIn(n.COMMON_EVIDENCE_QUERY.replace("$key", "key"), driver.calls[1][0] + driver.calls[0][0])
+        self.assertIn(n.COMMON_EVIDENCE_QUERY.replace("$key", "key").rstrip().removesuffix(";"),
+                      driver.calls[1][0] + driver.calls[0][0])
 
     def test_unrequested_sections_are_empty_lists(self):
         driver = FakeDriver({"detail": lambda p: [{"key": k, "context": [{f: None for f in n.CONTEXT_FIELDS}], "evidence": []}

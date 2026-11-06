@@ -71,7 +71,7 @@ STATEMENTS = {
     "card.item_catalog": (ITEM_CATALOG_QUERY, "(dp_card_product)-[dp_has_item]->(dp_card_product_item)"),
     "card.item_evidence": (ITEM_EVIDENCE_QUERY, "(dp_card_product)-[dp_has_item]->(dp_card_product_item)-[dp_supported_by]->"
                                                 "(dp_card_source_evidence)-[dp_in_chunk]->(dp_card_doc_chunk)-[dp_on_page]->(dp_card_doc_page)"),
-    "card.common_catalog": (COMMON_CATALOG_QUERY, "(dp_card_product)-[dp_has_common_benefit]->(dp_card_common_bnft)-[dp_belongs_to]->(dp_card_common)"),
+    "card.common_catalog": (COMMON_CATALOG_QUERY, "(dp_card_common_bnft)-[dp_belongs_to]->(dp_card_common), optionally (dp_card_common_bnft)-[dp_applies_to]->(dp_card_product)"),
     "card.list": (LIST_QUERY, "(dp_card_product_item|dp_card_common_bnft)"),
     "card.relations": (RELATION_QUERY, "dp_card_product_item and dp_card_common_bnft application relationships"),
     "card.benefit_relations": (BENEFIT_RELATIONS_QUERY, "dp_card_product_item.relation_list (source JSON)"),
@@ -91,7 +91,7 @@ SECTION_QUERIES = {"rules": RULE_QUERY, "conditions": CONDITION_QUERY, "limits":
 ALL_SECTIONS = tuple(SECTION_QUERIES)
 
 # region 배치 조회 (P3, 2026-11-05) — 같은 named query를 한 문장으로 묶어 네트워크 왕복을 줄인다. 데이터 캐시는 없다.
-# 각 named query 본문을 그대로 CALL 서브쿼리에 넣고 ``$key``/``$keyword`` 만 바깥 변수로 바꾼다. 조회 조건·정렬은 원문 그대로다.
+# 각 named query 본문을 CALL 서브쿼리에 넣고 ``$key``/``$keyword`` 만 바깥 변수로 바꾼다. 단독 실행용 끝 세미콜론은 제거한다.
 # 반환 행은 원래 RETURN 열 순서대로 다시 만든다. 근거 행만 로직이 읽는 열(owner_labels, rule_key, link, evidence)로 줄인다.
 # 청크·페이지·문서의 전체 속성은 전송하지 않지만 MATCH 경로(근거→청크→페이지→문서)는 그대로라 같은 근거만 조회된다.
 CONTEXT_FIELDS = ("card", "benefit", "card_sources", "common", "common_docs", "card_labels", "benefit_labels", "extraction_sources")
@@ -107,8 +107,8 @@ CATALOG_FIELDS = {"catalog": ("key", "name", "id", "status", "card_source", "tar
 
 
 def _subquery(query: str, variable: str | None = None) -> str:
-    """named query를 서브쿼리 본문으로 쓴다. ``$variable`` 파라미터만 같은 이름의 바깥 변수로 바꾼다."""
-    body = query.replace(f"${variable}", variable) if variable else query
+    """named query를 서브쿼리 본문으로 쓴다. 파라미터 이름을 바꾸고 단독 실행용 종료 세미콜론을 제거한다."""
+    body = (query.replace(f"${variable}", variable) if variable else query).rstrip().removesuffix(";")
     if "$" in body:
         raise ValueError("배치 서브쿼리에 바꾸지 않은 파라미터가 남았습니다")
     return body
@@ -142,11 +142,11 @@ def detail_batch_query(evidence_query: str, sections: tuple[str, ...]) -> str:
 LIST_BATCH_QUERY = "\n".join(["UNWIND $keywords AS keyword", "CALL (keyword) {", _subquery(LIST_QUERY, "keyword"), "}",
                               "RETURN keyword, " + ", ".join(LIST_FIELDS)])
 CATALOG_BATCH_QUERY = "\n".join([
-    "OPTIONAL CALL () {", CATALOG_QUERY, "}",
+    "OPTIONAL CALL () {", _subquery(CATALOG_QUERY), "}",
     f"WITH [x IN collect({_map(CATALOG_FIELDS['catalog'])}) WHERE x.key IS NOT NULL] AS catalog",
-    "OPTIONAL CALL () {", ITEM_CATALOG_QUERY, "}",
+    "OPTIONAL CALL () {", _subquery(ITEM_CATALOG_QUERY), "}",
     f"WITH catalog, [x IN collect({_map(CATALOG_FIELDS['items'])}) WHERE x.key IS NOT NULL] AS items",
-    "OPTIONAL CALL () {", COMMON_CATALOG_QUERY, "}",
+    "OPTIONAL CALL () {", _subquery(COMMON_CATALOG_QUERY), "}",
     f"WITH catalog, items, [x IN collect({_map(CATALOG_FIELDS['commons'])}) WHERE x.key IS NOT NULL] AS commons",
     "RETURN catalog, items, commons"])
 
@@ -169,7 +169,10 @@ def catalog_rows(catalog: list[dict], items: list[dict], commons: list[dict]) ->
     """``list_catalog`` 의 행 처리. 세 카탈로그 Cypher 결과(행 순서 그대로)를 질문 해석용 한 목록으로 만든다."""
     rows = catalog
     for row in rows:
-        row["card"] = source({"source_json": row.pop("card_source")}).get("product_nm", "미확인")
+        card = source({"source_json": row.pop("card_source")})
+        row["card"] = card.get("product_nm", "미확인")
+        row["card_id"] = card.get("card_id")
+        row["issuer"] = card.get("issuer")
         row["item_type"] = "BENEFIT"
     for row in items:
         card = source({"source_json": row.pop("card_source")})
@@ -306,10 +309,9 @@ class Neo4jSearch:
         """질문 해석에 쓸 카드별·공통 혜택 목록과 적용 대상을 반환한다.
 
         Cypher 3건을 차례로 실행해 한 목록으로 합친다.
-            catalog        카드 혜택(dp_card_bnft) + 규칙 대상·결제 기준 금액 → item_type="BENEFIT"
-                           (공통 혜택과 dp_same_as로 동일성이 확인된 카드 혜택은 빼고 공통 혜택 쪽으로 보여 준다)
+            catalog        카드 상품 항목(dp_card_product_item) 중 BENEFIT 행
             item_catalog   혜택 외 상품 항목(dp_card_product_item, 연회비 등) → item_data.fee_lines의 같은 사실 참조 포함
-            common_catalog 공통 혜택(dp_card_common_bnft) 전체와 적용 카드 이름 → item_type="COMMON_BENEFIT"
+            common_catalog 공통 혜택(dp_card_common_bnft) 전체와 적용 카드 이름
                            (적용 관계가 없으면 card="적용 카드 미확인")
         각 행의 key는 그래프 노드 key(JSON 배열 문자열)이며, retrieve의 get_detail 인자로 그대로 쓰인다.
 
@@ -374,9 +376,8 @@ class Neo4jSearch:
 
         CardGraphRAG.retrieve가 그래프 key마다 호출한다. 실행 순서는 detail_statements와 같다.
             1. card.context : 혜택 노드와 카드(들)·공통서비스 정보. 없으면 None 반환
-            2. sections 순서대로 rules / conditions / limits / evidence
-               evidence는 key 종류에 따라 Cypher가 다르다 — 공통 혜택: common_evidence(dp_same_as로 연결된 카드 혜택의 근거),
-               연회비 등 항목: item_evidence, 그 밖: benefit_evidence
+            2. sections 순서대로 원장 JSON/text와 evidence를 투영한다. RULE/COND 탐색 노드는 없으며,
+               PDF는 실제 dp_supported_by 관계에서 Evidence → chunk → page → document를 따라 조회한다.
         근거 행은 (dp_card_source_evidence)-[in_chunk]->(청크)-[on_page]->(페이지)-[in_document]->(문서) 경로로
         PDF 페이지와 인용 원문을 함께 돌려준다.
 

@@ -590,3 +590,42 @@ RETURNING evidence_link_id;
 - app_log 인용: answer point는 `20261105_002740`, `20261105_002742`, `20261105_002743`만 인용했습니다. 즉 금액, “통합 월 적립 한도” 제목, “특별/추가 적립” 셀은 인용했으나 60만원 조건 Evidence `20261105_002745`는 빠졌습니다. 검색/답변 outcome의 PDF evidence 목록에서 인용되지 않은 것은 `20261105_002734`(혜택명/3% 추가적립), `20261105_002738`(대상 가맹점), `20261105_002739`(1만원), `20261105_002741`(5만원)입니다. `20261105_002745`는 outcome에서 검색된 미인용 근거가 아니라, 추출 데이터/PDF에는 있지만 해당 outcome에 들어오지 않은 근거입니다. Neo4j에서 확인된 rule evidence `20261105_002735`는 outcome PDF evidence 목록에 없어 검색·인용 모두 이 로그에서 확인되지 않습니다.
 - 요약 컬럼 누락: `neo4j_summary`는 카드 혜택 Label/Key와 답변 point의 사용 Evidence ID를 표시하지만 point의 `verification="STRUCTURED_ONLY"`, `origin="llm"`, 파생 policy의 `PROGRAM_DERIVED`, 선택 tier 600000→20000은 포함하지 않습니다. 상단 `ANSWERED`는 답변 상태일 뿐 point 검증 등급이 아닙니다. `pdf_evidence_summary`는 outcome에 포함된 7개 Evidence만 다뤄서 2745 조건 인용을 표시하지 못하며, 미인용 목록도 outcome 내부 검색 결과까지만 보여 줍니다. 따라서 PDF 원문 전체에서 추출된 2744–2746이 없다는 점과 별도 추출 매핑을 표시하지 않습니다.
 - 추적 요약: 질문의 600000 → 혜택 `주요 간편결제 모아포인트 추가적립` → Neo4j r2/c2 `SPEND_REQ 600000` → staging `r2.limit_keys=[l2]` 및 l2 월 20000 → 코드 policy가 같은 값을 `PROGRAM_DERIVED`로 선택 → PDF p.3 동일 행 “60만원 이상 | 특별/추가 적립 | 2만원”. 원문은 연결을 확인해 주지만, 최종 Neo4j 구조화 relation/evidence 경로와 app_log 인용에는 c2/2745가 빠져 있습니다.
+
+## 2026-11-06 — PostgreSQL 원장 기준 Neo4j dp_ 전체 재구축 및 실행 경로 검증
+
+### 원천 매핑과 적재
+
+- PostgreSQL `postgres`, PostgreSQL 17.11의 `db_pipeline`을 repeatable-read, read-only snapshot으로 확인했습니다. 기본 테이블 20개, 뷰 8개, 선언 PK가 없는 테이블 0개, 선언 FK 0개였습니다. 요청대로 실행 로그 `app_log`, `app_log_event_archive` 2개만 Neo4j 매핑에서 제외하고 나머지 18개 테이블 4,359행을 매핑했습니다. 실제 PK/컬럼/행수는 `src/card_benefit/docs/guide/POSTGRESQL_TO_NEO4J_SCHEMA_MAPPING.md`에 기록했습니다.
+- 일반 테이블 행은 `dp_<table>` 노드로, 연결 테이블은 Relationship으로 변환했습니다. 원래 PK, NULL 컬럼, 전체 원본 행 JSON을 보존합니다. 실제 선언 FK가 없으므로 문서에 적은 FK 등가 컬럼 조인을 사용하고, 참조가 있으면 정확히 한 PK 행에만 연결되도록 검증합니다. JSON 내부 RULE/COND 노드는 만들지 않고 `source_json`과 원본 텍스트/JSON 속성을 유지했습니다. 기존 1,536차원 임베딩을 재사용했습니다.
+- 기존 그래프 DB 식별자 `6ac1f0f8`을 확인하고, 삭제 전 dp_ 그래프 JSON 백업 `tmp/neo4j_dp_backup_20261106.json.gz`(1,635 nodes, 2,702 relationships, 15 constraints, 19 indexes; SHA-256 `2d639a26cce270aa679b418b401b45c245ce7681675dffb92740cf3648102189`)을 확보했습니다. 삭제 대상 dp_와 외부 관계 0을 확인한 다음 dp_ 노드/관계/인덱스/제약만 제거·재생성했습니다. 다른 데이터베이스/프로젝트는 건드리지 않았습니다.
+- 전체 재적재 결과 4,359 노드, 8,648 관계(18 relation type), 제약 15개, 인덱스 19개입니다. fulltext 및 vector 인덱스 모두 `ONLINE`; 1,536차원 cosine 구성을 확인했습니다. `neo4j_validate.py`에서 PostgreSQL 원천과 노드·관계·속성을 비교해 누락/초과/차이 0, 외부 관계 0, `ok=true`를 확인했습니다. 고립 `card_ai_run` 5개는 연결할 정확한 대상 문서 참조가 없어서 원본 행으로 보존했습니다.
+
+### Cypher 오류 재현 및 수정
+
+- 사용자 보고 `stage=interpret / NEO4J_FAILED / CypherSyntaxError`를 live `Neo4jSearch.list_catalog()`로 재현했습니다. 원문 Neo4j 오류: `Invalid input ';': expected an expression, ',', 'ASC', 'ASCENDING', 'DESC', 'DESCENDING', 'LIMIT', 'OFFSET' or 'SKIP' (line 5, column 18 (offset: 307))`, 문제가 된 줄은 `ORDER BY name,key;`였습니다. 매퍼 쿼리의 마지막 세미콜론을 `CATALOG_BATCH_QUERY` 서브쿼리에 그대로 삽입한 것이 원인이었습니다. `_subquery()`를 통해 하위 쿼리 세미콜론을 제거하게 수정했고 live 카탈로그 133건 조회가 통과했습니다.
+- Retrieve를 실제 실행해 두 번째 오류를 확인했습니다. Neo4j 메시지: `Variable rule_key not defined (line 46, column 148 (offset: 2988))`. `SECTION_FIELDS.evidence`가 `rule_key`를 모으는데 새 table-mapped `item_evidence` query가 해당 alias를 반환하지 않았습니다. `l.rule_key AS rule_key`를 추가해 해결했고 POINT II 상세에서 18개 PDF Evidence와 2745/2740 p.3을 반환했습니다.
+- 규칙/조건 JSON을 RULE/COND 노드처럼 개별 조회하는 임시 변경에서는 실제 파이프라인이 `AttributeError: 'str' object has no attribute 'get'`를 냈습니다. 원본 JSON은 `context.benefit.source_json`에 유지되며 `benefit_context()`가 이를 직접 파싱하는 설계이므로, 비어 있는 rules/conditions batch projection을 유지하고 JSON은 source row에서 읽도록 되돌렸습니다. `graph_questions.cypher`는 이전 노드 모델을 요구하지 않습니다.
+- 추가 live query 검증에서 배치 키워드 조회 오류도 발견했습니다: `Variable status not defined (line 18, column 32 (offset: 965))`. `LIST_BATCH_QUERY`의 외부 반환 계약은 status를 요구했지만 두 UNION 분기가 alias를 공급하지 않았습니다. 둘 다 `verification_status_cd AS status`를 반환하도록 보완했습니다. 이는 단일 키워드 조회와 달리 배치 경로에만 있던 오류였습니다.
+- 코드 검색 결과 active `graph_questions.cypher`, `neo4j_hybrid_search.py`, `neo4j_search.py`, `card_graphrag.py`의 실행 Cypher에는 구형 `dp_card_bnft`, `dp_bnft_rule`, `dp_cond_*`, `dp_rule_target`, `dp_same_as` 탐색이 남지 않았습니다. 예전 label 이름은 `neo4j_validation.cypher`의 삭제 확인 목록/테스트의 부재 assertion 및 legacy 로거 key 호환성에만 있습니다. 구형 incremental sync 진입점은 차단되어 재생성에 사용되지 않습니다.
+
+### LangGraph 및 실제 질문 검증
+
+- LangGraph `interpret → retrieve → answer → finish`의 기본 N 경로는 Neo4j keyword/vector/RRF를 쓰며 업무 질문 중 PostgreSQL 원장을 조회하지 않습니다. 관련 Cypher는 새 table labels와 관계를 사용합니다. PostgreSQL 연결은 app_log 설정일 때 실행 로그 저장용뿐입니다.
+- 통합 질문은 `카드의정석 POINT II에서 전월 실적이 60만원이면 특별·추가 적립의 통합 월 한도는 얼마야?`입니다. Neo4j 후보 ID `card_product_item:23:20261105_000100`; Retrieve Evidence 18건; 조건 20261105_002745와 금액 20261105_002740, 한도 표제 20261105_002742, 혜택 셀 20261105_002743가 모두 상품안내장 20261105_000043 3페이지, chunk 20261105_000176입니다.
+- 실제 Streamlit 파일을 `AppTest.from_file()`로 실행했습니다. 위젯은 `st.form` 안의 `st.text_area(key="question")`와 `st.form_submit_button("질문하기")`이며 AppTest에선 `at.button[0]`으로 노출되고 key는 `FormSubmitter:question_form-질문하기`입니다. form state가 별도 `.run()` 때 초기화되어, 질문 입력·버튼 click 후 단일 `at.run()`으로 제출했습니다. UI 소스는 변경하지 않았습니다.
+- 최종 성공 실행: N search engines `neo4j_keyword`, `neo4j_vector`, `neo4j_rrf`; selected benefit `20261105_000100`; 답변은 “전월 실적 60만원이면 … 한도는 2만원입니다”; status `ANSWERED`. 답변 point 검증 `RAW_MATCH`; citation IDs `20261105_002745`, `20261105_002740`, `20261105_002742`, `20261105_002743`; PDF p.3. `validate_answer()`에서 수치와 PDF evidence가 일치했습니다. 원천 staging validation은 `LINK_REVIEW`라 답변 외의 자료 매핑 검토 경고가 표시됐습니다. 한 번의 별도 호출에서 모델이 미선택 결과를 반환했지만 재실행 및 최종 진단에서는 동일 질문이 정상 답변을 반환했습니다. 이는 DB/Cypher 실패가 아니라 LLM 해석 결과의 변동입니다.
+- 첫 AppTest 실수는 한글 label을 PowerShell stdin 인코딩으로 비교해 `submit button not found`를 발생시킨 테스트 하네스 문제였습니다. 브라우저 CUA backend는 unavailable이었지만 AppTest 실제 UI→pipeline 실행으로 대체 검증했습니다. Python `pipeline.run()`을 별도 mocking 없이 AppTest의 제출 분기에서 호출했습니다.
+- 1-hop `hop1_card_benefits`와 2-hop `hop2_card_rules` live query는 ONE PICK STYLE 카드 ID `[2]`로 실행해 각각 4건을 확인했습니다. 상세 Evidence·공통 혜택·후보 관계·키워드 배치 경로도 live 읽기 테스트를 통과했습니다.
+
+### 실행 명령과 테스트
+
+- 재구축 실행 명령: `python -m src.card_benefit.payment_card.db_pipeline.neo4j_dry_run --schema-only`, `...neo4j_dry_run --dry-run`, `...neo4j_load_draft` (preview), `...neo4j_load_draft --apply --confirm APPROVED_DP_POSTGRES_REBUILD`, `...neo4j_validate`.
+- 최종 로컬 회귀 명령: `\.venv\Scripts\python.exe -m pytest src/card_benefit/payment_card/db_pipeline/test_neo4j_relational_model.py src/card_benefit/payment_card/db_pipeline/test_neo4j_dry_run.py src/card_benefit/payment_card/db_pipeline/test_neo4j_load_draft.py src/card_benefit/payment_card/db_pipeline/test_neo4j_validate.py src/card_benefit/payment_card/db_pipeline/test_neo4j_relation_sync.py src/card_benefit/payment_card/db_pipeline/test_neo4j_search_projection.py src/card_benefit/payment_card/tests/test_neo4j_hybrid_search.py src/card_benefit/payment_card/tests/test_p2_limit_tiers.py src/card_benefit/payment_card/tests/test_neo4j_origin_search.py src/card_benefit/payment_card/tests/test_neo4j_batch_queries.py src/card_benefit/payment_card/tests/test_app_log_summaries.py src/card_benefit/payment_card/tests/test_detail_trace_log.py src/card_benefit/payment_card/tests/test_evidence_trace_log.py -q`. 결과 `65 passed, 3 skipped`.
+- 쿼리 수정 및 재구축 이후 마지막 실제 validator도 다시 실행했습니다. 기대/실제 4,359 nodes, 8,648 relationships, `exact_source_match=true`, `constraints_ok=true`, `indexes_ok=true`, `external_relationships=0`, `ok=true`였습니다.
+- live integration은 `$env:RUN_NEO4J_INTEGRATION='1'; .\.venv\Scripts\python.exe -m pytest src/card_benefit/payment_card/tests/test_neo4j_origin_search.py -q`로 실행했으며 `25 passed`입니다. 기존 live Neo4j 전체 `test_card_graphrag` 스위트는 이전 시도에서 완료되지 않아 성공으로 표시하지 않았습니다.
+
+### 미완료/수동 검토
+
+- Stage `LINK_REVIEW`를 가진 혜택 매핑은 원본 PDF 표와 대조한 수동 검토가 여전히 필요합니다. 본문 답변은 실제 PDF 원문을 인용하고 `RAW_MATCH`로 검증됐으나, staging 관계 승인 상태 자체를 변경하지 않았습니다.
+- Streamlit 브라우저 화면 자동화는 browser backend 불가로 수행하지 못했고 AppTest로 UI 스크립트를 실제 실행했습니다. 자연어 카드 간 비교 전체 질의 집합 및 모든 카드의 정확도 검수는 후속 검토 대상입니다.
+- 이번 작업은 PostgreSQL 원장, app_log 기존 행/JSON, Neo4j dp_ 이외 데이터에 쓰기하지 않았습니다. 구형 dp_만 승인된 범위에서 재구축했습니다. Git commit/push는 하지 않았습니다.
