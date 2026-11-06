@@ -1,0 +1,1980 @@
+{
+ "22/20261105_000099": {
+  "card_extr_stg_id": "20261105_000619",
+  "stg_raw_item": {
+   "rules": [
+    {
+     "rule_key": "r1",
+     "value_num": null,
+     "conditions": [
+      {
+       "scope": "THIS_BENEFIT",
+       "cond_key": "c1",
+       "evidence": [
+        {
+         "supports": "COND",
+         "quote_txt": "30만원 이상\n80만원 미만",
+         "link_basis": "TABLE_IMAGE",
+         "support_key": "c1"
+        }
+       ],
+       "negate_yn": false,
+       "cond_min_amt": 300000,
+       "cond_raw_txt": "30만원 이상\n80만원 미만",
+       "cond_type_cd": "SPEND_REQ",
+       "excl_raw_txt": null,
+       "cond_basis_cd": "PREV_MONTH_SPEND",
+       "cond_max_amt_excl": 800000,
+       "target_benefit_nms": []
+      }
+     ],
+     "limit_keys": [
+      "l1"
+     ],
+     "min_txn_amt": null,
+     "value_raw_txt": "청구할인",
+     "value_unit_cd": null,
+     "min_txn_raw_txt": null
+    },
+    {
+     "rule_key": "r2",
+     "value_num": null,
+     "conditions": [
+      {
+       "scope": "THIS_BENEFIT",
+       "cond_key": "c2",
+       "evidence": [
+        {
+         "supports": "COND",
+         "quote_txt": "80만원 이상\n15,000원",
+         "link_basis": "TABLE_IMAGE",
+         "support_key": "c2"
+        }
+       ],
+       "negate_yn": false,
+       "cond_min_amt": 800000,
+       "cond_raw_txt": "80만원 이상",
+       "cond_type_cd": "SPEND_REQ",
+       "excl_raw_txt": null,
+       "cond_basis_cd": "PREV_MONTH_SPEND",
+       "cond_max_amt_excl": null,
+       "target_benefit_nms": []
+      }
+     ],
+     "limit_keys": [
+      "l2"
+     ],
+     "min_txn_amt": null,
+     "value_raw_txt": "청구할인",
+     "value_unit_cd": null,
+     "min_txn_raw_txt": null
+    },
+    {
+     "rule_key": "r3",
+     "value_num": null,
+     "conditions": [
+      {
+       "scope": "THIS_BENEFIT",
+       "cond_key": "c3",
+       "evidence": [
+        {
+         "supports": "COND",
+         "quote_txt": "※ 월납 요금 승인 금액이 할인 한도보다 적을 경우 승인 금액만큼 할인 적용",
+         "link_basis": "SAME_TEXT",
+         "support_key": "c3"
+        }
+       ],
+       "negate_yn": false,
+       "cond_min_amt": null,
+       "cond_raw_txt": "월납 요금 승인 금액이 할인 한도보다 적을 경우",
+       "cond_type_cd": "ETC",
+       "excl_raw_txt": null,
+       "cond_basis_cd": "TXN_AMT",
+       "cond_max_amt_excl": null,
+       "target_benefit_nms": []
+      }
+     ],
+     "limit_keys": [
+      "l1",
+      "l2"
+     ],
+     "min_txn_amt": null,
+     "value_raw_txt": "승인 금액만큼 할인 적용",
+     "value_unit_cd": null,
+     "min_txn_raw_txt": null
+    }
+   ],
+   "limits": [
+    {
+     "limit_key": "l1",
+     "limit_num": 10000,
+     "period_cd": "MONTH",
+     "cap_unit_cd": "KRW",
+     "limit_raw_txt": "10,000원",
+     "shared_scope_txt": "횟수 제한 없이 월 할인 한도 내에서 합산 할인",
+     "applies_to_benefit_nms": [
+      "월납 요금 청구할인"
+     ]
+    },
+    {
+     "limit_key": "l2",
+     "limit_num": 15000,
+     "period_cd": "MONTH",
+     "cap_unit_cd": "KRW",
+     "limit_raw_txt": "15,000원",
+     "shared_scope_txt": "횟수 제한 없이 월 할인 한도 내에서 합산 할인",
+     "applies_to_benefit_nms": [
+      "월납 요금 청구할인"
+     ]
+    }
+   ],
+   "bnft_nm": "월납 요금 청구할인",
+   "targets": [
+    {
+     "target_nm": "SKT",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "KT",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "LG U+",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "SKB(SK브로드밴드)",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "SK 세븐모바일",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "KT M모바일",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "U+ 유모바일",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "LG 헬로비전",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "딜라이브",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "퍼스트모바일",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "스노우맨",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "핀다이렉트",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "코웨이",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "LG전자",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "SK인텔릭스",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "유튜브 프리미엄",
+     "target_type_cd": "SERVICE"
+    },
+    {
+     "target_nm": "넷플릭스",
+     "target_type_cd": "SERVICE"
+    },
+    {
+     "target_nm": "디즈니플러스",
+     "target_type_cd": "SERVICE"
+    },
+    {
+     "target_nm": "스카이라이프",
+     "target_type_cd": "SERVICE"
+    },
+    {
+     "target_nm": "HCN",
+     "target_type_cd": "SERVICE"
+    }
+   ],
+   "evidence": [
+    {
+     "supports": "BNFT",
+     "quote_txt": "월납 요금 청구할인",
+     "link_basis": "SAME_TEXT",
+     "support_key": "b1"
+    },
+    {
+     "supports": "RULE",
+     "quote_txt": "월납 요금 청구할인",
+     "link_basis": "TABLE_IMAGE",
+     "support_key": "r1"
+    },
+    {
+     "supports": "RULE",
+     "quote_txt": "월납 요금 청구할인",
+     "link_basis": "TABLE_IMAGE",
+     "support_key": "r2"
+    },
+    {
+     "supports": "RULE",
+     "quote_txt": "승인 금액만큼 할인 적용",
+     "link_basis": "SAME_TEXT",
+     "support_key": "r3"
+    },
+    {
+     "supports": "LIMIT",
+     "quote_txt": "10,000원",
+     "link_basis": "TABLE_IMAGE",
+     "support_key": "l1"
+    },
+    {
+     "supports": "LIMIT",
+     "quote_txt": "15,000원",
+     "link_basis": "TABLE_IMAGE",
+     "support_key": "l2"
+    },
+    {
+     "supports": "LIMIT",
+     "quote_txt": "※ 횟수 제한 없이 월 할인 한도 내에서 합산 할인",
+     "link_basis": "SAME_TEXT",
+     "support_key": null
+    },
+    {
+     "supports": "TARGET",
+     "quote_txt": "월납 요금 대상 가맹점(국내 가맹점 기준)\n• 통신 : SKT, KT, LG U+, SKB(SK브로드밴드), \n             알뜰폰(SK 세븐모바일, KT M모바일, U+ 유모바일, LG 헬로비전, \n               딜라이브, 퍼스트모바일, 스노우맨, 핀다이렉트)\n• 렌탈 : 코웨이, LG전자, SK인텔릭스\n• 기타 월납서비스 : 유튜브 프리미엄, 넷플릭스, 디즈니플러스, \n                                 스카이라이프, HCN",
+     "link_basis": "SAME_TEXT",
+     "support_key": null
+    }
+   ],
+   "item_key": "b1",
+   "brand_txt": null,
+   "certainty": "HIGH",
+   "relations": [],
+   "conditions": [
+    {
+     "scope": "THIS_BENEFIT",
+     "cond_key": "c4",
+     "evidence": [
+      {
+       "supports": "COND",
+       "quote_txt": "월납 요금 대상 가맹점\n자동납부 시",
+       "link_basis": "TABLE_IMAGE",
+       "support_key": "c4"
+      }
+     ],
+     "negate_yn": false,
+     "cond_min_amt": null,
+     "cond_raw_txt": "월납 요금 대상 가맹점\n자동납부 시",
+     "cond_type_cd": "PAYMENT_METHOD",
+     "excl_raw_txt": null,
+     "cond_basis_cd": null,
+     "cond_max_amt_excl": null,
+     "target_benefit_nms": []
+    },
+    {
+     "scope": "THIS_BENEFIT",
+     "cond_key": "c5",
+     "evidence": [
+      {
+       "supports": "COND",
+       "quote_txt": "카드 거래정지(분실신고 등), 한도 부족, 카드 재발급 후 변경된 카드번호 자동납부 \n     재등록 누락 등 자동납부 결제 불가 사유 발생시  할인 서비스 제공이 불가합니다.",
+       "link_basis": "SAME_TEXT",
+       "support_key": "c5"
+      }
+     ],
+     "negate_yn": false,
+     "cond_min_amt": null,
+     "cond_raw_txt": "카드 거래정지(분실신고 등), 한도 부족, 카드 재발급 후 변경된 카드번호 자동납부 \n     재등록 누락 등 자동납부 결제 불가 사유 발생시  할인 서비스 제공이 불가합니다.",
+     "cond_type_cd": "ETC",
+     "excl_raw_txt": null,
+     "cond_basis_cd": null,
+     "cond_max_amt_excl": null,
+     "target_benefit_nms": []
+    }
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "excluded_cards": [],
+   "applicable_cards": [],
+   "uncertainty_note": null,
+   "service_grade_txt": null,
+   "is_common_candidate": false,
+   "no_condition_stated": false,
+   "validity_period_txt": null,
+   "selection_service_txt": null
+  },
+  "rule_list": [
+   {
+    "rule_key": "r1",
+    "cond_expr": {
+     "branches": [
+      {
+       "atoms": [
+        {
+         "atom_key": "c1",
+         "atom_seq": 1,
+         "negate_yn": false,
+         "cond_min_amt": 300000,
+         "cond_raw_txt": "30만원 이상\n80만원 미만",
+         "cond_type_cd": "SPEND_REQ",
+         "excl_raw_txt": null,
+         "cond_basis_cd": "PREV_MONTH_SPEND",
+         "cond_status_cd": "DRAFT",
+         "cond_max_amt_excl": 800000
+        }
+       ],
+       "branch_no": 1
+      }
+     ],
+     "expr_status_cd": "DRAFT"
+    },
+    "value_num": null,
+    "target_list": [
+     {
+      "target_nm": "SKT",
+      "target_key": "SKT",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "KT",
+      "target_key": "KT",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "LG U+",
+      "target_key": "LG U+",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "SKB(SK브로드밴드)",
+      "target_key": "SKB(SK브로드밴드)",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "SK 세븐모바일",
+      "target_key": "SK 세븐모바일",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "KT M모바일",
+      "target_key": "KT M모바일",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "U+ 유모바일",
+      "target_key": "U+ 유모바일",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "LG 헬로비전",
+      "target_key": "LG 헬로비전",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "딜라이브",
+      "target_key": "딜라이브",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "퍼스트모바일",
+      "target_key": "퍼스트모바일",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "스노우맨",
+      "target_key": "스노우맨",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "핀다이렉트",
+      "target_key": "핀다이렉트",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "코웨이",
+      "target_key": "코웨이",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "LG전자",
+      "target_key": "LG전자",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "SK인텔릭스",
+      "target_key": "SK인텔릭스",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "유튜브 프리미엄",
+      "target_key": "유튜브 프리미엄",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "넷플릭스",
+      "target_key": "넷플릭스",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "디즈니플러스",
+      "target_key": "디즈니플러스",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "스카이라이프",
+      "target_key": "스카이라이프",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "HCN",
+      "target_key": "HCN",
+      "target_type_cd": "SERVICE"
+     }
+    ],
+    "value_unit_cd": null,
+    "rule_status_cd": "DRAFT"
+   },
+   {
+    "rule_key": "r2",
+    "cond_expr": {
+     "branches": [
+      {
+       "atoms": [
+        {
+         "atom_key": "c2",
+         "atom_seq": 1,
+         "negate_yn": false,
+         "cond_min_amt": 800000,
+         "cond_raw_txt": "80만원 이상",
+         "cond_type_cd": "SPEND_REQ",
+         "excl_raw_txt": null,
+         "cond_basis_cd": "PREV_MONTH_SPEND",
+         "cond_status_cd": "DRAFT",
+         "cond_max_amt_excl": null
+        }
+       ],
+       "branch_no": 1
+      }
+     ],
+     "expr_status_cd": "DRAFT"
+    },
+    "value_num": null,
+    "target_list": [
+     {
+      "target_nm": "SKT",
+      "target_key": "SKT",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "KT",
+      "target_key": "KT",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "LG U+",
+      "target_key": "LG U+",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "SKB(SK브로드밴드)",
+      "target_key": "SKB(SK브로드밴드)",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "SK 세븐모바일",
+      "target_key": "SK 세븐모바일",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "KT M모바일",
+      "target_key": "KT M모바일",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "U+ 유모바일",
+      "target_key": "U+ 유모바일",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "LG 헬로비전",
+      "target_key": "LG 헬로비전",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "딜라이브",
+      "target_key": "딜라이브",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "퍼스트모바일",
+      "target_key": "퍼스트모바일",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "스노우맨",
+      "target_key": "스노우맨",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "핀다이렉트",
+      "target_key": "핀다이렉트",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "코웨이",
+      "target_key": "코웨이",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "LG전자",
+      "target_key": "LG전자",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "SK인텔릭스",
+      "target_key": "SK인텔릭스",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "유튜브 프리미엄",
+      "target_key": "유튜브 프리미엄",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "넷플릭스",
+      "target_key": "넷플릭스",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "디즈니플러스",
+      "target_key": "디즈니플러스",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "스카이라이프",
+      "target_key": "스카이라이프",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "HCN",
+      "target_key": "HCN",
+      "target_type_cd": "SERVICE"
+     }
+    ],
+    "value_unit_cd": null,
+    "rule_status_cd": "DRAFT"
+   },
+   {
+    "rule_key": "r3",
+    "cond_expr": {
+     "branches": [
+      {
+       "atoms": [
+        {
+         "atom_key": "c3",
+         "atom_seq": 1,
+         "negate_yn": false,
+         "cond_min_amt": null,
+         "cond_raw_txt": "월납 요금 승인 금액이 할인 한도보다 적을 경우",
+         "cond_type_cd": "ETC",
+         "excl_raw_txt": null,
+         "cond_basis_cd": "TXN_AMT",
+         "cond_status_cd": "DRAFT",
+         "cond_max_amt_excl": null
+        }
+       ],
+       "branch_no": 1
+      }
+     ],
+     "expr_status_cd": "DRAFT"
+    },
+    "value_num": null,
+    "target_list": [
+     {
+      "target_nm": "SKT",
+      "target_key": "SKT",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "KT",
+      "target_key": "KT",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "LG U+",
+      "target_key": "LG U+",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "SKB(SK브로드밴드)",
+      "target_key": "SKB(SK브로드밴드)",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "SK 세븐모바일",
+      "target_key": "SK 세븐모바일",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "KT M모바일",
+      "target_key": "KT M모바일",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "U+ 유모바일",
+      "target_key": "U+ 유모바일",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "LG 헬로비전",
+      "target_key": "LG 헬로비전",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "딜라이브",
+      "target_key": "딜라이브",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "퍼스트모바일",
+      "target_key": "퍼스트모바일",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "스노우맨",
+      "target_key": "스노우맨",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "핀다이렉트",
+      "target_key": "핀다이렉트",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "코웨이",
+      "target_key": "코웨이",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "LG전자",
+      "target_key": "LG전자",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "SK인텔릭스",
+      "target_key": "SK인텔릭스",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "유튜브 프리미엄",
+      "target_key": "유튜브 프리미엄",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "넷플릭스",
+      "target_key": "넷플릭스",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "디즈니플러스",
+      "target_key": "디즈니플러스",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "스카이라이프",
+      "target_key": "스카이라이프",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "HCN",
+      "target_key": "HCN",
+      "target_type_cd": "SERVICE"
+     }
+    ],
+    "value_unit_cd": null,
+    "rule_status_cd": "DRAFT"
+   }
+  ],
+  "item_limit_txt": "10,000원 / 15,000원 / ※ 횟수 제한 없이 월 할인 한도 내에서 합산 할인",
+  "evidence": [
+   {
+    "evidence_id": "20261105_002677",
+    "quote_txt": "월납 요금 청구할인",
+    "start_pos": 3142,
+    "end_pos": 3151,
+    "source_txt": "월납 요금 청구할인"
+   },
+   {
+    "evidence_id": "20261105_002678",
+    "quote_txt": "월납 요금 청구할인",
+    "start_pos": 3142,
+    "end_pos": 3151,
+    "source_txt": "월납 요금 청구할인"
+   },
+   {
+    "evidence_id": "20261105_002679",
+    "quote_txt": "월납 요금 청구할인",
+    "start_pos": 3142,
+    "end_pos": 3151,
+    "source_txt": "월납 요금 청구할인"
+   },
+   {
+    "evidence_id": "20261105_002680",
+    "quote_txt": "승인 금액만큼 할인 적용",
+    "start_pos": 3211,
+    "end_pos": 3223,
+    "source_txt": "승인 금액만큼 할인 적용"
+   },
+   {
+    "evidence_id": "20261105_002681",
+    "quote_txt": "10,000원",
+    "start_pos": 3719,
+    "end_pos": 3725,
+    "source_txt": "10,000원"
+   },
+   {
+    "evidence_id": "20261105_002682",
+    "quote_txt": "15,000원",
+    "start_pos": 3751,
+    "end_pos": 3757,
+    "source_txt": "15,000원"
+   },
+   {
+    "evidence_id": "20261105_002683",
+    "quote_txt": "※ 횟수 제한 없이 월 할인 한도 내에서 합산 할인",
+    "start_pos": 3153,
+    "end_pos": 3180,
+    "source_txt": "※ 횟수 제한 없이 월 할인 한도 내에서 합산 할인"
+   },
+   {
+    "evidence_id": "20261105_002684",
+    "quote_txt": "월납 요금 대상 가맹점(국내 가맹점 기준)\n• 통신 : SKT, KT, LG U+, SKB(SK브로드밴드), \n             알뜰폰(SK 세븐모바일, KT M모바일, U+ 유모바일, LG 헬로비전, \n               딜라이브, 퍼스트모바일, 스노우맨, 핀다이렉트)\n• 렌탈 : 코웨이, LG전자, SK인텔릭스\n• 기타 월납서비스 : 유튜브 프리미엄, 넷플릭스, 디즈니플러스, \n                                 스카이라이프, HCN",
+    "start_pos": 3392,
+    "end_pos": 3657,
+    "source_txt": "월납 요금 대상 가맹점(국내 가맹점 기준)\n• 통신 : SKT, KT, LG U+, SKB(SK브로드밴드), \n             알뜰폰(SK 세븐모바일, KT M모바일, U+ 유모바일, LG 헬로비전, \n               딜라이브, 퍼스트모바일, 스노우맨, 핀다이렉트)\n• 렌탈 : 코웨이, LG전자, SK인텔릭스\n• 기타 월납서비스 : 유튜브 프리미엄, 넷플릭스, 디즈니플러스, \n                                 스카이라이프, HCN"
+   },
+   {
+    "evidence_id": "20261105_002685",
+    "quote_txt": "30만원 이상\n80만원 미만",
+    "start_pos": 3727,
+    "end_pos": 3741,
+    "source_txt": "30만원 이상\n80만원 미만"
+   },
+   {
+    "evidence_id": "20261105_002686",
+    "quote_txt": "80만원 이상\n15,000원",
+    "start_pos": 3743,
+    "end_pos": 3757,
+    "source_txt": "80만원 이상\n15,000원"
+   },
+   {
+    "evidence_id": "20261105_002687",
+    "quote_txt": "※ 월납 요금 승인 금액이 할인 한도보다 적을 경우 승인 금액만큼 할인 적용",
+    "start_pos": 3182,
+    "end_pos": 3223,
+    "source_txt": "※ 월납 요금 승인 금액이 할인 한도보다 적을 경우 승인 금액만큼 할인 적용"
+   },
+   {
+    "evidence_id": "20261105_002688",
+    "quote_txt": "월납 요금 대상 가맹점\n자동납부 시",
+    "start_pos": 3759,
+    "end_pos": 3777,
+    "source_txt": "월납 요금 대상 가맹점\n자동납부 시"
+   },
+   {
+    "evidence_id": "20261105_002689",
+    "quote_txt": "카드 거래정지(분실신고 등), 한도 부족, 카드 재발급 후 변경된 카드번호 자동납부 \n     재등록 누락 등 자동납부 결제 불가 사유 발생시  할인 서비스 제공이 불가합니다.",
+    "start_pos": 3292,
+    "end_pos": 3389,
+    "source_txt": "카드 거래정지(분실신고 등), 한도 부족, 카드 재발급 후 변경된 카드번호 자동납부 \n     재등록 누락 등 자동납부 결제 불가 사유 발생시  할인 서비스 제공이 불가합니다."
+   }
+  ]
+ },
+ "23/20261105_000100": {
+  "card_extr_stg_id": "20261105_000636",
+  "stg_raw_item": {
+   "rules": [
+    {
+     "rule_key": "r1",
+     "value_num": "3",
+     "conditions": [
+      {
+       "scope": "THIS_BENEFIT",
+       "cond_key": "c1",
+       "evidence": [
+        {
+         "supports": "COND",
+         "quote_txt": "전월 국내가맹점 이용실적 \n30만원 이상",
+         "link_basis": "TABLE_IMAGE",
+         "support_key": "c1"
+        }
+       ],
+       "negate_yn": false,
+       "cond_min_amt": 300000,
+       "cond_raw_txt": "전월 국내가맹점 이용실적 \n30만원 이상",
+       "cond_type_cd": "SPEND_REQ",
+       "excl_raw_txt": null,
+       "cond_basis_cd": "PREV_MONTH_SPEND",
+       "cond_max_amt_excl": null,
+       "target_benefit_nms": []
+      }
+     ],
+     "limit_keys": [
+      "l1"
+     ],
+     "min_txn_amt": null,
+     "value_raw_txt": "3%",
+     "value_unit_cd": "PERCENT",
+     "min_txn_raw_txt": null
+    },
+    {
+     "rule_key": "r2",
+     "value_num": "3",
+     "conditions": [
+      {
+       "scope": "THIS_BENEFIT",
+       "cond_key": "c2",
+       "evidence": [
+        {
+         "supports": "COND",
+         "quote_txt": "전월 국내가맹점 이용실적 \n60만원 이상",
+         "link_basis": "TABLE_IMAGE",
+         "support_key": "c2"
+        }
+       ],
+       "negate_yn": false,
+       "cond_min_amt": 600000,
+       "cond_raw_txt": "전월 국내가맹점 이용실적 \n60만원 이상",
+       "cond_type_cd": "SPEND_REQ",
+       "excl_raw_txt": null,
+       "cond_basis_cd": "PREV_MONTH_SPEND",
+       "cond_max_amt_excl": null,
+       "target_benefit_nms": []
+      }
+     ],
+     "limit_keys": [
+      "l2"
+     ],
+     "min_txn_amt": null,
+     "value_raw_txt": "3%",
+     "value_unit_cd": "PERCENT",
+     "min_txn_raw_txt": null
+    },
+    {
+     "rule_key": "r3",
+     "value_num": "3",
+     "conditions": [
+      {
+       "scope": "THIS_BENEFIT",
+       "cond_key": "c3",
+       "evidence": [
+        {
+         "supports": "COND",
+         "quote_txt": "전월 국내가맹점 이용실적 \n120만원 이상",
+         "link_basis": "TABLE_IMAGE",
+         "support_key": "c3"
+        }
+       ],
+       "negate_yn": false,
+       "cond_min_amt": 1200000,
+       "cond_raw_txt": "전월 국내가맹점 이용실적 \n120만원 이상",
+       "cond_type_cd": "SPEND_REQ",
+       "excl_raw_txt": null,
+       "cond_basis_cd": "PREV_MONTH_SPEND",
+       "cond_max_amt_excl": null,
+       "target_benefit_nms": []
+      }
+     ],
+     "limit_keys": [
+      "l3"
+     ],
+     "min_txn_amt": null,
+     "value_raw_txt": "3%",
+     "value_unit_cd": "PERCENT",
+     "min_txn_raw_txt": null
+    }
+   ],
+   "limits": [
+    {
+     "limit_key": "l1",
+     "limit_num": 10000,
+     "period_cd": "MONTH",
+     "cap_unit_cd": "KRW",
+     "limit_raw_txt": "1만원",
+     "shared_scope_txt": "특별/추가 적립",
+     "applies_to_benefit_nms": []
+    },
+    {
+     "limit_key": "l2",
+     "limit_num": 20000,
+     "period_cd": "MONTH",
+     "cap_unit_cd": "KRW",
+     "limit_raw_txt": "2만원",
+     "shared_scope_txt": "특별/추가 적립",
+     "applies_to_benefit_nms": []
+    },
+    {
+     "limit_key": "l3",
+     "limit_num": 50000,
+     "period_cd": "MONTH",
+     "cap_unit_cd": "KRW",
+     "limit_raw_txt": "5만원",
+     "shared_scope_txt": "특별/추가 적립",
+     "applies_to_benefit_nms": []
+    }
+   ],
+   "bnft_nm": "주요 간편결제 모아포인트 추가적립",
+   "targets": [
+    {
+     "target_nm": "네이버페이",
+     "target_type_cd": "SERVICE"
+    },
+    {
+     "target_nm": "카카오페이",
+     "target_type_cd": "SERVICE"
+    },
+    {
+     "target_nm": "PAYCO",
+     "target_type_cd": "SERVICE"
+    },
+    {
+     "target_nm": "SSGPAY",
+     "target_type_cd": "SERVICE"
+    }
+   ],
+   "evidence": [
+    {
+     "supports": "BNFT",
+     "quote_txt": "주요 간편결제 모아포인트 3% 추가적립",
+     "link_basis": "SAME_TEXT",
+     "support_key": "b1"
+    },
+    {
+     "supports": "RULE",
+     "quote_txt": "3% 추가적립",
+     "link_basis": "SAME_TEXT",
+     "support_key": "r1"
+    },
+    {
+     "supports": "RULE",
+     "quote_txt": "3% 추가적립",
+     "link_basis": "SAME_TEXT",
+     "support_key": "r2"
+    },
+    {
+     "supports": "RULE",
+     "quote_txt": "3% 추가적립",
+     "link_basis": "SAME_TEXT",
+     "support_key": "r3"
+    },
+    {
+     "supports": "TARGET",
+     "quote_txt": "네이버페이, 카카오페이, PAYCO, SSGPAY",
+     "link_basis": "SAME_TEXT",
+     "support_key": "b1"
+    },
+    {
+     "supports": "LIMIT",
+     "quote_txt": "1만원",
+     "link_basis": "TABLE_IMAGE",
+     "support_key": "l1"
+    },
+    {
+     "supports": "LIMIT",
+     "quote_txt": "2만원",
+     "link_basis": "TABLE_IMAGE",
+     "support_key": "l2"
+    },
+    {
+     "supports": "LIMIT",
+     "quote_txt": "5만원",
+     "link_basis": "TABLE_IMAGE",
+     "support_key": "l3"
+    },
+    {
+     "supports": "LIMIT",
+     "quote_txt": "통합 월 적립 한도",
+     "link_basis": "TABLE_IMAGE",
+     "support_key": null
+    },
+    {
+     "supports": "LIMIT",
+     "quote_txt": "특별/추가 적립",
+     "link_basis": "TABLE_IMAGE",
+     "support_key": null
+    }
+   ],
+   "item_key": "b1",
+   "brand_txt": null,
+   "certainty": "HIGH",
+   "relations": [],
+   "conditions": [
+    {
+     "scope": "THIS_BENEFIT",
+     "cond_key": "c4",
+     "evidence": [
+      {
+       "supports": "COND",
+       "quote_txt": "전월 국내 가맹점 이용실적 30만원 이상 시 적립",
+       "link_basis": "SAME_TEXT",
+       "support_key": "c4"
+      }
+     ],
+     "negate_yn": false,
+     "cond_min_amt": 300000,
+     "cond_raw_txt": "전월 국내 가맹점 이용실적 30만원 이상 시 적립",
+     "cond_type_cd": "SPEND_REQ",
+     "excl_raw_txt": null,
+     "cond_basis_cd": "PREV_MONTH_SPEND",
+     "cond_max_amt_excl": null,
+     "target_benefit_nms": []
+    },
+    {
+     "scope": "THIS_BENEFIT",
+     "cond_key": "c5",
+     "evidence": [
+      {
+       "supports": "COND",
+       "quote_txt": "Two-in-One 결제서비스(체크매출) 이용 시 추가적립 제외",
+       "link_basis": "SAME_TEXT",
+       "support_key": "c5"
+      }
+     ],
+     "negate_yn": true,
+     "cond_min_amt": null,
+     "cond_raw_txt": "Two-in-One 결제서비스(체크매출) 이용 시 추가적립 제외",
+     "cond_type_cd": "BNFT_EXCL",
+     "excl_raw_txt": "Two-in-One 결제서비스(체크매출) 이용 시",
+     "cond_basis_cd": null,
+     "cond_max_amt_excl": null,
+     "target_benefit_nms": []
+    },
+    {
+     "scope": "THIS_BENEFIT",
+     "cond_key": "c6",
+     "evidence": [
+      {
+       "supports": "COND",
+       "quote_txt": "추가적립은 주요 간편결제에 본 카드를 등록하여 온라인/오프라인\n에서 사용한 경우 제공",
+       "link_basis": "SAME_TEXT",
+       "support_key": "c6"
+      }
+     ],
+     "negate_yn": false,
+     "cond_min_amt": null,
+     "cond_raw_txt": "추가적립은 주요 간편결제에 본 카드를 등록하여 온라인/오프라인\n에서 사용한 경우 제공",
+     "cond_type_cd": "PAYMENT_METHOD",
+     "excl_raw_txt": null,
+     "cond_basis_cd": null,
+     "cond_max_amt_excl": null,
+     "target_benefit_nms": []
+    }
+   ],
+   "bnft_type_cd": "POINT",
+   "excluded_cards": [],
+   "applicable_cards": [],
+   "uncertainty_note": "표의 실적 기준은 모두 ‘이상’으로 표기되어 서로 중첩됩니다. 상한 구간이나 우선순위는 추정하지 않았습니다.",
+   "service_grade_txt": null,
+   "is_common_candidate": false,
+   "no_condition_stated": false,
+   "validity_period_txt": null,
+   "selection_service_txt": null
+  },
+  "rule_list": [
+   {
+    "rule_key": "r1",
+    "cond_expr": {
+     "branches": [
+      {
+       "atoms": [
+        {
+         "atom_key": "c1",
+         "atom_seq": 1,
+         "negate_yn": false,
+         "cond_min_amt": 300000,
+         "cond_raw_txt": "전월 국내가맹점 이용실적 \n30만원 이상",
+         "cond_type_cd": "SPEND_REQ",
+         "excl_raw_txt": null,
+         "cond_basis_cd": "PREV_MONTH_SPEND",
+         "cond_status_cd": "DRAFT",
+         "cond_max_amt_excl": null
+        }
+       ],
+       "branch_no": 1
+      }
+     ],
+     "expr_status_cd": "DRAFT"
+    },
+    "value_num": 3,
+    "target_list": [
+     {
+      "target_nm": "네이버페이",
+      "target_key": "네이버페이",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "카카오페이",
+      "target_key": "카카오페이",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "PAYCO",
+      "target_key": "PAYCO",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "SSGPAY",
+      "target_key": "SSGPAY",
+      "target_type_cd": "SERVICE"
+     }
+    ],
+    "value_unit_cd": "PERCENT",
+    "rule_status_cd": "DRAFT"
+   },
+   {
+    "rule_key": "r2",
+    "cond_expr": {
+     "branches": [
+      {
+       "atoms": [
+        {
+         "atom_key": "c2",
+         "atom_seq": 1,
+         "negate_yn": false,
+         "cond_min_amt": 600000,
+         "cond_raw_txt": "전월 국내가맹점 이용실적 \n60만원 이상",
+         "cond_type_cd": "SPEND_REQ",
+         "excl_raw_txt": null,
+         "cond_basis_cd": "PREV_MONTH_SPEND",
+         "cond_status_cd": "DRAFT",
+         "cond_max_amt_excl": null
+        }
+       ],
+       "branch_no": 1
+      }
+     ],
+     "expr_status_cd": "DRAFT"
+    },
+    "value_num": 3,
+    "target_list": [
+     {
+      "target_nm": "네이버페이",
+      "target_key": "네이버페이",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "카카오페이",
+      "target_key": "카카오페이",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "PAYCO",
+      "target_key": "PAYCO",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "SSGPAY",
+      "target_key": "SSGPAY",
+      "target_type_cd": "SERVICE"
+     }
+    ],
+    "value_unit_cd": "PERCENT",
+    "rule_status_cd": "DRAFT"
+   },
+   {
+    "rule_key": "r3",
+    "cond_expr": {
+     "branches": [
+      {
+       "atoms": [
+        {
+         "atom_key": "c3",
+         "atom_seq": 1,
+         "negate_yn": false,
+         "cond_min_amt": 1200000,
+         "cond_raw_txt": "전월 국내가맹점 이용실적 \n120만원 이상",
+         "cond_type_cd": "SPEND_REQ",
+         "excl_raw_txt": null,
+         "cond_basis_cd": "PREV_MONTH_SPEND",
+         "cond_status_cd": "DRAFT",
+         "cond_max_amt_excl": null
+        }
+       ],
+       "branch_no": 1
+      }
+     ],
+     "expr_status_cd": "DRAFT"
+    },
+    "value_num": 3,
+    "target_list": [
+     {
+      "target_nm": "네이버페이",
+      "target_key": "네이버페이",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "카카오페이",
+      "target_key": "카카오페이",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "PAYCO",
+      "target_key": "PAYCO",
+      "target_type_cd": "SERVICE"
+     },
+     {
+      "target_nm": "SSGPAY",
+      "target_key": "SSGPAY",
+      "target_type_cd": "SERVICE"
+     }
+    ],
+    "value_unit_cd": "PERCENT",
+    "rule_status_cd": "DRAFT"
+   }
+  ],
+  "item_limit_txt": "1만원 / 2만원 / 5만원 / 통합 월 적립 한도 / 특별/추가 적립",
+  "evidence": [
+   {
+    "evidence_id": "20261105_002734",
+    "quote_txt": "주요 간편결제 모아포인트 3% 추가적립",
+    "start_pos": 181,
+    "end_pos": 201,
+    "source_txt": "주요 간편결제 모아포인트 3% 추가적립"
+   },
+   {
+    "evidence_id": "20261105_002735",
+    "quote_txt": "3% 추가적립",
+    "start_pos": 195,
+    "end_pos": 201,
+    "source_txt": "3% 추가적립"
+   },
+   {
+    "evidence_id": "20261105_002736",
+    "quote_txt": "3% 추가적립",
+    "start_pos": 195,
+    "end_pos": 201,
+    "source_txt": "3% 추가적립"
+   },
+   {
+    "evidence_id": "20261105_002737",
+    "quote_txt": "3% 추가적립",
+    "start_pos": 195,
+    "end_pos": 201,
+    "source_txt": "3% 추가적립"
+   },
+   {
+    "evidence_id": "20261105_002738",
+    "quote_txt": "네이버페이, 카카오페이, PAYCO, SSGPAY",
+    "start_pos": 206,
+    "end_pos": 232,
+    "source_txt": "네이버페이, 카카오페이, PAYCO, SSGPAY"
+   },
+   {
+    "evidence_id": "20261105_002739",
+    "quote_txt": "1만원",
+    "start_pos": 414,
+    "end_pos": 416,
+    "source_txt": "1만원"
+   },
+   {
+    "evidence_id": "20261105_002740",
+    "quote_txt": "2만원",
+    "start_pos": 471,
+    "end_pos": 473,
+    "source_txt": "2만원"
+   },
+   {
+    "evidence_id": "20261105_002741",
+    "quote_txt": "5만원",
+    "start_pos": 529,
+    "end_pos": 531,
+    "source_txt": "5만원"
+   },
+   {
+    "evidence_id": "20261105_002742",
+    "quote_txt": "통합 월 적립 한도",
+    "start_pos": 772,
+    "end_pos": 781,
+    "source_txt": "통합 월 적립 한도"
+   },
+   {
+    "evidence_id": "20261105_002743",
+    "quote_txt": "특별/추가 적립",
+    "start_pos": 404,
+    "end_pos": 411,
+    "source_txt": "특별/추가 적립"
+   },
+   {
+    "evidence_id": "20261105_002744",
+    "quote_txt": "전월 국내가맹점 이용실적 \n30만원 이상",
+    "start_pos": 362,
+    "end_pos": 383,
+    "source_txt": "전월 국내가맹점 이용실적 \n30만원 이상"
+   },
+   {
+    "evidence_id": "20261105_002745",
+    "quote_txt": "전월 국내가맹점 이용실적 \n60만원 이상",
+    "start_pos": 419,
+    "end_pos": 440,
+    "source_txt": "전월 국내가맹점 이용실적 \n60만원 이상"
+   },
+   {
+    "evidence_id": "20261105_002746",
+    "quote_txt": "전월 국내가맹점 이용실적 \n120만원 이상",
+    "start_pos": 476,
+    "end_pos": 498,
+    "source_txt": "전월 국내가맹점 이용실적 \n120만원 이상"
+   },
+   {
+    "evidence_id": "20261105_002747",
+    "quote_txt": "전월 국내 가맹점 이용실적 30만원 이상 시 적립",
+    "start_pos": 239,
+    "end_pos": 265,
+    "source_txt": "전월 국내 가맹점 이용실적 30만원 이상 시 적립"
+   },
+   {
+    "evidence_id": "20261105_002748",
+    "quote_txt": "Two-in-One 결제서비스(체크매출) 이용 시 추가적립 제외",
+    "start_pos": 270,
+    "end_pos": 304,
+    "source_txt": "Two-in-One 결제서비스(체크매출) 이용 시 추가적립 제외"
+   },
+   {
+    "evidence_id": "20261105_002749",
+    "quote_txt": "추가적립은 주요 간편결제에 본 카드를 등록하여 온라인/오프라인\n에서 사용한 경우 제공",
+    "start_pos": 309,
+    "end_pos": 355,
+    "source_txt": "추가적립은 주요 간편결제에 본 카드를 등록하여 온라인/오프라인\n에서 사용한 경우 제공"
+   }
+  ]
+ },
+ "20/20261105_000092": {
+  "card_extr_stg_id": "20261105_000571",
+  "stg_raw_item": {
+   "rules": [
+    {
+     "rule_key": "bonus_base_discount",
+     "value_num": "50",
+     "conditions": [
+      {
+       "scope": "THIS_BENEFIT",
+       "cond_key": "bonus_spend_24m",
+       "evidence": [
+        {
+         "supports": "COND",
+         "quote_txt": "서비스 실적 기간 내 2,400만원 이상 이용 시",
+         "link_basis": "SAME_TEXT",
+         "support_key": "bonus_spend_24m"
+        }
+       ],
+       "negate_yn": false,
+       "cond_min_amt": 24000000,
+       "cond_raw_txt": "서비스 실적 기간 내 2,400만원 이상 이용 시",
+       "cond_type_cd": "SPEND_REQ",
+       "excl_raw_txt": null,
+       "cond_basis_cd": "ROLLING_MONTHS",
+       "cond_max_amt_excl": null,
+       "target_benefit_nms": []
+      }
+     ],
+     "limit_keys": [
+      "bonus_base_cap"
+     ],
+     "min_txn_amt": null,
+     "value_raw_txt": "50% 청구할인",
+     "value_unit_cd": "PERCENT",
+     "min_txn_raw_txt": null
+    },
+    {
+     "rule_key": "bonus_additional_cap_discount",
+     "value_num": "50",
+     "conditions": [
+      {
+       "scope": "THIS_BENEFIT",
+       "cond_key": "bonus_spend_36m",
+       "evidence": [
+        {
+         "supports": "COND",
+         "quote_txt": "3,600만원 이상 이용 시",
+         "link_basis": "SAME_TEXT",
+         "support_key": "bonus_spend_36m"
+        }
+       ],
+       "negate_yn": false,
+       "cond_min_amt": 36000000,
+       "cond_raw_txt": "3,600만원 이상 이용 시",
+       "cond_type_cd": "SPEND_REQ",
+       "excl_raw_txt": null,
+       "cond_basis_cd": "ROLLING_MONTHS",
+       "cond_max_amt_excl": null,
+       "target_benefit_nms": []
+      }
+     ],
+     "limit_keys": [
+      "bonus_additional_cap"
+     ],
+     "min_txn_amt": null,
+     "value_raw_txt": "50% 청구할인",
+     "value_unit_cd": "PERCENT",
+     "min_txn_raw_txt": null
+    }
+   ],
+   "limits": [
+    {
+     "limit_key": "bonus_base_cap",
+     "limit_num": 100000,
+     "period_cd": "UNKNOWN",
+     "cap_unit_cd": "KRW",
+     "limit_raw_txt": "보너스 할인 한도 10만원 제공",
+     "shared_scope_txt": null,
+     "applies_to_benefit_nms": [
+      "골프/프리미엄 아울렛 50% 청구 할인"
+     ]
+    },
+    {
+     "limit_key": "bonus_additional_cap",
+     "limit_num": 100000,
+     "period_cd": "UNKNOWN",
+     "cap_unit_cd": "KRW",
+     "limit_raw_txt": "보너스 할인 한도 10만원 추가 제공",
+     "shared_scope_txt": null,
+     "applies_to_benefit_nms": [
+      "골프/프리미엄 아울렛 50% 청구 할인"
+     ]
+    }
+   ],
+   "bnft_nm": "골프/프리미엄 아울렛 50% 청구 할인",
+   "targets": [
+    {
+     "target_nm": "골프업종",
+     "target_type_cd": "INDUSTRY"
+    },
+    {
+     "target_nm": "골프연습장업종(스크린골프 포함)",
+     "target_type_cd": "INDUSTRY"
+    },
+    {
+     "target_nm": "카카오골프",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "롯데프리미엄 아울렛",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "신세계사이먼",
+     "target_type_cd": "MERCHANT"
+    },
+    {
+     "target_nm": "현대프리미엄 아울렛",
+     "target_type_cd": "MERCHANT"
+    }
+   ],
+   "evidence": [
+    {
+     "supports": "BNFT",
+     "quote_txt": "골프/프리미엄 아울렛 50% 청구 할인",
+     "link_basis": "SAME_TEXT",
+     "support_key": null
+    },
+    {
+     "supports": "RULE",
+     "quote_txt": "50% 청구할인",
+     "link_basis": "SAME_TEXT",
+     "support_key": "bonus_base_discount"
+    },
+    {
+     "supports": "RULE",
+     "quote_txt": "50% 청구할인",
+     "link_basis": "SAME_TEXT",
+     "support_key": "bonus_additional_cap_discount"
+    },
+    {
+     "supports": "LIMIT",
+     "quote_txt": "보너스 할인 \n한도 10만원 제공",
+     "link_basis": "SAME_TEXT",
+     "support_key": "bonus_base_cap"
+    },
+    {
+     "supports": "LIMIT",
+     "quote_txt": "보너스 할인 한도 10만원 추가 제공",
+     "link_basis": "SAME_TEXT",
+     "support_key": "bonus_additional_cap"
+    },
+    {
+     "supports": "TARGET",
+     "quote_txt": "골프 : 골프업종, 골프연습장업종(스크린골프 포함), 카카오골프",
+     "link_basis": "SAME_TEXT",
+     "support_key": null
+    },
+    {
+     "supports": "TARGET",
+     "quote_txt": "프리미엄 아울렛 : 롯데프리미엄 아울렛, 신세계사이먼, 현대프리미엄 아울렛",
+     "link_basis": "SAME_TEXT",
+     "support_key": null
+    },
+    {
+     "supports": "APPLICABILITY",
+     "quote_txt": "BONUS 바우처는 본인 회원 명의의 ‘JADE First’ 카드로",
+     "link_basis": "SAME_TEXT",
+     "support_key": null
+    },
+    {
+     "supports": "APPLICABILITY",
+     "quote_txt": "서비스 실적 금액 달성 다음달부터 다음 해 서비스 실적 기간 말일까지",
+     "link_basis": "TABLE_IMAGE",
+     "support_key": null
+    }
+   ],
+   "item_key": "bonus_voucher",
+   "brand_txt": null,
+   "certainty": "HIGH",
+   "relations": [],
+   "conditions": [
+    {
+     "scope": "THIS_BENEFIT",
+     "cond_key": "bonus_spend_period",
+     "evidence": [
+      {
+       "supports": "COND",
+       "quote_txt": "서비스 실적 기간 : 매년 / 카드 발급 월 포함 12개월",
+       "link_basis": "TABLE_IMAGE",
+       "support_key": "bonus_spend_period"
+      }
+     ],
+     "negate_yn": false,
+     "cond_min_amt": null,
+     "cond_raw_txt": "서비스 실적 기간 : 매년 / 카드 발급 월 포함 12개월",
+     "cond_type_cd": "ETC",
+     "excl_raw_txt": null,
+     "cond_basis_cd": "ROLLING_MONTHS",
+     "cond_max_amt_excl": null,
+     "target_benefit_nms": []
+    },
+    {
+     "scope": "THIS_BENEFIT",
+     "cond_key": "bonus_payment_card",
+     "evidence": [
+      {
+       "supports": "COND",
+       "quote_txt": "본인 회원 명의의 ‘JADE First’ 카드로",
+       "link_basis": "SAME_TEXT",
+       "support_key": "bonus_payment_card"
+      }
+     ],
+     "negate_yn": false,
+     "cond_min_amt": null,
+     "cond_raw_txt": "본인 회원 명의의 ‘JADE First’ 카드로",
+     "cond_type_cd": "PAYMENT_METHOD",
+     "excl_raw_txt": null,
+     "cond_basis_cd": null,
+     "cond_max_amt_excl": null,
+     "target_benefit_nms": []
+    },
+    {
+     "scope": "THIS_BENEFIT",
+     "cond_key": "bonus_golf_offline",
+     "evidence": [
+      {
+       "supports": "COND",
+       "quote_txt": "골프업종, 골프연습장업종(스크린골프 포함) \n\t : 오프라인 결제 건에 한하여 서비스 제공",
+       "link_basis": "SAME_TEXT",
+       "support_key": "bonus_golf_offline"
+      }
+     ],
+     "negate_yn": false,
+     "cond_min_amt": null,
+     "cond_raw_txt": "골프업종, 골프연습장업종(스크린골프 포함) \n\t : 오프라인 결제 건에 한하여 서비스 제공",
+     "cond_type_cd": "MERCHANT_RULE",
+     "excl_raw_txt": null,
+     "cond_basis_cd": null,
+     "cond_max_amt_excl": null,
+     "target_benefit_nms": []
+    },
+    {
+     "scope": "THIS_BENEFIT",
+     "cond_key": "bonus_kakao_channel",
+     "evidence": [
+      {
+       "supports": "COND",
+       "quote_txt": "카카오골프 : 공식 홈페이지(온라인/모바일앱)을 통한\n\t 골프장 예약, 골프용품 결제 건에 한하여 서비스 제공",
+       "link_basis": "SAME_TEXT",
+       "support_key": "bonus_kakao_channel"
+      }
+     ],
+     "negate_yn": false,
+     "cond_min_amt": null,
+     "cond_raw_txt": "카카오골프 : 공식 홈페이지(온라인/모바일앱)을 통한\n\t 골프장 예약, 골프용품 결제 건에 한하여 서비스 제공",
+     "cond_type_cd": "MERCHANT_RULE",
+     "excl_raw_txt": null,
+     "cond_basis_cd": null,
+     "cond_max_amt_excl": null,
+     "target_benefit_nms": []
+    },
+    {
+     "scope": "THIS_BENEFIT",
+     "cond_key": "bonus_outlet_offline",
+     "evidence": [
+      {
+       "supports": "COND",
+       "quote_txt": "프리미엄 아울렛 : 오프라인 결제 건에 한하여 서비스 제공",
+       "link_basis": "SAME_TEXT",
+       "support_key": "bonus_outlet_offline"
+      }
+     ],
+     "negate_yn": false,
+     "cond_min_amt": null,
+     "cond_raw_txt": "프리미엄 아울렛 : 오프라인 결제 건에 한하여 서비스 제공",
+     "cond_type_cd": "MERCHANT_RULE",
+     "excl_raw_txt": null,
+     "cond_basis_cd": null,
+     "cond_max_amt_excl": null,
+     "target_benefit_nms": []
+    },
+    {
+     "scope": "THIS_BENEFIT",
+     "cond_key": "bonus_spend_exclusions",
+     "evidence": [
+      {
+       "supports": "COND",
+       "quote_txt": "승인취소, 매입취소 결제 건은 서비스 실적 금액에서 제외",
+       "link_basis": "TABLE_IMAGE",
+       "support_key": "bonus_spend_exclusions"
+      }
+     ],
+     "negate_yn": true,
+     "cond_min_amt": null,
+     "cond_raw_txt": "승인취소, 매입취소 결제 건은 서비스 실적 금액에서 제외",
+     "cond_type_cd": "SPEND_EXCL",
+     "excl_raw_txt": "승인취소, 매입취소 결제 건",
+     "cond_basis_cd": null,
+     "cond_max_amt_excl": null,
+     "target_benefit_nms": []
+    },
+    {
+     "scope": "THIS_BENEFIT",
+     "cond_key": "bonus_primary_member",
+     "evidence": [
+      {
+       "supports": "COND",
+       "quote_txt": "카드 발급 본인 회원에 한하여 제공됩니다.(가족카드 회원 제공 불가)",
+       "link_basis": "TABLE_IMAGE",
+       "support_key": "bonus_primary_member"
+      }
+     ],
+     "negate_yn": false,
+     "cond_min_amt": null,
+     "cond_raw_txt": "카드 발급 본인 회원에 한하여 제공됩니다.(가족카드 회원 제공 불가)",
+     "cond_type_cd": "ETC",
+     "excl_raw_txt": null,
+     "cond_basis_cd": null,
+     "cond_max_amt_excl": null,
+     "target_benefit_nms": []
+    },
+    {
+     "scope": "THIS_BENEFIT",
+     "cond_key": "bonus_expiry",
+     "evidence": [
+      {
+       "supports": "COND",
+       "quote_txt": "제공기간을 경과한 미사용바우처는 자동 소멸되며 다음해로 이월되지 않습니다.",
+       "link_basis": "TABLE_IMAGE",
+       "support_key": "bonus_expiry"
+      }
+     ],
+     "negate_yn": false,
+     "cond_min_amt": null,
+     "cond_raw_txt": "제공기간을 경과한 미사용바우처는 자동 소멸되며 다음해로 이월되지 않습니다.",
+     "cond_type_cd": "ETC",
+     "excl_raw_txt": null,
+     "cond_basis_cd": null,
+     "cond_max_amt_excl": null,
+     "target_benefit_nms": []
+    }
+   ],
+   "bnft_type_cd": "DISCOUNT",
+   "excluded_cards": [],
+   "applicable_cards": [
+    "JADE First"
+   ],
+   "uncertainty_note": "3,600만원 이상 실적에 따른 10만원은 별도 할인율이 아니라 보너스 할인 한도의 추가분입니다.",
+   "service_grade_txt": null,
+   "is_common_candidate": false,
+   "no_condition_stated": false,
+   "validity_period_txt": "서비스 실적 금액 달성 다음달부터 다음 해 서비스 실적 기간 말일까지",
+   "selection_service_txt": null
+  },
+  "rule_list": [
+   {
+    "rule_key": "bonus_base_discount",
+    "cond_expr": {
+     "branches": [
+      {
+       "atoms": [
+        {
+         "atom_key": "bonus_spend_24m",
+         "atom_seq": 1,
+         "negate_yn": false,
+         "cond_min_amt": 24000000,
+         "cond_raw_txt": "서비스 실적 기간 내 2,400만원 이상 이용 시",
+         "cond_type_cd": "SPEND_REQ",
+         "excl_raw_txt": null,
+         "cond_basis_cd": "ROLLING_MONTHS",
+         "cond_status_cd": "DRAFT",
+         "cond_max_amt_excl": null
+        }
+       ],
+       "branch_no": 1
+      }
+     ],
+     "expr_status_cd": "DRAFT"
+    },
+    "value_num": 50,
+    "target_list": [
+     {
+      "target_nm": "골프업종",
+      "target_key": "골프업종",
+      "target_type_cd": "INDUSTRY"
+     },
+     {
+      "target_nm": "골프연습장업종(스크린골프 포함)",
+      "target_key": "골프연습장업종(스크린골프 포함)",
+      "target_type_cd": "INDUSTRY"
+     },
+     {
+      "target_nm": "카카오골프",
+      "target_key": "카카오골프",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "롯데프리미엄 아울렛",
+      "target_key": "롯데프리미엄 아울렛",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "신세계사이먼",
+      "target_key": "신세계사이먼",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "현대프리미엄 아울렛",
+      "target_key": "현대프리미엄 아울렛",
+      "target_type_cd": "MERCHANT"
+     }
+    ],
+    "value_unit_cd": "PERCENT",
+    "rule_status_cd": "DRAFT"
+   },
+   {
+    "rule_key": "bonus_additional_cap_discount",
+    "cond_expr": {
+     "branches": [
+      {
+       "atoms": [
+        {
+         "atom_key": "bonus_spend_36m",
+         "atom_seq": 1,
+         "negate_yn": false,
+         "cond_min_amt": 36000000,
+         "cond_raw_txt": "3,600만원 이상 이용 시",
+         "cond_type_cd": "SPEND_REQ",
+         "excl_raw_txt": null,
+         "cond_basis_cd": "ROLLING_MONTHS",
+         "cond_status_cd": "DRAFT",
+         "cond_max_amt_excl": null
+        }
+       ],
+       "branch_no": 1
+      }
+     ],
+     "expr_status_cd": "DRAFT"
+    },
+    "value_num": 50,
+    "target_list": [
+     {
+      "target_nm": "골프업종",
+      "target_key": "골프업종",
+      "target_type_cd": "INDUSTRY"
+     },
+     {
+      "target_nm": "골프연습장업종(스크린골프 포함)",
+      "target_key": "골프연습장업종(스크린골프 포함)",
+      "target_type_cd": "INDUSTRY"
+     },
+     {
+      "target_nm": "카카오골프",
+      "target_key": "카카오골프",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "롯데프리미엄 아울렛",
+      "target_key": "롯데프리미엄 아울렛",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "신세계사이먼",
+      "target_key": "신세계사이먼",
+      "target_type_cd": "MERCHANT"
+     },
+     {
+      "target_nm": "현대프리미엄 아울렛",
+      "target_key": "현대프리미엄 아울렛",
+      "target_type_cd": "MERCHANT"
+     }
+    ],
+    "value_unit_cd": "PERCENT",
+    "rule_status_cd": "DRAFT"
+   }
+  ],
+  "item_limit_txt": "보너스 할인 한도 10만원 제공 / 보너스 할인 한도 10만원 추가 제공",
+  "evidence": [
+   {
+    "evidence_id": "20261105_002444",
+    "quote_txt": "골프/프리미엄 아울렛 50% 청구 할인",
+    "start_pos": 72,
+    "end_pos": 92,
+    "source_txt": "골프/프리미엄 아울렛 50% 청구 할인"
+   },
+   {
+    "evidence_id": "20261105_002445",
+    "quote_txt": "50% 청구할인",
+    "start_pos": 843,
+    "end_pos": 850,
+    "source_txt": "50% 청구할인"
+   },
+   {
+    "evidence_id": "20261105_002446",
+    "quote_txt": "50% 청구할인",
+    "start_pos": 843,
+    "end_pos": 850,
+    "source_txt": "50% 청구할인"
+   },
+   {
+    "evidence_id": "20261105_002447",
+    "quote_txt": "보너스 할인 \n한도 10만원 제공",
+    "start_pos": 712,
+    "end_pos": 729,
+    "source_txt": "보너스 할인 \n한도 10만원 제공"
+   },
+   {
+    "evidence_id": "20261105_002448",
+    "quote_txt": "보너스 할인 한도 10만원 추가 제공",
+    "start_pos": 749,
+    "end_pos": 768,
+    "source_txt": "보너스 할인 한도 10만원 추가 제공"
+   },
+   {
+    "evidence_id": "20261105_002449",
+    "quote_txt": "골프 : 골프업종, 골프연습장업종(스크린골프 포함), 카카오골프",
+    "start_pos": 878,
+    "end_pos": 912,
+    "source_txt": "골프 : 골프업종, 골프연습장업종(스크린골프 포함), 카카오골프"
+   },
+   {
+    "evidence_id": "20261105_002450",
+    "quote_txt": "프리미엄 아울렛 : 롯데프리미엄 아울렛, 신세계사이먼, 현대프리미엄 아울렛",
+    "start_pos": 919,
+    "end_pos": 959,
+    "source_txt": "프리미엄 아울렛 : 롯데프리미엄 아울렛, 신세계사이먼, 현대프리미엄 아울렛"
+   },
+   {
+    "evidence_id": "20261105_002451",
+    "quote_txt": "BONUS 바우처는 본인 회원 명의의 ‘JADE First’ 카드로",
+    "start_pos": 779,
+    "end_pos": 815,
+    "source_txt": "BONUS 바우처는 본인 회원 명의의 ‘JADE First’ 카드로"
+   },
+   {
+    "evidence_id": "20261105_002452",
+    "quote_txt": "서비스 실적 금액 달성 다음달부터 다음 해 서비스 실적 기간 말일까지",
+    "start_pos": 494,
+    "end_pos": 531,
+    "source_txt": "서비스 실적 금액 달성 다음달부터 다음 해 서비스 실적 기간 말일까지"
+   },
+   {
+    "evidence_id": "20261105_002453",
+    "quote_txt": "서비스 실적 기간 내 2,400만원 이상 이용 시",
+    "start_pos": 684,
+    "end_pos": 710,
+    "source_txt": "서비스 실적 기간 내 2,400만원 이상 이용 시"
+   },
+   {
+    "evidence_id": "20261105_002454",
+    "quote_txt": "3,600만원 이상 이용 시",
+    "start_pos": 733,
+    "end_pos": 747,
+    "source_txt": "3,600만원 이상 이용 시"
+   },
+   {
+    "evidence_id": "20261105_002455",
+    "quote_txt": "서비스 실적 기간 : 매년 / 카드 발급 월 포함 12개월",
+    "start_pos": 533,
+    "end_pos": 564,
+    "source_txt": "서비스 실적 기간 : 매년 / 카드 발급 월 포함 12개월"
+   },
+   {
+    "evidence_id": "20261105_002456",
+    "quote_txt": "본인 회원 명의의 ‘JADE First’ 카드로",
+    "start_pos": 790,
+    "end_pos": 815,
+    "source_txt": "본인 회원 명의의 ‘JADE First’ 카드로"
+   },
+   {
+    "evidence_id": "20261105_002457",
+    "quote_txt": "골프업종, 골프연습장업종(스크린골프 포함) \n\t : 오프라인 결제 건에 한하여 서비스 제공",
+    "start_pos": 963,
+    "end_pos": 1012,
+    "source_txt": "골프업종, 골프연습장업종(스크린골프 포함) \n\t : 오프라인 결제 건에 한하여 서비스 제공"
+   },
+   {
+    "evidence_id": "20261105_002458",
+    "quote_txt": "카카오골프 : 공식 홈페이지(온라인/모바일앱)을 통한\n\t 골프장 예약, 골프용품 결제 건에 한하여 서비스 제공",
+    "start_pos": 1016,
+    "end_pos": 1076,
+    "source_txt": "카카오골프 : 공식 홈페이지(온라인/모바일앱)을 통한\n\t 골프장 예약, 골프용품 결제 건에 한하여 서비스 제공"
+   },
+   {
+    "evidence_id": "20261105_002459",
+    "quote_txt": "프리미엄 아울렛 : 오프라인 결제 건에 한하여 서비스 제공",
+    "start_pos": 1080,
+    "end_pos": 1111,
+    "source_txt": "프리미엄 아울렛 : 오프라인 결제 건에 한하여 서비스 제공"
+   },
+   {
+    "evidence_id": "20261105_002460",
+    "quote_txt": "승인취소, 매입취소 결제 건은 서비스 실적 금액에서 제외",
+    "start_pos": 1242,
+    "end_pos": 1272,
+    "source_txt": "승인취소, 매입취소 결제 건은 서비스 실적 금액에서 제외"
+   },
+   {
+    "evidence_id": "20261105_002461",
+    "quote_txt": "카드 발급 본인 회원에 한하여 제공됩니다.(가족카드 회원 제공 불가)",
+    "start_pos": 1124,
+    "end_pos": 1161,
+    "source_txt": "카드 발급 본인 회원에 한하여 제공됩니다.(가족카드 회원 제공 불가)"
+   },
+   {
+    "evidence_id": "20261105_002462",
+    "quote_txt": "제공기간을 경과한 미사용바우처는 자동 소멸되며 다음해로 이월되지 않습니다.",
+    "start_pos": 1165,
+    "end_pos": 1205,
+    "source_txt": "제공기간을 경과한 미사용바우처는 자동 소멸되며 다음해로 이월되지 않습니다."
+   }
+  ]
+ }
+}

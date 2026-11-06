@@ -105,3 +105,9 @@ RETURN b.card_common_id AS card_common_id, b.card_common_bnft_id AS card_common_
 MATCH (r:dp_bnft_rule)-[:dp_targets]->(t:dp_rule_target)
 RETURN r.card_id AS card_id, r.card_bnft_id AS card_bnft_id, r.rule_key AS rule_key,
        t.target_type_cd AS target_type_cd, t.target_key AS target_key, t.target_nm AS target_nm
+
+// name: benefit_item_data
+// 2026-11-06 P2: 혜택 노드 source_json의 item_data. 키가 없으면 has_item_data=false(NULL 값과 구분한다).
+MATCH (b:dp_card_bnft)
+WITH b, apoc.convert.fromJsonMap(b.source_json) AS src
+RETURN b.card_id AS card_id, b.card_bnft_id AS card_bnft_id, 'item_data' IN keys(src) AS has_item_data, src.item_data AS item_data

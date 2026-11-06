@@ -82,6 +82,85 @@ def parse_vector(value) -> list[float]:
     return [float(item) for item in value]
 # endregion
 
+# region 원천 컬럼 매핑 (2026-11-06 P2) — 열 목록을 명시하는 스냅샷 SELECT는 이 표에서 만든다.
+# 원천 컬럼 → 스냅샷 키. 표에 없는 컬럼은 SOURCE_EXCLUDED에 사유와 함께 분류해야 한다(neo4j_validate.column_coverage가 검사).
+# 혜택은 기존 그래프 key를 유지하려고 예전 card_bnft 컬럼명 별칭을 쓴다. item_data는 2026-11-06에 추가했다(limit_tiers 등).
+BENEFIT_COLUMNS = {
+    "card_id": "card_id", "card_product_item_id": "card_bnft_id", "item_cd": "bnft_cd", "item_nm": "bnft_nm",
+    "item_subtype_cd": "bnft_type_cd", "item_origin_cd": "bnft_origin_cd", "item_scope_cd": "bnft_scope_cd",
+    "item_brand_opt_cds": "bnft_brand_opt_cds", "item_cond_expr": "bnft_cond_expr", "rule_list": "rule_list",
+    "relation_list": "relation_list", "verification_status_cd": "verification_status_cd", "item_valid_from": "bnft_valid_from",
+    "item_valid_to_excl": "bnft_valid_to_excl", "item_rule_txt": "bnft_rule_txt", "item_limit_txt": "bnft_limit_txt",
+    "item_search_txt": "bnft_search_txt", "item_embedding": "bnft_embedding", "item_data": "item_data"}
+ITEM_COLUMNS = {name: name for name in (
+    "card_id", "card_product_item_id", "item_type_cd", "item_cd", "item_nm", "item_scope_cd", "item_brand_opt_cds", "item_data",
+    "verification_status_cd", "item_valid_from", "item_valid_to_excl", "item_rule_txt", "item_limit_txt")}
+# Neo4j 관계 속성은 ev_link_id를 유지한다(재적재 전까지). 관계 key가 원천 행으로 만들어지므로 기존 필드명(card_bnft_id)을 유지한다.
+LINK_COLUMNS = {"card_id": "card_id", "evidence_link_id": "ev_link_id", "ev_subject_cd": "ev_subject_cd",
+                "card_product_item_id": "card_bnft_id", "rule_key": "rule_key", "relation_key": "relation_key",
+                "ev_item_cd": "ev_item_cd", "ev_item_key": "ev_item_key", "evidence_id": "evidence_id"}
+# 스냅샷에 옮기지 않는 원천 컬럼과 사유. 검색 투영 컬럼은 원행에서 떼어 search 속성으로 올린다(SEARCH_COLUMNS).
+AUDIT_COLUMNS = ("create_date", "create_user_id", "update_date", "update_user_id")
+SOURCE_EXCLUDED = {
+    "benefits": {"item_type_cd": "BENEFIT 고정값. 적재기가 item_type_cd='BENEFIT' 속성으로 기록",
+                 "item_ref": "card_id·card_product_item_id에서 만든 표준 참조(중복 정보)",
+                 **{name: "감사 컬럼" for name in AUDIT_COLUMNS}},
+    "items": {"item_subtype_cd": "CHECK card_product_item_subtype_ck: BENEFIT 외에는 NULL",
+              "item_cond_expr": "CHECK card_product_item_nonbnft_ck: BENEFIT 외에는 NULL",
+              "rule_list": "CHECK card_product_item_nonbnft_ck: BENEFIT 외에는 []",
+              "relation_list": "CHECK card_product_item_nonbnft_ck: BENEFIT 외에는 []",
+              "item_origin_cd": "BENEFIT 외 항목은 현재 모두 LOCAL. 추가하면 항목 노드 source_json이 바뀌므로 별도 결정",
+              "item_search_txt": "혜택 외 항목은 검색 투영 대상이 아님", "item_embedding": "혜택 외 항목은 검색 투영 대상이 아님",
+              "item_ref": "card_id·card_product_item_id에서 만든 표준 참조(중복 정보)",
+              **{name: "감사 컬럼" for name in AUDIT_COLUMNS}},
+    "links": {"card_doc_id": "근거 노드(dp_card_source_evidence)→청크→페이지→문서 경로로 표현(같은 값 승계)",
+              "page_no": "근거 노드 경로로 표현", "card_doc_chunk_id": "근거 노드 경로로 표현"},
+}
+SOURCE_TABLES = {"benefits": "card_product_item", "items": "card_product_item", "links": "card_evidence_link"}
+
+
+def select_sql(columns: dict, table: str, where: str, order: str) -> str:
+    """원천 컬럼 → 스냅샷 키 표로 SELECT 문을 만든다(별칭이 같으면 생략)."""
+    items = ", ".join(column if alias == column else f"{column} AS {alias}" for column, alias in columns.items())
+    return f"SELECT {items} FROM db_pipeline.{table}{where} ORDER BY {order}"
+
+
+BENEFITS_SQL = select_sql(BENEFIT_COLUMNS, "card_product_item", " WHERE item_type_cd = 'BENEFIT'", "card_id, card_product_item_id")
+ITEMS_SQL = select_sql(ITEM_COLUMNS, "card_product_item", " WHERE item_type_cd <> 'BENEFIT'", "card_id, card_product_item_id")
+LINKS_SQL = select_sql(LINK_COLUMNS, "card_evidence_link", "", "card_id, evidence_link_id")
+SNAPSHOT_COLUMNS = {"benefits": BENEFIT_COLUMNS, "items": ITEM_COLUMNS, "links": LINK_COLUMNS}
+
+
+def column_coverage(source_columns: dict[str, list[str]], snapshot: dict | None = None) -> list[str]:
+    """열 목록을 명시한 스냅샷 SELECT가 원천 컬럼을 빠짐없이 분류했는지 검사한다. 문제 목록(없으면 빈 목록).
+
+    Args:
+        source_columns: 원천 테이블 → 실제 컬럼 목록(information_schema에서 읽은 값). 스냅샷 함수와 독립된 입력이다.
+        snapshot: load_snapshot 결과. 주면 그래프로 옮긴다고 분류한 컬럼이 실제 스냅샷 행 키에 있는지도 확인한다
+                  (검색 투영 컬럼은 원행에서 떼므로 제외).
+    """
+    problems = []
+    for name, mapping in SNAPSHOT_COLUMNS.items():
+        actual = source_columns.get(SOURCE_TABLES[name])
+        if not actual:
+            problems.append(f"{name}: 원천 테이블 {SOURCE_TABLES[name]}의 컬럼을 읽지 못했습니다")
+            continue
+        excluded = SOURCE_EXCLUDED.get(name, {})
+        unclassified = [c for c in actual if c not in mapping and c not in excluded]
+        if unclassified:
+            problems.append(f"{name}: 분류되지 않은 원천 컬럼 {unclassified}")
+        missing = [c for c in mapping if c not in actual]
+        if missing:
+            problems.append(f"{name}: 원천에 없는 컬럼을 매핑했습니다 {missing}")
+        for row in (snapshot or {}).get(name, [])[:1]:
+            projected = {BENEFIT_COLUMNS[c] for c in ("item_search_txt", "item_embedding")} if name == "benefits" else set()
+            absent = [c for c, alias in mapping.items() if alias not in row and alias not in projected]
+            if absent:
+                problems.append(f"{name}: 스냅샷 행에 없는 매핑 컬럼 {absent}")
+    return problems
+# endregion
+
+
 # 라벨별 식별 속성. 테이블은 PostgreSQL PK, JSONB에서 나온 노드는 소유자 PK와 JSON 내부 키로 만든다.
 PK_FIELDS = {
     "card_product": ("card_id",),
@@ -175,20 +254,11 @@ def load_snapshot(conn):
             "products": "SELECT * FROM db_pipeline.card_product ORDER BY card_id",
             "product_docs": "SELECT * FROM db_pipeline.card_product_doc ORDER BY card_id, card_doc_id",
             # 카드 혜택 원천은 card_product_item(BENEFIT). 그래프 매핑은 기존 card_bnft 필드명을 쓴다.
-            "benefits": ("SELECT card_id, card_product_item_id AS card_bnft_id, item_cd AS bnft_cd, item_nm AS bnft_nm, "
-                         "item_subtype_cd AS bnft_type_cd, item_origin_cd AS bnft_origin_cd, item_scope_cd AS bnft_scope_cd, "
-                         "item_brand_opt_cds AS bnft_brand_opt_cds, item_cond_expr AS bnft_cond_expr, rule_list, relation_list, "
-                         "verification_status_cd, item_valid_from AS bnft_valid_from, item_valid_to_excl AS bnft_valid_to_excl, "
-                         "item_rule_txt AS bnft_rule_txt, item_limit_txt AS bnft_limit_txt, item_search_txt AS bnft_search_txt, "
-                         "item_embedding AS bnft_embedding "
-                         "FROM db_pipeline.card_product_item WHERE item_type_cd = 'BENEFIT' ORDER BY card_id, card_product_item_id"),
+            "benefits": BENEFITS_SQL,
             # Neo4j 관계 속성은 ev_link_id를 유지한다(재적재 전까지). 승계한 문서·페이지·청크 ID는 원문 근거 노드 경로로 이미 표현된다.
             # 관계 key가 원천 행으로 만들어지므로 기존 필드명(card_bnft_id)을 유지한다.
-            "links": ("SELECT card_id, evidence_link_id AS ev_link_id, ev_subject_cd, card_product_item_id AS card_bnft_id, rule_key, relation_key, "
-                      "ev_item_cd, ev_item_key, evidence_id FROM db_pipeline.card_evidence_link ORDER BY card_id, evidence_link_id"),
-            "items": ("SELECT card_id, card_product_item_id, item_type_cd, item_cd, item_nm, item_scope_cd, item_brand_opt_cds, "
-                      "item_data, verification_status_cd, item_valid_from, item_valid_to_excl, item_rule_txt, item_limit_txt "
-                      "FROM db_pipeline.card_product_item WHERE item_type_cd <> 'BENEFIT' ORDER BY card_id, card_product_item_id"),
+            "links": LINKS_SQL,
+            "items": ITEMS_SQL,
             "evidence": "SELECT * FROM db_pipeline.card_source_evidence ORDER BY evidence_id",
             "chunks": "SELECT * FROM db_pipeline.card_doc_chunk ORDER BY card_doc_id, page_no, card_doc_chunk_id",
             "pages": "SELECT * FROM db_pipeline.card_doc_page ORDER BY card_doc_id, page_no",

@@ -246,6 +246,8 @@ answer_text 작성 규칙 (고객이 읽는 설명문):
 - 없는 우선순위, 중복 적용, 예외 규칙을 만들지 않는다.
 - rule_selection_unresolved에 있는 혜택은 지급액을 하나로 정하지 않는다. tiers의 금액 구간을 모두 쓰고, 적용 방식이 미확정임을 분리해서 쓴다.
 - 금액 구간은 기준 금액과 지급액을 짝지어 모두 쓴다. "A원 또는 B원"처럼 줄이지 않는다.
+- 혜택에 limit_tiers가 있으면 구간별 한도는 limit_tiers의 구간(label)과 cap(공유 한도는 shared)을 짝지어 쓴다. 한 구간의 한도 금액을 다른 구간에 쓰지 않는다. 한도는 지급액(rules의 value)이 아니다.
+- tiers의 payout_known이 false인 구간은 지급액이 조회 자료에 없다. 그 구간의 지급액을 쓰지 말고 기준 금액(구간)만 쓴다. 한도(limits) 금액을 그 구간의 지급액으로 옮겨 쓰지 않는다.
 - 결제 금액을 물었는데 여러 구간이 함께 해당하면 rule_selection_unresolved의 rule_text를 그대로 옮긴 뒤 "이 금액은 여러 구간에 모두 해당하는데, 어떤 금액이 적용되는지는 아직 확정되지 않았습니다."처럼 쓴다. 이때 answer_text는 3문장 이내로 쓰고 한도와 공통 제외는 points에만 쓴다.
 - points의 금액 구간 문장에는 구간 사실만 쓴다. 적용 방식이 미확정이라는 말은 conclusion과 answer_text에만 쓴다.
 - 계산은 같은 단위 두 값의 차이만 쓰고, 두 값을 문장에 함께 쓴다.
@@ -718,6 +720,11 @@ def benefit_context(detail: dict) -> dict:
         rules.append({"rule_key": rule.get("rule_key"), "value": rule.get("value_num"), "unit": rule.get("value_unit_cd"),
                       "status": rule.get("rule_status_cd"), "targets": item["targets"]})
     limits = [{"text": item["limit_text"]} for item in detail["limits"]]
+    tiers = limit_tier_view(benefit.get("item_data"))
+    if tiers:
+        extra_limits = {"limit_tiers": tiers}       # 구간별 한도(item_data.limit_tiers). 없으면 키를 넣지 않는다(기존 문맥 유지).
+    else:
+        extra_limits = {}
     common = detail["context"].get("common")
     extra = {} if not common else {
         "common_service": {"name": common.get("common_nm"), "brand": common.get("brand_cd"), "grade": common.get("service_grade_cd")},
@@ -727,7 +734,34 @@ def benefit_context(detail: dict) -> dict:
             "card": source(detail["context"]["card"]).get("product_nm"), "type": benefit.get("bnft_type_cd"),
             "verification_status": benefit.get("verification_status_cd"),
             "rule_text": benefit.get("bnft_rule_txt"), "rules": rules,
-            "conditions": condition_groups(detail["conditions"]), "limits": limits}
+            "conditions": condition_groups(detail["conditions"]), "limits": limits, **extra_limits}
+
+
+def limit_tier_view(item_data) -> list[dict]:
+    """item_data.limit_tiers를 답변 문맥용 구간 목록으로 바꾼다(2026-11-06 P2). 없거나 형식이 다르면 빈 목록.
+
+    각 구간: 실적 기준(basis)·하한·상한(없으면 None)·원문 구간 표기, 이 혜택의 한도(cap)와 공유 한도(shared). 금액은 저장값 그대로다.
+    한도는 기간 누적 상한이며 규칙의 지급값(value)과 다른 값이다.
+    """
+    data = item_data if isinstance(item_data, dict) else {}
+    tiers = data.get("limit_tiers") if isinstance(data.get("limit_tiers"), dict) else None
+    if not tiers or not isinstance(tiers.get("tiers"), list):
+        return []
+    own = tiers.get("own") or {}
+    out = []
+    for tier in tiers["tiers"]:
+        key = tier.get("tier_key")
+        cap = (own.get("caps") or {}).get(key) or {}
+        if cap.get("amount") is None or tier.get("min_amt") is None:
+            continue
+        out.append({"label": tier.get("label"), "basis": tiers.get("basis_cd"), "min_amt": tier["min_amt"],
+                    "max_amt": tier.get("max_amt_excl"), "rule_key": tier.get("rule_key"),
+                    "cap": {"column": own.get("column"), "raw": cap.get("raw"), "amount": cap["amount"]},
+                    "shared": [{"column": group.get("column"), "raw": ((group.get("caps") or {}).get(key) or {}).get("raw"),
+                                "amount": ((group.get("caps") or {}).get(key) or {}).get("amount"),
+                                "members": group.get("member_benefit_nms") or []}
+                               for group in tiers.get("shared") or [] if ((group.get("caps") or {}).get(key) or {}).get("amount") is not None]})
+    return out
 
 
 def _card_item(ref: str | None) -> tuple[int, str] | None:
@@ -996,6 +1030,9 @@ def rule_conflicts(benefits: list[dict], amount: int | None) -> list[dict]:
         tiers = sorted(({"rule_key": rule["rule_key"], "value": rule["value"], "unit": rule["unit"], "min_amt": spend(rule, "min_amt"),
                          "max_amt": spend(rule, "max_amt"), "basis": spend(rule, "basis")} for rule in benefit["rules"]),
                        key=lambda tier: tier["min_amt"] or 0)
+        for tier in tiers:
+            # 지급값·단위가 없으면 미확정(False)이다. 구간은 지우지 않고 남긴다. 0은 확인된 값이다(2026-11-06).
+            tier["payout_known"] = tier_token(tier) is not None
         conflicts.append({"benefit_id": benefit["benefit_id"], "name": benefit["name"], "tiers": tiers, "rule_text": benefit.get("rule_text"),
                           "applicable_rule_keys": [tier["rule_key"] for tier in tiers if tier_applies(tier, amount)]})
     return conflicts
@@ -1008,15 +1045,26 @@ def tier_applies(tier: dict, amount: int | None) -> bool:
     return amount >= tier["min_amt"] and (tier.get("max_amt") is None or amount < tier["max_amt"])
 
 
-def tier_token(tier: dict) -> tuple[str | None, float]:
-    """구간 지급액을 문장의 값과 비교할 ``(종류, 값)`` 으로 만든다."""
-    return UNIT_KINDS.get(tier["unit"]), float(tier["value"])
+def tier_token(tier: dict) -> tuple[str, float] | None:
+    """구간 지급액을 문장의 값과 비교할 ``(종류, 값)`` 으로 만든다.
+
+    지급값(value_num)이 숫자가 아니거나 단위(value_unit_cd)가 지원 단위가 아니면 None(지급액 미확정)을 돌려준다.
+    None을 0으로 바꾸지 않는다. 실제 숫자 0은 정상 값이다(2026-11-06, 더 심플 하나카드 월납 요금 r1·r2 NULL 지급값).
+    """
+    value, kind = tier.get("value"), UNIT_KINDS.get(tier.get("unit"))
+    if kind is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return kind, float(value)
 
 
 def tier_label(tier: dict) -> str:
-    """구간 하나를 조회값으로 표기한다."""
-    kind, value = tier_token(tier)
-    payout = won(value) if kind == "MONEY" else f"{value:g}{UNIT_LABELS.get(kind, '')}"
+    """구간 하나를 조회값으로 표기한다. 지급액을 모르면 금액을 만들지 않고 '지급액 정보 없음'으로 쓴다."""
+    token = tier_token(tier)
+    if token is None:
+        payout = "지급액 정보 없음"
+    else:
+        kind, value = token
+        payout = won(value) if kind == "MONEY" else f"{value:g}{UNIT_LABELS.get(kind, '')}"
     basis = "결제 건당 " if tier.get("basis") == TIER_PAYMENT_BASIS else ""
     return f"{basis}{won(tier['min_amt'])} 이상 시 {payout}"
 
@@ -1058,6 +1106,10 @@ def known_values(context: dict, question: str, benefit_id: str | None) -> set[tu
         known.update(value_tokens(benefit.get("rule_text") or ""))
         for limit in benefit["limits"]:
             known.update(value_tokens(limit["text"]))
+        for tier in benefit.get("limit_tiers") or []:       # 구간별 한도의 저장 금액(구간 짝은 distorts_limit_tier가 검사)
+            known.add(("MONEY", float(tier["min_amt"]), None))
+            known.update(("MONEY", float(amount), None) for amount in
+                         [tier["cap"]["amount"], *[group["amount"] for group in tier.get("shared", [])]])
         for group in benefit["conditions"]:
             for branch in group["branches"]:
                 for atom in branch["atoms"]:
@@ -1107,9 +1159,13 @@ def distorts_tier(text: str, conflicts: list[dict]) -> bool:
     """문장의 "기준 금액 → 지급액" 관계가 조회된 금액 구간과 어긋나는지 확인한다. 값이 모두 근거에 있어도 관계가 틀리면 다른 뜻이 된다.
 
     "N원 이상"이 구간 기준이면 그 구간의 지급액만 맞다. 구간 기준이 아닌 금액이나 "N원 결제"는 그 금액이 구간에 들어야 맞다.
+    구간 기준액은 모든 구간에서 모으고, 지급액 비교는 지급값이 확인된 구간(tier_token이 None이 아닌 구간)만 쓴다.
+    지급값을 모르는 구간을 근거로 문장이 틀렸다고(또는 맞다고) 판정하지 않는다.
     """
     tiers = [tier for conflict in conflicts for tier in conflict["tiers"] if tier["min_amt"] is not None]
-    minimums, values = {float(tier["min_amt"]) for tier in tiers}, {tier_token(tier) for tier in tiers}
+    minimums = {float(tier["min_amt"]) for tier in tiers}
+    tiers = [tier for tier in tiers if tier_token(tier) is not None]      # 아래 지급액 비교 대상
+    values = {tier_token(tier) for tier in tiers}
     for sentence in SENTENCE_END.split(text):
         basis, is_minimum = None, False
         for match in VALUE_PATTERN.finditer(sentence):
@@ -1129,6 +1185,46 @@ def distorts_tier(text: str, conflicts: list[dict]) -> bool:
     return False
 
 
+def distorts_limit_tier(text: str, benefits: list[dict]) -> bool:
+    """문장의 "실적 구간 → 한도 금액" 짝이 item_data.limit_tiers와 어긋나는지 확인한다(2026-11-06 P2).
+
+    "N원 이상"의 N이 어떤 혜택 구간의 하한이면 그 구간을 현재 구간으로 둔다. 이후 같은 문장에서 그 혜택의 다른 구간
+    한도(이 혜택 cap 또는 공유 cap)로만 쓰이는 금액이 나오면 잘못 배정한 것이다. 다음 "M원 이상"이 나오면 구간을 바꾼다.
+    구간 경계 금액, 다른 혜택에만 있는 금액, 구간 표가 없는 혜택은 판정하지 않는다(규칙 지급값 검증은 distorts_tier가 맡는다).
+    """
+    views = [(benefit["benefit_id"], benefit.get("limit_tiers") or []) for benefit in benefits]
+    views = [(bid, tiers) for bid, tiers in views if tiers]
+    if not views:
+        return False
+
+    def caps(tier):
+        return {float(tier["cap"]["amount"])} | {float(group["amount"]) for group in tier.get("shared", [])}
+
+    starts: dict[float, list[tuple]] = {}
+    for bid, tiers in views:
+        bounds = {float(t["min_amt"]) for t in tiers} | {float(t["max_amt"]) for t in tiers if t.get("max_amt") is not None}
+        every = set().union(*(caps(t) for t in tiers)) - bounds
+        for tier in tiers:
+            starts.setdefault(float(tier["min_amt"]), []).append((bid, caps(tier), every, bounds))
+    for sentence in SENTENCE_END.split(text):
+        current = None
+        for match in VALUE_PATTERN.finditer(sentence):
+            token = value_tokens(match.group(0))[0]
+            if token[0] != "MONEY":
+                continue
+            after = sentence[match.end():]
+            if TIER_MINIMUM.match(after) and token[1] in starts:
+                current = starts[token[1]]
+                continue
+            if current is None:
+                continue
+            # 현재 구간 후보(같은 하한을 가진 혜택이 여럿이면 모두) 중 이 금액을 한도로 가진 혜택만 본다.
+            owners = [(own, every, bounds) for _, own, every, bounds in current if token[1] in every and token[1] not in bounds]
+            if owners and not any(token[1] in own for own, _, _ in owners):
+                return True
+    return False
+
+
 def stated_minimums(text: str) -> set[float]:
     """문장에 "N원 이상"으로 쓰인 기준 금액을 모은다."""
     return {value_tokens(match.group(0))[0][1] for match in VALUE_PATTERN.finditer(text)
@@ -1142,8 +1238,11 @@ def picks_single_tier(text: str, conflicts: list[dict], benefit_id: str | None =
         if benefit_id is not None and conflict["benefit_id"] != benefit_id:
             continue
         tiers = [tier for tier in conflict["tiers"] if tier["rule_key"] in conflict["applicable_rule_keys"]]
-        mentioned = sum(tier_token(tier) in written or float(tier["min_amt"]) in minimums for tier in tiers)
-        if len(tiers) > 1 and sum(tier_token(tier) in written for tier in tiers) and mentioned < len(tiers):
+        # 지급값을 모르는 구간(tier_token None)은 지급액으로 언급될 수 없고, 기준액으로만 언급된다.
+        paid = [tier_token(tier) is not None and tier_token(tier) in written for tier in tiers]
+        mentioned = sum(said or (tier["min_amt"] is not None and float(tier["min_amt"]) in minimums)
+                        for said, tier in zip(paid, tiers))
+        if len(tiers) > 1 and sum(paid) and mentioned < len(tiers):
             return conflict["name"]
     return None
 
@@ -1159,7 +1258,9 @@ def won(amount: float) -> str:
 def tier_is_quoted(conflict: dict, evidence: list[dict]) -> bool:
     """혜택 범위의 인용 원문 한 건에 구간의 기준과 지급액이 같은 관계로 적혀 있는지 확인한다."""
     tiers = [tier for tier in conflict["tiers"] if tier["min_amt"] is not None]
-    needed = {("MONEY", float(tier["min_amt"])) for tier in tiers} | {tier_token(tier) for tier in tiers}
+    # 지급값을 모르는 구간은 기준액만 원문에 있으면 된다(없는 지급액을 요구하지 않는다).
+    needed = {("MONEY", float(tier["min_amt"])) for tier in tiers} | {tier_token(tier) for tier in tiers
+                                                                     if tier_token(tier) is not None}
     for item in evidence:
         quote = " ".join(item.get("quote", "").split())
         if _in_scope(item, conflict["benefit_id"]) and needed <= {token[:2] for token in value_tokens(quote)} and not distorts_tier(quote, [conflict]):
@@ -1282,6 +1383,9 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
         if distorts_tier(text, conflicts):
             drop("금액 구간의 기준과 지급액이 원문과 다른 문장을 버렸습니다", text)
             continue
+        if distorts_limit_tier(text, [item for item in context.get("benefits", []) if benefit_id in (None, item["benefit_id"])]):
+            drop("실적 구간과 한도 금액의 짝이 원문과 다른 문장을 버렸습니다", text)
+            continue
         name = picks_single_tier(text, conflicts, benefit_id)
         if name:
             drop(f"{name}의 규칙 선택이 미확정인데 일부 구간 금액만 답한 문장을 버렸습니다", text)
@@ -1296,7 +1400,11 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
     for conflict in conflicts:
         if len(conflict["applicable_rule_keys"]) < 2:
             continue
-        values = {(*tier_token(tier), None) for tier in conflict["tiers"]}
+        values = {(*tier_token(tier), None) for tier in conflict["tiers"] if tier_token(tier) is not None}
+        if not values:
+            # 지급값이 확인된 구간이 없으면 빈 집합 때문에 "이미 답함"으로 오판하지 않도록 구간 문장을 만들지 않는다.
+            warnings.append(f"{conflict['name']}의 구간 지급액이 조회 자료에 없어 금액 구간 문장을 만들지 않았습니다.")
+            continue
         if any(point["benefit_id"] == conflict["benefit_id"]
                and all(_matches(value, set(value_tokens(point["text"]))) for value in values) for point in points):
             continue
@@ -1313,6 +1421,9 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
     unknown = unknown_values(conclusion, all_known, numbers)
     if unknown:
         warnings.append(f"결론에서 조회 결과에 없는 값 {unknown}을 발견해 결론을 제거했습니다: {conclusion[:60]}")
+        conclusion = ""
+    if conclusion and distorts_limit_tier(conclusion, context.get("benefits", [])):
+        warnings.append(f"결론의 실적 구간과 한도 금액 짝이 원문과 달라 결론을 제거했습니다: {conclusion[:60]}")
         conclusion = ""
     conclusion, replaced = fixed_conclusion(conclusion, conflicts, context.get("payment_amount"), context["evidence"])
     if replaced:
@@ -1409,6 +1520,8 @@ def answer_text_problem(text: str, context: dict, question: str, known: set, num
         return "미확정 금액 구간을 단정했습니다"
     if distorts_tier(text, conflicts):
         return "금액 구간의 기준과 지급액이 원문과 다릅니다"
+    if distorts_limit_tier(text, context.get("benefits", [])):
+        return "실적 구간과 한도 금액의 짝이 원문과 다릅니다"
     same_tiers = len({json.dumps([(tier["min_amt"], tier["value"]) for tier in item["tiers"]]) for item in blocking}) == 1
     if same_tiers and SAME_TIER_CLAIM.search(text):
         return "구간이 같은 혜택의 금액이 다르다고 썼습니다"

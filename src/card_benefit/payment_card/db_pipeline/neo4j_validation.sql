@@ -28,3 +28,13 @@ SELECT card_common_id, card_common_bnft_id, card_id FROM db_pipeline.card_common
 
 -- name: rule_targets
 SELECT card_id, card_product_item_id AS card_bnft_id, rule_key, target_type_cd, target_key, target_nm FROM db_pipeline.v_card_rule_target;
+
+-- name: source_columns
+-- 2026-11-06 P2: 스냅샷 SELECT와 독립된 원천 컬럼 목록. neo4j_dry_run.column_coverage가 분류 누락을 검사한다.
+SELECT table_name, column_name FROM information_schema.columns
+WHERE table_schema = 'db_pipeline' AND table_name IN ('card_product_item', 'card_evidence_link')
+ORDER BY table_name, ordinal_position;
+
+-- name: benefit_item_data
+-- 2026-11-06 P2: 혜택 item_data를 스냅샷 함수를 거치지 않고 직접 읽는다. Neo4j 혜택 노드 source_json의 item_data와 대조한다.
+SELECT card_id, card_product_item_id AS card_bnft_id, item_data FROM db_pipeline.card_product_item WHERE item_type_cd = 'BENEFIT';

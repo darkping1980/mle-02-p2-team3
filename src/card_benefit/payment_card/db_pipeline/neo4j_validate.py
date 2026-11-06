@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 from common.neo4j_connection import create_neo4j_driver
 from common.postgres_db_session import PostgresDbSession
 
-from .neo4j_dry_run import build, load_snapshot
+from .neo4j_dry_run import build, canonical, column_coverage, load_snapshot
 from .neo4j_load_draft import CYPHER, EXPECTED_DB, prepare, relationship_properties
 
 MAPPER_ROOT = Path(__file__).resolve().parent
@@ -84,6 +84,42 @@ def compare_graph(nodes: list[dict], edges: list[dict], graph_nodes: list[dict],
     }
 
 
+def source_column_map(rows: list[dict]) -> dict[str, list[str]]:
+    """information_schema 행 → 테이블별 컬럼 목록(원래 순서)."""
+    out: dict[str, list[str]] = {}
+    for row in rows:
+        out.setdefault(row["table_name"], []).append(row["column_name"])
+    return out
+
+
+def compare_item_data(pg_rows: list[dict], graph_rows: list[dict]) -> list[dict]:
+    """혜택별 item_data를 PostgreSQL(직접 조회)과 Neo4j source_json에서 대조한다(2026-11-06 P2).
+
+    스냅샷 함수를 거치지 않으므로 load_snapshot SELECT에서 item_data가 빠져도 차이로 나온다.
+    Neo4j에 item_data 키가 없으면(has_item_data=false) PostgreSQL 값이 {}여도 차이다(NULL·빈 값과 키 없음을 구분).
+    """
+    def key(row):
+        return int(row["card_id"]), str(row["card_bnft_id"])
+
+    def value(item):
+        return canonical(json.loads(item) if isinstance(item, str) else item)
+    graph = {key(row): row for row in graph_rows}
+    problems = []
+    for row in pg_rows:
+        found = graph.get(key(row))
+        expected = value(row["item_data"])
+        if found is None:
+            problems.append({"key": key(row), "problem": "Neo4j 혜택 노드 없음"})
+        elif not found.get("has_item_data"):
+            problems.append({"key": key(row), "problem": "Neo4j source_json에 item_data 키 없음", "expected": expected})
+        elif value(found.get("item_data")) != expected:
+            problems.append({"key": key(row), "problem": "item_data 값 다름", "expected": expected,
+                             "actual": value(found.get("item_data"))})
+    extra = set(graph) - {key(row) for row in pg_rows}
+    problems.extend({"key": k, "problem": "PostgreSQL에 없는 Neo4j 혜택"} for k in sorted(extra))
+    return problems
+
+
 def graph_ok(differences: int, outside: dict, orphans: list, *sql_equal: bool) -> bool:
     """dp_ 그래프만 판정한다. fp_ 건수는 ``other_graphs`` 로 보고하며 여기에 넣지 않는다."""
     return (differences == 0 and all(sql_equal) and not orphans
@@ -98,8 +134,12 @@ def run() -> dict:
     sql = PostgresDbSession(mapper_root=MAPPER_ROOT, camel_case_keys=False, sql_log_mode="none")
     try:
         sql_rows = {name: sql.select_list(f"neo4j_validation.{name}") for name in COMPARED}
+        source_columns = source_column_map(sql.select_list("neo4j_validation.source_columns"))
+        pg_item_data = sql.select_list("neo4j_validation.benefit_item_data")
     finally:
         sql.database_manager.close()
+    # 스냅샷 SELECT와 독립된 원천 컬럼 목록으로 분류 누락을 검사한다(2026-11-06 P2).
+    coverage = column_coverage(source_columns, snapshot)
     graph, stats = build(snapshot)
     nodes, edges = prepare(graph)
     from neo4j import READ_ACCESS
@@ -115,15 +155,18 @@ def run() -> dict:
         cypher_rows = {name: read(session, name) for name in COMPARED}
         labels = read(session, "label_counts")
         relationships = read(session, "relationship_counts")
+        graph_item_data = read(session, "benefit_item_data")
     equal = {name: _normalize(sql_rows[name], fields) == _normalize(cypher_rows[name], fields) for name, fields in COMPARED.items()}
     mismatch = sum(len(v) for v in result.values())
+    item_data = compare_item_data(pg_item_data, graph_item_data)
     return {"expected": {"nodes": stats["node_total"], "relationships": stats["relationship_total"]},
             "neo4j": {"nodes": sum(r["n"] for r in labels), "relationships": sum(r["n"] for r in relationships)},
             "label_counts": labels, "relationship_counts": relationships,
             "differences": {k: len(v) for k, v in result.items()}, "difference_keys": result,
             "outside_scope": outside, "other_graphs": other_graphs, "orphan_nodes": orphans,
             "sql_cypher": {name: [len(sql_rows[name]), len(cypher_rows[name]), equal[name]] for name in COMPARED},
-            "ok": graph_ok(mismatch, outside, orphans, *equal.values())}
+            "column_coverage": coverage, "item_data_mismatch": {"count": len(item_data), "items": item_data[:20]},
+            "ok": graph_ok(mismatch, outside, orphans, *equal.values()) and not coverage and not item_data}
 
 
 def main() -> None:

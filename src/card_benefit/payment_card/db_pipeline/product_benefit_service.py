@@ -32,7 +32,8 @@ from dataclasses import dataclass
 from psycopg.types.json import Jsonb
 
 from .common_benefit_service import CommonBenefitRepository, compact, quote_text
-from .extraction_service import locate_quote, strip_calc_atoms, strip_calc_rule
+from .extraction_service import (check_limit_struct, limit_struct, limit_tiers_from_extraction, locate_quote,
+                                 strip_calc_atoms, strip_calc_rule)
 from .unresolved_review import APPROVED, BLOCK_REGISTRATION, PENDING, PENDING_SCOPE_NOTE, validate_review_sources
 from .benefit_review_patch import (apply_patch, extracted_shared_members, limit_tiers_text, provenance,
                                    restrict_rule_targets, shared_limit_problems, usable)
@@ -329,6 +330,20 @@ class ProductBenefitService:
         data = {}
         if candidate.get('review_patch'):
             data = {'schema_ver': 'BENEFIT_V1', 'review_patch': candidate['review_patch']}
+        # 추출 한도 구조 보존(2026-11-06): limits·규칙별 limit_keys를 해석 없이 item_data에 둔다. item_limit_txt는 그대로다.
+        located = self._located(evidence)
+        rule_keys = [rule['rule_key'] for rule in rules]
+        struct = limit_struct(raw, rule_keys, self._limit_evidence(raw, located))
+        if struct:
+            issues = check_limit_struct(raw, rule_keys, struct)
+            if issues:
+                return review(f"추출 한도 구조를 보존하지 못했습니다: {issues[0]}")
+            data = {**data, 'schema_ver': 'BENEFIT_V1', **struct}
+            # 구간별 한도가 명확할 때만 구간 표를 만든다. 사람 보정(SET_LIMIT_TIERS)이 있으면 그것을 쓴다.
+            derived = None if candidate.get('limit_tiers') else limit_tiers_from_extraction(
+                rules, struct, self._cond_evidence(raw, rules, located))
+            if derived:
+                data['limit_tiers'] = derived
         if candidate.get('limit_tiers'):
             # 한도 구간(공유 한도 포함)은 item_data에 구조로, item_limit_txt에 원문 표기로 남긴다.
             data = {**data, 'schema_ver': 'BENEFIT_V1', 'limit_tiers': candidate['limit_tiers']}
@@ -348,6 +363,9 @@ class ProductBenefitService:
         for key, evidence_id in links:
             if key is None:
                 self.repo.write('insert_evidence_link', CARD_ID=card_id, BNFT_ID=benefit_id, EVIDENCE_ID=evidence_id)
+            elif isinstance(key, tuple) and key[0] == 'COND':   # ('COND', rule_key, atom_key): 규칙 조건(구간 표기 등)의 근거
+                self.repo.write('insert_rule_cond_evidence_link', CARD_ID=card_id, BNFT_ID=benefit_id, RULE_KEY=key[1],
+                                ATOM_KEY=key[2], EVIDENCE_ID=evidence_id)
             elif isinstance(key, tuple):   # ('REL', relation_key): 혜택 간 관계의 근거
                 self.repo.write('insert_rel_evidence_link', CARD_ID=card_id, BNFT_ID=benefit_id, RELATION_KEY=key[1],
                                 EVIDENCE_ID=evidence_id)
@@ -493,8 +511,7 @@ class ProductBenefitService:
             relation_keys에 있는 관계의 근거(supports='REL')는 ('REL', relation_key) 키로 돌려준다(③, 2026-11-05).
             저장하지 않는 관계의 REL 인용은 예전처럼 혜택 근거로 연결한다.
         """
-        located = [e for e in evidence if e['start_pos'] is not None and e['end_pos'] is not None
-                   and e.get('source_txt') is not None and compact(e['source_txt']) == compact(e['quote_txt'])]
+        located = ProductBenefitService._located(evidence)
         rule_keys = {rule['rule_key'] for rule in rules}
         links = []
         for item in raw.get('evidence', []):
@@ -514,4 +531,52 @@ class ProductBenefitService:
         unique = list(dict.fromkeys(links))
         if not any(key is None for key, _ in unique) or not rule_keys <= {key for key, _ in unique}:
             return [], '혜택 또는 계산 규칙을 뒷받침하는 근거가 없습니다'
-        return unique, None
+        # 규칙 조건 안의 인용(예: '80만원 이상⏎15,000원' 구간 표기)을 기존 RULE/COND 형식으로 연결한다(2026-11-06).
+        # 위치를 못 찾은 조건 인용은 건너뛴다. 위 성공 판정(혜택·규칙 근거)은 바꾸지 않는다.
+        for (rule_key, atom_key), evidence_ids in ProductBenefitService._cond_evidence(raw, rules, located).items():
+            unique.append((('COND', rule_key, atom_key), evidence_ids[0]))
+        return list(dict.fromkeys(unique)), None
+
+    @staticmethod
+    def _located(evidence):
+        """원문 위치가 확인되고 잘라낸 원문이 인용과 같은 근거 행."""
+        return [e for e in evidence if e.get('start_pos') is not None and e.get('end_pos') is not None
+                and e.get('source_txt') is not None and compact(e['source_txt']) == compact(e['quote_txt'])]
+
+    @staticmethod
+    def _match(located, quote):
+        """인용 문자열과 같은 위치 확인 근거의 evidence_id 목록(근거 행 순서)."""
+        return [e['evidence_id'] for e in located if compact(e['quote_txt']) == compact(quote or '')]
+
+    @staticmethod
+    def _limit_evidence(raw, located) -> dict[str, list[str]]:
+        """limit_key → 위치가 확인된 LIMIT 근거 evidence_id 목록(인용마다 첫 일치 행)."""
+        out: dict[str, list[str]] = {}
+        for item in raw.get('evidence', []):
+            if item.get('supports') == 'LIMIT' and item.get('support_key'):
+                ids = ProductBenefitService._match(located, item.get('quote_txt'))
+                if ids:
+                    out.setdefault(item['support_key'], [])
+                    if ids[0] not in out[item['support_key']]:
+                        out[item['support_key']].append(ids[0])
+        return out
+
+    @staticmethod
+    def _cond_evidence(raw, rules, located) -> dict[tuple, list[str]]:
+        """(rule_key, atom_key) → 위치가 확인된 규칙 조건 근거 evidence_id 목록.
+
+        등록할 규칙의 조건식에 실제로 있는 atom_key(=추출 cond_key)만 대상으로 한다.
+        """
+        atoms = {(rule['rule_key'], atom.get('atom_key')) for rule in rules
+                 for branch in (rule.get('cond_expr') or {}).get('branches', []) for atom in branch.get('atoms', [])}
+        out: dict[tuple, list[str]] = {}
+        for rule in raw.get('rules', []):
+            for condition in rule.get('conditions') or []:
+                key = (rule.get('rule_key'), condition.get('cond_key'))
+                if key not in atoms:
+                    continue
+                for item in condition.get('evidence') or []:
+                    ids = ProductBenefitService._match(located, item.get('quote_txt'))
+                    if ids and ids[0] not in out.get(key, []):
+                        out.setdefault(key, []).append(ids[0])
+        return out

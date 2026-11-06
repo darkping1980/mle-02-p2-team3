@@ -470,6 +470,131 @@ def strip_calc_rule(rule: dict) -> dict:
     return cleaned
 
 
+# region 한도 구조 보존 (2026-11-06) — 추출 원본(stg_raw_item)의 limits·rules[].limit_keys를 item_data에 해석 없이 남긴다.
+# rule_list 계약(6개 키)과 value_num·value_unit_cd·item_limit_txt의 의미는 바꾸지 않는다. 한도는 보상액 계산에 쓰지 않는다.
+# 배경: 더 심플 하나카드 월납 요금(r1→10,000원, r2→15,000원)처럼 구간별 한도 연결이 등록에서 사라졌다.
+LIMIT_FIELDS = ("limit_key", "limit_num", "cap_unit_cd", "period_cd", "limit_raw_txt", "shared_scope_txt", "applies_to_benefit_nms")
+LIMIT_TIERS_SCHEMA = "LIMIT_TIERS_V1"
+PERIOD_COLUMNS = {"MONTH": "월 한도", "YEAR": "연 한도", "DAY": "일 한도"}   # 자동 생성 구간 표의 열 이름(원문 열 이름이 아님)
+TIER_EXCLUDED_BASIS = ("TXN_AMT",)                                          # 결제 1건 기준은 실적 구간이 아니다
+
+
+def limit_struct(raw: dict, rule_keys: list[str], limit_evidence: dict[str, list[str]]) -> dict:
+    """추출 한도와 규칙별 한도 연결을 그대로 옮긴다. 한도가 없으면 빈 dict.
+
+    Args:
+        raw: 추출 원본(stg_raw_item, 보정 적용 후).
+        rule_keys: 등록할 규칙 키(rule_list 순서). 등록하지 않는 규칙의 연결은 남기지 않는다.
+        limit_evidence: limit_key → 위치가 확인된 LIMIT 근거 evidence_id 목록.
+
+    Returns:
+        ``{"limits": [...], "rule_limits": {rule_key: [limit_key, ...]}}`` 또는 ``{}``.
+        값은 추출 원본의 값이며 계산·추론·환산하지 않는다.
+    """
+    limits = [item for item in raw.get("limits") or [] if item.get("limit_key")]
+    if not limits:
+        return {}
+    known = {item["limit_key"] for item in limits}
+    by_rule = {rule.get("rule_key"): rule for rule in raw.get("rules") or []}
+    rule_limits = {}
+    for key in rule_keys:
+        keys = [k for k in (by_rule.get(key) or {}).get("limit_keys") or [] if k in known]
+        if keys:
+            rule_limits[key] = list(dict.fromkeys(keys))
+    return {"limits": [{**{field: item.get(field) for field in LIMIT_FIELDS},
+                        "evidence_ids": list(limit_evidence.get(item["limit_key"], []))} for item in limits],
+            "rule_limits": rule_limits}
+
+
+def check_limit_struct(raw: dict, rule_keys: list[str], struct: dict) -> list[str]:
+    """보존 결과가 추출 원본과 같은지 검사한다(한도 키·수치·규칙별 연결). 문제 목록, 없으면 빈 목록."""
+    issues = []
+    raw_limits = {item["limit_key"]: item for item in raw.get("limits") or [] if item.get("limit_key")}
+    kept = {item["limit_key"]: item for item in struct.get("limits", [])}
+    if set(raw_limits) != set(kept):
+        issues.append(f"한도 키가 추출 원본과 다릅니다: {sorted(raw_limits)} != {sorted(kept)}")
+    for key in set(raw_limits) & set(kept):
+        if any(raw_limits[key].get(field) != kept[key].get(field) for field in LIMIT_FIELDS):
+            issues.append(f"한도 값이 추출 원본과 다릅니다: {key}")
+    by_rule = {rule.get("rule_key"): rule for rule in raw.get("rules") or []}
+    for key in rule_keys:
+        expected = [k for k in (by_rule.get(key) or {}).get("limit_keys") or [] if k in raw_limits]
+        if list(dict.fromkeys(expected)) != struct.get("rule_limits", {}).get(key, []):
+            issues.append(f"규칙 {key}의 한도 연결이 추출 원본과 다릅니다")
+    if set(struct.get("rule_limits", {})) - set(rule_keys):
+        issues.append("등록하지 않는 규칙의 한도 연결이 있습니다")
+    return issues
+
+
+def _spend_atoms(rule: dict) -> list[dict]:
+    return [atom for branch in (rule.get("cond_expr") or {}).get("branches", []) for atom in branch.get("atoms", [])
+            if atom.get("cond_type_cd") == "SPEND_REQ"]
+
+
+def limit_tiers_from_extraction(rules: list[dict], struct: dict, cond_evidence: dict[tuple, list[str]]) -> dict | None:
+    """실적 구간별 한도가 원문 추출에서 하나씩 명확히 대응할 때만 ``item_data.limit_tiers`` 를 만든다. 아니면 None.
+
+    조건(모두 충족해야 한다. 하나라도 어기면 구간 표로 단정하지 않고 limits·rule_limits만 남긴다):
+        1. 실적 조건(SPEND_REQ, 결제 1건 기준 제외)이 있는 규칙이 2개 이상이고, 규칙마다 그 atom이 정확히 1개이며 기준이 모두 같다.
+        2. 구간 규칙마다 원화 금액(limit_num 있음) 한도가 정확히 1개이고, 한도 키가 구간마다 다르며 기간이 같고 확정(UNKNOWN 아님)이다.
+           (같은 한도를 여러 구간이 공유하거나 기간이 불명확하면 구간별 한도가 아니다.)
+        3. 구간이 겹치지 않는다. 상한(max_amt_excl)이 없는 구간은 가장 높은 구간 하나뿐이다.
+           원문에 상한이 없어 구간이 겹치면(예: 30만원 이상 / 60만원 이상) 상한을 추론하지 않는다.
+        4. 한도마다 LIMIT 근거, 구간마다 조건(COND) 근거가 위치 확인된 상태로 있다.
+    누적형 한도("10만원 추가 제공")는 구간 상한이 없고 기간이 불명확해 2·3에서 걸러진다.
+
+    Args:
+        rules: 등록할 rule_list.
+        struct: limit_struct 결과.
+        cond_evidence: (rule_key, atom_key) → 위치가 확인된 조건 근거 evidence_id 목록.
+    """
+    limits = {item["limit_key"]: item for item in struct.get("limits", [])}
+    rule_limits = struct.get("rule_limits", {})
+    tiers = []
+    for rule in rules:
+        atoms = [atom for atom in _spend_atoms(rule) if atom.get("cond_basis_cd") not in TIER_EXCLUDED_BASIS]
+        if not atoms:
+            continue
+        if len(atoms) != 1 or atoms[0].get("cond_min_amt") is None or not atoms[0].get("cond_basis_cd"):
+            return None
+        caps = [limits[k] for k in rule_limits.get(rule["rule_key"], [])
+                if limits[k].get("cap_unit_cd") == "KRW" and limits[k].get("limit_num") is not None]
+        if len(caps) != 1:
+            return None
+        tiers.append((rule["rule_key"], atoms[0], caps[0]))
+    if len(tiers) < 2:
+        return None
+    if len({atom["cond_basis_cd"] for _, atom, _ in tiers}) != 1:
+        return None
+    if len({cap["limit_key"] for _, _, cap in tiers}) != len(tiers):
+        return None
+    periods = {cap.get("period_cd") for _, _, cap in tiers}
+    if len(periods) != 1 or next(iter(periods)) not in PERIOD_COLUMNS:
+        return None
+    tiers.sort(key=lambda item: item[1]["cond_min_amt"])
+    for n, (_, atom, _) in enumerate(tiers):
+        upper = atom.get("cond_max_amt_excl")
+        if n + 1 < len(tiers) and (upper is None or upper > tiers[n + 1][1]["cond_min_amt"]):
+            return None
+        if upper is not None and upper <= atom["cond_min_amt"]:
+            return None
+    for rule_key, atom, cap in tiers:
+        if not cap.get("evidence_ids") or not cond_evidence.get((rule_key, atom.get("atom_key"))):
+            return None
+    period = next(iter(periods))
+    return {
+        "schema_ver": LIMIT_TIERS_SCHEMA, "source": "EXTRACTION", "basis_cd": tiers[0][1]["cond_basis_cd"],
+        "tiers": [{"tier_key": rule_key, "rule_key": rule_key, "label": " ".join((atom.get("cond_raw_txt") or "").split()),
+                   "min_amt": atom["cond_min_amt"], "max_amt_excl": atom.get("cond_max_amt_excl"),
+                   "evidence_ids": list(cond_evidence[(rule_key, atom.get("atom_key"))])} for rule_key, atom, _ in tiers],
+        "own": {"column": PERIOD_COLUMNS[period], "column_source": "PERIOD_CD", "merged_cell": False,
+                "caps": {rule_key: {"raw": cap.get("limit_raw_txt"), "amount": cap["limit_num"], "limit_key": cap["limit_key"]}
+                         for rule_key, _, cap in tiers}},
+        "shared": [],
+    }
+# endregion
+
+
 def build_rule(rule, targets: list[dict]) -> dict:
     """규칙 1건을 ``rule_list`` 항목으로 만든다. 건당 최소 금액은 규칙 조건이다.
 
