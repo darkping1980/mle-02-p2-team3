@@ -64,11 +64,11 @@ class GeneratedCypherTests(unittest.TestCase):
         self.assertNotIn(n.RULE_QUERY.replace("$key", "key"), query)
         self.assertIn("AS evidence", query)
 
-    def test_evidence_projection_drops_chunk_page_document(self):
-        self.assertEqual(n.SECTION_FIELDS["evidence"], ("owner_labels", "rule_key", "link", "evidence"))
+    def test_evidence_projection_preserves_chunk_page_document(self):
+        self.assertTrue({"owner", "evidence_labels", "chunk", "page", "document"} <= set(n.SECTION_FIELDS["evidence"]))
         query = n.detail_batch_query(n.EVIDENCE_QUERY, ("evidence",))
         collected = query.split("OPTIONAL CALL (key) {")[1].split("}\n", 1)[1]
-        self.assertNotIn("chunk:", collected)
+        self.assertIn("chunk:", collected)
         self.assertIn("(chunk:dp_card_doc_chunk)", query)           # MATCH 경로는 그대로(같은 근거만 조회)
 
     def test_registries_are_unchanged(self):
@@ -90,7 +90,7 @@ class BatchMappingTests(unittest.TestCase):
                 out.append({"key": key, "context": [common_context if key == common else context],
                             "rules": [{"targets": [], "labels": ["dp_bnft_rule"], "rule": {"rule_key": "r1"}}],
                             "conditions": [], "limits": [{"limit_text": "월 1천원"}],
-                            "evidence": [{"evidence": {"source_json": "{}"}, "link": {}, "rule_key": None, "owner_labels": ["x"]}]})
+                            "evidence": [{**{field: None for field in n.SECTION_FIELDS["evidence"]}, "evidence": {"source_json": "{}"}, "link": {}, "rule_key": None, "owner_labels": ["x"]}]})
             return out
         driver = FakeDriver({"detail": rows})
         result = n.Neo4jSearch(driver).get_details([bnft, common, missing, bnft], n.ALL_SECTIONS)

@@ -102,7 +102,7 @@ CONTEXT_FIELDS = ("card", "benefit", "card_sources", "common", "common_docs", "c
 SECTION_FIELDS = {"rules": ("rule", "labels", "targets"),
                   "conditions": ("owner_cd", "rule_key", "expression", "branch_no", "atom", "labels"),
                   "limits": ("limit_text",),
-                  "evidence": ("owner_labels", "rule_key", "link", "evidence")}
+                  "evidence": ("owner_labels", "owner", "evidence_labels", "rule_key", "link", "evidence", "chunk", "page", "document")}
 SECTION_PRESENT = {"rules": "rule", "conditions": "atom", "limits": "limit_text", "evidence": "evidence"}   # 항상 값이 있는 열
 LIST_FIELDS = ("key", "name", "id", "status")
 CATALOG_FIELDS = {"catalog": ("key", "name", "id", "status", "card_source", "targets", "payment_min_amounts"),

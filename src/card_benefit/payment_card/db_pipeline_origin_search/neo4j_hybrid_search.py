@@ -147,7 +147,11 @@ RETURN identified, lim, completed, merged, size(pool) AS pool_size,
 PRODUCTS_QUERY = "MATCH (p:dp_card_product) RETURN p.card_id AS card_id, p.product_nm AS product_nm ORDER BY card_id"
 COMMON_LINK_EVIDENCE_QUERY = """
 MATCH (c:dp_card_common_bnft {key: $key})-[l:dp_supported_by {link_source: 'COMMON_STG'}]->(e:dp_card_source_evidence)
-RETURN l.ev_subject_cd AS ev_subject_cd, l.ev_item_key AS ev_item_key, e.source_json AS evidence
+OPTIONAL MATCH (e)-[:dp_in_chunk]->(chunk:dp_card_doc_chunk)-[:dp_on_page]->(page:dp_card_doc_page)-[:dp_in_document]->(doc:dp_card_doc)
+RETURN l.ev_subject_cd AS ev_subject_cd, l.ev_item_key AS ev_item_key, e.source_json AS evidence,
+       properties(l) AS link, properties(c) AS owner, labels(c) AS owner_labels,
+       properties(e) AS evidence_properties, labels(e) AS evidence_labels,
+       properties(chunk) AS chunk, properties(page) AS page, properties(doc) AS document
 ORDER BY e.page_no, e.evidence_id"""
 TERMS_QUERY = """
 MATCH (c:dp_card_product)-[:dp_has_item]->(i:dp_card_product_item {item_type_cd: 'TERMS'})
@@ -246,8 +250,10 @@ class Neo4jBenefitSearch:
             graph_key = json.dumps(["card_common_bnft", int(owner), bnft_id], ensure_ascii=False, separators=(",", ":"))
             rows = self._run("card.common_link_evidence", COMMON_LINK_EVIDENCE_QUERY, key=graph_key)
             evidence = [{"link": {"ev_subject_cd": row["ev_subject_cd"], "ev_item_key": row["ev_item_key"]}, "rule_key": None,
-                         "evidence": {"source_json": json.dumps({f: source({"source_json": row["evidence"]}).get(f) for f in EVIDENCE_FIELDS},
-                                                                ensure_ascii=False)}} for row in rows]
+                         "evidence": {**(row.get("evidence_properties") or {}), "source_json": json.dumps({f: source({"source_json": row["evidence"]}).get(f) for f in EVIDENCE_FIELDS},
+                                                                ensure_ascii=False)},
+                         "owner": row.get("owner"), "owner_labels": row.get("owner_labels"), "evidence_labels": row.get("evidence_labels"),
+                         "diagnostic_link": row.get("link"), "chunk": row.get("chunk"), "page": row.get("page"), "document": row.get("document")} for row in rows]
             return {"context": {}, "rules": [], "conditions": [], "limits": [], "evidence": evidence if "evidence" in sections else []}
         if key.startswith("pg:CARD_BNFT:"):
             _, _, owner, bnft_id = key.split(":", 3)

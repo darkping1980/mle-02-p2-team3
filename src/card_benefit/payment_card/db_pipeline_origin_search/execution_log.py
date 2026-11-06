@@ -49,10 +49,53 @@ def outcome_detail_text(outcome: dict | None) -> str | None:
 
 
 def outcome_pdf_evidence_text(outcome: dict | None) -> str | None:
-    """Serialize every PDF evidence item exactly from the final GraphRAG state."""
+    """Add graph provenance only at logging time; answer evidence remains unchanged."""
     if not outcome or not outcome.get("evidence"):
         return None
-    return json.dumps(outcome["evidence"], ensure_ascii=False, indent=2, default=str)
+    try:
+        from card_benefit.payment_card.db_pipeline_origin_search.card_graphrag import source
+        result = [dict(item) for item in outcome["evidence"]]
+        indexed = {item["evidence_id"]: item for item in result}
+        for detail in outcome.get("retrieved_data") or []:
+            for row in detail.get("evidence") or []:
+                evidence = row.get("evidence") or {}
+                target = indexed.get(source(evidence).get("evidence_id"))
+                if target is None:
+                    continue
+                owner = row.get("owner") or {}
+                if row.get("owner_labels") and owner:
+                    entry = {"labels": row["owner_labels"], "key": owner.get("key"),
+                             "name": owner.get("name") or owner.get("product_nm"),
+                             "rule_key": row.get("rule_key"), "relationship_type": "dp_supported_by",
+                             "relationship_properties": {k: v for k, v in (row.get("diagnostic_link") or row.get("link") or {}).items() if k != "source_json"}}
+                    owners = target.setdefault("owners", [])
+                    if entry not in owners:
+                        owners.append(entry)
+                if row.get("evidence_labels"):
+                    target["evidence_labels"] = row["evidence_labels"]
+                if evidence.get("key") is not None:
+                    target["evidence_key"] = evidence["key"]
+                chunk_node, page_node, doc_node = (row.get("chunk") or {}, row.get("page") or {}, row.get("document") or {})
+                chunk, page, doc = ({**source(node), **node} for node in (chunk_node, page_node, doc_node))
+                if chunk or page or doc:
+                    location = {"card_doc_id": doc.get("card_doc_id"), "doc_title": doc.get("doc_title"),
+                                "doc_file_nm": doc.get("doc_file_nm"), "doc_source_url": doc.get("doc_source_url"),
+                                "doc_sha256": doc.get("doc_sha256"), "page_no": page.get("page_no"),
+                                "card_doc_chunk_id": chunk.get("card_doc_chunk_id"), "chunk_key": chunk.get("key"),
+                                "chunk_seq": chunk.get("chunk_seq"), "chunk_start_pos": chunk.get("chunk_start_pos"),
+                                "chunk_end_pos": chunk.get("chunk_end_pos"), "start_pos": evidence.get("start_pos"),
+                                "end_pos": evidence.get("end_pos")}
+                    locations = target.setdefault("locations", [])
+                    if location not in locations:
+                        locations.append(location)
+        return json.dumps(result, ensure_ascii=False, indent=2, default=str)
+    except Exception:
+        LOG.exception("PDF evidence provenance logging failed")
+        try:
+            return json.dumps(outcome["evidence"], ensure_ascii=False, indent=2, default=str)
+        except Exception:
+            LOG.exception("PDF evidence logging failed")
+            return None
 
 
 def app_db_log_enabled() -> bool:

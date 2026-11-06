@@ -127,7 +127,7 @@ MATCH (owner)-[link:dp_supported_by]->(e:dp_card_source_evidence)
       -[:dp_in_chunk]->(chunk:dp_card_doc_chunk)
       -[:dp_on_page]->(page:dp_card_doc_page)
       -[:dp_in_document]->(doc:dp_card_doc)
-RETURN labels(owner) AS owner_labels, owner.rule_key AS rule_key,
+RETURN labels(owner) AS owner_labels, properties(owner) AS owner, labels(e) AS evidence_labels, owner.rule_key AS rule_key,
        properties(link) AS link, properties(e) AS evidence,
        properties(chunk) AS chunk, properties(page) AS page, properties(doc) AS document
 ORDER BY page.page_no, e.start_pos, e.evidence_id
@@ -139,7 +139,7 @@ MATCH (card:dp_card_product)-[:dp_has_item]->(i:dp_card_product_item {key:$key})
       -[:dp_in_chunk]->(chunk:dp_card_doc_chunk)
       -[:dp_on_page]->(page:dp_card_doc_page)
       -[:dp_in_document]->(doc:dp_card_doc)
-RETURN labels(i) AS owner_labels, null AS rule_key,
+RETURN labels(i) AS owner_labels, properties(i) AS owner, labels(e) AS evidence_labels, null AS rule_key,
        properties(link) AS link, properties(e) AS evidence,
        properties(chunk) AS chunk, properties(page) AS page, properties(doc) AS document
 ORDER BY page.page_no, e.start_pos, e.evidence_id
@@ -151,7 +151,7 @@ MATCH (common:dp_card_common_bnft {key:$key})<-[:dp_same_as]-(b:dp_card_bnft)
       -[:dp_in_chunk]->(chunk:dp_card_doc_chunk)
       -[:dp_on_page]->(page:dp_card_doc_page)
       -[:dp_in_document]->(doc:dp_card_doc)
-RETURN labels(b) AS owner_labels, null AS rule_key,
+RETURN labels(b) AS owner_labels, properties(b) AS owner, labels(e) AS evidence_labels, null AS rule_key,
        properties(link) AS link, properties(e) AS evidence,
        properties(chunk) AS chunk, properties(page) AS page, properties(doc) AS document
 ORDER BY page.page_no, e.start_pos, e.evidence_id
