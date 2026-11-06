@@ -425,12 +425,14 @@ if submitted:
                 with capture_request_queries() as query_events:
                     st.session_state.outcome = {**pipeline.run(question), "search_mode": search_mode}
                 outcome_for_log = st.session_state.outcome
-        except Exception:
-            # get_pipeline 생성(Neo4j 드라이버·PostgreSQL 세션 준비) 실패나, 노드가 잡지 않은 예외가 여기로 온다.
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+
             st.session_state.outcome = None
             st.error(ERROR_TEXT)
             if dev_mode():
-                st.caption("실행 준비에 실패했습니다. Neo4j 연결 설정을 확인하세요.")
+                st.exception(e)
         finally:
             cleanup()
             if APP_DB_LOG_ENABLED:
