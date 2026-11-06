@@ -88,7 +88,7 @@ SECTIONS_BY_INTENT = {
     "EVIDENCE_SEARCH": ("evidence",),
 }
 # 한도 질문에는 혜택·한도 근거만 전달하고 정책 공통 근거는 뺀다.
-EVIDENCE_SUBJECTS_BY_INTENT = {"BENEFIT_LIMIT": {"BNFT", "ITEM"}}   # ITEM: 연회비 등 혜택이 아닌 상품 항목
+EVIDENCE_SUBJECTS_BY_INTENT = {"BENEFIT_LIMIT": {"BNFT", "ITEM", "COMMON_STG", "EXTRACTION_STAGE"}}
 DATA_STATUS_NOTICE = "개발용 자료로, 혜택과 원문 근거 모두 담당자 검토가 끝나지 않았습니다. 실제 카드 혜택과 다를 수 있습니다."
 # 데이터 검토 과제로 등록된 조건 키. 카드 이용 조건 자체는 원문에 있으므로 개발자 기록에만 남긴다.
 UNRESOLVED_ATOMS = {"transit_exclusions": "대중교통 제외 조건의 세부 적용 범위는 아직 확정되지 않았습니다."}
@@ -107,12 +107,6 @@ TIER_INTENTS = ("BENEFIT_DETAIL", "BENEFIT_COMPARE")
 TIER_WORDS = r"얼마|금액|구간"
 TIER_OPEN = "여러 금액 구간이 함께 해당할 때 어떤 금액이 적용되는지는 아직 확정되지 않았습니다."
 TIER_PAYMENT_BASIS = "TXN_AMT"      # 결제 1건의 금액을 비교하는 기준(공통코드 COND_BASIS).
-POINT2_SHARED_CAP_BENEFIT_REF = "card_product_item:23:20261105_000100"
-POINT2_SHARED_CAP_TIERS = (
-    {"min_amt": 300000, "cap_amount": 10000},
-    {"min_amt": 600000, "cap_amount": 20000},
-    {"min_amt": 1200000, "cap_amount": 50000},
-)
 PREVIOUS_MONTH_SPEND = re.compile(r"전월\s*(?:국내\s*)?(?:가맹점\s*)?(?:이용\s*)?실적|지난달\s*실적")
 MESSAGES = {
     "EMPTY_QUESTION": "질문을 입력하세요.",
@@ -259,7 +253,7 @@ answer_text 작성 규칙 (고객이 읽는 설명문):
 - rule_selection_unresolved에 있는 혜택은 지급액을 하나로 정하지 않는다. tiers의 금액 구간을 모두 쓰고, 적용 방식이 미확정임을 분리해서 쓴다.
 - 금액 구간은 기준 금액과 지급액을 짝지어 모두 쓴다. "A원 또는 B원"처럼 줄이지 않는다.
 - 혜택에 limit_tiers가 있으면 구간별 한도는 limit_tiers의 구간(label)과 cap(공유 한도는 shared)을 짝지어 쓴다. 한 구간의 한도 금액을 다른 구간에 쓰지 않는다. 한도는 지급액(rules의 value)이 아니다.
-- benefit에 program_cap_policy가 있고 source가 PROGRAM_DERIVED이면 이 정책을 해당 혜택에만 적용한다. selected가 있으면 그 cap을 답하고, 조건의 원문 하한·cond_max_amt_excl은 바꾸지 않는다. 이 정책은 POINT II 특별·추가 적립의 공유 월 한도이며 기본 적립이나 다른 카드 한도가 아니다.
+- 혜택의 limit_text에 원문 실적 조건과 한도가 한 행으로 연결되어 있으면 그 행을 그대로 근거로 사용한다. 원문 행에 없는 중간 구간의 한도를 계산하지 않는다.
 - tiers의 payout_known이 false인 구간은 지급액이 조회 자료에 없다. 그 구간의 지급액을 쓰지 말고 기준 금액(구간)만 쓴다. 한도(limits) 금액을 그 구간의 지급액으로 옮겨 쓰지 않는다.
 - 결제 금액을 물었는데 여러 구간이 함께 해당하면 rule_selection_unresolved의 rule_text를 그대로 옮긴 뒤 "이 금액은 여러 구간에 모두 해당하는데, 어떤 금액이 적용되는지는 아직 확정되지 않았습니다."처럼 쓴다. 이때 answer_text는 3문장 이내로 쓰고 한도와 공통 제외는 points에만 쓴다.
 - points의 금액 구간 문장에는 구간 사실만 쓴다. 적용 방식이 미확정이라는 말은 conclusion과 answer_text에만 쓴다.
@@ -411,7 +405,8 @@ def detail_ref(detail: dict) -> str | None:
     if detail.get("entity_ref"):
         return detail["entity_ref"]
     stored = source(detail["context"]["benefit"])
-    return stored.get("card_bnft_id") or stored.get("card_common_bnft_id")
+    return (stored.get("card_product_item_id") or stored.get("card_bnft_id")
+            or stored.get("card_common_bnft_id"))
 
 
 def previous_month_spend(question: str) -> int | None:
@@ -423,38 +418,6 @@ def previous_month_spend(question: str) -> int | None:
         if kind == "MONEY" and period is None:
             return int(amount)
     return None
-
-
-def point2_shared_cap_policy(benefit_id: str | None, spend: int | None) -> dict | None:
-    """POINT II 카드 23/100 전용 파생 cap 정책. source conditions의 값은 변경하지 않는다."""
-    if benefit_id != POINT2_SHARED_CAP_BENEFIT_REF:
-        return None
-    derived_tiers = []
-    for index, tier in enumerate(POINT2_SHARED_CAP_TIERS):
-        next_min = POINT2_SHARED_CAP_TIERS[index + 1]["min_amt"] if index + 1 < len(POINT2_SHARED_CAP_TIERS) else None
-        derived_tiers.append({
-            **tier,
-            "derived_max_amt_excl": next_min,
-            "max_basis": "NEXT_TIER_MIN" if next_min is not None else None,
-        })
-    selected = None
-    if isinstance(spend, int) and not isinstance(spend, bool) and spend >= 0:
-        eligible = [tier for tier in derived_tiers if spend >= tier["min_amt"]]
-        if eligible:
-            tier = max(eligible, key=lambda item: item["min_amt"])
-            selected = {key: tier[key] for key in ("min_amt", "cap_amount", "derived_max_amt_excl", "max_basis")}
-    return {
-        "policy_id": "POINT2_SPECIAL_ADDITIONAL_SHARED_MONTHLY_CAP_V1",
-        "source": "PROGRAM_DERIVED",
-        "scope": "SPECIAL_AND_ADDITIONAL_ACCRUAL_SHARED_MONTHLY_CAP",
-        "basis_cd": "PREV_MONTH_SPEND",
-        "selection": "HIGHEST_QUALIFYING_MINIMUM",
-        "source_conditions": [{"min_amt": tier["min_amt"], "cond_max_amt_excl": None} for tier in derived_tiers],
-        "tiers": derived_tiers,
-        "previous_month_spend": spend if isinstance(spend, int) and not isinstance(spend, bool) and spend >= 0 else None,
-        "selected": selected,
-        "basic_accrual_cap": None,
-    }
 
 
 def collect_evidence(details: list[dict], intent: str) -> list[dict]:
@@ -471,10 +434,17 @@ def collect_evidence(details: list[dict], intent: str) -> list[dict]:
     allowed = EVIDENCE_SUBJECTS_BY_INTENT.get(intent)
     merged: dict[str, dict] = {}
     for detail in details:
-        benefit_name = detail["context"]["benefit"].get("name")
+        benefit_row = source(detail["context"]["benefit"])
+        benefit_name = benefit_row.get("item_nm") or benefit_row.get("bnft_nm") or benefit_row.get("name")
         benefit_id = detail_ref(detail)
         for row in detail["evidence"]:
             subject = row["link"].get("ev_subject_cd")
+            if subject is None:
+                lineage = str(row["link"].get("source_table", ""))
+                if lineage.startswith("derived:card_common_bnft+"):
+                    subject = "COMMON_STG"
+                elif lineage.startswith("derived:dp_supported_by+") or lineage.startswith("derived:card_evidence_link+"):
+                    subject = "EXTRACTION_STAGE"
             if allowed is not None and subject not in allowed:
                 continue
             props = source(row["evidence"])
@@ -733,7 +703,9 @@ def drop_duplicate_benefits(details: list[dict]) -> tuple[list[dict], list[str]]
             for line in (source(detail["context"]["benefit"]).get("item_data") or {}).get("fee_lines") or []
             if line.get("same_fact_item_ref")}
     kept = [detail for detail in details if is_fee_detail(detail) or detail_ref(detail) not in same]
-    dropped = [detail["context"]["benefit"].get("name") for detail in details if detail not in kept]
+    dropped = [(source(detail["context"]["benefit"]).get("item_nm")
+                or source(detail["context"]["benefit"]).get("bnft_nm"))
+               for detail in details if detail not in kept]
     return kept, dropped
 
 
@@ -770,6 +742,79 @@ def resolve_fee_choice(question: str, chosen: list[str], by_id: dict, catalog: l
 def benefit_context(detail: dict, previous_spend: int | None = None) -> dict:
     """Neo4j 상세 조회에서 답변에 필요한 필드만 추린다."""
     benefit = source(detail["context"]["benefit"])
+    if benefit.get("card_product_item_id") is not None or benefit.get("card_common_bnft_id") is not None:
+        is_item = benefit.get("card_product_item_id") is not None
+        item_data = benefit.get("item_data") if is_item else {}
+        item_data = item_data if isinstance(item_data, dict) else {}
+        rule_rows = benefit.get("rule_list") if is_item else []
+        rule_rows = rule_rows if isinstance(rule_rows, list) else []
+        groups = []
+        expr = benefit.get("item_cond_expr") if is_item else None
+        if isinstance(expr, str):
+            try:
+                expr = json.loads(expr)
+            except ValueError:
+                expr = None
+        if isinstance(expr, dict) and expr.get("branches"):
+            branches = []
+            for index, branch in enumerate(expr.get("branches") or []):
+                atoms = []
+                for atom in branch.get("atoms", []):
+                    atoms.append({"atom_key": atom.get("atom_key"), "negate": atom.get("negate_yn"),
+                                  "type": atom.get("cond_type_cd"), "min_amt": atom.get("cond_min_amt"),
+                                  "max_amt": atom.get("cond_max_amt_excl"), "basis": atom.get("cond_basis_cd"),
+                                  "text": atom.get("cond_raw_txt") or atom.get("excl_raw_txt"),
+                                  "excl_raw_txt": atom.get("excl_raw_txt"), "status": atom.get("cond_status_cd")})
+                branches.append({"branch_no": branch.get("branch_no", index + 1), "atoms": atoms})
+            groups.append({"scope": "혜택", "branches": branches})
+        for rule in rule_rows:
+            atoms = []
+            for condition in rule.get("conditions", []):
+                atoms.append({"atom_key": condition.get("cond_key"), "negate": condition.get("negate_yn"),
+                              "type": condition.get("cond_type_cd"), "min_amt": condition.get("cond_min_amt"),
+                              "max_amt": condition.get("cond_max_amt_excl"), "basis": condition.get("cond_basis_cd"),
+                              "text": condition.get("cond_raw_txt") or condition.get("excl_raw_txt"),
+                              "excl_raw_txt": condition.get("excl_raw_txt"), "status": condition.get("cond_status_cd")})
+            if atoms:
+                groups.append({"scope": rule.get("rule_key") or "혜택", "branches": [{"branch_no": 1, "atoms": atoms}]})
+        limits_text = benefit.get("item_limit_txt") if is_item else benefit.get("bnft_limit_txt")
+        limits = [{"text": limits_text}] if limits_text else []
+        targets = [target.get("target_nm") for rule in rule_rows for target in (rule.get("target_list") or [])
+                   if isinstance(target, dict) and target.get("target_nm")]
+        exclusions = [atom.get("excl_raw_txt") for group in groups for branch in group["branches"]
+                      for atom in branch["atoms"] if atom.get("excl_raw_txt")]
+        name = benefit.get("item_nm") if is_item else benefit.get("bnft_nm")
+        card = source(detail["context"].get("card") or {}).get("product_nm")
+        tier_view = limit_tier_view(item_data)
+        if not tier_view:
+            tier_view = extraction_limit_tier_view(detail.get("context", {}).get("extraction_sources", []),
+                                                   detail.get("evidence", []))
+        return {"benefit_id": detail_ref(detail), "name": name, "card": card,
+                "type": benefit.get("item_subtype_cd") if is_item else benefit.get("bnft_type_cd"),
+                "verification_status": benefit.get("verification_status_cd"),
+                "rule_text": benefit.get("item_rule_txt") if is_item else benefit.get("bnft_rule_txt"),
+                "rules": [{"rule_key": rule.get("rule_key"), "value": rule.get("value_num"),
+                           "unit": rule.get("value_unit_cd"), "status": rule.get("rule_status_cd"),
+                           "targets": [x.get("target_nm") for x in (rule.get("target_list") or []) if isinstance(x, dict)]}
+                          for rule in rule_rows],
+                "conditions": groups, "limits": limits,
+                "limit_tiers": tier_view, "condition_text": "\n".join(atom.get("text", "") for group in groups
+                  for branch in group["branches"] for atom in branch["atoms"] if atom.get("text")),
+                "limit_text": limits_text, "exclusion_text": "\n".join(exclusions), "targets": targets,
+                **({"common_service": {"name": (detail["context"].get("common") or {}).get("common_nm")}}
+                   if detail["context"].get("common") else {})}
+    if detail.get("simplified"):
+        text = detail.get("benefit_text") or {}
+        common = detail["context"].get("common")
+        return {"benefit_id": detail_ref(detail), "name": benefit.get("bnft_nm") or benefit.get("benefit_name"),
+                "card": (detail["context"].get("card") or {}).get("product_name"),
+                "type": benefit.get("bnft_type_cd"), "verification_status": benefit.get("verification_status_cd"),
+                "description": text.get("benefit_description"), "rule_text": text.get("rule_text"),
+                "condition_text": text.get("condition_text"), "limit_text": text.get("limit_text"),
+                "exclusion_text": text.get("exclusion_text"), "search_text": text.get("search_text"),
+                "rules": [], "conditions": [], "limits": [], "limit_tiers": [],
+                "tier_mappings": json.loads(text.get("tier_mappings_json") or "[]"),
+                **({"common_service": {"name": common.get("common_nm")}} if common else {})}
     rules = []
     for item in detail["rules"]:
         rule = source(item["rule"])
@@ -786,13 +831,66 @@ def benefit_context(detail: dict, previous_spend: int | None = None) -> dict:
         "common_service": {"name": common.get("common_nm"), "brand": common.get("brand_cd"), "grade": common.get("service_grade_cd")},
         "applied_cards": [source({"source_json": item}).get("product_nm") for item in detail["context"].get("card_sources", [])],
         "valid_from": benefit.get("bnft_valid_from"), "valid_to_excl": benefit.get("bnft_valid_to_excl")}
-    program_cap_policy = point2_shared_cap_policy(detail_ref(detail), previous_spend)
     return {**extra, "benefit_id": detail_ref(detail), "name": benefit.get("bnft_nm"),
             "card": source(detail["context"]["card"]).get("product_nm"), "type": benefit.get("bnft_type_cd"),
             "verification_status": benefit.get("verification_status_cd"),
             "rule_text": benefit.get("bnft_rule_txt"), "rules": rules,
             "conditions": condition_groups(detail["conditions"]), "limits": limits, **extra_limits,
-            **({"program_cap_policy": program_cap_policy} if program_cap_policy else {})}
+            }
+
+
+def extraction_limit_tier_view(extraction_sources: list, evidence_rows: list[dict]) -> list[dict]:
+    """Read explicit condition/limit key links from an original extraction row.
+
+    No thresholds are calculated. A tier is emitted only when one rule names one
+    SPEND_REQ condition and one limit key, and both keys resolve in that same raw
+    extraction JSON. Ambiguous/missing links remain unprojected for manual review.
+    """
+    evidence_by_quote = {}
+    for row in evidence_rows:
+        props = source(row.get("evidence") or {})
+        quote = props.get("quote_txt")
+        if quote:
+            evidence_by_quote.setdefault(quote, []).append(props.get("evidence_id"))
+    result = []
+    for raw_source in extraction_sources or []:
+        extraction = source({"source_json": raw_source}) if isinstance(raw_source, str) else raw_source
+        raw = extraction.get("stg_raw_item") if isinstance(extraction, dict) else None
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except (TypeError, ValueError):
+                continue
+        if not isinstance(raw, dict):
+            continue
+        limits = {item.get("limit_key"): item for item in raw.get("limits") or []
+                  if isinstance(item, dict) and item.get("limit_key")}
+        review = extraction.get("stg_sql_check_cd")
+        for rule in raw.get("rules") or []:
+            if not isinstance(rule, dict):
+                continue
+            conditions = [item for item in rule.get("conditions") or [] if isinstance(item, dict)
+                          and item.get("cond_type_cd") == "SPEND_REQ" and item.get("cond_min_amt") is not None]
+            limit_keys = list(rule.get("limit_keys") or [])
+            if len(conditions) != 1 or len(limit_keys) != 1:
+                continue
+            condition, limit = conditions[0], limits.get(limit_keys[0])
+            if not limit or limit.get("limit_num") is None:
+                continue
+            if limit.get("cap_unit_cd") not in (None, "KRW"):
+                continue
+            condition_quote = condition.get("cond_raw_txt") or ""
+            limit_quote = limit.get("limit_raw_txt") or ""
+            linked_ids = list(dict.fromkeys([*(evidence_by_quote.get(condition_quote) or []),
+                                             *(evidence_by_quote.get(limit_quote) or [])]))
+            result.append({"label": condition_quote, "basis": condition.get("cond_basis_cd"),
+                           "min_amt": condition["cond_min_amt"], "max_amt": condition.get("cond_max_amt_excl"),
+                           "cap": {"column": limit.get("limit_key"), "raw": limit_quote,
+                                   "amount": limit["limit_num"]}, "shared": [],
+                           "rule_key": rule.get("rule_key"), "condition": condition_quote,
+                           "limit": limit_quote, "evidence_ids": linked_ids,
+                           "source": "card_extr_stg.stg_raw_item key mapping", "review_status": review})
+    return result
 
 
 def limit_tier_view(item_data) -> list[dict]:
@@ -1170,10 +1268,11 @@ def known_values(context: dict, question: str, benefit_id: str | None) -> set[tu
             known.add(("MONEY", float(tier["min_amt"]), None))
             known.update(("MONEY", float(amount), None) for amount in
                          [tier["cap"]["amount"], *[group["amount"] for group in tier.get("shared", [])]])
-        policy = benefit.get("program_cap_policy") or {}
-        for tier in policy.get("tiers") or []:
-            known.add(("MONEY", float(tier["min_amt"]), None))
-            known.add(("MONEY", float(tier["cap_amount"]), None))
+        known.update(value_tokens(benefit.get("condition_text") or ""))
+        known.update(value_tokens(benefit.get("limit_text") or ""))
+        for mapping in benefit.get("tier_mappings") or []:
+            known.update(value_tokens(mapping.get("condition", "")))
+            known.update(value_tokens(mapping.get("limit", "")))
         for group in benefit["conditions"]:
             for branch in group["branches"]:
                 for atom in branch["atoms"]:
@@ -1256,14 +1355,23 @@ def distorts_limit_tier(text: str, benefits: list[dict]) -> bool:
     한도(이 혜택 cap 또는 공유 cap)로만 쓰이는 금액이 나오면 잘못 배정한 것이다. 다음 "M원 이상"이 나오면 구간을 바꾼다.
     구간 경계 금액, 다른 혜택에만 있는 금액, 구간 표가 없는 혜택은 판정하지 않는다(규칙 지급값 검증은 distorts_tier가 맡는다).
     """
+    for sentence in SENTENCE_END.split(text):
+        sentence_amounts = {int(value) for kind, value, _ in value_tokens(sentence) if kind == "MONEY"}
+        threshold_amounts = {int(value) for match in VALUE_PATTERN.finditer(sentence)
+                             if re.match(r"\s*(?:이상|초과|이하|미만)", sentence[match.end():])
+                             for kind, value, _ in value_tokens(match.group(0)) if kind == "MONEY"}
+        claimed_caps = sentence_amounts - threshold_amounts
+        if not threshold_amounts or not claimed_caps:
+            continue
+        for benefit in benefits:
+            for row in benefit.get("tier_mappings") or []:
+                condition_amounts = {int(value) for kind, value, _ in value_tokens(row.get("condition", "")) if kind == "MONEY"}
+                cap_amounts = {int(value) for kind, value, _ in value_tokens(row.get("limit", "")) if kind == "MONEY"}
+                if threshold_amounts & condition_amounts and not claimed_caps & cap_amounts:
+                    return True
     views = []
     for benefit in benefits:
         tiers = list(benefit.get("limit_tiers") or [])
-        policy = benefit.get("program_cap_policy") or {}
-        if policy.get("source") == "PROGRAM_DERIVED":
-            tiers.extend({"min_amt": tier["min_amt"], "max_amt": tier.get("derived_max_amt_excl"),
-                          "cap": {"amount": tier["cap_amount"]}, "shared": []}
-                         for tier in policy.get("tiers") or [])
         views.append((benefit["benefit_id"], tiers))
     views = [(bid, tiers) for bid, tiers in views if tiers]
     if not views:
@@ -1578,10 +1686,7 @@ def unbacked_status(text: str, context: dict) -> str | None:
 
 
 def _has_structured_limit_tiers(benefit: dict) -> bool:
-    if benefit.get("limit_tiers"):
-        return True
-    policy = benefit.get("program_cap_policy") or {}
-    return policy.get("source") == "PROGRAM_DERIVED" and bool(policy.get("tiers"))
+    return bool(benefit.get("limit_tiers") or benefit.get("tier_mappings"))
 
 
 def _unstructured_limit_pair_claim(text: str) -> bool:
@@ -1613,6 +1718,23 @@ def limit_tier_answer_problem(text: str, context: dict, question: str, benefit: 
                        if any(name and name in question for name in (item.get("card"), item.get("name")))]
     if not targets:
         return None
+
+    requested_spend = previous_month_spend(question)
+    for item in targets:
+        mappings = item.get("tier_mappings") or []
+        if requested_spend is None or not mappings:
+            continue
+        matching = []
+        for row in mappings:
+            condition_amounts = {int(value) for kind, value, _ in value_tokens(row.get("condition", "")) if kind == "MONEY"}
+            if requested_spend in condition_amounts:
+                matching.append(row)
+        if not matching:
+            return "요청한 전월 실적 구간과 연결된 원문 한도 행이 없습니다"
+        answer_amounts = {int(value) for kind, value, _ in value_tokens(text) if kind == "MONEY"}
+        mapped_amounts = {int(value) for row in matching for kind, value, _ in value_tokens(row.get("limit", "")) if kind == "MONEY"}
+        if answer_amounts and not answer_amounts.intersection(mapped_amounts):
+            return "답변 한도가 요청한 실적 구간의 원문 한도와 일치하지 않습니다"
 
     structured = [_has_structured_limit_tiers(item) for item in targets]
     if all(structured):
@@ -1964,7 +2086,7 @@ class CardGraphRAG:
                     detail = self.search.get_detail(key, sections)
                 # 그래프의 공통 혜택 근거는 dp_same_as가 있을 때만 있다. 0건이면 같은 공통서비스·혜택 ID의 PostgreSQL 근거만 읽는다.
                 fallback = postgresql_common_key(key) if detail is not None and "evidence" in sections and not detail["evidence"] else None
-                if fallback and self.benefit_search is not None:
+                if fallback and self.benefit_search is not None and getattr(self.benefit_search, "engine", None) != "neo4j":
                     original = self.benefit_search.get_detail(fallback, ("evidence",))
                     detail["evidence"] = original["evidence"] if original else []
                     if detail["evidence"]:
@@ -1975,7 +2097,9 @@ class CardGraphRAG:
                     detail["entity_ref"] = entity_ref(key)
                 (details if detail is not None else missing).append(detail if detail is not None else key)
                 if detail is not None:
-                    trace.append({"benefit": detail["context"]["benefit"].get("name"), "engine": "postgresql" if key.startswith("pg:") else "neo4j",
+                    benefit_row = source(detail["context"]["benefit"])
+                    trace.append({"benefit": benefit_row.get("item_nm") or benefit_row.get("bnft_nm") or benefit_row.get("name"),
+                                  "engine": "postgresql" if key.startswith("pg:") else "neo4j",
                                   "evidence_engine": detail.get("evidence_source", "postgresql" if key.startswith("pg:") else "neo4j"),
                                   "rules": len(detail["rules"]), "conditions": len(detail["conditions"]),
                                   "limits": len(detail["limits"]), "evidence": len(detail["evidence"])})

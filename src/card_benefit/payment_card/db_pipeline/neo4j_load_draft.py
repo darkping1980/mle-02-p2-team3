@@ -1,195 +1,194 @@
-"""PostgreSQL에서 만든 ``dp_`` 그래프를 지정 Neo4j DB에 적재한다. ``--apply`` 와 확인 문구 없이는 쓰지 않는다.
-
-MERGE만 쓰므로 재실행해도 중복되지 않는다. 노드·관계 삭제 구문이 없고 ``dp_`` 밖의 데이터는 건드리지 않는다.
-스키마 변경은 ``dp_`` 제약 생성뿐이다.
-"""
-# 주의: 위 모듈 docstring은 main()의 argparse description(--help 출력)으로 쓰이므로 내용을 바꾸지 않았다.
-#
-# [등록 파이프라인에서의 위치] 4단계 "Neo4j 적재"의 쓰기부. 원천은 항상 PostgreSQL 전체 스냅샷이다(증분 적재 아님).
-#
-# 처리 흐름 (main)
-#     1. psycopg로 PostgreSQL 접속 → neo4j_dry_run.load_snapshot → build (변환·검증, 실패 시 GraphValidationError)
-#     2. prepare: 허용 라벨·관계 유형만 통과시키고 적재용 목록(nodes, relationships)으로 변환
-#     3. 미리보기 출력. --apply가 없으면 여기서 끝(Neo4j 접속 없음)
-#     4. --confirm APPROVED_DP_HANA_CARD 와 NEO4J_DATABASE == EXPECTED_DB 가 모두 맞아야 진행
-#     5. prepare_schema: dp_ 제약(CREATE CONSTRAINT IF NOT EXISTS) 생성·확인
-#     6. Neo4j에 있는 dp_ 노드 중 원천에 없는 노드(stale)가 있으면 중단(자동 삭제하지 않음)
-#     7. session.execute_write(write_transaction): 노드 MERGE → 관계 MERGE → 건수·key 사후 확인
-#        execute_write는 함수 전체를 하나의 Neo4j 쓰기 트랜잭션으로 실행하므로, 사후 확인에서 ValueError가 나면
-#        이번 적재 전체가 commit되지 않는다.
-#
-# 식별자: 노드는 (라벨 + PostgreSQL PK 속성)으로 MERGE하고, 모든 dp_ 노드에 dp_node 라벨과 고유 key를 둔다.
-#        관계 key는 neo4j_dry_run의 관계 key 문자열을 SHA-256한 값이다. 재실행해도 같은 key라 중복이 생기지 않는다.
-# 정적 Cypher 조회는 neo4j_validation.cypher(Neo4jDbSession mapper, CYPHER["neo4j_validation.이름"])에 있다.
+"""Replace only this project's dp_ graph with the PostgreSQL relational read model."""
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 
 import psycopg
 from dotenv import load_dotenv
 
 from common.neo4j_connection import create_neo4j_driver
-from common.neo4j_db_session import Neo4jDbSession
-
-from .neo4j_dry_run import COMMON_LABEL, PK_FIELDS, PREFIX, build, load_snapshot
+from .neo4j_relational_model import PREFIX, build, load_snapshot
 
 EXPECTED_DB = "6ac1f0f8"
-# 정적 조회는 neo4j_validation.cypher에 있다. 아래 MERGE는 라벨·관계 유형이 동적이라 파일로 옮기지 않는다.
-CYPHER = Neo4jDbSession(mapper_root=Path(__file__).resolve().parent).mappers
-CONFIRM = "APPROVED_DP_HANA_CARD"
-NODE_LABELS = frozenset(PREFIX + label for label in PK_FIELDS)
-REL_TYPES = frozenset(PREFIX + kind for kind in (
-    "has_document", "has_benefit", "has_rule", "has_expr", "has_branch", "has_atom", "targets", "supported_by",
-    "in_chunk", "on_page", "in_document", "has_common_benefit", "belongs_to", "same_as", "has_item", "related_to"))
-# 쓰기 구문이므로 읽기 전용 neo4j_validation.cypher에 두지 않는다. --apply에서만 실행한다.
-CREATE_CONSTRAINTS = (
-    f"CREATE CONSTRAINT dp_node_key IF NOT EXISTS FOR (n:{COMMON_LABEL}) REQUIRE n.key IS UNIQUE",
-    *(f"CREATE CONSTRAINT {PREFIX}{label}_pk IF NOT EXISTS FOR (n:{PREFIX}{label}) "
-      f"REQUIRE ({', '.join('n.' + field for field in fields)}) IS NODE KEY"
-      for label, fields in PK_FIELDS.items()),
-)
-SCALAR_FIELDS = ("card_id", "card_bnft_id", "card_product_item_id", "item_type_cd", "item_cd", "rule_key", "value_num", "bnft_cd", "bnft_type_cd", "product_cd", "product_nm",
-                 "card_kind_cd", "card_common_id", "card_common_bnft_id", "common_cd", "common_nm", "brand_cd",
-                 "service_grade_cd", "service_type_cd", "card_doc_id", "doc_title", "doc_type_cd", "card_doc_chunk_id",
-                 "branch_no", "atom_seq", "evidence_id", "page_no", "start_pos", "end_pos", "target_nm", "target_key",
-                 "target_type_cd", "excl_raw_txt", "bnft_valid_from", "bnft_valid_to_excl")
-ALIASES = {"bnft_nm": "name", "verification_status_cd": "verification_status", "bnft_rule_txt": "rule_text",
-           "bnft_limit_txt": "limit_text", "atom_key": "key_name", "cond_type_cd": "kind", "cond_raw_txt": "raw_text",
-           "negate_yn": "negate", "cond_min_amt": "min_amt", "approval_status_cd": "approval_status",
-           "card_cond_status_cd": "card_cond_status", "item_nm": "name", "item_rule_txt": "rule_text",
-           "item_limit_txt": "limit_text"}
-ITEM_LABEL = PREFIX + "card_product_item"
+EXPECTED_POSTGRES_DB = "postgres"
+CONFIRM = "APPROVED_DP_POSTGRES_REBUILD"
+BACKUP_PATH = Path("tmp/neo4j_dp_backup_20261106.json.gz")
+BACKUP_SHA256 = "2d639a26cce270aa679b418b401b45c245ce7681675dffb92740cf3648102189"
 
 
-def node_properties(node):
-    """PK와 조회용 스칼라를 속성으로 올린다. NULL은 ``source_json`` 에만 남는다."""
-    row = json.loads(node["source_json"])
-    props = {"key": node["key"], "source_json": node["source_json"], **node.get("pk", {})}
-    for name in SCALAR_FIELDS:
-        value = row.get(name)
-        if isinstance(value, (str, int, float, bool)):
-            props[name] = value
-    for src, dest in ALIASES.items():
-        value = row.get(src)
-        if isinstance(value, (str, int, float, bool)):
-            props[dest] = value
-    if node["label"] == PREFIX + "card_bnft":
-        # 혜택도 카드 상품 항목이다. 기존 key·속성은 그대로 두고 항목 ID·유형만 더한다.
-        props["card_product_item_id"], props["item_type_cd"] = row.get("card_bnft_id"), "BENEFIT"
-    # 검색 투영(임베딩·검색 텍스트·동일성 판정 상태). source_json이 아닌 변환기의 별도 값에서만 온다.
-    props.update(node.get("search") or {})
-    return props
+def _ident(name: str) -> str:
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+        raise ValueError(f"unsafe schema identifier {name!r}")
+    return "`" + name + "`"
 
 
-def prepare(graph):
-    """적재 형식으로 바꾼다. 허용 목록 밖의 라벨·유형은 거부한다."""
-    graph.validate()
-    nodes, relationships = [], []
-    for n in graph.nodes.values():
-        if n["label"] not in NODE_LABELS:
-            raise ValueError("unexpected node scope")
-        nodes.append({"label": n["label"], "pk": n["pk"], "props": node_properties(n)})   # search 투영 속성 포함
-    for k, e in graph.edges.items():
-        if e["type"] not in REL_TYPES:
-            raise ValueError("unexpected relationship scope")
-        relationships.append({"type": e["type"], "start": e["start"], "end": e["end"],
-                              "key": hashlib.sha256(k.encode("utf-8")).hexdigest(), "source_json": e["source_json"]})
-    return nodes, relationships
+def prepare(snapshot: dict) -> dict:
+    return build(snapshot)
 
 
-def relationship_properties(edge):
-    """관계 원본에서 Cypher가 기록할 스칼라 속성을 선택한다."""
-    original = json.loads(edge["source_json"])
-    fields = ("ev_link_id", "ev_subject_cd", "ev_item_cd", "ev_item_key", "atom_seq", "doc_role_cd",
-              "approval_status_cd", "status", "bnft_cd")
-    if edge["type"] == PREFIX + "related_to":
-        fields += ("relation_key", "rel_type_cd", "rel_priority", "to_bnft_id")
-    if edge["type"] == PREFIX + "supported_by" and original.get("link_source"):
-        # 공통 혜택 근거(검색 투영). card_evidence_link 행이 아니므로 출처와 소유 공통 혜택·근거를 속성으로 둔다.
-        fields += ("link_source", "card_common_id", "card_common_bnft_id", "evidence_id")
-    return {k: v for k, v in original.items() if k in fields and isinstance(v, (str, int, float, bool))}
+def _make_constraints(session, model: dict):
+    session.run("CREATE CONSTRAINT dp_node_key IF NOT EXISTS FOR (n:dp_node) REQUIRE n.key IS UNIQUE").consume()
+    included = {node["table"] for node in model["nodes"]}
+    for table_name, table in sorted(model["table_map"].items()):
+        if table_name not in included:
+            continue
+        label = _ident(PREFIX + table_name)
+        name = _ident("dp_" + table_name + "_pk")
+        fields = ",".join("n." + _ident(field) for field in table["pk"])
+        session.run(f"CREATE CONSTRAINT {name} IF NOT EXISTS FOR (n:{label}) REQUIRE ({fields}) IS NODE KEY").consume()
 
 
-def write_transaction(tx, nodes, relationships):
-    """전용 라벨과 PK로만 MERGE한다. 값은 파라미터로 전달한다.
-
-    ``session.execute_write`` 의 트랜잭션 함수다. 라벨·관계 유형은 Cypher 파라미터로 쓸 수 없어 문자열에 넣지만,
-    prepare에서 허용 목록(NODE_LABELS·REL_TYPES)으로 확인한 값만 들어온다.
-
-    Returns:
-        (노드 수, 관계 수)
-
-    Raises:
-        ValueError: MERGE 결과가 1건이 아니거나 사후 확인에서 Neo4j의 dp_ key 집합이 원천과 다를 때(트랜잭션 rollback).
-    """
-    for n in nodes:
-        label = n["label"]  # prepare에서 허용 목록으로 확인했다.
-        match = ", ".join(f"{field}: $pk.{field}" for field in n["pk"])
-        extra = f", n:{ITEM_LABEL}" if label == PREFIX + "card_bnft" else ""
-        result = tx.run(f"MERGE (n:{label} {{{match}}}) SET n:{COMMON_LABEL}{extra}, n += $props RETURN count(n) AS n",
-                        pk=n["pk"], props=n["props"]).single(strict=True)
-        if result["n"] != 1:
-            raise ValueError("node creation mismatch")
-    for e in relationships:
-        kind = e["type"]  # prepare에서 허용 목록으로 확인했다.
-        extra = relationship_properties(e)
-        result = tx.run(f"MATCH (a:{COMMON_LABEL} {{key:$start}}), (b:{COMMON_LABEL} {{key:$end}}) "
-                        f"MERGE (a)-[r:{kind} {{key:$key}}]->(b) SET r.source_json=$source_json, r += $extra RETURN count(r) AS n",
-                        extra=extra, **{k: e[k] for k in ("start", "end", "key", "source_json")}).single(strict=True)
-        if result["n"] != 1:
-            raise ValueError("relationship endpoint mismatch")
-    found_nodes = [r["key"] for r in tx.run(CYPHER["neo4j_validation.node_keys"])]
-    found_edges = [r["key"] for r in tx.run(CYPHER["neo4j_validation.relationship_keys"])]
-    if len(found_nodes) != len(nodes) or set(found_nodes) != {n["props"]["key"] for n in nodes}:
-        raise ValueError("node postcondition mismatch")
-    if len(found_edges) != len(relationships) or set(found_edges) != {e["key"] for e in relationships}:
-        raise ValueError("relationship postcondition mismatch")
-    return len(nodes), len(relationships)
+def _create_indexes(session, model: dict):
+    session.run("CREATE FULLTEXT INDEX dp_card_product_item_text IF NOT EXISTS FOR (n:dp_card_product_item) "
+                "ON EACH [n.item_nm,n.item_rule_txt,n.item_limit_txt,n.item_search_txt]").consume()
+    session.run("CREATE FULLTEXT INDEX dp_card_common_bnft_text IF NOT EXISTS FOR (n:dp_card_common_bnft) "
+                "ON EACH [n.bnft_nm,n.bnft_rule_txt,n.bnft_limit_txt]").consume()
+    dimensions = set()
+    for node in model["nodes"]:
+        embedding = node["props"].get("embedding")
+        if embedding is not None:
+            dimensions.add(len(embedding))
+    if dimensions and dimensions != {1536}:
+        raise ValueError(f"expected reusable 1536-dimensional source embeddings; found {sorted(dimensions)}")
+    for table, prop in (("card_product_item", "embedding"), ("card_common_bnft", "embedding")):
+        if not any(node["table"] == table and node["props"].get(prop) is not None for node in model["nodes"]):
+            continue
+        if len(dimensions) != 1:
+            raise ValueError(f"embedding dimensions are inconsistent: {sorted(dimensions)}")
+        name, label = _ident(f"dp_{table}_embedding"), _ident(PREFIX + table)
+        prop_ident = _ident(prop)
+        dimension = next(iter(dimensions))
+        session.run(f"CREATE VECTOR INDEX {name} IF NOT EXISTS FOR (n:{label}) ON (n.{prop_ident}) "
+                    f"OPTIONS {{indexConfig: {{`vector.dimensions`: {dimension}, `vector.similarity_function`: 'cosine'}}}}").consume()
 
 
-def prepare_schema(session) -> dict:
-    """dp_ 제약을 만든다. 다른 프로젝트의 제약은 바꾸지 않는다."""
-    for statement in CREATE_CONSTRAINTS:
-        session.run(statement).consume()
-    names = {row["name"] for row in session.run(CYPHER["neo4j_validation.card_constraints"])}
-    wanted = {"dp_node_key", *(f"{PREFIX}{label}_pk" for label in PK_FIELDS)}
-    if not wanted <= names:
-        raise SystemExit(f"dp_ 제약이 없습니다: {sorted(wanted - names)}")
-    return {"dp_constraints": len(wanted)}
+def _write_nodes(tx, label: str, nodes: list[dict]):
+    result = tx.run(f"UNWIND $rows AS row MERGE (n:dp_node:{_ident(label)} {{key:row.key}}) "
+                    "SET n += row.props RETURN count(n) AS n", rows=[{"key": n["key"], "props": n["props"]} for n in nodes]).single(strict=True)
+    if result["n"] != len(nodes):
+        raise ValueError(f"node count mismatch for {label}: {result['n']} != {len(nodes)}")
+    return result["n"]
+
+
+def _write_relationships(tx, rel_type: str, edges: list[dict]):
+    result = tx.run(f"UNWIND $rows AS row MATCH (a:dp_node {{key:row.start}}),(b:dp_node {{key:row.end}}) "
+                    f"MERGE (a)-[r:{_ident(rel_type)} {{key:row.key}}]->(b) SET r += row.props RETURN count(r) AS n",
+                    rows=[{"key": e["key"], "start": e["start"], "end": e["end"], "props": e["props"]} for e in edges]).single(strict=True)
+    if result["n"] != len(edges):
+        raise ValueError(f"relationship endpoint/count mismatch for {rel_type}: {result['n']} != {len(edges)}")
+    return result["n"]
+
+
+def write_transaction(tx, model: dict):
+    node_counts = {}
+    by_label = {}
+    for node in model["nodes"]:
+        by_label.setdefault(PREFIX + node["table"], []).append(node)
+    for label, nodes in sorted(by_label.items()):
+        node_counts[label] = _write_nodes(tx, label, nodes)
+    rel_counts = {}
+    by_type = {}
+    for edge in model["relationships"]:
+        by_type.setdefault(edge["type"], []).append(edge)
+    for rel_type, edges in sorted(by_type.items()):
+        rel_counts[rel_type] = _write_relationships(tx, rel_type, edges)
+    actual_nodes = tx.run("MATCH (n:dp_node) RETURN count(n) AS n").single(strict=True)["n"]
+    actual_rels = tx.run("MATCH (:dp_node)-[r]->(:dp_node) WHERE type(r) STARTS WITH 'dp_' RETURN count(r) AS n").single(strict=True)["n"]
+    if actual_nodes != len(model["nodes"]) or actual_rels != len(model["relationships"]):
+        raise ValueError(f"postcondition mismatch nodes={actual_nodes}/{len(model['nodes'])}, rels={actual_rels}/{len(model['relationships'])}")
+    return {"nodes": actual_nodes, "relationships": actual_rels,
+            "node_counts": node_counts, "relationship_counts": rel_counts}
+
+
+def _backup_matches():
+    if not BACKUP_PATH.is_file():
+        raise SystemExit(f"recovery backup missing: {BACKUP_PATH}")
+    digest = hashlib.sha256(BACKUP_PATH.read_bytes()).hexdigest()
+    if digest != BACKUP_SHA256:
+        raise SystemExit(f"recovery backup checksum verification failed: {digest}")
+    with gzip.open(BACKUP_PATH, "rt", encoding="utf-8") as stream:
+        backup = json.load(stream)
+    if (backup.get("database") != EXPECTED_DB or len(backup.get("nodes", [])) != 1635
+            or len(backup.get("relationships", [])) != 2702
+            or len(backup.get("constraints", [])) != 15 or len(backup.get("indexes", [])) != 19):
+        raise SystemExit("recovery backup identity/count verification failed")
+    return {"sha256": digest, "nodes": len(backup["nodes"]), "relationships": len(backup["relationships"]),
+            "constraints": len(backup.get("constraints", [])), "indexes": len(backup.get("indexes", []))}
+
+
+def _safe_clear(session) -> dict:
+    database = os.getenv("NEO4J_DATABASE")
+    if database != EXPECTED_DB:
+        raise SystemExit(f"unexpected Neo4j database: {database!r}")
+    outside = session.run("""MATCH (n)-[r]-(m)
+        WHERE any(label IN labels(n) WHERE label STARTS WITH 'dp_')
+          AND none(label IN labels(m) WHERE label STARTS WITH 'dp_')
+        RETURN count(r) AS n""").single(strict=True)["n"]
+    if outside:
+        raise SystemExit(f"dp_ graph has relationships outside project scope: {outside}")
+    before = session.run("""MATCH (n) WHERE any(label IN labels(n) WHERE label STARTS WITH 'dp_')
+        WITH count(n) AS nodes MATCH ()-[r]->() WHERE type(r) STARTS WITH 'dp_'
+        RETURN nodes,count(r) AS relationships""").single(strict=True)
+    constraints = [r["name"] for r in session.run("SHOW CONSTRAINTS YIELD name RETURN name") if r["name"].startswith("dp_")]
+    indexes = [r["name"] for r in session.run("SHOW INDEXES YIELD name RETURN name") if r["name"].startswith("dp_")]
+    for name in constraints:
+        session.run(f"DROP CONSTRAINT {_ident(name)} IF EXISTS").consume()
+    for name in indexes:
+        session.run(f"DROP INDEX {_ident(name)} IF EXISTS").consume()
+    session.run("MATCH (n) WHERE any(label IN labels(n) WHERE label STARTS WITH 'dp_') DETACH DELETE n").consume()
+    remaining_nodes = session.run("MATCH (n) WHERE any(label IN labels(n) WHERE label STARTS WITH 'dp_') RETURN count(n) AS n").single(strict=True)["n"]
+    remaining_rels = session.run("MATCH ()-[r]->() WHERE type(r) STARTS WITH 'dp_' RETURN count(r) AS n").single(strict=True)["n"]
+    if remaining_nodes or remaining_rels:
+        raise ValueError(f"dp_ clear incomplete: nodes={remaining_nodes}, relationships={remaining_rels}")
+    return {"before_nodes": before["nodes"], "before_relationships": before["relationships"],
+            "dropped_constraints": constraints, "dropped_indexes": indexes, "outside_relationships": outside}
 
 
 def main():
-    """PostgreSQL 스냅샷을 변환해 미리보기를 출력하고, --apply와 확인 문구가 있을 때만 Neo4j에 적재한다."""
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--apply", action="store_true")
-    ap.add_argument("--confirm", default="")
-    args = ap.parse_args()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--apply", action="store_true", help="drop and rebuild only dp_ objects")
+    parser.add_argument("--confirm", default="")
+    args = parser.parse_args()
     load_dotenv(".env")
-    # PostgreSQL은 읽기만 한다(load_snapshot이 READ ONLY 트랜잭션을 설정).
-    with psycopg.connect(os.environ["DB_URL"], connect_timeout=10) as c:
-        graph, stats = build(load_snapshot(c))
-    nodes, edges = prepare(graph)
-    print(json.dumps({"mode": "APPLY" if args.apply else "PREVIEW", "nodes": len(nodes), "relationships": len(edges),
-                      "target_database": EXPECTED_DB, "by_label": stats["nodes"], "by_type": stats["relationships"],
-                      "isolated_nodes": stats["isolated_nodes"], "unlinked_evidence": len(stats["unlinked_evidence"]),
-                      "brand_compare": stats["brand_compare"]}, ensure_ascii=False))
+    with psycopg.connect(os.environ["DB_URL"], connect_timeout=10) as conn:
+        snapshot = load_snapshot(conn)
+    if snapshot["identity"]["database"] != EXPECTED_POSTGRES_DB:
+        raise SystemExit(f"unexpected PostgreSQL database: {snapshot['identity']['database']}")
+    model = prepare(snapshot)
     if not args.apply:
+        print(json.dumps({"mode": "PREVIEW", "postgres": snapshot["identity"], "expected_neo4j": EXPECTED_DB,
+                          "backup": str(BACKUP_PATH), "backup_counts": _backup_matches(), **model["stats"]},
+                         ensure_ascii=False, default=str, indent=2))
         return
     if args.confirm != CONFIRM or os.getenv("NEO4J_DATABASE") != EXPECTED_DB:
-        raise SystemExit("explicit approval confirmation and exact target database required")
-    # Reuse verified project TLS implementation; no certificate verification bypass.
+        raise SystemExit("explicit confirmation token and exact project database are required")
+    _backup_matches()
     with create_neo4j_driver() as driver, driver.session(database=EXPECTED_DB) as session:
-        print("schema", prepare_schema(session))
-        existing = set(session.run(CYPHER["neo4j_validation.existing_node_keys"]).single(strict=True)["keys"])
-        stale = existing - {n["props"]["key"] for n in nodes}
-        if stale:
-            raise SystemExit(f"원천에 없는 dp_ 노드가 있어 적재를 중단합니다. 자동 삭제하지 않습니다: {sorted(stale)[:5]}")
-        # Neo4j 쓰기 트랜잭션: write_transaction이 정상 반환하면 commit, 예외면 rollback된다.
-        print("committed", session.execute_write(write_transaction, nodes, edges))
+        identity_row = session.run("CALL db.info() YIELD name,id RETURN name,id").single(strict=True)
+        identity = identity_row["name"]
+        if identity != EXPECTED_DB:
+            raise SystemExit(f"unexpected Neo4j identity: {identity_row}")
+        cleared = _safe_clear(session)
+        _make_constraints(session, model)
+        result = session.execute_write(write_transaction, model)
+        _create_indexes(session, model)
+        from .neo4j_validate import validate_live
+        validation = validate_live(model, session)
+        if not validation["ok"]:
+            print(json.dumps({"mode": "APPLY_VALIDATION_FAILED", "database": identity,
+                              "clear": cleared, "load": result, "validation": validation},
+                             ensure_ascii=False, default=str, indent=2))
+            raise SystemExit(1)
+        print(json.dumps({"mode": "APPLIED", "database": identity, "clear": cleared,
+                          "load": result, "validation": {"ok": validation["ok"], "actual": validation["actual"],
+                          "constraints_ok": validation["constraints_ok"], "indexes_ok": validation["indexes_ok"]}},
+                         ensure_ascii=False, default=str, indent=2))
 
 
 if __name__ == "__main__":

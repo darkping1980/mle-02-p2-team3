@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 import re
 
 SEARCH_TEXT_RULE_VER = "BNFT_SEARCH_TXT_V1"
@@ -79,7 +80,17 @@ def exclusion_tokens(text: str | None) -> set[str]:
 
 def excluded_tokens(benefit: dict) -> set[str]:
     """혜택 적용 제외 문구의 낱말. 실적 산정 제외(SPEND_EXCL)는 다른 범위라 보지 않는다."""
-    expressions = [benefit.get("bnft_cond_expr"), *(rule.get("cond_expr") for rule in benefit.get("rule_list") or [])]
+    def decoded(value):
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except (TypeError, ValueError):
+                return None
+        return value
+
+    rules = decoded(benefit.get("rule_list")) or []
+    expressions = [decoded(benefit.get("bnft_cond_expr")), decoded(benefit.get("item_cond_expr")),
+                   *(decoded(rule.get("cond_expr")) for rule in rules if isinstance(rule, dict))]
     tokens: set[str] = set()
     for expression in expressions:
         for branch in (expression or {}).get("branches", []):

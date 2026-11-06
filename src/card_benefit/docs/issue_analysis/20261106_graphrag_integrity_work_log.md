@@ -539,3 +539,54 @@ RETURNING evidence_link_id;
 - CARD10-009/029/030/044의 Notion 실행 오류 원문 또는 실행 세부 메타데이터가 질문별로 완전하지 않다. CARD10-029에는 별도 사용자 실행 관찰을 덧붙였으며 이를 baseline 값으로 대체하지 않았다.
 - Woori 문서 source URL과 ONE PICK 공식 출처 진위는 카탈로그 자체에서 확정되지 않았다.
 - Golden 데이터셋은 v1로 생성했으나, 현재는 전체 50문항의 완성형 정답셋이 아니다. 인적 검수 완료 후 dataset version을 올리고 변경 이력을 추가해야 한다.
+- 기존 작업의 Markdown 20개 생성 및 PDF 누락 10개 보류 기록은 보존했습니다.
+
+## 2026-11-06 — 누락 PDF 재검사 및 후속 변환
+
+- 후속 검사에서 보류 문서 10개 모두 manifest 상대경로의 원본 PDF를 찾았습니다. 각 파일명 후보는 1개였고 파일 크기 및 SHA-256이 manifest와 일치했습니다.
+- 해당 10개만 PyMuPDF 1.28.2로 변환했습니다. 기존 20개 Markdown은 덮어쓰거나 재변환하지 않았습니다.
+- 전체 manifest 30개에서 PDF 해시 일치, Markdown 존재/비영 크기, UTF-8 디코딩 및 페이지 표식 수를 확인했습니다. 해시 오류, PDF 누락, Markdown 누락은 없습니다.
+- 우리카드 브랜드 안내 PDF 5개와 SIMPLE 카드 PDF 1개는 텍스트 레이어가 없어 추출 불가 표식으로 남겼습니다. 본문 변환 성공으로 간주하지 않으며 육안 확인 및 로컬 OCR/전사가 필요합니다.
+- 표·혜택 실적 구간·할인/적립액·한도 연결은 전 문서에서 원문 PDF 수동 검수 대상입니다. 상세 결과는 `src/card_benefit/docs/guide/PDF_TO_MARKDOWN_MANIFEST_CONVERSION_REPORT.md`에 기록했습니다.
+
+## 2026-11-06 — app_log 읽기 쉬운 Neo4j/PDF 요약 컬럼
+
+- `execution_log.py`에 `outcome_neo4j_summary`, `outcome_pdf_evidence_summary`를 추가했습니다. 두 함수는 최종 outcome의 기존 값만 이용하고 실패 시 `None`을 반환합니다. 추가 Neo4j/PostgreSQL 업무 조회나 LLM 호출은 하지 않습니다.
+- Neo4j 요약은 답변 points의 benefit ID와 `retrieved_data`의 검증된 Ref를 연결해 출력하며, 검색 후보 전체를 최종 답변에 사용된 노드처럼 표시하지 않습니다. `dp_supported_by`는 답변 point의 evidence ID만 표시합니다. 답변 구조화 검증 상태와 PDF 원문 인용은 별도임을 표시합니다. Ref가 없는 경우 Key/Label을 만들지 않습니다.
+- PDF 요약은 `answer.points[].evidence_ids`로 인용/미인용을 분리하고, 기존 `pdf_evidence_text`에 기록된 인용 원문, 문서, 파일, 페이지, 청크 및 소유 관계를 출력합니다. evidence ID가 같은 여러 위치/관계는 유지하고 원문을 변경하지 않습니다.
+- `persist_app_logs`의 INSERT 및 ON CONFLICT UPDATE에 신규 두 컬럼을 추가했습니다. Streamlit 정상 응답, 예외(부분 outcome이 있으면 그 데이터), 동일 질문 재사용 경로 모두 summary를 전달합니다. 저장 실패는 기존처럼 경고만 기록해 답변을 실패시키지 않습니다.
+- SQL은 `src/card_benefit/sql/db_pipeline_app_log_summaries.sql`에 작성했습니다. DDL은 nullable TEXT 컬럼 두 개만 추가합니다. 롤백은 새 컬럼을 DROP하는 명령이며, 컬럼 사용 전 검토 후 실행해야 합니다.
+- 사전 확인 및 기존 행 count/예시를 위한 읽기 전용 SQL은 `src/card_benefit/sql/db_pipeline_app_log_summaries_precheck.sql`에 있습니다. 현재 연결 대상 DB 식별자 및 실제 `app_log` 구조를 확인하지 않았고, 실제 app_log ID 261의 행도 이 로컬 워크스페이스에 제공되지 않아 운영 DB 접근/DDL/일괄 UPDATE를 하지 않았습니다. 과거 로그 보정 대상 수는 DB에서 precheck 실행 전까지 미확인입니다.
+- 과거 데이터 보정은 `summaries_from_stored_app_log(detail_text, pdf_evidence_text)`로 기존 JSON에서 재구성할 수 있습니다. 새 컬럼 추가 후 대상 count와 샘플을 확인하고 별도 승인을 받은 뒤, 애플리케이션 함수로 건별 요약을 생성해 UPDATE하는 절차입니다. 기존 JSON은 수정하지 않습니다.
+- 대표 출력 형식:
+  - Neo4j: `혜택: 주요 간편결제 모아포인트 추가적립`, `노드 Key: ["card_bnft",23,"20261105_000100"]`, `답변 검증: STRUCTURED_ONLY`, Evidence ID `20261105_002740`, `20261105_002742`, `20261105_002743`.
+  - PDF: 문서 `카드의정석 POINT II 상품안내장`, 문서 ID `20261105_000043`, 페이지 3, 청크 `20261105_000176`; 원문 인용 `2만원`, `통합 월 적립 한도`, `특별/추가 적립`은 입력 JSON 값을 그대로 출력합니다.
+- 검증: `test_app_log_summaries.py`, `test_evidence_trace_log.py`, `test_detail_trace_log.py` 총 11개 통과; 변경 Python 파일 `py_compile` 통과. 테스트는 운영 DB 쓰기 없이 수행했습니다. JSON 누락/null/잘못된 형식, 두 혜택 분리, 역사 JSON 재구성을 포함합니다.
+
+### 승인된 운영 DB 적용 및 실데이터 검증
+
+- 연결 식별: Supabase pooler `aws-0-eu-west-1.pooler.supabase.com:5432`, database `postgres`, project ref `yucdexyyrwnpmeoornuz`, PostgreSQL 17.11. 비밀번호/토큰은 기록하지 않았습니다. `db_pipeline.app_log` 존재 및 기존 GraphRAG 전용 컬럼(`detail_text`, `pdf_evidence_text`)으로 프로젝트 DB임을 확인했습니다.
+- DDL 전 컬럼: 11개; 신규 컬럼 없음. 행 수 129.
+- 실행 SQL: `src/card_benefit/sql/db_pipeline_app_log_summaries.sql`의 `ALTER TABLE db_pipeline.app_log ADD COLUMN IF NOT EXISTS ...` 문. 적용 후 `neo4j_summary TEXT NULL`, `pdf_evidence_summary TEXT NULL` 확인. 다른 기존 컬럼과 행은 유지됐고 DDL 후 행 수는 129.
+- 자동 테스트: 11 passed. Streamlit 서버는 로컬 8501 포트에서 시작됐으나 CUA 브라우저 backend가 unavailable이라 화면에서 입력하는 UI 테스트는 보류했습니다. 서버를 통해 세션 입력하지 못했습니다.
+- 대체 통합 테스트: 같은 Streamlit 모듈의 `get_pipeline(SEARCH_MODE)` 실호출로 질문을 실행하고, 기존 persist 함수로 저장했습니다. 정확한 질문 결과는 “전월 실적이 60만원이면 … 통합 월 한도는 2만원입니다.” 신규 정상행 `app_log_id=263`; request/response/detail_text/pdf_evidence_text/두 요약 컬럼 모두 비어 있지 않습니다.
+- `app_log_id=263` 요약 확인: Node Label `dp_node, dp_card_bnft, dp_card_product_item`; Node Key `["card_bnft",23,"20261105_000100"]`; 혜택 `주요 간편결제 모아포인트 추가적립`; 상태 `ANSWERED`; 인용 Evidence `20261105_002740`, `20261105_002742`, `20261105_002743`. PDF 문서 `카드의정석 POINT II 상품안내장`, 문서 ID `20261105_000043`, 3페이지, 청크 `20261105_000176`; 인용 원문 `2만원`, `통합 월 적립 한도`, `특별/추가 적립`. 검색됐으나 답변에서 인용되지 않은 근거도 분리 출력됨. 기존 실제 예시 행 `app_log_id=261`도 재구성 결과가 같은 문서/페이지/청크/인용과 일치함을 확인했습니다.
+- 첫 직접실행 시도는 PowerShell stdin 인코딩 때문에 request_text가 깨져 `app_log_id=262`로 저장됐습니다. 해당 행은 허용된 범위 밖의 수정/삭제를 하지 않고 보존했습니다. 정확한 Unicode 입력으로 재실행한 정상 검증행은 263입니다.
+- 기존 로그 보정 전: 131행 중 두 요약 중 하나 이상 NULL인 행 129개, 재구성 가능한 행 92개(그중 1행은 기존 요약 한 컬럼만 보충 가능). 보정은 `UPDATE app_log SET neo4j_summary=COALESCE(...), pdf_evidence_summary=COALESCE(...) WHERE app_log_id=... AND (summary IS NULL...)` 형태의 단일 DB 트랜잭션으로 수행했습니다. 최종 업데이트 92행(91행은 두 컬럼 모두 채움, 1행은 PDF 요약만 채움); 행 수 131 유지; 요약 NULL 행 38개.
+- 미보정 38행: JSON이 없거나 재구성 가능한 provenance가 없어 둘 다 비어 있는 37행(IDs는 141, 142, 152, 161, 162, 176, 183–192, 194–199, 201, 203, 205, 213, 215, 217, 225, 227, 229, 237, 239, 241, 249, 251, 253), 그리고 `app_log_id=193`은 PDF 요약만 이미/추가 가능하고 Neo4j 요약 입력이 없어 유지됐습니다. JSON 파싱 오류 0건.
+- 보정 UPDATE는 두 신규 요약 컬럼만 설정했으며 `detail_text`, `pdf_evidence_text`, `response_text`, `execution_log`, `created_at`, 기본키는 UPDATE 문에서 변경하지 않았습니다. 행 수는 131로 유지됐습니다. 운영 DB 검증 결과 조회문은 사용자 제공 SELECT를 그대로 사용하면 됩니다.
+
+## 2026-11-06 — app_log 263 실적 조건·한도 근거 연결 분석 (읽기 전용)
+
+- 확인 대상: `db_pipeline.app_log.app_log_id=263`, 질문은 POINT II 전월 실적 60만원의 특별·추가 적립 통합 월 한도, 답변은 2만원. 이번 분석에서는 PostgreSQL/Neo4j/코드를 변경하지 않았습니다.
+- PDF 원문 확인: `src/card_benefit/data/raw/woori_all/credit/상품안내장_카드의정석 POINT II_260901.pdf`, SHA-256 `0a4da23acb9a331182f15aa2591314cb2116a5a7ea40092b57932004612e973d`, 문서 ID `20261105_000043`, 3페이지. PDF 표의 같은 행에 `전월 국내가맹점 이용실적 60만원 이상 | 특별/추가 적립 | 2만원`이 배치되어 있어 원문상 관계는 명확합니다. 아래쪽도 같은 열 구조로 30만원 이상→1만원, 120만원 이상→5만원입니다.
+- PDF 추출 자료의 위치별 Evidence: `20261105_002745`는 “전월 국내가맹점 이용실적 60만원 이상”(offset 419–440), `20261105_002740`는 “2만원”(471–473), `20261105_002742`는 “통합 월 적립 한도”(772–781), `20261105_002743`는 “특별/추가 적립”(404–411). 네 항목 모두 문서 `20261105_000043`, 3페이지, 청크 `20261105_000176`, 원본 추출 상태 `PENDING`입니다. PDF의 위치 정렬 때문에 60만원 행·금액 토큰이 서로 인접한 offset은 아니지만, 실제 PDF 표에서는 같은 행에 있습니다.
+- 원천 추출 데이터: `db_pipeline.card_extr_stg.card_extr_stg_id=20261105_000636`의 `stg_raw_item`에는 `r2.conditions`의 `c2`, `cond_min_amt=600000`, basis `PREV_MONTH_SPEND`, `limit_keys=["l2"]`가 있습니다. 같은 객체의 `limits`에서 `l2.limit_num=20000`, `period_cd=MONTH`, `shared_scope_txt=특별/추가 적립`입니다. 이 staging 구조에는 60만원→l2→2만원 매핑이 명시적으로 존재합니다. 조건 원문 인용은 `20261105_002745`, cap 인용은 `20261105_002740`으로 `card_source_evidence`에 있고 둘 다 동일 stage/document/page/chunk에 연결됩니다.
+- 정규화 PostgreSQL/Neo4j 상태: `card_product_item` ID `20261105_000100`의 `item_data`는 `{}`이고 `rule_list`에는 r1=30만원, r2=60만원, r3=120만원의 `cond_expr` 및 모두 3% 적립이 있지만 cap `limit_keys`는 남아 있지 않습니다. Neo4j 혜택 Ref는 `card_product_item:23:20261105_000100`, Node Key `["card_bnft",23,"20261105_000100"]`, 실제 Labels `["dp_node","dp_card_bnft","dp_card_product_item"]`입니다. 해당 노드의 `limit_text`는 `1만원 / 2만원 / 5만원 / 통합 월 적립 한도 / 특별/추가 적립`을 나열할 뿐 tier 매핑을 구조화하지 않습니다.
+- Neo4j 조건 노드 Key는 `["cond_atom","RULE:23:20261105_000100:r1",1,"c1"]`, `["cond_atom","RULE:23:20261105_000100:r2",1,"c2"]`, `["cond_atom","RULE:23:20261105_000100:r3",1,"c3"]`; 각각 min amount 300000, 600000, 1200000 및 `SPEND_REQ`입니다. `c2`의 raw text는 “전월 국내가맹점 이용실적 60만원 이상”입니다. 이 조건 노드에서 `dp_supported_by`로 향하는 관계는 0건이며 condition evidence 2744/2745/2746은 Neo4j `dp_card_source_evidence` 노드로도 조회되지 않았습니다.
+- RULE 근거 관계: `dp_supported_by`는 적재되어 있습니다. r1/r2/r3 모두 `20261105_002735`(원문 “3% 추가적립”)를 연결합니다. 이는 적립률 규칙 인용이며 60만원 조건이나 cap 선택의 PDF 근거는 아닙니다. 혜택 노드에는 7개 BNFT 근거 연결이 있습니다. `20261105_002745` 등 조건 셀 Evidence의 `card_evidence_link` 행은 없고 해당 ID들의 `ev_subject_cd=BNFT` 노드 관계도 없습니다. 따라서 RULE 관계 존재와 COND 관계 존재를 구분해야 합니다.
+- 프로그램 파생 계산 여부: 맞습니다. `previous_month_spend()`가 질문에서 600000을 읽고, `benefit_context()`가 Ref가 `card_product_item:23:20261105_000100`일 때 `point2_shared_cap_policy()`를 호출합니다. 이 함수는 코드 상수 300000→10000, 600000→20000, 1200000→50000을 사용하며 600000에 대해 `source=PROGRAM_DERIVED`, `selected={min_amt:600000,cap_amount:20000,derived_max_amt_excl:1200000}`를 반환했습니다. 원천 staging에도 같은 연결이 남아 있지만 Neo4j 최종 노드/관계에는 없으므로 실행 시점 매핑은 프로그램 정책으로 산출됩니다.
+- `validate_answer()`는 답변을 이 파생 정책 tier와 비교합니다. `_has_structured_limit_tiers()`는 `program_cap_policy.tiers`도 구조 tier로 인정하고 `distorts_limit_tier()`가 60만원 tier에서 2만원이 아닌 값을 말하는 오류를 차단합니다. 따라서 숫자/구간 연결 검증은 코드 파생 mapping 기준으로 수행됩니다. PDF Evidence가 60만원과 2만원의 관계를 모두 증명했는지 검사하거나 그 관계 Evidence ID를 답변에 강제하는 검증은 아닙니다. `verification_level()`의 개별 원문 숫자 일치 판정 역시 tier-to-cap 의미 관계를 인증하지 않습니다.
+- app_log 인용: answer point는 `20261105_002740`, `20261105_002742`, `20261105_002743`만 인용했습니다. 즉 금액, “통합 월 적립 한도” 제목, “특별/추가 적립” 셀은 인용했으나 60만원 조건 Evidence `20261105_002745`는 빠졌습니다. 검색/답변 outcome의 PDF evidence 목록에서 인용되지 않은 것은 `20261105_002734`(혜택명/3% 추가적립), `20261105_002738`(대상 가맹점), `20261105_002739`(1만원), `20261105_002741`(5만원)입니다. `20261105_002745`는 outcome에서 검색된 미인용 근거가 아니라, 추출 데이터/PDF에는 있지만 해당 outcome에 들어오지 않은 근거입니다. Neo4j에서 확인된 rule evidence `20261105_002735`는 outcome PDF evidence 목록에 없어 검색·인용 모두 이 로그에서 확인되지 않습니다.
+- 요약 컬럼 누락: `neo4j_summary`는 카드 혜택 Label/Key와 답변 point의 사용 Evidence ID를 표시하지만 point의 `verification="STRUCTURED_ONLY"`, `origin="llm"`, 파생 policy의 `PROGRAM_DERIVED`, 선택 tier 600000→20000은 포함하지 않습니다. 상단 `ANSWERED`는 답변 상태일 뿐 point 검증 등급이 아닙니다. `pdf_evidence_summary`는 outcome에 포함된 7개 Evidence만 다뤄서 2745 조건 인용을 표시하지 못하며, 미인용 목록도 outcome 내부 검색 결과까지만 보여 줍니다. 따라서 PDF 원문 전체에서 추출된 2744–2746이 없다는 점과 별도 추출 매핑을 표시하지 않습니다.
+- 추적 요약: 질문의 600000 → 혜택 `주요 간편결제 모아포인트 추가적립` → Neo4j r2/c2 `SPEND_REQ 600000` → staging `r2.limit_keys=[l2]` 및 l2 월 20000 → 코드 policy가 같은 값을 `PROGRAM_DERIVED`로 선택 → PDF p.3 동일 행 “60만원 이상 | 특별/추가 적립 | 2만원”. 원문은 연결을 확인해 주지만, 최종 Neo4j 구조화 relation/evidence 경로와 app_log 인용에는 c2/2745가 빠져 있습니다.

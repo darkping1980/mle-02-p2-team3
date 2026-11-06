@@ -1,353 +1,81 @@
-"""P2(2026-11-06): 혜택 item_data의 Neo4j 적재·원천 컬럼 완전성 검사·구간별 한도 답변 검증. DB를 쓰지 않는다.
-
-fixture
-    fixtures_limit_struct.json       22/099·23/100·20/092 실제 추출 원본·등록 규칙·근거(P1과 공용)
-    fixtures_limit_tiers_daily.json  42/179·42/180 실제 item_data.limit_tiers(SET_LIMIT_TIERS 보정본, 읽기 전용으로 옮김)
-22/099의 limit_tiers는 DB에 아직 없다(기존 데이터 보정 전). P1 helper가 추출 원본에서 만드는 값으로 시험한다.
-"""
-import copy
+"""Regression checks for source-row tier context and relation-aware answer validation."""
 import json
-from pathlib import Path
 
-from card_benefit.payment_card.db_pipeline import neo4j_dry_run as dry
-from card_benefit.payment_card.db_pipeline.extraction_service import limit_struct, limit_tiers_from_extraction
-from card_benefit.payment_card.db_pipeline.neo4j_load_draft import node_properties
-from card_benefit.payment_card.db_pipeline.neo4j_validate import compare_item_data, source_column_map
-from card_benefit.payment_card.db_pipeline.product_benefit_service import ProductBenefitService
 from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag as g
-from card_benefit.payment_card.db_pipeline_origin_search.card_graphrag import AnswerPoint, CardAnswer, rule_conflicts
-
-HERE = Path(__file__).parent
-STRUCT = json.loads((HERE / "fixtures_limit_struct.json").read_text(encoding="utf-8"))
-DAILY = json.loads((HERE / "fixtures_limit_tiers_daily.json").read_text(encoding="utf-8"))
-# 2026-11-06 information_schema.columns 실제 값(읽기 전용 조회)
-PRODUCT_ITEM_COLUMNS = ["card_id", "card_product_item_id", "item_type_cd", "item_cd", "item_nm", "item_subtype_cd", "item_origin_cd",
-                        "item_scope_cd", "item_brand_opt_cds", "item_cond_expr", "rule_list", "relation_list", "item_data",
-                        "verification_status_cd", "item_valid_from", "item_valid_to_excl", "item_rule_txt", "item_limit_txt",
-                        "item_search_txt", "item_embedding", "item_ref", "create_date", "create_user_id", "update_date", "update_user_id"]
-EVIDENCE_LINK_COLUMNS = ["card_doc_id", "page_no", "card_doc_chunk_id", "evidence_id", "card_id", "evidence_link_id",
-                         "card_product_item_id", "ev_subject_cd", "rule_key", "relation_key", "ev_item_cd", "ev_item_key"]
-SOURCE = {"card_product_item": PRODUCT_ITEM_COLUMNS, "card_evidence_link": EVIDENCE_LINK_COLUMNS}
 
 
-def simple_item_data():
-    """22/099: P1 helper가 실제 추출 원본에서 만드는 item_data(보정 후 DB에 들어갈 형태)."""
-    case = copy.deepcopy(STRUCT["22/20261105_000099"])
-    raw, rules, evidence = case["stg_raw_item"], case["rule_list"], case["evidence"]
-    located = ProductBenefitService._located(evidence)
-    struct = limit_struct(raw, [r["rule_key"] for r in rules], ProductBenefitService._limit_evidence(raw, located))
-    tiers = limit_tiers_from_extraction(rules, struct, ProductBenefitService._cond_evidence(raw, rules, located))
-    return {"schema_ver": "BENEFIT_V1", **struct, "limit_tiers": tiers}
+def detail(item_data):
+    benefit = {"card_id": 23, "card_product_item_id": "20261105_000100",
+               "item_type_cd": "BENEFIT", "item_nm": "특별·추가 적립",
+               "item_rule_txt": "특별 및 추가 적립", "item_limit_txt": "통합 월 적립 한도",
+               "item_data": item_data, "item_cond_expr": None, "rule_list": [], "relation_list": []}
+    return {"context": {"card": {"source_json": json.dumps({"card_id": 23, "product_nm": "카드의정석 POINT II"})},
+                        "benefit": {"source_json": json.dumps(benefit)}, "common": None},
+            "rules": [], "conditions": [], "limits": [], "evidence": []}
 
 
-def detail(card, item_id, name, item_data, rules, conditions=(), limit_text=None):
-    """Neo4j 상세 조회(card.detail_batch) 결과 형태."""
-    benefit = {"card_bnft_id": item_id, "bnft_nm": name, "item_data": item_data, "bnft_rule_txt": None}
-    return {"context": {"card": {"source_json": json.dumps({"product_nm": card}, ensure_ascii=False)},
-                        "benefit": {"source_json": json.dumps(benefit, ensure_ascii=False)}},
-            "rules": [{"rule": {"source_json": json.dumps(rule, ensure_ascii=False)}, "targets": ["SKT"]} for rule in rules],
-            "conditions": list(conditions), "limits": [{"limit_text": limit_text}] if limit_text else [], "evidence": []}
+def tiers():
+    return {"limit_tiers": {"basis_cd": "PREV_MONTH_SPEND", "own": {"column": "own_cap", "caps": {
+        "t30": {"raw": "1만원", "amount": 10000}, "t60": {"raw": "2만원", "amount": 20000},
+        "t120": {"raw": "5만원", "amount": 50000}}}, "tiers": [
+            {"tier_key": "t30", "label": "30만원 이상", "min_amt": 300000},
+            {"tier_key": "t60", "label": "60만원 이상", "min_amt": 600000},
+            {"tier_key": "t120", "label": "120만원 이상", "min_amt": 1200000}]}}
 
 
-def simple_context_benefit():
-    case = STRUCT["22/20261105_000099"]
-    data = simple_item_data()
-    item = detail("더 심플 하나카드", "20261105_000099", "월납 요금 청구할인", data, case["rule_list"], limit_text=case["item_limit_txt"])
-    benefit = g.benefit_context(item)
-    # 조건 묶음은 Neo4j 조건 행에서 만든다. 여기서는 benefit_context 결과 형태를 직접 채운다(구간 검증에 필요한 부분).
-    benefit["conditions"] = [{"scope": rk, "branches": [{"branch_no": 1, "atoms": [
-        {"atom_key": ak, "negate": False, "type": "SPEND_REQ", "min_amt": lo, "max_amt": hi, "basis": "PREV_MONTH_SPEND",
-         "text": txt, "status": "DRAFT"}]}]} for rk, ak, lo, hi, txt in
-        (("r1", "c1", 300000, 800000, "30만원 이상\n80만원 미만"), ("r2", "c2", 800000, None, "80만원 이상"))]
-    return benefit
+def test_original_item_data_is_carried_to_context_without_creating_payment_rules():
+    benefit = g.benefit_context(detail(tiers()))
+    assert benefit["benefit_id"] == "20261105_000100"
+    assert benefit["name"] == "특별·추가 적립"
+    assert [(row["min_amt"], row["cap"]["amount"]) for row in benefit["limit_tiers"]] == [
+        (300000, 10000), (600000, 20000), (1200000, 50000)]
+    assert benefit["rules"] == []
 
 
-def daily_benefit(item_id, name):
-    case = DAILY[f"42/{item_id}"]
-    item = detail("카드의정석2 DAILY", item_id, name, case["item_data"],
-                  [{"rule_key": "r", "value_num": 5, "value_unit_cd": "PERCENT", "rule_status_cd": "DRAFT"}],
-                  limit_text=case["item_limit_txt"])
-    return g.benefit_context(item)
+def test_limit_tier_validator_rejects_a_wrong_spend_to_cap_pair():
+    benefit = g.benefit_context(detail(tiers()))
+    assert not g.distorts_limit_tier("전월 실적 60만원 이상이면 통합 월 한도 2만원입니다.", [benefit])
+    assert g.distorts_limit_tier("전월 실적 60만원 이상이면 통합 월 한도 1만원입니다.", [benefit])
 
 
-# region 적재(neo4j_dry_run): BENEFIT item_data
-class TestSnapshotItemData:
-    def test_benefit_select_includes_item_data_and_keeps_other_columns(self):
-        assert "item_data FROM db_pipeline.card_product_item WHERE item_type_cd = 'BENEFIT'" in dry.BENEFITS_SQL
-        for part in ("card_product_item_id AS card_bnft_id", "item_limit_txt AS bnft_limit_txt", "item_embedding AS bnft_embedding"):
-            assert part in dry.BENEFITS_SQL
-        # 혜택 외 항목·근거 연결 SELECT는 기존과 같은 열이다(노드·관계 source_json 불변).
-        assert dry.ITEMS_SQL == ("SELECT card_id, card_product_item_id, item_type_cd, item_cd, item_nm, item_scope_cd, item_brand_opt_cds, "
-                                 "item_data, verification_status_cd, item_valid_from, item_valid_to_excl, item_rule_txt, item_limit_txt "
-                                 "FROM db_pipeline.card_product_item WHERE item_type_cd <> 'BENEFIT' ORDER BY card_id, card_product_item_id")
-        assert dry.LINKS_SQL == ("SELECT card_id, evidence_link_id AS ev_link_id, ev_subject_cd, card_product_item_id AS card_bnft_id, rule_key, "
-                                 "relation_key, ev_item_cd, ev_item_key, evidence_id FROM db_pipeline.card_evidence_link "
-                                 "ORDER BY card_id, evidence_link_id")
-
-    def test_item_data_goes_to_source_json_not_to_properties(self):
-        data = simple_item_data()
-        snapshot = {"products": [{"card_id": 22, "card_cond_status_cd": "DRAFT"}], "product_docs": [], "documents": [], "pages": [],
-                    "chunks": [], "evidence": [], "links": [], "items": [], "commons": [], "common_docs": [],
-                    "common_benefits": [], "common_applies": [], "brand_compare": [],
-                    "benefits": [{"card_id": 22, "card_bnft_id": "B1", "bnft_nm": "월납 요금 청구할인", "bnft_cond_expr": None,
-                                  "rule_list": [], "relation_list": [], "item_data": data, "bnft_limit_txt": "10,000원 / 15,000원"}]}
-        graph, _ = dry.build(snapshot)
-        node = graph.nodes[dry.key("card_bnft", 22, "B1")]
-        assert json.loads(node["source_json"])["item_data"] == json.loads(json.dumps(data))
-        props = node_properties(node)
-        assert "item_data" not in props and props["limit_text"] == "10,000원 / 15,000원"
-        # 상세 조회는 source_json을 그대로 돌려주므로 GraphRAG가 읽을 수 있다.
-        assert g.limit_tier_view(json.loads(props["source_json"])["item_data"])[0]["cap"]["amount"] == 10000
-# endregion
+def test_previous_month_spend_parser_does_not_treat_payment_as_spend():
+    assert g.previous_month_spend("전월 실적 60만원이면 한도는?") == 600000
+    assert g.previous_month_spend("60만원 결제하면?") is None
 
 
-# region 검증(neo4j_validate): 원천 컬럼 완전성·item_data 직접 대조
-class TestColumnCoverage:
-    def test_current_mapping_covers_all_source_columns(self):
-        assert dry.column_coverage(SOURCE) == []
-
-    def test_old_select_without_item_data_is_detected(self):
-        """P2 이전 SELECT(item_data 없음)를 재현하면 검출되어야 한다(노드·관계 수와 무관)."""
-        old = {k: v for k, v in dry.BENEFIT_COLUMNS.items() if k != "item_data"}
-        original = dry.SNAPSHOT_COLUMNS["benefits"]
-        try:
-            dry.SNAPSHOT_COLUMNS["benefits"] = old
-            problems = dry.column_coverage(SOURCE)
-        finally:
-            dry.SNAPSHOT_COLUMNS["benefits"] = original
-        assert any("benefits" in p and "item_data" in p for p in problems), problems
-
-    def test_new_source_column_must_be_classified(self):
-        source = {**SOURCE, "card_product_item": PRODUCT_ITEM_COLUMNS + ["item_new_col"]}
-        problems = dry.column_coverage(source)
-        assert any("item_new_col" in p and p.startswith("benefits") for p in problems)
-        assert any("item_new_col" in p and p.startswith("items") for p in problems)
-
-    def test_snapshot_rows_must_carry_mapped_columns(self):
-        row = {alias: None for column, alias in dry.BENEFIT_COLUMNS.items() if column not in ("item_search_txt", "item_embedding")}
-        assert dry.column_coverage(SOURCE, {"benefits": [row]}) == []
-        row.pop("item_data")
-        assert any("스냅샷 행에 없는 매핑 컬럼" in p and "item_data" in p for p in dry.column_coverage(SOURCE, {"benefits": [row]}))
-
-    def test_source_column_map(self):
-        rows = [{"table_name": "t", "column_name": "a"}, {"table_name": "t", "column_name": "b"}]
-        assert source_column_map(rows) == {"t": ["a", "b"]}
+def test_extraction_stage_explicit_keys_preserve_spend_to_limit_pair_and_evidence_ids():
+    condition_quote = "전월 국내가맹점 이용실적 60만원 이상"
+    cap_quote = "2만원"
+    raw = {"stg_sql_check_cd": "LINK_REVIEW", "stg_raw_item": json.dumps({
+        "rules": [
+            {"rule_key": "r1", "conditions": [{"cond_key": "c1", "cond_type_cd": "SPEND_REQ", "cond_basis_cd": "PREV_MONTH_SPEND",
+                         "cond_min_amt": 300000, "cond_raw_txt": "전월 실적 30만원 이상"}], "limit_keys": ["l1"]},
+            {"rule_key": "r2", "conditions": [{"cond_key": "c2", "cond_type_cd": "SPEND_REQ",
+                         "cond_basis_cd": "PREV_MONTH_SPEND", "cond_min_amt": 600000, "cond_raw_txt": condition_quote}], "limit_keys": ["l2"]},
+            {"rule_key": "r3", "conditions": [{"cond_key": "c3", "cond_type_cd": "SPEND_REQ", "cond_basis_cd": "PREV_MONTH_SPEND",
+                         "cond_min_amt": 1200000, "cond_raw_txt": "전월 실적 120만원 이상"}], "limit_keys": ["l3"]}],
+        "limits": [{"limit_key": "l1", "limit_num": 10000, "cap_unit_cd": "KRW", "limit_raw_txt": "1만원"},
+                   {"limit_key": "l2", "limit_num": 20000, "cap_unit_cd": "KRW", "limit_raw_txt": cap_quote},
+                   {"limit_key": "l3", "limit_num": 50000, "cap_unit_cd": "KRW", "limit_raw_txt": "5만원"}]})}
+    extraction_sources = [json.dumps(raw)]
+    evidence = [{"evidence": {"source_json": json.dumps({"evidence_id": "COND_EVIDENCE", "quote_txt": condition_quote})}},
+                {"evidence": {"source_json": json.dumps({"evidence_id": "CAP_EVIDENCE", "quote_txt": cap_quote})}}]
+    mapping = g.extraction_limit_tier_view(extraction_sources, evidence)
+    tier = next(row for row in mapping if row["min_amt"] == 600000)
+    assert (tier["min_amt"], tier["cap"]["amount"]) == (600000, 20000)
+    assert tier["evidence_ids"] == ["COND_EVIDENCE", "CAP_EVIDENCE"]
+    assert tier["review_status"] == "LINK_REVIEW"
+    benefit = {"benefit_id": "card_product_item:23:POINT2", "limit_tiers": mapping}
+    assert not g.distorts_limit_tier("전월 실적 60만원 이상이면 2만원 한도입니다.", [benefit])
+    assert g.distorts_limit_tier("전월 실적 60만원 이상이면 1만원 한도입니다.", [benefit])
 
 
-class TestItemDataCompare:
-    def test_missing_key_value_change_and_match(self):
-        pg = [{"card_id": 22, "card_bnft_id": "A", "item_data": {}},
-              {"card_id": 42, "card_bnft_id": "B", "item_data": {"limit_tiers": {"x": 1}}},
-              {"card_id": 42, "card_bnft_id": "C", "item_data": '{"schema_ver": "BENEFIT_V1"}'}]
-        graph = [{"card_id": 22, "card_bnft_id": "A", "has_item_data": False, "item_data": None},     # 적재 전 상태
-                 {"card_id": 42, "card_bnft_id": "B", "has_item_data": True, "item_data": {"limit_tiers": {"x": 2}}},
-                 {"card_id": 42, "card_bnft_id": "C", "has_item_data": True, "item_data": {"schema_ver": "BENEFIT_V1"}},
-                 {"card_id": 9, "card_bnft_id": "Z", "has_item_data": True, "item_data": {}}]
-        problems = {tuple(p["key"]): p["problem"] for p in compare_item_data(pg, graph)}
-        assert problems == {(22, "A"): "Neo4j source_json에 item_data 키 없음", (42, "B"): "item_data 값 다름",
-                            (9, "Z"): "PostgreSQL에 없는 Neo4j 혜택"}
-# endregion
-
-
-# region GraphRAG: limit_tiers 전달과 구간별 한도 배정 검증
-class TestLimitTierContext:
-    def test_simple_monthly_tiers_reach_context_without_touching_rule_values(self):
-        benefit = simple_context_benefit()
-        assert [(t["label"], t["min_amt"], t["max_amt"], t["cap"]["amount"]) for t in benefit["limit_tiers"]] == [
-            ("30만원 이상 80만원 미만", 300000, 800000, 10000), ("80만원 이상", 800000, None, 15000)]
-        assert [r["value"] for r in benefit["rules"]] == [None, None, None]        # 한도는 지급값이 아니다
-        tiers = rule_conflicts([benefit], None)[0]["tiers"]
-        assert {t["payout_known"] for t in tiers} == {False}                      # P0 계약 유지
-
-    def test_no_limit_tiers_keeps_old_context(self):
-        for name in ("23/20261105_000100", "20/20261105_000092"):
-            case = STRUCT[name]
-            benefit = g.benefit_context(detail("카드", name.split("/")[1], "x", {}, case["rule_list"], limit_text=case["item_limit_txt"]))
-            assert "limit_tiers" not in benefit
-        assert g.limit_tier_view({"limits": [], "rule_limits": {}}) == []
-        assert g.limit_tier_view(None) == []
-
-    def test_daily_shared_caps_are_exposed(self):
-        fixed = daily_benefit("20261105_000179", "고정소비 영역 5% 청구할인")
-        assert [(t["min_amt"], t["cap"]["amount"], [s["amount"] for s in t["shared"]]) for t in fixed["limit_tiers"]] == [
-            (500000, 3000, [8000]), (1000000, 6000, [11000]), (2000000, 12000, [17000])]
-
-
-class TestPoint2SharedCapPolicy:
-    def test_highest_qualifying_threshold_boundaries(self):
-        expected = [
-            (299999, None, None),
-            (300000, 300000, 10000),
-            (599999, 300000, 10000),
-            (600000, 600000, 20000),
-            (1199999, 600000, 20000),
-            (1200000, 1200000, 50000),
-        ]
-        for spend, minimum, cap in expected:
-            policy = g.point2_shared_cap_policy(g.POINT2_SHARED_CAP_BENEFIT_REF, spend)
-            selected = policy["selected"]
-            assert (selected["min_amt"], selected["cap_amount"]) == (minimum, cap) if minimum else selected is None
-            assert policy["source"] == "PROGRAM_DERIVED"
-            assert policy["selection"] == "HIGHEST_QUALIFYING_MINIMUM"
-
-    def test_policy_does_not_change_source_conditions_and_marks_derived_bounds(self):
-        case = STRUCT["23/20261105_000100"]
-        before = copy.deepcopy(case["rule_list"])
-        policy = g.point2_shared_cap_policy(g.POINT2_SHARED_CAP_BENEFIT_REF, 600000)
-        assert case["rule_list"] == before
-        assert all(atom["cond_max_amt_excl"] is None
-                   for rule in case["rule_list"]
-                   for branch in rule["cond_expr"]["branches"]
-                   for atom in branch["atoms"])
-        assert [tier["derived_max_amt_excl"] for tier in policy["tiers"]] == [600000, 1200000, None]
-        assert [tier["max_basis"] for tier in policy["tiers"]] == ["NEXT_TIER_MIN", "NEXT_TIER_MIN", None]
-        assert all(item["cond_max_amt_excl"] is None for item in policy["source_conditions"])
-        assert policy["basic_accrual_cap"] is None
-
-    def test_policy_is_limited_to_exact_point2_benefit_and_valid_spend(self):
-        for ref in ("card_product_item:22:20261105_000099", "card_product_item:20:20261105_000092",
-                    "card_product_item:23:another_item"):
-            assert g.point2_shared_cap_policy(ref, 1200000) is None
-        for spend in (None, -1, True, 1.5):
-            policy = g.point2_shared_cap_policy(g.POINT2_SHARED_CAP_BENEFIT_REF, spend)
-            assert policy["selected"] is None
-            assert policy["previous_month_spend"] is None
-
-    def test_program_derived_point2_tiers_count_as_structured_limit_data(self):
-        benefit = {"benefit_id": g.POINT2_SHARED_CAP_BENEFIT_REF,
-                   "program_cap_policy": g.point2_shared_cap_policy(g.POINT2_SHARED_CAP_BENEFIT_REF, 600000)}
-        assert g._has_structured_limit_tiers(benefit)
-
-    def test_previous_month_spend_parser_is_separate_from_payment_amount(self):
-        assert g.previous_month_spend("전월 실적 60만원이면 통합 한도는?") == 600000
-        assert g.previous_month_spend("전월 국내가맹점 이용 실적 120만원일 때") == 1200000
-        assert g.previous_month_spend("60만원 결제하면?") is None
-
-    def test_policy_enters_context_only_for_exact_benefit(self):
-        case = STRUCT["23/20261105_000100"]
-        item = detail("카드의정석 POINT II", "20261105_000100", "주요 간편결제 추가적립", {},
-                      case["rule_list"], limit_text=case["item_limit_txt"])
-        item["entity_ref"] = g.POINT2_SHARED_CAP_BENEFIT_REF
-        benefit = g.benefit_context(item, previous_spend=600000)
-        assert benefit["program_cap_policy"]["selected"]["min_amt"] == 600000
-        assert benefit["program_cap_policy"]["selected"]["cap_amount"] == 20000
-        assert "limit_tiers" not in benefit  # program-derived policy stays separate from source item_data tiers.
-
-        other = detail("Other card", "20261105_000100", "주요 간편결제 추가적립", {},
-                       case["rule_list"], limit_text=case["item_limit_txt"])
-        other["entity_ref"] = "card_product_item:22:20261105_000100"
-        assert "program_cap_policy" not in g.benefit_context(other, previous_spend=600000)
-
-    def test_selected_policy_cap_pair_is_validated_without_changing_source_tiers(self):
-        policy = g.point2_shared_cap_policy(g.POINT2_SHARED_CAP_BENEFIT_REF, 600000)
-        benefit = {"benefit_id": g.POINT2_SHARED_CAP_BENEFIT_REF,
-                   "program_cap_policy": policy, "limit_tiers": []}
-        assert not g.distorts_limit_tier("전월 실적 60만원 이상 특별·추가 적립 통합 월 한도는 2만원입니다.", [benefit])
-        assert g.distorts_limit_tier("전월 실적 60만원 이상 특별·추가 적립 통합 월 한도는 1만원입니다.", [benefit])
-
-
-class TestDistortsLimitTier:
-    def test_simple_monthly_correct_and_swapped_pairs(self):
-        benefits = [simple_context_benefit()]
-        for text in ("전월 실적 30만원 이상 80만원 미만이면 월 10,000원, 80만원 이상이면 월 15,000원까지 할인됩니다.",
-                     "30만원 이상 구간 한도는 10,000원입니다.", "자동납부 시 할인됩니다.", "월 할인 한도는 10,000원 / 15,000원입니다."):
-            assert not g.distorts_limit_tier(text, benefits), text
-        for text in ("전월 실적 80만원 이상이면 월 10,000원까지 할인됩니다.",
-                     "30만원 이상 80만원 미만은 15,000원 한도입니다.",
-                     "30만원 이상이면 15,000원, 80만원 이상이면 10,000원입니다."):
-            assert g.distorts_limit_tier(text, benefits), text
-
-    def test_daily_tier_and_shared_caps(self):
-        benefits = [daily_benefit("20261105_000179", "고정소비 영역 5% 청구할인"), daily_benefit("20261105_000180", "정기결제 50% 청구할인")]
-        assert not g.distorts_limit_tier("50만원 이상 100만원 미만은 고정소비 3,000원, 통합 8,000원입니다.", benefits)
-        assert not g.distorts_limit_tier("100만원 이상 200만원 미만이면 정기결제 5,000원, 통합 할인한도 11,000원입니다.", benefits)
-        assert g.distorts_limit_tier("100만원 이상이면 통합 할인한도 8,000원입니다.", benefits)
-        assert g.distorts_limit_tier("200만원 이상이면 고정소비 할인 6,000원입니다.", benefits)
-
-    def test_comparison_sentence_with_other_card_amounts_is_not_flagged(self):
-        benefits = [simple_context_benefit(), daily_benefit("20261105_000180", "정기결제 50% 청구할인")]
-        text = "더 심플은 30만원 이상 80만원 미만 월 10,000원이고, DAILY 정기결제는 월 5,000원입니다."
-        assert not g.distorts_limit_tier(text, benefits)        # 5,000원은 더 심플의 한도가 아니므로 판정하지 않는다
-
-    def test_benefits_without_limit_tiers_are_not_judged(self):
-        case = STRUCT["23/20261105_000100"]
-        benefit = g.benefit_context(detail("카드", "20261105_000100", "x", {}, case["rule_list"], limit_text=case["item_limit_txt"]))
-        assert not g.distorts_limit_tier("30만원 이상이면 5만원입니다.", [benefit])     # 구간 표가 없으면 판단 근거가 없다
-
-
-class TestValidateAnswerWithLimitTiers:
-    def context(self):
-        benefit = simple_context_benefit()
-        bid = benefit["benefit_id"]
-        evidence = [{"evidence_id": eid, "page_no": 1, "approval_status": "PENDING", "quote": quote, "benefit_ids": [bid]}
-                    for eid, quote in (("E81", "10,000원"), ("E82", "15,000원"), ("E85", "30만원 이상\n80만원 미만"),
-                                       ("E86", "80만원 이상\n15,000원"))]
-        return {"benefits": [benefit], "payment_amount": None, "rule_selection_unresolved": rule_conflicts([benefit], None),
-                "unresolved": [], "evidence": evidence}, bid
-
-    def test_wrong_pair_is_dropped_and_correct_pair_kept(self):
-        context, bid = self.context()
-        good = "전월 실적 30만원 이상 80만원 미만이면 월 10,000원까지 할인됩니다."
-        bad = "전월 실적 80만원 이상이면 월 10,000원까지 할인됩니다."
-        raw = CardAnswer(answer_text=good, conclusion="", uncertain=[], cannot_answer_reason=None,
-                         points=[AnswerPoint(text=good, evidence_ids=["E81", "E85"], benefit_id=bid),
-                                 AnswerPoint(text=bad, evidence_ids=["E81", "E86"], benefit_id=bid)])
-        answer, warnings = g.validate_answer(raw, context, "휴대전화 요금 자동납부 할인 한도는?")
-        texts = [p["text"] for p in answer["points"]]
-        assert good in texts and bad not in texts
-        assert any("한도 금액의 짝" in w for w in warnings)
-
-    def test_structured_simple_monthly_limit_tiers_accept_correct_pairs(self):
-        context, bid = self.context()
-        question = "더 심플 하나카드의 월납 요금 할인 한도는 지난달 이용액 구간에 따라 어떻게 달라져?"
-        text = "전월 실적 30만원 이상 80만원 미만이면 월 할인 한도는 10,000원이고, 80만원 이상이면 15,000원입니다."
-        known = g.known_values(context, question, None)
-        numbers = g.numbers_in(json.dumps(context, ensure_ascii=False)) | g.numbers_in(question)
-        assert g.answer_text_problem(text, context, question, known, numbers) is None
-        raw = CardAnswer(answer_text=text, conclusion="", uncertain=[], cannot_answer_reason=None,
-                         points=[AnswerPoint(text=text, evidence_ids=["E81", "E82", "E85", "E86"], benefit_id=bid)])
-        answer, _ = g.validate_answer(raw, context, question)
-        assert answer["answer_source"] == "llm"
-        assert answer["points"] and answer["points"][0]["text"] == text
-
-    def test_structured_limit_tiers_reject_unresolved_answer(self):
-        context, bid = self.context()
-        uncertain = "각 실적 구간의 월 할인 한도는 아직 미확정입니다."
-        raw = CardAnswer(answer_text=uncertain, conclusion="", uncertain=[], cannot_answer_reason=None,
-                         points=[AnswerPoint(text=uncertain, evidence_ids=["E81", "E85"], benefit_id=bid)])
-        answer, warnings = g.validate_answer(
-            raw, context, "더 심플 하나카드의 월납 요금 할인 한도는 지난달 이용액 구간에 따라 어떻게 달라져?")
-        assert answer["points"] == []
-        assert answer["answer_text"] == ""
-        assert any("structured limit tiers" in warning for warning in warnings)
-
-    def test_missing_limit_tiers_rejects_unverified_threshold_cap_pair(self):
-        context, _ = self.context()
-        context["benefits"][0].pop("limit_tiers")
-        known = g.known_values(context, "", None)
-        numbers = g.numbers_in(json.dumps(context, ensure_ascii=False))
-        question = "더 심플 하나카드의 월납 요금 할인 한도는 지난달 이용액 구간에 따라 어떻게 달라져?"
-        for text in ("전월 실적 80만원 이상이면 월 할인 한도 10,000원입니다.",
-                     "월 할인 한도는 10,000원이며 전월 실적 80만원 이상 구간에 적용됩니다."):
-            problem = g.answer_text_problem(text, context, question, known, numbers)
-            assert problem == "tier-to-cap mapping is unavailable in retrieved structured data"
-
-    def test_missing_limit_tiers_allows_separate_amounts_and_uncertainty(self):
-        context, _ = self.context()
-        context["benefits"][0].pop("limit_tiers")
-        text = "조회된 월 할인 한도는 10,000원과 15,000원입니다. 실적 구간별 연결은 아직 미확정입니다."
-        known = g.known_values(context, "", None)
-        numbers = g.numbers_in(json.dumps(context, ensure_ascii=False))
-        assert g.answer_text_problem(text, context,
-            "더 심플 하나카드의 월납 요금 할인 한도는 지난달 이용액 구간에 따라 어떻게 달라져?", known, numbers) is None
-        bounds_only = "전월 실적 30만원 이상 80만원 미만 구간의 월 할인 한도 매핑은 미확정입니다."
-        assert g.answer_text_problem(bounds_only, context,
-            "더 심플 하나카드의 월납 요금 할인 한도는 지난달 이용액 구간에 따라 어떻게 달라져?", known, numbers) is None
-
-    def test_answer_text_problem_reports_wrong_pair(self):
-        context, _ = self.context()
-        known = g.known_values(context, "", None)
-        numbers = g.numbers_in(json.dumps(context, ensure_ascii=False))
-        assert g.answer_text_problem("80만원 이상이면 월 10,000원까지 할인됩니다. 다만 적용 방식은 미확정입니다.", context, "", known, numbers) \
-            == "실적 구간과 한도 금액의 짝이 원문과 다릅니다"
-# endregion
+def test_extraction_stage_sibling_evidence_is_kept_for_limit_answers():
+    detail_row = {"context": {"benefit": {"source_json": json.dumps({"card_product_item_id": "POINT2",
+                                                                        "item_nm": "특별·추가 적립"})}},
+                  "evidence": [{"link": {"source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg"},
+                                "evidence": {"source_json": json.dumps({"evidence_id": "20261105_002745",
+                                                                         "page_no": 3, "quote_txt": "60만원 이상"})}}]}
+    evidence = g.collect_evidence([detail_row], "BENEFIT_LIMIT")
+    assert [row["evidence_id"] for row in evidence] == ["20261105_002745"]
+    assert evidence[0]["subjects"] == ["EXTRACTION_STAGE"]

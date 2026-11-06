@@ -131,6 +131,145 @@ def outcome_pdf_evidence_text(outcome: dict | None) -> str | None:
             return None
 
 
+def _summary_value(value) -> str | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, default=str)
+    return str(value)
+
+
+def outcome_neo4j_summary(outcome: dict | None) -> str | None:
+    """Render only Neo4j provenance already present on the final outcome."""
+    try:
+        detail_text = outcome_detail_text(outcome)
+        if not detail_text:
+            return None
+        detail = json.loads(detail_text)
+        points = detail.get("points") or []
+        rendered = []
+        if detail.get("status"):
+            rendered.append(f"답변 검증: {detail['status']}")
+            rendered.append("구조화 값 검증 상태이며 PDF 원문 검증 상태와는 별도입니다.")
+            rendered.append("")
+        for point in points:
+            ref = point.get("neo4j_ref") or {}
+            benefit_id = point.get("benefit_id")
+            if not ref and not benefit_id:
+                continue
+            title = point.get("benefit_name") or point.get("text") or benefit_id or "혜택"
+            rendered.append(f"혜택: {title}")
+            if ref:
+                rendered.append(f"노드 Label: {_summary_value(ref.get('labels')) or '확인된 값 없음'}")
+                rendered.append(f"노드 Key: {_summary_value(ref.get('key')) or '확인된 값 없음'}")
+                rendered.append(f"논리적 혜택 ID: {benefit_id or '확인된 값 없음'}")
+            status = point.get("verification_status") or point.get("verification_status_cd")
+            if status:
+                rendered.append(f"답변 검증: {status}")
+            elif point.get("origin") == "PROGRAM_DERIVED":
+                rendered.append("답변 검증: 프로그램 계산 결과 (Neo4j 저장값으로 표시하지 않음)")
+            if point.get("evidence_ids"):
+                rendered.append("근거 관계: dp_supported_by")
+                rendered.extend(f"Evidence ID: {evidence_id}" for evidence_id in dict.fromkeys(point["evidence_ids"]))
+            rendered.append("")
+        if not rendered:
+            return None
+        header = ["[답변에 연결된 Neo4j 정보]", ""]
+        return "\n".join(header + rendered).rstrip()
+    except Exception:
+        LOG.exception("Neo4j summary logging failed")
+        return None
+
+
+def outcome_pdf_evidence_summary(outcome: dict | None) -> str | None:
+    """Summarize cited and uncited PDF evidence without changing source quotes."""
+    try:
+        raw = outcome_pdf_evidence_text(outcome)
+        if not raw:
+            return None
+        evidence_rows = json.loads(raw)
+        if not isinstance(evidence_rows, list):
+            return None
+        answer = (outcome or {}).get("answer") or {}
+        cited = {str(eid) for point in answer.get("points") or []
+                 for eid in point.get("evidence_ids") or [] if eid is not None}
+        lines = ["[답변에 실제 사용된 PDF 근거]", ""]
+        uncited_lines = []
+        for item in evidence_rows:
+            if not isinstance(item, dict):
+                continue
+            evidence_id = item.get("evidence_id")
+            locations = item.get("locations") or [{}]
+            owners = item.get("owners") or [{}]
+            target = lines if str(evidence_id) in cited else uncited_lines
+            for location in locations:
+                if not isinstance(location, dict):
+                    continue
+                doc_title = location.get("doc_title") or item.get("doc_title")
+                file_name = location.get("doc_file_nm") or item.get("doc_file_nm")
+                doc_id = location.get("card_doc_id") or item.get("card_doc_id")
+                page_no = location.get("page_no") or item.get("page_no")
+                chunk_id = location.get("card_doc_chunk_id") or location.get("chunk_key") or item.get("card_doc_chunk_id")
+                target.append(f"문서: {doc_title or '확인된 값 없음'}")
+                if file_name is not None: target.append(f"원본 파일: {file_name}")
+                if doc_id is not None: target.append(f"문서 ID: {doc_id}")
+                if page_no is not None: target.append(f"페이지: {page_no}")
+                if chunk_id is not None: target.append(f"청크 ID: {chunk_id}")
+                if evidence_id is not None: target.append(f"근거 ID: {evidence_id}")
+                quote = item.get("quote_txt", item.get("quote"))
+                if quote is not None: target.append(f"원문: {json.dumps(quote, ensure_ascii=False)}")
+                target.append("")
+            for owner in owners:
+                if not isinstance(owner, dict):
+                    continue
+                target.append(f"근거 소유 관계: {owner.get('relationship_type') or '확인된 관계 없음'}")
+                if owner.get("labels") is not None: target.append(f"소유 노드 Label: {_summary_value(owner['labels'])}")
+                if owner.get("key") is not None: target.append(f"소유 노드 Key: {_summary_value(owner['key'])}")
+                target.append("")
+        if uncited_lines:
+            lines.extend(["[검색되었으나 답변에서 인용하지 않은 근거]", "", *uncited_lines])
+        return "\n".join(lines).rstrip() if len(lines) > 2 or uncited_lines else None
+    except Exception:
+        LOG.exception("PDF evidence summary logging failed")
+        return None
+
+
+def summaries_from_stored_app_log(detail_text: str | None, pdf_evidence_text: str | None) -> tuple[str | None, str | None]:
+    """Rebuild display values from historical JSON columns only; performs no retrieval."""
+    neo4j_summary = pdf_summary = None
+    try:
+        detail = json.loads(detail_text) if detail_text else {}
+        if not isinstance(detail, dict):
+            detail = {}
+        retrieved = []
+        for point in detail.get("points") or []:
+            ref = point.get("neo4j_ref") if isinstance(point, dict) else None
+            if not ref:
+                continue
+            key, labels = ref.get("key"), ref.get("labels")
+            if key is None or not labels:
+                continue
+            try:
+                from card_benefit.payment_card.db_pipeline_origin_search.neo4j_search import entity_ref
+                logical_id = entity_ref(key)
+            except Exception:
+                continue
+            retrieved.append({"entity_ref": logical_id, "context": {
+                "benefit": {"key": key, "name": ref.get("name")}, "benefit_labels": labels}})
+        neo4j_summary = outcome_neo4j_summary({"answer": detail, "retrieved_data": retrieved})
+    except Exception:
+        LOG.exception("Historical Neo4j summary reconstruction failed")
+    try:
+        evidence = json.loads(pdf_evidence_text) if pdf_evidence_text else []
+        if not isinstance(evidence, list):
+            evidence = []
+        points = detail.get("points") if isinstance(detail, dict) else []
+        pdf_summary = outcome_pdf_evidence_summary({"answer": {"points": points or []}, "evidence": evidence})
+    except Exception:
+        LOG.exception("Historical PDF summary reconstruction failed")
+    return neo4j_summary, pdf_summary
+
+
 def app_db_log_enabled() -> bool:
     """APP_DB_LOG_ENABLED 기본값은 ON. 명시적으로 false 계열이면 저장/상세 수집을 끈다."""
     load_project_environment()
@@ -268,6 +407,8 @@ def persist_app_logs(
     events: list[LogEvent],
     detail_text: str | None = None,
     pdf_evidence_text: str | None = None,
+    neo4j_summary: str | None = None,
+    pdf_evidence_summary: str | None = None,
 ) -> None:
     """요청의 이벤트를 요청당 한 행으로 모아 INSERT한다. 저장 예외는 검색으로 전파하지 않는다."""
     if not events:
@@ -294,8 +435,9 @@ def persist_app_logs(
                 cursor.execute(
                     """INSERT INTO db_pipeline.app_log
                            (session_id, request_id, client_ip, request_text, execution_log,
-                            response_text, detail_text, pdf_evidence_text, error_text, created_at)
-                       VALUES (%s, %s, NULL, %s, %s, %s, %s, %s, %s, %s)
+                            response_text, detail_text, pdf_evidence_text, neo4j_summary,
+                            pdf_evidence_summary, error_text, created_at)
+                       VALUES (%s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                        ON CONFLICT (session_id, request_id) DO UPDATE SET
                            client_ip = EXCLUDED.client_ip,
                            request_text = EXCLUDED.request_text,
@@ -303,10 +445,13 @@ def persist_app_logs(
                            response_text = EXCLUDED.response_text,
                            detail_text = EXCLUDED.detail_text,
                            pdf_evidence_text = EXCLUDED.pdf_evidence_text,
+                           neo4j_summary = EXCLUDED.neo4j_summary,
+                           pdf_evidence_summary = EXCLUDED.pdf_evidence_summary,
                            error_text = EXCLUDED.error_text,
                            created_at = LEAST(db_pipeline.app_log.created_at, EXCLUDED.created_at)""",
                     (session_id, request_id, request_text, execution_log,
-                     response_text, detail_text, pdf_evidence_text, error_text, created_at),
+                     response_text, detail_text, pdf_evidence_text, neo4j_summary,
+                     pdf_evidence_summary, error_text, created_at),
                 )
     except Exception as error:
         LOG.warning("검색 로그 저장 실패 (%s); 검색 결과는 유지합니다.", type(error).__name__)

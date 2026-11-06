@@ -67,25 +67,21 @@ QUERIES = {"카탈로그": CATALOG_QUERY, "항목 카탈로그": ITEM_CATALOG_QU
            "공통 혜택 근거": COMMON_EVIDENCE_QUERY, **HOP_QUERIES}
 # 로그에 쓰는 Cypher 식별자와 그 쿼리가 지나가는 노드·관계 경로.
 STATEMENTS = {
-    "card.catalog": (CATALOG_QUERY, "(dp_card_product)-[dp_has_benefit]->(dp_card_bnft)"
-                                    "-[dp_has_rule]->(dp_bnft_rule)-[dp_targets]->(dp_rule_target), "
-                                    "(dp_bnft_rule)-[dp_has_expr]->()-[dp_has_branch]->()-[dp_has_atom]->(dp_cond_atom)"),
+    "card.catalog": (CATALOG_QUERY, "(dp_card_product)-[dp_has_item]->(dp_card_product_item)"),
     "card.item_catalog": (ITEM_CATALOG_QUERY, "(dp_card_product)-[dp_has_item]->(dp_card_product_item)"),
     "card.item_evidence": (ITEM_EVIDENCE_QUERY, "(dp_card_product)-[dp_has_item]->(dp_card_product_item)-[dp_supported_by]->"
                                                 "(dp_card_source_evidence)-[dp_in_chunk]->(dp_card_doc_chunk)-[dp_on_page]->(dp_card_doc_page)"),
     "card.common_catalog": (COMMON_CATALOG_QUERY, "(dp_card_product)-[dp_has_common_benefit]->(dp_card_common_bnft)-[dp_belongs_to]->(dp_card_common)"),
-    "card.list": (LIST_QUERY, "(dp_card_bnft|dp_card_common_bnft)"),
-    "card.relations": (RELATION_QUERY, "(dp_card_product)-[dp_has_benefit|dp_has_common_benefit]->(혜택)-[dp_has_rule]->()-[dp_targets]->(dp_rule_target), "
-                                       "(혜택|규칙)-[dp_has_expr]->()-[dp_has_branch]->()-[dp_has_atom]->(dp_cond_atom)"),
-    "card.benefit_relations": (BENEFIT_RELATIONS_QUERY, "(dp_card_bnft)-[dp_related_to]->(dp_card_bnft)"),
-    "card.context": (CONTEXT_QUERY, "(dp_card_product)-[dp_has_benefit|dp_has_common_benefit]->(혜택)-[dp_belongs_to]->(dp_card_common)-[dp_has_document]->(dp_card_doc)"),
-    "card.rules": (RULE_QUERY, "(dp_card_bnft)-[dp_has_rule]->(dp_bnft_rule)-[dp_targets]->(dp_rule_target)"),
-    "card.conditions": (CONDITION_QUERY, "(dp_card_product|dp_card_bnft|dp_bnft_rule)-[dp_has_expr]->(dp_cond_expr)"
-                                         "-[dp_has_branch]->(dp_cond_branch)-[dp_has_atom]->(dp_cond_atom)"),
+    "card.list": (LIST_QUERY, "(dp_card_product_item|dp_card_common_bnft)"),
+    "card.relations": (RELATION_QUERY, "dp_card_product_item and dp_card_common_bnft application relationships"),
+    "card.benefit_relations": (BENEFIT_RELATIONS_QUERY, "dp_card_product_item.relation_list (source JSON)"),
+    "card.context": (CONTEXT_QUERY, "dp_card_product_item source row plus card/common ownership"),
+    "card.rules": (RULE_QUERY, "dp_card_product_item.rule_list source JSON"),
+    "card.conditions": (CONDITION_QUERY, "dp_card_product_item.item_cond_expr source JSON"),
     "card.limits": (LIMIT_QUERY, "(혜택).limit_text"),
-    "card.evidence": (EVIDENCE_QUERY, "(dp_card_product|dp_card_bnft|dp_bnft_rule)-[dp_supported_by]->(dp_card_source_evidence)"
+    "card.evidence": (EVIDENCE_QUERY, "(dp_card_product_item|dp_card_common_bnft)-[dp_supported_by]->(dp_card_source_evidence)"
                                       "-[dp_in_chunk]->(dp_card_doc_chunk)-[dp_on_page]->(dp_card_doc_page)-[dp_in_document]->(dp_card_doc)"),
-    "card.common_evidence": (COMMON_EVIDENCE_QUERY, "(dp_card_common_bnft)<-[dp_same_as]-(dp_card_bnft)-[dp_supported_by]->(dp_card_source_evidence)"
+    "card.common_evidence": (COMMON_EVIDENCE_QUERY, "(dp_card_common_bnft)-[dp_supported_by]->(dp_card_source_evidence)"
                                                     "-[dp_in_chunk]->(dp_card_doc_chunk)-[dp_on_page]->(dp_card_doc_page)-[dp_in_document]->(dp_card_doc)"),
     **{f"card.{name}": (query, name) for name, query in HOP_QUERIES.items()},
 }
@@ -98,7 +94,7 @@ ALL_SECTIONS = tuple(SECTION_QUERIES)
 # 각 named query 본문을 그대로 CALL 서브쿼리에 넣고 ``$key``/``$keyword`` 만 바깥 변수로 바꾼다. 조회 조건·정렬은 원문 그대로다.
 # 반환 행은 원래 RETURN 열 순서대로 다시 만든다. 근거 행만 로직이 읽는 열(owner_labels, rule_key, link, evidence)로 줄인다.
 # 청크·페이지·문서의 전체 속성은 전송하지 않지만 MATCH 경로(근거→청크→페이지→문서)는 그대로라 같은 근거만 조회된다.
-CONTEXT_FIELDS = ("card", "benefit", "card_sources", "common", "common_docs", "card_labels", "benefit_labels")
+CONTEXT_FIELDS = ("card", "benefit", "card_sources", "common", "common_docs", "card_labels", "benefit_labels", "extraction_sources")
 SECTION_FIELDS = {"rules": ("rule", "labels", "targets"),
                   "conditions": ("owner_cd", "rule_key", "expression", "branch_no", "atom", "labels"),
                   "limits": ("limit_text",),

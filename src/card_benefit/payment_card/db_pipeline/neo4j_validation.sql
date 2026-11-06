@@ -1,40 +1,75 @@
--- neo4j_validate.py가 neo4j_validation.cypher의 같은 이름 조회와 비교하는 읽기 전용 SQL.
--- 현재 등록된 전체 상품을 대상으로 한다.
+-- Read-only PostgreSQL source checks for the table-faithful dp_ rebuild.
+-- The Python loader uses one REPEATABLE READ, READ ONLY transaction and SELECT *.
 
--- name: condition_structure
--- Neo4j 혜택·규칙 노드 속성은 card_bnft_id를 유지한다(기존 key 보존). PostgreSQL 뷰 컬럼은 card_product_item_id다.
-SELECT owner_cd, card_id, card_product_item_id AS card_bnft_id, rule_key, branch_no, atom_seq, atom_key, cond_type_cd, negate_yn, cond_min_amt, cond_raw_txt
-FROM db_pipeline.v_card_cond_atom;
+-- name: source_relations
+SELECT table_name,table_type
+FROM information_schema.tables
+WHERE table_schema='db_pipeline'
+ORDER BY table_type,table_name;
 
--- name: evidence_links
--- Neo4j 관계 속성 이름은 ev_link_id를 유지한다(재적재 전까지). PostgreSQL 컬럼은 evidence_link_id다.
-SELECT l.evidence_link_id AS ev_link_id, l.ev_subject_cd, l.rule_key, l.ev_item_cd, l.ev_item_key,
-       l.evidence_id, e.start_pos, e.end_pos
-FROM db_pipeline.card_evidence_link l
-JOIN db_pipeline.card_source_evidence e ON e.evidence_id = l.evidence_id;
+-- name: source_columns_and_nullability
+SELECT table_name,column_name,ordinal_position,data_type,udt_name,is_nullable
+FROM information_schema.columns
+WHERE table_schema='db_pipeline'
+ORDER BY table_name,ordinal_position;
 
--- name: common_evidence_links
--- GraphRAG의 공통 혜택 근거 대체 조회(embedding_repository.select_common_bnft_evidence)와 같은 경로. 공통 혜택·근거 쌍마다 1행.
-SELECT DISTINCT b.card_common_id, b.card_common_bnft_id, e.evidence_id, 'BNFT' AS ev_subject_cd, '-' AS ev_item_key
+-- name: source_primary_keys
+SELECT tc.table_name,kcu.column_name,kcu.ordinal_position
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+  ON tc.constraint_catalog=kcu.constraint_catalog
+ AND tc.constraint_schema=kcu.constraint_schema
+ AND tc.constraint_name=kcu.constraint_name
+ AND tc.table_name=kcu.table_name
+WHERE tc.table_schema='db_pipeline' AND tc.constraint_type='PRIMARY KEY'
+ORDER BY tc.table_name,kcu.ordinal_position;
+
+-- name: source_foreign_keys
+SELECT child.relname AS table_name,con.conname AS constraint_name,
+       child_att.attname AS column_name,parent.relname AS ref_table,
+       parent_att.attname AS ref_column,child_key.ord AS ordinal_position
+FROM pg_constraint con
+JOIN pg_class child ON child.oid=con.conrelid
+JOIN pg_namespace child_ns ON child_ns.oid=child.relnamespace
+JOIN pg_class parent ON parent.oid=con.confrelid
+JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS child_key(attnum,ord) ON true
+JOIN LATERAL unnest(con.confkey) WITH ORDINALITY AS parent_key(attnum,ord) ON parent_key.ord=child_key.ord
+JOIN pg_attribute child_att ON child_att.attrelid=child.oid AND child_att.attnum=child_key.attnum
+JOIN pg_attribute parent_att ON parent_att.attrelid=parent.oid AND parent_att.attnum=parent_key.attnum
+WHERE child_ns.nspname='db_pipeline' AND con.contype='f'
+ORDER BY child.relname,con.conname,child_key.ord;
+
+-- name: source_row_counts
+SELECT schemaname,tablename,n_live_tup::bigint AS estimated_rows
+FROM pg_stat_user_tables
+WHERE schemaname='db_pipeline'
+ORDER BY tablename;
+
+-- name: benefit_source_rows
+SELECT card_id,card_product_item_id,item_type_cd,item_nm,item_rule_txt,item_limit_txt,
+       item_search_txt,item_cond_expr,rule_list,relation_list,item_data,item_embedding
+FROM db_pipeline.card_product_item
+ORDER BY card_id,card_product_item_id;
+
+-- name: common_benefit_source_rows
+SELECT card_common_id,card_common_bnft_id,bnft_nm,bnft_rule_txt,bnft_limit_txt,bnft_embedding
+FROM db_pipeline.card_common_bnft
+ORDER BY card_common_id,card_common_bnft_id;
+
+-- name: evidence_link_rows
+SELECT * FROM db_pipeline.card_evidence_link
+ORDER BY card_doc_id,page_no,card_doc_chunk_id,evidence_id,card_id,evidence_link_id;
+
+-- name: common_evidence_source_lineage
+SELECT b.card_common_id,b.card_common_bnft_id,b.bnft_nm,d.card_doc_id,
+       s.card_extr_stg_id,e.evidence_id,e.page_no,e.card_doc_chunk_id,e.quote_txt
 FROM db_pipeline.card_common_bnft b
-JOIN db_pipeline.card_common_doc d ON d.card_common_id = b.card_common_id
+JOIN db_pipeline.card_common_doc d ON d.card_common_id=b.card_common_id
 JOIN db_pipeline.card_extr_stg s
-  ON s.card_doc_id = d.card_doc_id AND s.stg_kind_cd = 'BENEFIT' AND s.stg_raw_item->>'bnft_nm' = b.bnft_nm
- AND s.stg_sql_check_cd IS NOT NULL AND s.stg_parent_card_extr_stg_id IS NULL
-JOIN db_pipeline.card_source_evidence e ON e.card_extr_stg_id = s.card_extr_stg_id;
-
--- name: common_applies
-SELECT card_common_id, card_common_bnft_id, card_id FROM db_pipeline.card_common_bnft_apply;
-
--- name: rule_targets
-SELECT card_id, card_product_item_id AS card_bnft_id, rule_key, target_type_cd, target_key, target_nm FROM db_pipeline.v_card_rule_target;
-
--- name: source_columns
--- 2026-11-06 P2: 스냅샷 SELECT와 독립된 원천 컬럼 목록. neo4j_dry_run.column_coverage가 분류 누락을 검사한다.
-SELECT table_name, column_name FROM information_schema.columns
-WHERE table_schema = 'db_pipeline' AND table_name IN ('card_product_item', 'card_evidence_link')
-ORDER BY table_name, ordinal_position;
-
--- name: benefit_item_data
--- 2026-11-06 P2: 혜택 item_data를 스냅샷 함수를 거치지 않고 직접 읽는다. Neo4j 혜택 노드 source_json의 item_data와 대조한다.
-SELECT card_id, card_product_item_id AS card_bnft_id, item_data FROM db_pipeline.card_product_item WHERE item_type_cd = 'BENEFIT';
+  ON s.card_doc_id=d.card_doc_id
+ AND s.stg_kind_cd='BENEFIT'
+ AND s.stg_raw_item->>'bnft_nm'=b.bnft_nm
+ AND s.stg_sql_check_cd IS NOT NULL
+ AND s.stg_parent_card_extr_stg_id IS NULL
+JOIN db_pipeline.card_source_evidence e ON e.card_extr_stg_id=s.card_extr_stg_id
+ORDER BY b.card_common_id,b.card_common_bnft_id,e.page_no,e.evidence_id;

@@ -38,7 +38,8 @@ from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag, v
 from card_benefit.payment_card.db_pipeline_origin_search.neo4j_search import CARD_LOGGER_NAME, GRAPH_PREFIX, QUERIES, connect
 from card_benefit.payment_card.db_pipeline_origin_search.execution_log import (
     app_db_log_enabled, capture_request_queries, configure_application_logging, error_message,
-    log_event, outcome_detail_text, outcome_pdf_evidence_text, persist_app_logs, request_pipeline,
+    log_event, outcome_detail_text, outcome_pdf_evidence_text, outcome_neo4j_summary,
+    outcome_pdf_evidence_summary, persist_app_logs, request_pipeline,
     response_message,
 )
 import streamlit as st
@@ -407,7 +408,9 @@ if submitted:
                       log_event("RESPONSE", customer_response_for_log(st.session_state.outcome))]
             persist_app_logs(session_id, request_id, events,
                              detail_text=outcome_detail_text(st.session_state.outcome),
-                             pdf_evidence_text=outcome_pdf_evidence_text(st.session_state.outcome))
+                             pdf_evidence_text=outcome_pdf_evidence_text(st.session_state.outcome),
+                             neo4j_summary=outcome_neo4j_summary(st.session_state.outcome),
+                             pdf_evidence_summary=outcome_pdf_evidence_summary(st.session_state.outcome))
     else:
         request_event = log_event("REQUEST", question)
         cleanup = lambda: None
@@ -444,7 +447,9 @@ if submitted:
                     events.append(log_event("RESPONSE", customer_response_for_log(outcome_for_log or {})))
                 persist_app_logs(session_id, request_id, events,
                                  detail_text=outcome_detail_text(outcome_for_log),
-                                 pdf_evidence_text=outcome_pdf_evidence_text(outcome_for_log))
+                                 pdf_evidence_text=outcome_pdf_evidence_text(outcome_for_log),
+                                 neo4j_summary=outcome_neo4j_summary(outcome_for_log),
+                                 pdf_evidence_summary=outcome_pdf_evidence_summary(outcome_for_log))
 
 # 재실행마다 저장된 마지막 결과를 다시 그린다(위젯 조작만 해도 결과가 화면에 남는 이유).
 if st.session_state.get("outcome"):
