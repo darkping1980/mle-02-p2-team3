@@ -284,6 +284,10 @@ class CardState(TypedDict, total=False):
 
 
 def configure_card_logging() -> None:
+    """공통 쿼리 로그 설정을 초기화합니다.
+    개발 환경에서는 DB_QUERY_LOG 변수가 없을 경우 로깅을 활성화하고,
+    CARD_SEARCH_LOG_LEVEL 설정에 따라 로그 레벨을 조정합니다.
+    """
     """공통 쿼리 로그 설정을 재사용한다. handler는 공통 함수가 한 번만 붙이고, OFF로 바뀌면 제거한다.
 
     ``DB_QUERY_LOG`` 가 없으면 로컬 개발 환경에서 켠다. ``CARD_SEARCH_LOG_LEVEL`` 의 기본값은 DEBUG이며,
