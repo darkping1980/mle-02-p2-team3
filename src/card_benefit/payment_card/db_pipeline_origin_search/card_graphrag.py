@@ -1,8 +1,14 @@
-"""Neo4j-only card-benefit GraphRAG pipeline.
+"""Neo4j 전용 카드 혜택 GraphRAG 파이프라인 모듈.
 
-Execution order is interpret -> retrieve -> answer -> finish. Candidate search uses
-Neo4j keyword/vector fusion and RRF; details and PDF evidence are read from Neo4j.
+이 모듈은 LangGraph를 이용해 카드 혜택 질의 처리 흐름을 구현합니다.
+- **interpret**: 질문을 해석하고 의도와 대상 혜택 ID를 추출합니다.
+- **retrieve**: Neo4j에서 후보 혜택을 검색하고 PDF 근거(evidence)를 수집합니다.
+- **answer**: 검색 결과를 LLM에 전달해 답변을 생성합니다.
+- **finish**: 최종 답변을 검증·포맷팅 후 UI에 반환합니다.
+
+기존 로직은 유지되며, 한국어 docstring 및 인라인 주석만 추가됩니다.
 """
+# region Imports
 from __future__ import annotations
 
 import json
