@@ -307,6 +307,17 @@ def configure_card_logging() -> None:
 
 
 def create_neo4j_benefit_search(neo4j_search, embedder=None, **options):
+    """Neo4j 전용 키워드/벡터 하이브리드 후보 검색을 생성합니다.
+    
+    Parameters
+    ----------
+    neo4j_search: Neo4jSearch
+        Neo4j 검색 인스턴스.
+    embedder: optional
+        임베더가 제공되지 않으면 기본 OpenAIEmbedder를 사용합니다.
+    **options: dict
+        추가 옵션을 Neo4jBenefitSearch 생성자에 전달합니다.
+    """
     """Create the Neo4j-only keyword/vector hybrid candidate search."""
     from card_benefit.payment_card.db_pipeline.embedding_service import OpenAIEmbedder
     from .neo4j_hybrid_search import Neo4jBenefitSearch
