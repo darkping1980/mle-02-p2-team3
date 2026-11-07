@@ -83,6 +83,14 @@ class NullPayoutConflictTests(unittest.TestCase):
     def setUp(self):
         self.conflicts = rule_conflicts([simple_monthly_benefit()], None)
 
+    def test_explicit_cap_mapping_and_approval_amount_do_not_create_payout_conflict(self):
+        benefit = simple_monthly_benefit()
+        benefit["limit_tiers"] = [
+            {"min_amt": 300000, "max_amt": 800000, "cap": {"amount": 10000}},
+            {"min_amt": 800000, "max_amt": None, "cap": {"amount": 15000}},
+        ]
+        self.assertEqual(rule_conflicts([benefit], None), [])
+
     def test_tiers_are_kept_with_payout_state(self):
         self.assertEqual(len(self.conflicts), 1)
         tiers = self.conflicts[0]["tiers"]

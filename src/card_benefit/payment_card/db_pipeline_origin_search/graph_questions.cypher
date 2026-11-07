@@ -3,7 +3,7 @@
 // name: catalog
 MATCH (p:dp_card_product)-[:dp_has_item]->(i:dp_card_product_item {item_type_cd:'BENEFIT'})
 RETURN i.key AS key,i.item_nm AS name,i.card_product_item_id AS id,i.verification_status_cd AS status,
-       p.source_json AS card_source,i.rule_list AS rule_list,i.item_cond_expr AS item_cond_expr,
+       p.source_json AS card_source,i.rule_list AS rule_list,i.item_cond_expr AS item_cond_expr,i.search_text AS search_text,
        i.item_rule_txt AS item_rule_txt,i.item_limit_txt AS item_limit_txt
 ORDER BY name,key;
 

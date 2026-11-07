@@ -9,14 +9,8 @@ import logging
 import os
 import sys
 from datetime import datetime, timezone
-from uuid import uuid4
 
-from card_benefit.payment_card.db_pipeline.embedding_service import EMBEDDING_LOG_KEYS
-from card_benefit.payment_card.db_pipeline.document_repository import MAPPER_ROOT
-from card_benefit.payment_card.db_pipeline_origin_search.benefit_search_service import BenefitSearchService
 from common.database_manager import DatabaseManager
-from common.postgres_db_session import PostgresDbSession
-from common.query_logger import DEFAULT_SENSITIVE_KEYS
 from common.query_log_config import load_project_environment
 
 LOG = logging.getLogger("card_search.execution_log")
@@ -357,48 +351,6 @@ def capture_request_queries():
         yield events
     finally:
         ACTIVE_QUERY_EVENTS.reset(token)
-
-
-def request_pipeline(base_pipeline, search_mode: str):
-    """B/C 검색에서만 요청 전용 PostgreSQL 세션을 사용해 쿼리 로그를 분리한다."""
-    if (search_mode == "A" or base_pipeline.benefit_search is None
-            or not isinstance(base_pipeline.benefit_search, BenefitSearchService)):   # N은 PostgreSQL 세션이 없다
-        return base_pipeline, lambda: None
-
-    logger = logging.Logger(f"card_search.sql.capture.{uuid4().hex}", level=logging.INFO)
-    logger.propagate = False
-    handler = SQLCaptureHandler()
-    logger.addHandler(handler)
-    session = None
-    original = base_pipeline.benefit_search
-    try:
-        session = PostgresDbSession(
-            mapper_root=MAPPER_ROOT,
-            camel_case_keys=False,
-            database_manager=original.repository.sql_session.database_manager,
-            sql_log_mode="combined",
-            sensitive_log_keys=(*DEFAULT_SENSITIVE_KEYS, *EMBEDDING_LOG_KEYS),
-        )
-        session.query_logger.logger = logger
-        benefit_search = BenefitSearchService(session, original.embedder, original.neo4j_search)
-        pipeline = base_pipeline.__class__(
-            base_pipeline.search,
-            base_pipeline.interpret_llm,
-            base_pipeline.answer_llm,
-            benefit_search=benefit_search,
-            search_mode=search_mode,
-        )
-    except Exception as error:
-        logger.removeHandler(handler)
-        handler.close()
-        LOG.warning("요청별 SQL 수집기 준비 실패 (%s); 기존 검색 경로를 사용합니다.", type(error).__name__)
-        return base_pipeline, lambda: None
-
-    def cleanup() -> None:
-        logger.removeHandler(handler)
-        handler.close()
-
-    return pipeline, cleanup
 
 
 def persist_app_logs(

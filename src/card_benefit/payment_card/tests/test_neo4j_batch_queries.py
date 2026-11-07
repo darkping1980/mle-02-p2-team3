@@ -4,7 +4,6 @@ import re
 import unittest
 
 from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag, neo4j_search as n
-from card_benefit.payment_card.db_pipeline_origin_search.benefit_search_service import BenefitSearchService
 
 WRITE = re.compile(r"\b(CREATE|MERGE|DELETE|DETACH|SET|REMOVE|DROP)\b")
 
@@ -130,6 +129,7 @@ class BatchMappingTests(unittest.TestCase):
 
     def test_list_catalog_uses_one_statement_and_same_row_processing(self):
         catalog = [{"key": "a", "name": "A", "id": "1", "status": None, "card_source": '{"product_nm":"P"}',
+                    "search_text": "A search text",
                     "rule_list": "[]", "item_cond_expr": "{}", "item_rule_txt": "룰", "item_limit_txt": "한도"}]
         commons = [{"key": "c", "name": "C", "id": "2", "status": None, "common_nm": "S", "cards": []}]
         driver = FakeDriver({"catalog": [{"catalog": catalog, "items": [], "commons": commons, "products": [{"card_id": 1, "product_nm": "P"}]}]})
@@ -141,29 +141,6 @@ class BatchMappingTests(unittest.TestCase):
 
 
 class CallerFallbackTests(unittest.TestCase):
-    def test_keyword_scoring_same_with_batch_and_per_term(self):
-        class Repo:
-            def rows(self, name, **_):
-                if name == "keyword_card_bnft":
-                    return [{"card_id": 2, "card_bnft_id": "B1", "bnft_cd": "c", "bnft_nm": "버스", "bnft_type_cd": None,
-                             "product_nm": "P", "keyword_score": 1}]
-                return []
-
-        class PerTerm:
-            def list_benefits(self, term):
-                return [{"key": '["card_bnft",2,"B1"]', "id": "B1"}] if term in ("버스", "교통") else []
-
-        class Batch(PerTerm):
-            def list_benefits_many(self, terms):
-                return {term: self.list_benefits(term) for term in terms}
-
-        scores = []
-        for graph in (PerTerm(), Batch()):
-            service = BenefitSearchService.__new__(BenefitSearchService)
-            service.repository, service.neo4j_search = Repo(), graph
-            scores.append([(h.key, h.keyword_score) for h in service._keyword("버스 교통 혜택", [])])
-        self.assertEqual(scores[0], scores[1])
-        self.assertEqual(scores[0][0][1], 3)
 
     def test_retrieve_uses_batch_once_and_falls_back_without_it(self):
         key = '["card_bnft",2,"B"]'

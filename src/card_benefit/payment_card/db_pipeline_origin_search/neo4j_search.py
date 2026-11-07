@@ -1,21 +1,13 @@
-"""dp_ 그래프 읽기 전용 조회. Cypher는 graph_questions.cypher에 있고 실행과 로그는 여기서 맡는다.
+"""Read-only Neo4j query repository for the N-mode GraphRAG path.
 
-Java 관점: Neo4j용 Repository/DAO다. Cypher 문장은 같은 폴더의 ``graph_questions.cypher`` 에 ``// name: 이름`` 으로
-정의되어 있고, ``MAPPERS["graph_questions.이름"]`` 으로 문자열을 꺼내 파라미터와 함께 실행한다(LLM이 Cypher를 만들지 않음).
-모든 조회는 ``READ_ACCESS`` 세션의 ``execute_read`` 로 실행되어 그래프를 바꾸지 않는다.
-그래프 자체는 db_pipeline/neo4j_load_draft.py가 PostgreSQL에서 적재한 ``dp_`` 라벨 노드·관계다.
+Named Cypher statements are loaded from ``graph_questions.cypher`` and mapped
+through ``MAPPERS``. Query execution uses READ_ACCESS and ``execute_read``.
+The graph is a read model loaded from PostgreSQL by the separate ingestion
+pipeline; this module does not mutate graph data.
 
-Cypher별 용도 (STATEMENTS의 식별자 → 호출 메서드)
-    card.catalog / card.item_catalog / card.common_catalog  → list_catalog : 질문 해석용 혜택·연회비 항목·공통 혜택 목록
-    card.list                                              → list_benefits : 혜택명 문자열 검색(B·C 후보 점수 보강)
-    card.relations                                         → candidate_relations : 후보별 적용 대상·제외 문구
-    card.context                                           → get_detail : 혜택 1건과 카드·공통서비스·문서
-    card.rules / card.conditions / card.limits             → get_detail : 규칙·대상, 조건식(branch·atom), 한도 원문
-    card.evidence / card.common_evidence / card.item_evidence → get_detail : 연결된 PDF 원문 근거(페이지·청크·문서)
-    card.hop*                                              → hop : 다중 홉 조회(GraphRAG 흐름에서는 호출하지 않고 tests/test_neo4j_origin_search.py만 사용)
-
-호출하는 곳: card_graphrag.CardGraphRAG(interpret·retrieve), benefit_search_service.BenefitSearchService,
-            streamlit_app(connect, QUERIES 표시), verify_view(STATEMENTS·flatten_record)
+The repository exposes catalog, keyword search, card/item/common benefit
+context, related-card, and PDF Evidence queries used by CardGraphRAG and the
+Streamlit UI. Legacy A/B/C search services have been removed.
 """
 from __future__ import annotations
 
@@ -91,7 +83,7 @@ CONTEXT_FIELDS = ("card", "benefit", "card_sources", "common", "common_docs", "c
 SECTION_FIELDS = {"evidence": ("owner_labels", "owner", "evidence_labels", "rule_key", "link", "evidence", "chunk", "page", "document")}
 SECTION_PRESENT = {"evidence": "evidence"}
 LIST_FIELDS = ("key", "name", "id", "status")
-CATALOG_FIELDS = {"catalog": ("key", "name", "id", "status", "card_source", "rule_list", "item_cond_expr",
+CATALOG_FIELDS = {"catalog": ("key", "name", "id", "status", "card_source", "rule_list", "item_cond_expr", "search_text",
                               "item_rule_txt", "item_limit_txt"),
                   "items": ("key", "name", "id", "status", "item_type", "card_id", "item_source", "item_data", "item_rule_txt", "item_cd", "card_source"),
                   "commons": ("key", "name", "id", "status", "common_nm", "cards"),
@@ -324,16 +316,10 @@ def entity_ref(key: str, fallback: str | None = None) -> str | None:
     """혜택 key를 엔터티 종류·소유자·ID가 모두 들어간 표준 참조로 바꾼다.
 
     카드 상품 항목: ``card_product_item:{card_id}:{card_product_item_id}``. 혜택의 그래프 key ``["card_bnft",6,"ID"]``,
-    PostgreSQL key ``pg:CARD_BNFT:6:ID``, 연회비 등 항목 key ``["card_product_item",6,"ID"]`` 가 모두 이 참조가 된다.
+    카드 혜택 항목과 공통 혜택 key를 서로 다른 노드 유형 참조로 변환한다.
     공통 혜택: ``card_common_bnft:{card_common_id}:{card_common_bnft_id}``. 카드 항목과 ID 문자열이 같아도 섞이지 않는다.
     형식이 다른 key는 ``fallback`` 을 쓴다.
     """
-    if key.startswith("pg:"):
-        parts = key.split(":", 3)
-        if len(parts) != 4:
-            return fallback
-        kind = ITEM_KINDS.get(parts[1].lower())
-        return f"{kind}:{parts[2]}:{parts[3]}" if kind else fallback
     try:
         parts = json.loads(key)
     except (TypeError, ValueError):
@@ -457,7 +443,7 @@ class Neo4jSearch:
         return rows
 
     def list_benefits(self, keyword: str = "") -> list[dict]:
-        """혜택명에 keyword가 들어간 카드·공통 혜택을 찾는다(BenefitSearchService._keyword의 점수 보강용)."""
+        """혜택명에 keyword가 들어간 카드·공통 혜택을 찾는다."""
         return self._query(LIST_QUERY, keyword=keyword.strip())
 
     def list_benefits_many(self, keywords: list[str]) -> dict[str, list[dict]]:

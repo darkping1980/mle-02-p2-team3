@@ -42,6 +42,13 @@ def test_no_grounded_point_means_no_natural_answer():
     assert answer["status"] == "NOT_ANSWERABLE" and answer["answer_text"] == "" and answer["answer_source"] == "none"
 
 
+def test_unresolved_requested_limit_fact_marks_answer_partial():
+    uncertainty = "\uC801\uC6A9 \uAE08\uC561 \uAD6C\uAC04\uC740 \uD655\uC778\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4."
+    question = "\uD1B5\uD569 \uD55C\uB3C4\uB294?"
+    answer, _ = validate_answer(raw(uncertainty), context(), question)
+    assert answer["status"] == "PARTIAL"
+
+
 def test_unresolved_tier_cannot_be_decided_in_natural_text():
     conflict = {"benefit_id": "B1", "name": "대중교통", "applicable_rule_keys": ["a", "b"],
                 "tiers": [{"rule_key": "a", "value": 100, "unit": "KRW", "min_amt": 3000}, {"rule_key": "b", "value": 500, "unit": "KRW", "min_amt": 10000}]}
@@ -49,7 +56,7 @@ def test_unresolved_tier_cannot_be_decided_in_natural_text():
     item["payment_amount"] = 10000
     item["benefits"][0]["limits"] = [{"text": "100원 500원 월 1천원"}]
     answer, _ = validate_answer(raw("1만원을 결제하면 500원을 받습니다."), item, "1만원 결제")
-    assert answer["answer_source"] == "validated_sentences"
+    assert answer["answer_source"] == "program_tier"
 
 
 def test_exclusion_overrides_llm_text():

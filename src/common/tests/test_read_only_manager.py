@@ -105,29 +105,5 @@ class ReadOnlySessionGuardTests(unittest.TestCase):
             self.assertEqual(connection, "conn")
 
 
-class SearchWiringTests(unittest.TestCase):
-    def test_graphrag_search_service_gets_read_only_manager(self):
-        from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag
-        with mock.patch("card_benefit.payment_card.db_pipeline.embedding_service.OpenAIEmbedder") as embedder:
-            service = card_graphrag.create_benefit_search(None)
-        manager = service.repository.sql_session.database_manager
-        self.assertTrue(manager.autocommit and manager.read_only)
-        self.assertIs(service.common_service.repo.session.database_manager, manager)   # 동일성 판정 조회도 같은 연결
-        embedder.assert_called_once()
-
-    def test_request_pipeline_reuses_the_same_read_only_manager(self):
-        from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag, execution_log
-        with mock.patch("card_benefit.payment_card.db_pipeline.embedding_service.OpenAIEmbedder"):
-            service = card_graphrag.create_benefit_search(None)
-        base = card_graphrag.CardGraphRAG(None, benefit_search=service, search_mode="C")
-        pipeline, cleanup = execution_log.request_pipeline(base, "C")
-        try:
-            self.assertIsNot(pipeline, base)
-            self.assertIs(pipeline.benefit_search.repository.sql_session.database_manager,
-                          service.repository.sql_session.database_manager)
-        finally:
-            cleanup()
-
-
 if __name__ == "__main__":
     unittest.main()

@@ -61,6 +61,10 @@ class FakeSearch:
         return self.catalog or [{"id": BENEFIT_ID, "key": KEY, "name": "ONE MORE 대중교통 캐시백", "card": "테스트 카드",
                                  "targets": ["버스"], "payment_min_amounts": []}]
 
+    def catalog_rows(self, question, graph_catalog, top_k=8):
+        from card_benefit.payment_card.db_pipeline_origin_search.search_contract import SearchOutcome
+        return list(graph_catalog), SearchOutcome("N", [], 0.0, engines=["neo4j_hybrid"])
+
     def get_detail(self, key, sections=neo4j_search.ALL_SECTIONS):
         self.calls.append((key, sections))
         if self.fail:
@@ -315,17 +319,6 @@ class GraphTests(unittest.TestCase):
 COMMON_KEY = '["card_common_bnft",15,"C5"]'
 
 
-class FakeBenefitSearch:
-    """PostgreSQL 상세 조회 Mock. 요청한 pg: key별로 근거를 돌려준다."""
-    def __init__(self, evidence_by_key):
-        self.evidence_by_key, self.calls = evidence_by_key, []
-
-    def get_detail(self, key, sections):
-        self.calls.append((key, sections))
-        evidence = self.evidence_by_key.get(key)
-        return None if evidence is None else {**detail([]), "evidence": evidence}
-
-
 class BenefitIdCollisionTests(unittest.TestCase):
     """카드 혜택과 공통 혜택의 ID 문자열이 같아도 종류·소유자로 따로 식별한다(2026-11-04 우리카드·MP004 11쌍)."""
     CARD_KEY = json.dumps(["card_bnft", 6, "20261104_000013"])
@@ -343,8 +336,6 @@ class BenefitIdCollisionTests(unittest.TestCase):
     def test_entity_ref_keeps_kind_and_owner(self):
         self.assertEqual(card_graphrag.entity_ref(self.CARD_KEY), "card_product_item:6:20261104_000013")
         self.assertEqual(card_graphrag.entity_ref(self.COMMON_KEY), "card_common_bnft:9:20261104_000013")
-        self.assertEqual(card_graphrag.entity_ref("pg:CARD_BNFT:6:20261104_000013"), "card_product_item:6:20261104_000013")
-        self.assertEqual(card_graphrag.entity_ref("pg:CARD_COMMON_BNFT:9:20261104_000013"), "card_common_bnft:9:20261104_000013")
         self.assertEqual(card_graphrag.entity_ref("not-a-key", "X"), "X")
 
     def test_catalog_offers_distinct_ids_to_llm(self):
@@ -371,52 +362,23 @@ class BenefitIdCollisionTests(unittest.TestCase):
 
 
 class CommonEvidenceFallbackTests(unittest.TestCase):
-    def common_run(self, graph_evidence, benefit_search, key=COMMON_KEY):
+    def common_run(self, graph_evidence, key=COMMON_KEY):
         search = FakeSearch(detail(graph_evidence))
-        search.catalog = [{"id": "C5", "key": key, "name": "트립닷컴 국내외 호텔 할인", "card": "적용 카드 미확인",
+        search.catalog = [{"id": "C5", "key": key, "name": "Travel common benefit", "card": "Travel card",
                            "targets": [], "payment_min_amounts": []}]
-        second = answer_llm("호텔 15% 할인입니다.", ("PE1",))
-        # 카탈로그는 공통 혜택을 종류·소유자 포함 참조로 내보낸다(카드 혜택과 ID 충돌 방지).
-        state = CardGraphRAG(search, interpret_llm(ids=(card_graphrag.entity_ref(key, "C5"),)), second,
-                             benefit_search=benefit_search).run("트립닷컴 호텔 할인?")
+        second = answer_llm("?? 15% ?????.", ("E1",))
+        state = CardGraphRAG(search, interpret_llm(ids=(card_graphrag.entity_ref(key, "C5"),)), second).run("?? ???")
         return state, second
 
-    def test_zero_graph_evidence_reads_same_common_benefit_from_postgresql(self):
-        pg = FakeBenefitSearch({"pg:CARD_COMMON_BNFT:15:C5": [evidence_row("PE1", quote="국내외 호텔 15% 할인")],
-                                "pg:CARD_COMMON_BNFT:15:C6": [evidence_row("OTHER")]})
-        state, _ = self.common_run([], pg)
-        self.assertEqual(pg.calls, [("pg:CARD_COMMON_BNFT:15:C5", ("evidence",))])
-        self.assertEqual([item["evidence_id"] for item in state["evidence"]], ["PE1"])
-        self.assertEqual(state["retrieval_trace"][0]["evidence_engine"], "postgresql_fallback")
+    def test_graph_evidence_is_used_from_neo4j(self):
+        state, _ = self.common_run([evidence_row("E1", quote="?? 15% ??")])
         self.assertEqual(state["answer"]["status"], "ANSWERED")
-
-    def test_no_postgresql_evidence_stays_not_answerable(self):
-        for evidence_by_key in ({}, {"pg:CARD_COMMON_BNFT:15:C5": []}):
-            state, second = self.common_run([], FakeBenefitSearch(evidence_by_key))
-            self.assertEqual(state["evidence"], [])
-            self.assertEqual(state["answer"]["status"], "NOT_ANSWERABLE")
-            self.assertEqual(second.prompts, [])
-            self.assertEqual(state["retrieval_trace"][0]["evidence_engine"], "neo4j")
-
-    def test_graph_evidence_is_used_without_fallback(self):
-        pg = FakeBenefitSearch({"pg:CARD_COMMON_BNFT:15:C5": [evidence_row("PE1")]})
-        state, _ = self.common_run([evidence_row("E1")], pg)
-        self.assertEqual(pg.calls, [])
         self.assertEqual([item["evidence_id"] for item in state["evidence"]], ["E1"])
 
-    def test_card_benefit_and_mode_a_do_not_fall_back(self):
-        pg = FakeBenefitSearch({"pg:CARD_COMMON_BNFT:15:C5": [evidence_row("PE1")]})
-        state, _ = self.common_run([], pg, key=KEY)
-        self.assertEqual(pg.calls, [])
+    def test_no_graph_evidence_stays_not_answerable(self):
+        state, second = self.common_run([])
         self.assertEqual(state["answer"]["status"], "NOT_ANSWERABLE")
-        state, _ = self.common_run([], None)
-        self.assertEqual(state["answer"]["status"], "NOT_ANSWERABLE")
-
-    def test_postgresql_key_keeps_exact_ids(self):
-        self.assertEqual(card_graphrag.postgresql_common_key('["card_common_bnft",15,"20261103_000006"]'),
-                         "pg:CARD_COMMON_BNFT:15:20261103_000006")
-        self.assertIsNone(card_graphrag.postgresql_common_key('["card_bnft",2,"20261101_000001"]'))
-
+        self.assertEqual(second.prompts, [])
 
 class ValueParsingTests(unittest.TestCase):
     def test_units_and_periods(self):
@@ -635,6 +597,19 @@ class TargetSelectionTests(unittest.TestCase):
     def test_compare_keeps_multiple_benefits(self):
         state, _, _ = run(self.search(), interpret_llm("BENEFIT_COMPARE", ("P1", "T1")), question="1만원 결제 시 ONE PICK과 대중교통 비교")
         self.assertEqual(state["search_parameters"]["benefit_ids"], ["P1", "T1"])
+
+    def test_compare_answer_prompt_requires_each_selected_benefit(self):
+        state, _, answer_llm_instance = run(
+            self.search(), interpret_llm("BENEFIT_COMPARE", ("P1", "T1")),
+            question="ONE PICK style card comparison")
+        prompt = answer_llm_instance.prompts[0]
+        self.assertIn("COMPARISON COMPLETENESS CHECK", prompt)
+        checklist = prompt.split("COMPARISON COMPLETENESS CHECK:", 1)[1]
+        for benefit in state["context"]["benefits"]:
+            self.assertIn(f'"benefit_id": "{benefit["benefit_id"]}"', checklist)
+        self.assertIn("transaction or previous-month-spend conditions", prompt)
+        self.assertIn("monthly/shared cap", prompt)
+        self.assertEqual(state["answer"]["status"], "ANSWERED")
 
     def test_only_transit_is_kept(self):
         state, _, _ = run(self.search(), interpret_llm("BENEFIT_DETAIL", ("T1",)), question="버스로 1만원 결제하면 얼마야?")
@@ -865,14 +840,15 @@ class UnbackedStatusTests(unittest.TestCase):
                                                            card_graphrag.known_values(tier_context(10000), "1만원 결제하면?", None),
                                                            card_graphrag.numbers_in(json.dumps(tier_context(10000), ensure_ascii=False))), None)
 
-    def test_valid_llm_answer_is_kept_for_payment_question(self):
+    def test_unconfirmed_payout_mapping_uses_program_tier_fallback(self):
         text = ("ONE PICK과 STYLE은 결제 건당 3천원 이상 시 100원, 결제 건당 1만원 이상 시 500원으로 안내되어 있습니다.\n\n"
                 "1만원 결제는 두 구간에 모두 해당하는데, 어떤 금액이 적용되는지는 아직 확정되지 않았습니다.")
         raw = card_answer([point("결제 건당 3천원 이상 100원, 1만원 이상 500원입니다.", ("EP",), "P1"),
                            point("결제 건당 3천원 이상 100원, 1만원 이상 500원입니다.", ("ES",), "S1")],
                           conclusion="1만원 결제의 지급액은 확정되지 않았습니다.", answer_text=text)
         answer, warnings = validate_answer(raw, tier_context(10000), "1만원 이상 결제하면 캐시백은 얼마인가?")
-        self.assertEqual((answer["answer_source"], answer["answer_text"], warnings), ("llm", text, []))
+        self.assertEqual(answer["answer_source"], "program_tier")
+        self.assertTrue(any("requested amount or condition remains unconfirmed" in warning for warning in warnings))
 
     def test_same_tiers_cannot_be_described_as_different(self):
         raw = card_answer([point("결제 건당 3천원 이상 100원, 1만원 이상 500원입니다.", ("EP",), "P1")],
@@ -978,6 +954,43 @@ class GenericRuleTests(unittest.TestCase):
         conflicts = self.conflicts(200000, basis="PREV_MONTH_SPEND")
         self.assertEqual(conflicts[0]["applicable_rule_keys"], [])
         self.assertNotIn("결제 건당", card_graphrag.tier_label(conflicts[0]["tiers"][0]))
+
+    def test_partial_limit_fallback_keeps_only_evidence_backed_limit_text(self):
+        context = {
+            "benefits": [{"benefit_id": "B1", "name": "Benefit one",
+                          "limits": [{"text": "\uC6D4 5\uCC9C\uC6D0"}]}],
+            "evidence": [{"evidence_id": "E1", "benefit_ids": ["B1"], "quote": "\uC6D4 5\uCC9C\uC6D0", "page_no": 1}],
+        }
+        points = card_graphrag.partial_limit_facts(context)
+        self.assertEqual(len(points), 1)
+        self.assertEqual(points[0]["text"], "Benefit one: \uC6D4 5\uCC9C\uC6D0")
+        self.assertEqual(points[0]["evidence_ids"], ["E1"])
+
+    def test_explicit_ordered_tier_caps_are_not_rejected_as_mismatched(self):
+        benefit = {"benefit_id": "B", "limit_tiers": [
+            {"min_amt": 500000, "cap": {"amount": 3000}, "shared": [{"amount": 8000}]},
+            {"min_amt": 1000000, "cap": {"amount": 6000}, "shared": [{"amount": 11000}]},
+            {"min_amt": 2000000, "cap": {"amount": 12000}, "shared": [{"amount": 17000}]},
+        ]}
+        own_caps = ("DAILY\ub294 \uac74\ub2f9 3\ub9cc\uc6d0 \uc774\uc0c1, \uc804\uc6d4 \uc2e4\uc801 50\ub9cc\uc6d0 \uc774\uc0c1 100\ub9cc\uc6d0 \ubbf8\ub9cc, "
+                    "100\ub9cc\uc6d0 \uc774\uc0c1 200\ub9cc\uc6d0 \ubbf8\ub9cc, 200\ub9cc\uc6d0 \uc774\uc0c1 \uad6c\uac04\uc758 \uace0\uc815\uc18c\ube44 \ud560\uc778 \ud55c\ub3c4\ub294 \uac01\uac01 "
+                    "3\ucc9c\uc6d0, 6\ucc9c\uc6d0, 1\ub9cc2\ucc9c\uc6d0\uc785\ub2c8\ub2e4.")
+        swapped_caps = own_caps.replace("3\ucc9c\uc6d0, 6\ucc9c\uc6d0, 1\ub9cc2\ucc9c\uc6d0", "6\ucc9c\uc6d0, 3\ucc9c\uc6d0, 1\ub9cc2\ucc9c\uc6d0")
+        shared_caps = own_caps.replace("\uace0\uc815\uc18c\ube44 \ud560\uc778 \ud55c\ub3c4", "\ud1b5\ud569 \ud560\uc778 \ud55c\ub3c4").replace(
+            "3\ucc9c\uc6d0, 6\ucc9c\uc6d0, 1\ub9cc2\ucc9c\uc6d0", "8\ucc9c\uc6d0, 1\ub9cc1\ucc9c\uc6d0, 1\ub9cc7\ucc9c\uc6d0")
+        both_caps = ("\uc804\uc6d4 \uc2e4\uc801 50\ub9cc\uc6d0 \uc774\uc0c1 100\ub9cc\uc6d0 \ubbf8\ub9cc, "
+                     "100\ub9cc\uc6d0 \uc774\uc0c1 200\ub9cc\uc6d0 \ubbf8\ub9cc, 200\ub9cc\uc6d0 \uc774\uc0c1\uc5d0\uc11c "
+                     "\uace0\uc815\uc18c\ube44 \ud55c\ub3c4\ub294 3\ucc9c\uc6d0, 6\ucc9c\uc6d0, 1\ub9cc2\ucc9c\uc6d0\uc774\uace0, "
+                     "\ud1b5\ud569 \ud55c\ub3c4\ub294 \uac19\uc740 \uc21c\uc11c\ub85c 8\ucc9c\uc6d0, 1\ub9cc1\ucc9c\uc6d0, 1\ub9cc7\ucc9c\uc6d0\uc785\ub2c8\ub2e4.")
+        integrated_first = ("\uc804\uc6d4 \uc2e4\uc801 50\ub9cc\uc6d0 \uc774\uc0c1 100\ub9cc\uc6d0 \ubbf8\ub9cc, "
+                            "100\ub9cc\uc6d0 \uc774\uc0c1 200\ub9cc\uc6d0 \ubbf8\ub9cc, 200\ub9cc\uc6d0 \uc774\uc0c1\uc5d0\uc11c "
+                            "\ud1b5\ud569 \ud55c\ub3c4\ub294 8\ucc9c\uc6d0, 1\ub9cc1\ucc9c\uc6d0, 1\ub9cc7\ucc9c\uc6d0\uc774\uace0 "
+                            "\uace0\uc815\uc18c\ube44 \ud55c\ub3c4\ub294 \uac19\uc740 \uc21c\uc11c\ub85c 3\ucc9c\uc6d0, 6\ucc9c\uc6d0, 1\ub9cc2\ucc9c\uc6d0\uc785\ub2c8\ub2e4.")
+        self.assertFalse(card_graphrag.distorts_limit_tier(own_caps, [benefit]))
+        self.assertTrue(card_graphrag.distorts_limit_tier(swapped_caps, [benefit]))
+        self.assertFalse(card_graphrag.distorts_limit_tier(shared_caps, [benefit]))
+        self.assertFalse(card_graphrag.distorts_limit_tier(both_caps, [benefit]))
+        self.assertFalse(card_graphrag.distorts_limit_tier(integrated_first, [benefit]))
 
     def test_answer_is_built_from_retrieved_values(self):
         context = self.context(200000)
@@ -1354,10 +1367,10 @@ class FakeNeo4jBenefitSearch:
     def __init__(self):
         self.calls = []
 
-    def catalog_rows(self, question, mode, graph_catalog, top_k=8):
-        from card_benefit.payment_card.db_pipeline_origin_search.benefit_search_service import SearchOutcome
-        self.calls.append((question, mode))
-        return list(graph_catalog), SearchOutcome(mode, [], 0.0, engines=["neo4j_hybrid"])
+    def catalog_rows(self, question, graph_catalog, top_k=8):
+        from card_benefit.payment_card.db_pipeline_origin_search.search_contract import SearchOutcome
+        self.calls.append(question)
+        return list(graph_catalog), SearchOutcome("N", [], 0.0, engines=["neo4j_hybrid"])
 
     def get_detail(self, key, sections):
         return None
@@ -1365,11 +1378,11 @@ class FakeNeo4jBenefitSearch:
 
 class StreamlitTests(unittest.TestCase):
     def test_partial_answer_is_visible_in_default_streamlit_view(self):
-        self.second.parsed = card_answer([point("??? ?????.", ("E1",)), point("???? ?? ?????.", ("MISSING",))])
+        self.second.parsed = card_answer([point("Supported sentence.", ("E1",)), point("Unsupported sentence.", ("MISSING",))])
         app = self.ask(AppTest.from_file(APP).run(timeout=30))
         self.assertFalse(app.exception)
         self.assertEqual(app.session_state["outcome"]["answer"]["status"], "PARTIAL")
-        self.assertTrue(any("????? ?????" in item.value for item in app.warning))
+        self.assertTrue(any("\ubd80\ubd84\uc801\uc73c\ub85c \uc548\ub0b4\ud569\ub2c8\ub2e4" in item.value for item in app.warning))
 
     def setUp(self):
         st.cache_resource.clear()
@@ -1378,8 +1391,6 @@ class StreamlitTests(unittest.TestCase):
         self.patches = [patch.object(neo4j_search, "connect", return_value=FakeSearch()),
                         patch.object(card_graphrag, "create_llms", return_value=(self.first, self.second)),
                         patch.object(card_graphrag, "create_neo4j_benefit_search", return_value=self.neo_search),
-                        patch.object(card_graphrag, "create_benefit_search",
-                                     side_effect=AssertionError("화면 기본 경로는 PostgreSQL 검색을 만들지 않는다")),
                         patch.object(card_graphrag, "configure_card_logging")]
         for item in self.patches:
             item.start()
@@ -1405,7 +1416,7 @@ class StreamlitTests(unittest.TestCase):
         self.assertEqual(self.first.prompts, [])
         neo4j_search.connect.assert_not_called()
 
-    def test_search_mode_radio_is_removed(self):
+    def test_no_search_mode_selector_is_present(self):
         app = AppTest.from_file(APP).run(timeout=30)
         self.assertFalse(any(item.key == "search_mode" or item.label == "검색 방식" for item in app.radio))
         app = self.dev(app)
@@ -1414,9 +1425,7 @@ class StreamlitTests(unittest.TestCase):
     def test_question_uses_neo4j_only_search_by_default(self):
         app = self.ask(AppTest.from_file(APP).run(timeout=30))
         self.assertFalse(app.exception)
-        self.assertEqual(self.neo_search.calls, [("대중교통 혜택은?", "N")])
-        card_graphrag.create_benefit_search.assert_not_called()
-        self.assertEqual(app.session_state["outcome"]["search_mode"], "N")
+        self.assertEqual(self.neo_search.calls, ["대중교통 혜택은?"])
         self.assertEqual(app.session_state["outcome"]["candidate_search"]["engines"], ["neo4j_hybrid"])
 
     def test_default_view_hides_internal_status(self):
@@ -1562,35 +1571,38 @@ class StreamlitTests(unittest.TestCase):
 class NewContractRegressionTests(unittest.TestCase):
     def test_item_and_common_use_distinct_name_and_rule_fields(self):
         item_detail = detail()
-        item = {"card_product_item_id": "I1", "item_nm": "???? ??", "item_rule_txt": "?? ??? ?? ??",
-                "source_json": js({"card_product_item_id": "I1", "item_nm": "???? ??",
-                                    "item_rule_txt": "?? ??? ?? ??"})}
+        name = "\ud1b5\uc2e0\uc694\uae08 \ud560\uc778"
+        rule_text = "\uc804\uc6d4 \uc2e4\uc801\uc5d0 \ub530\ub978 \ud55c\ub3c4"
+        item = {"card_product_item_id": "I1", "item_nm": name, "item_rule_txt": rule_text,
+                "source_json": js({"card_product_item_id": "I1", "item_nm": name, "item_rule_txt": rule_text})}
         item_detail["context"]["benefit"] = item
         item_detail["rules"] = [
-            {"rule": {"rule_key": "low", "value_num": 1}, "targets": ["????"]},
+            {"rule": {"rule_key": "low", "value_num": 1}, "targets": ["\ud1b5\uc2e0\uc694\uae08"]},
             {"rule": {"rule_key": "high", "value_num": 2}, "targets": []},
         ]
         unresolved = card_graphrag.unresolved_items([item_detail])
-        tier = next(row for row in unresolved if row.get("topic") == "?? ??")
-        self.assertEqual(tier["benefit"], "???? ??")
-        self.assertEqual(tier["confirmed"], "?? ??? ?? ??")
-        conditions, _, _ = card_graphrag.split_unresolved([item_detail], "????", "BENEFIT_LIMIT", None)
+        tier = next(row for row in unresolved if row.get("topic") == card_graphrag.TIER_NAME)
+        self.assertEqual(tier["benefit"], name)
+        self.assertEqual(tier["confirmed"], rule_text)
+        conditions, _, _ = card_graphrag.split_unresolved([item_detail], "\ud55c\ub3c4\ub294?", "BENEFIT_COMPARE", None)
         self.assertNotIn(None, conditions[0]["benefits"])
 
         common_detail = detail()
-        common_detail["context"]["benefit"] = {"card_common_bnft_id": "C1", "bnft_nm": "?? ??",
-            "bnft_rule_txt": "?? ??", "source_json": js({"card_common_bnft_id": "C1", "bnft_nm": "?? ??",
-                                                                  "bnft_rule_txt": "?? ??"})}
-        self.assertEqual(card_graphrag.benefit_context(common_detail)["name"], "?? ??")
+        common_name = "\uacf5\ud1b5 \ud61c\ud0dd"
+        common_rule = "\uacf5\ud1b5 \uaddc\uce59"
+        common_detail["context"]["benefit"] = {"card_common_bnft_id": "C1", "bnft_nm": common_name,
+            "bnft_rule_txt": common_rule, "source_json": js({"card_common_bnft_id": "C1", "bnft_nm": common_name,
+                                                                  "bnft_rule_txt": common_rule})}
+        self.assertEqual(card_graphrag.benefit_context(common_detail)["name"], common_name)
 
     def test_only_disjoint_previous_month_ranges_are_proven_non_overlapping(self):
         rules = [
             {"rule": {"rule_key": "30_80", "value_num": 1,
                        "cond_expr": {"branches": [{"atoms": [{"cond_type_cd": "SPEND_REQ", "cond_basis_cd": "PREV_MONTH_SPEND",
-                           "cond_min_amt": 300000, "cond_max_amt_excl": 800000}]}]}}, "targets": ["????"]},
+                           "cond_min_amt": 300000, "cond_max_amt_excl": 800000}]}]}}, "targets": ["\uc790\ub3d9\ub0a9\ubd80"]},
             {"rule": {"rule_key": "80_plus", "value_num": 2,
                        "cond_expr": {"branches": [{"atoms": [{"cond_type_cd": "SPEND_REQ", "cond_basis_cd": "PREV_MONTH_SPEND",
-                           "cond_min_amt": 800000}]}]}}, "targets": ["????"]},
+                           "cond_min_amt": 800000}]}]}}, "targets": ["\uc790\ub3d9\ub0a9\ubd80"]},
         ]
         self.assertFalse(card_graphrag.rule_selection_open(rules))
         transaction_rules = [{**row, "rule": {**row["rule"], "cond_expr": {"branches": [{"atoms": [
@@ -1598,14 +1610,74 @@ class NewContractRegressionTests(unittest.TestCase):
              "cond_max_amt_excl": 8000 if row["rule"]["rule_key"] == "30_80" else None}]}]}}} for row in rules]
         self.assertTrue(card_graphrag.rule_selection_open(transaction_rules))
 
+    def test_broad_exclusion_terms_do_not_reject_a_differently_scoped_benefit(self):
+        data = detail()
+        rule = {"rule_key": "online", "target_list": [{"target_nm": "online shopping"}],
+                "cond_expr": {"branches": [{"atoms": [{"cond_type_cd": "BNFT_EXCL",
+                    "excl_raw_txt": "\uad6c\ub3c5, \uc694\uae08 \uc81c\uc678"}]}]}}
+        benefit = {"card_product_item_id": "I2", "item_nm": "monthly bill discount", "card_id": 2,
+                   "rule_list": [rule], "source_json": js({"card_product_item_id": "I2", "item_nm": "monthly bill discount",
+                                                                  "card_id": 2, "rule_list": [rule]})}
+        data["context"]["benefit"] = benefit
+        self.assertEqual(card_graphrag.find_exclusions(
+            "\uc694\uae08\uacfc \uad6c\ub3c5\uc744 \uc790\ub3d9\ub0a9\ubd80\ud574\uc694", [data]), [])
+
+    def test_interpret_supplements_named_card_topics_from_catalog_when_hybrid_top_k_misses_one(self):
+        from card_benefit.payment_card.db_pipeline_origin_search.search_contract import SearchOutcome
+
+        question = "\ud734\ub300\uc804\ud654 \uc694\uae08\uacfc \uc815\uae30 \uad6c\ub3c5\uc744 \uc790\ub3d9\ub0a9\ubd80\ud558\ub294 \uace0\uac1d\uc5d0\uac8c \ub354 \uc2ec\ud50c \ud558\ub098\uce74\ub4dc\uc640 \uce74\ub4dc\uc758\uc815\uc11d2 DAILY\uc758 \uc801\uc6a9 \uac00\ub2a5 \ud560\uc778\uacfc \ud1b5\ud569 \ud55c\ub3c4\ub97c \ube44\uad50\ud574 \uc918"
+        graph_rows = [
+            {"key": '["card_product_item",22,"simple"]', "id": "simple", "name": "\uc6d4\ub0a9 \uc694\uae08 \uccad\uad6c\ud560\uc778",
+             "card": "\ub354 \uc2ec\ud50c \ud558\ub098\uce74\ub4dc", "card_id": 22, "targets": [], "payment_min_amounts": [],
+             "item_rule_txt": "\ud1b5\uc2e0\uc694\uae08 \uc6d4\ub0a9 \uc790\ub3d9\ub0a9\ubd80", "item_limit_txt": "\uc6d4 \ud55c\ub3c4",
+             "condition_text": ["\uc6d4\ub0a9 \uc694\uae08 \ub300\uc0c1 \uac00\ub9f9\uc810 \uc790\ub3d9\ub0a9\ubd80 \uc2dc"],
+             "search_text": "\ud1b5\uc2e0\uc694\uae08 \uc11c\ube44\uc2a4 \ub300\uc0c1: Netflix, Youtube Premium, \uc6d4\ub0a9 \uc694\uae08 \uc790\ub3d9\ub0a9\ubd80"},
+            {"key": '["card_product_item",42,"telecom"]', "id": "telecom", "name": "\uace0\uc815\uc18c\ube44 5% \uccad\uad6c\ud560\uc778",
+             "card": "\uce74\ub4dc\uc758\uc815\uc11d2 DAILY", "card_id": 42, "targets": ["SKT", "KT", "LG U+"],
+             "payment_min_amounts": [], "item_rule_txt": "\ud1b5\uc2e0\uc694\uae08 5%", "item_limit_txt": "\ud1b5\ud569 \uc6d4 \ud55c\ub3c4",
+             "condition_text": ["\ud1b5\uc2e0\uc694\uae08 \uc790\ub3d9\ub0a9\ubd80"], "search_text": "\ud1b5\uc2e0\uc694\uae08 \uc790\ub3d9\ub0a9\ubd80"},
+            {"key": '["card_product_item",42,"subscription"]', "id": "subscription", "name": "\uc815\uae30\uacb0\uc81c 50% \uccad\uad6c\ud560\uc778",
+             "card": "\uce74\ub4dc\uc758\uc815\uc11d2 DAILY", "card_id": 42, "targets": [], "payment_min_amounts": [],
+             "item_rule_txt": "\uc815\uae30\uacb0\uc81c 50%", "item_limit_txt": "\uc6d4 \ud55c\ub3c4",
+             "condition_text": ["\uc815\uae30\uacb0\uc81c(\uad6c\ub3c5)"], "search_text": "\uc815\uae30\uacb0\uc81c \uad6c\ub3c5"},
+        ]
+        search = FakeSearch()
+        search.catalog = graph_rows
+
+        class CandidateSearch:
+            def catalog_rows(self, question, graph_catalog, top_k=8):
+                from types import SimpleNamespace
+                selected = graph_catalog[1:]
+                hits = [SimpleNamespace(source="CARD_BNFT", key=row["key"], benefit_id=row["id"],
+                                        bnft_nm=row["name"], similarity=0.6,
+                                        cards=[{"product_nm": row["card"]}], applied=True,
+                                        graph_targets=row["targets"], target_terms=[], excluded_terms=[])
+                        for row in selected]
+                return selected, SearchOutcome("N", hits, 1.0, engines=["neo4j_hybrid"])
+
+        rag = CardGraphRAG(search, interpret_llm("BENEFIT_COMPARE", ()), answer_llm(),
+                           candidate_search=CandidateSearch())
+        state = rag.interpret({"request_id": "topic-fallback-test", "question": question})
+        simple_ref = "card_product_item:22:simple"
+        self.assertIn(simple_ref, state["search_parameters"]["benefit_ids"])
+        self.assertIn(simple_ref, state["candidate_search"]["topic_supplement_ids"])
+        self.assertIn(simple_ref, state["candidate_search"]["supplemented_ids"])
+        self.assertEqual(state["candidate_search"]["coverage_gaps"], [])
+        self.assertFalse(any("no matching benefit" in warning for warning in state.get("warnings", [])))
+
     def test_candidate_topic_matching_uses_conditions_and_targets_without_ids(self):
-        question = "???? ??? ?? ??? ?????? ???? ? ?? ??? ??? ?"
+        question = "\ud734\ub300\uc804\ud654 \uc694\uae08\uacfc \uc815\uae30 \uad6c\ub3c5\uc744 \uc790\ub3d9\ub0a9\ubd80\ud558\ub294 \uace0\uac1d\uc5d0\uac8c \ub450 \uce74\ub4dc \ud61c\ud0dd\uc744 \ube44\uad50\ud574 \uc918"
         self.assertEqual(set(card_graphrag._requested_benefit_topics(question)), {"telecom", "subscription"})
-        telecom = {"name": "???? ?? 5% ????", "targets": ["SKT", "KT", "LG U+"],
-                   "condition_text": ["???? ???? ?? ??? ?? ??"]}
-        subscription = {"name": "???? 50% ????", "condition_text": ["?? ?? ??"]}
+        telecom = {"name": "\uace0\uc815\uc18c\ube44 \uc601\uc5ed 5% \uccad\uad6c\ud560\uc778", "targets": ["SKT", "KT", "LG U+"],
+                   "condition_text": ["\ud1b5\uc2e0\uc694\uae08 \uc790\ub3d9\ub0a9\ubd80 \uac74\uc5d0 \ud55c\ud558\uc5ec \ud560\uc778 \uc81c\uacf5"]}
+        subscription = {"name": "\uc815\uae30\uacb0\uc81c 50% \uccad\uad6c\ud560\uc778", "condition_text": ["\uc815\uae30 \uad6c\ub3c5 \uacb0\uc81c"]}
+        monthly_services = {"name": "\uc6d4\ub0a9 \uc694\uae08 \uccad\uad6c\ud560\uc778",
+                            "rule_text": "\uc6d4\ub0a9 \uc694\uae08 \ub300\uc0c1 \uac00\ub9f9\uc810 \uc790\ub3d9\ub0a9\ubd80 \uc2dc",
+                            "search_text": "\uc11c\ube44\uc2a4 \ub300\uc0c1: Netflix, Youtube Premium"}
         self.assertTrue(card_graphrag._candidate_matches_topic(telecom, "telecom"))
         self.assertTrue(card_graphrag._candidate_matches_topic(subscription, "subscription"))
+        monthly_services["search_text"] += " \uc11c\ube44\uc2a4 \ub300\uc0c1 \uc6d4\ub0a9 \uc790\ub3d9\ub0a9\ubd80"
+        self.assertTrue(card_graphrag._candidate_matches_topic(monthly_services, "subscription"))
 
 
 @unittest.skipUnless(os.getenv("RUN_NEO4J_INTEGRATION") == "1", "실제 Neo4j 읽기 테스트는 명시적으로 켠다")
@@ -1615,6 +1687,8 @@ class LiveAccuracyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.search = neo4j_search.connect()
+        from card_benefit.payment_card.db_pipeline_origin_search.neo4j_hybrid_search import Neo4jBenefitSearch
+        cls.candidate_search = Neo4jBenefitSearch(cls.search, embedder=None)
         # 질문 해석 LLM은 ID 단독이 아니라 종류·소유자 포함 참조를 고른다.
         cls.ids = {row["name"]: card_graphrag.entity_ref(row["key"], row["id"]) for row in cls.search.list_catalog()}
 
@@ -1624,6 +1698,9 @@ class LiveAccuracyTests(unittest.TestCase):
 
     def benefit(self, word):
         return next(value for name, value in self.ids.items() if word in name)
+
+    def ask(self, question, intent, ids, parsed):
+        return CardGraphRAG(self.search, interpret_llm(intent, ids), FakeLLM(parsed), candidate_search=self.candidate_search).run(question)
 
     def read_items(self, ids):
         catalog = self.search.list_catalog()
@@ -1656,8 +1733,8 @@ class LiveAccuracyTests(unittest.TestCase):
                                 for branch in group["branches"] for atom in branch["atoms"])
         recurring_text = " ".join(atom["text"] or "" for group in recurring["conditions"]
                                   for branch in group["branches"] for atom in branch["atoms"])
-        self.assertIn("???? ????", telecom_text)
-        self.assertIn("????(??)", recurring_text)
+        self.assertIn("\ud1b5\uc2e0\uc694\uae08 \uc790\ub3d9\ub0a9\ubd80", telecom_text)
+        self.assertIn("\uc815\uae30\uacb0\uc81c(\uad6c\ub3c5)", recurring_text)
         self.assertEqual([tier["shared"][0]["amount"] for tier in recurring["limit_tiers"]], [8000, 11000, 17000])
         self.assertEqual([tier["min_amt"] for tier in recurring["limit_tiers"]], [500000, 1000000, 2000000])
         evidence = card_graphrag.collect_evidence(details, "BENEFIT_COMPARE")
@@ -1665,17 +1742,15 @@ class LiveAccuracyTests(unittest.TestCase):
         by_id = {row["evidence_id"]: row for row in answer_rows}
         self.assertIn("20261105_003034", by_id)
         self.assertEqual(by_id["20261105_003034"]["page_no"], 2)
-        self.assertIn("8,000?", by_id["20261105_003034"]["quote"])
-        self.assertIn("17,000?", by_id["20261105_003034"]["quote"])
-
-    def ask(self, question, intent, ids, parsed):
-        return CardGraphRAG(self.search, interpret_llm(intent, ids), FakeLLM(parsed)).run(question)
+        quote = by_id["20261105_003034"]["quote"]
+        self.assertIn("8,000", quote)
+        self.assertIn("17,000", quote)
 
     def test_verify_steps_with_real_neo4j(self):
         transit = self.benefit("대중교통")
         raw = card_answer([point("월 1,000원 한도입니다.", ("20261101_000046",), transit)], conclusion="대중교통 혜택입니다.")
         first, second = interpret_llm("BENEFIT_DETAIL", (transit,)), FakeLLM(raw)
-        rag = CardGraphRAG(self.search, first, second)
+        rag = CardGraphRAG(self.search, first, second, candidate_search=self.candidate_search)
         state = rag.verify_interpret("대중교통 혜택은?")
         plan = card_graphrag.verification_plan(state)
         self.assertEqual(len(plan), 1)

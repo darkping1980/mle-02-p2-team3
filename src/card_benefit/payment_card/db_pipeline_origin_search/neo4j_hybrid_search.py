@@ -5,7 +5,7 @@ import json
 import re
 from time import perf_counter
 
-from .benefit_search_service import FETCH_PER_TABLE, RRF_K, SearchHit, SearchOutcome, search_terms
+from .search_contract import FETCH_PER_TABLE, RRF_K, SearchHit, SearchOutcome, search_terms
 from .neo4j_search import CARD_LOG, REQUEST_ID, source
 
 ENGINE = "neo4j"
@@ -87,7 +87,7 @@ class Neo4jBenefitSearch:
     def _run(self, statement_id, cypher, **params):
         return self.neo4j_search._run(statement_id, cypher, STATEMENTS[statement_id], params)
 
-    def search(self, question: str, mode: str = "N", top_k: int = 5, use_graph: bool = True) -> SearchOutcome:
+    def search(self, question: str, top_k: int = 5, use_graph: bool = True) -> SearchOutcome:
         started = perf_counter()
         embed_started = perf_counter()
         vector = self.embedder.embed([question])[0] if self.embedder is not None else None
@@ -160,12 +160,12 @@ class Neo4jBenefitSearch:
                              selected=len(hits), products=len(cards))
         engines = (["neo4j_keyword"] if terms else []) + (["neo4j_vector"] if vector is not None else []) + ["neo4j_rrf"]
         CARD_LOG.log_summary("HYBRID", "neo4j", identified=identified or None, hits=len(hits), pool=len(candidates))
-        return SearchOutcome(mode, hits, (perf_counter()-started)*1000, [], [], engines)
+        return SearchOutcome("N", hits, (perf_counter()-started)*1000, [], [], engines)
 
-    def catalog_rows(self, question, mode, graph_catalog, top_k=8):
+    def catalog_rows(self, question, graph_catalog, top_k=8):
         from .neo4j_search import entity_ref
         catalog = {entity_ref(row["key"], row.get("id")): row for row in graph_catalog}
-        outcome = self.search(question, mode, top_k)
+        outcome = self.search(question, top_k=top_k)
         rows = []
         for hit in outcome.hits:
             known = catalog.get(entity_ref(hit.key, hit.benefit_id))
@@ -175,12 +175,6 @@ class Neo4jBenefitSearch:
         return rows, outcome
 
     def get_detail(self, key: str, sections: tuple[str, ...]):
-        if key.startswith("pg:CARD_BNFT:"):
-            _, _, owner, benefit_id = key.split(":", 3)
-            key = json.dumps(["card_product_item", int(owner), benefit_id], ensure_ascii=False, separators=(",", ":"))
-        elif key.startswith("pg:CARD_COMMON_BNFT:"):
-            _, _, owner, benefit_id = key.split(":", 3)
-            key = json.dumps(["card_common_bnft", int(owner), benefit_id], ensure_ascii=False, separators=(",", ":"))
         return self.neo4j_search.get_detail(key, sections)
 
     def card_terms(self, card_ids: list[int], details: list[dict] | None = None) -> list[dict]:

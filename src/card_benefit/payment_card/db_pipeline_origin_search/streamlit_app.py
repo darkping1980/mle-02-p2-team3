@@ -14,7 +14,7 @@ Streamlit 실행 모델 (Java 개발자 참고)
     3. 예시 질문, 질문 폼 (검색 방식 선택 없음: 항상 N = Neo4j 단일 검색)
     4. "질문하기" 제출 시:
          같은 질문·같은 모드·이전 오류 없음·강제 재실행 아님 → 이전 결과 재사용(LLM 미호출)
-         그 외 → get_pipeline(SEARCH_MODE).run(question) → 결과 State를 session_state.outcome에 저장
+         그 외 → get_pipeline().run(question) → 결과 State를 session_state.outcome에 저장
     5. 검색 결과는 요청당 한 번 로그에 저장하고, 일반 화면에는 최종 답변만 출력
        (개발자 모드에서는 기존 상세 내용·PDF 근거와 진단 정보도 표시)
 
@@ -40,7 +40,7 @@ from card_benefit.payment_card.db_pipeline_origin_search.neo4j_search import CAR
 from card_benefit.payment_card.db_pipeline_origin_search.execution_log import (
     app_db_log_enabled, capture_request_queries, configure_application_logging, error_message,
     log_event, outcome_detail_text, outcome_pdf_evidence_text, outcome_neo4j_summary,
-    outcome_pdf_evidence_summary, persist_app_logs, request_pipeline,
+    outcome_pdf_evidence_summary, persist_app_logs,
     response_message,
 )
 import streamlit as st
@@ -97,29 +97,12 @@ st.session_state.setdefault("execution_log_session_id", str(uuid4()))
 
 
 # region 파이프라인 생성 (모드별 캐시)
-SEARCH_MODE = "N"   # 화면 기본 검색 경로: Neo4j 단일 GraphRAG 검색
-
 @st.cache_resource(show_spinner=False)
-def get_pipeline(search_mode: str = SEARCH_MODE):
-    """재실행 사이에 모드별 드라이버와 그래프를 재사용한다. 예외는 캐시되지 않는다.
-
-    ``search_mode`` 값마다 CardGraphRAG 인스턴스가 하나씩 캐시된다(인자가 캐시 키).
-
-    Args:
-        search_mode: N(기본, Neo4j 단일 하이브리드 검색). A/B/C는 회귀 검증용으로만 남긴다.
-
-    Returns:
-        CardGraphRAG. N은 Neo4jBenefitSearch(Neo4j + 질문 임베딩)만 쓰고 PostgreSQL 업무 데이터를 조회하지 않는다.
-        A는 benefit_search=None이라 PostgreSQL에 접속하지 않는다. B·C는 BenefitSearchService(PostgreSQL + OpenAI 임베딩 + Neo4j)를 함께 넘긴다.
-        OPENAI_API_KEY가 없으면 create_llms가 (None, None)을 돌려주고, 질문 시 LLM_NOT_CONFIGURED로 끝난다.
-    """
+def get_pipeline():
+    """Create and cache the sole Neo4j hybrid GraphRAG pipeline."""
     search = connect()
-    if search_mode == "N":
-        benefit_search = card_graphrag.create_neo4j_benefit_search(search)
-    else:
-        benefit_search = None if search_mode == "A" else card_graphrag.create_benefit_search(search)
-    return card_graphrag.CardGraphRAG(search, *card_graphrag.create_llms(), benefit_search=benefit_search,
-                                      search_mode=search_mode)
+    candidate_search = card_graphrag.create_neo4j_benefit_search(search)
+    return card_graphrag.CardGraphRAG(search, *card_graphrag.create_llms(), candidate_search=candidate_search)
 # endregion
 
 
@@ -250,7 +233,6 @@ def show_outcome(outcome: dict) -> None:
     """마지막 실행 결과를 표시한다. 위젯 재실행은 이 저장값만 읽는다.
 
     Args:
-        outcome: CardGraphRAG.run이 돌려준 최종 CardState(dict) + search_mode(+ 재사용 시 reused).
             주로 읽는 키: answer(status·message·answer_text·conclusion·points·fee_rows·uncertain),
             evidence, open_conditions, data_notices, search_parameters, (개발자) llm_calls·path·context 등.
 
@@ -387,7 +369,6 @@ if run_mode == "개발 검증":
     verify_view.render(get_pipeline, show_outcome)
     st.stop()
 
-search_mode = SEARCH_MODE   # 화면에서 검색 방식을 고르지 않는다(Neo4j 단일 검색 고정)
 st.pills("예시 질문", EXAMPLES, key="example", on_change=use_example)
 with st.form("question_form"):
     question = st.text_area("질문", key="question", max_chars=card_graphrag.MAX_QUESTION_CHARS, height=80,
@@ -404,8 +385,7 @@ if submitted:
     if not question:
         st.warning("질문을 입력하세요.")
     # 분기: 직전과 같은 질문·모드이고 오류가 없었으면 LLM 비용을 쓰지 않고 이전 결과를 재사용한다.
-    elif (last and last["question"] == question and last.get("search_mode") == search_mode
-          and not last.get("error") and not force):
+    elif (last and last["question"] == question and not last.get("error") and not force):
         request_event = log_event("REQUEST", question)
         if dev_mode():
             st.info("같은 질문이라 API를 호출하지 않고 이전 결과를 표시합니다.")
@@ -423,20 +403,15 @@ if submitted:
                                  elapsed_ms=(perf_counter() - app_log_started) * 1000, reused=True)
     else:
         request_event = log_event("REQUEST", question)
-        cleanup = lambda: None
         query_events = []
         outcome_for_log = None
         try:
-            base_pipeline = get_pipeline(search_mode)
-            if APP_DB_LOG_ENABLED:
-                pipeline, cleanup = request_pipeline(base_pipeline, search_mode)
-            else:
-                pipeline = base_pipeline
+            pipeline = get_pipeline()
             with st.spinner("카드 혜택을 찾아 답변을 준비하고 있습니다..."):
                 # GraphRAG 실행: interpret → (retrieve → answer) → finish. 반환값은 최종 State(dict)다.
                 # 노드가 직접 잡는 실패(LLM·Neo4j·후보 검색)는 예외가 아니라 State의 error와 answer.status=ERROR로 돌아온다.
                 with capture_request_queries() as query_events:
-                    st.session_state.outcome = {**pipeline.run(question), "search_mode": search_mode}
+                    st.session_state.outcome = pipeline.run(question)
                 outcome_for_log = st.session_state.outcome
         except Exception as e:
             import traceback
@@ -447,7 +422,6 @@ if submitted:
             if dev_mode():
                 st.exception(e)
         finally:
-            cleanup()
             if APP_DB_LOG_ENABLED:
                 events = [request_event, *query_events]
                 error = error_message(outcome_for_log)

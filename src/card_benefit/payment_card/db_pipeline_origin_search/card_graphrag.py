@@ -1,44 +1,7 @@
-"""카드 혜택 GraphRAG — LangGraph 흐름: 질문 해석 → Neo4j 조회 → 근거 기반 답변 → 마무리 로그.
+"""Neo4j-only card-benefit GraphRAG pipeline.
 
-    interpret  실제 혜택 목록을 Neo4j에서 읽고, LLM이 질문 유형과 대상 혜택 ID를 고른다.
-               목록에 없는 ID는 버린다. LLM은 Cypher를 만들지 않는다.
-    retrieve   질문 유형별로 정해 둔 Cypher 템플릿만 파라미터로 실행한다.
-    answer     조회 결과만 LLM에 전달하고, 답변의 근거 ID와 숫자를 조회 결과와 대조한다.
-    finish     답변이 없는 경로의 안내 문구를 만들고 전체 시간·토큰·추정 비용을 기록한다.
-
-정상 질문의 LLM 호출은 interpret 1회, answer 1회다. 재시도와 다른 모델로의 전환은 없다.
-
-[전체 흐름] Streamlit(streamlit_app.py) → CardGraphRAG.run(question) → LangGraph 실행 → 최종 State(dict) → Streamlit 출력
-
-LangGraph 구성 (CardGraphRAG._build)
-    START → interpret ─(after_interpret)─┬→ retrieve ─(after_retrieve)─┬→ answer → finish → END
-                                         └→ finish                      └→ finish
-    - State(CardState)는 노드끼리 공유하는 dict다. 각 노드는 "바꿀 키만 담은 dict"를 반환하고, LangGraph가 합친다.
-      warnings·llm_calls·path는 덮어쓰지 않고 이어 붙인다(Annotated[..., operator.add] reducer).
-    - 조건부 Edge 함수(after_*)는 State를 보고 다음 노드 이름 문자열을 반환한다(Java의 switch 라우팅과 비슷).
-
-노드별 입력 → 출력(State 키)
-    interpret : question → catalog, intent, search_parameters, (B·C) candidate_search, llm_calls, warnings, error
-    retrieve  : search_parameters, intent → retrieved_data, evidence, statements, retrieval_trace, exclusions,
-                unresolved, open_conditions, data_notices, other_unresolved, error
-    answer    : retrieved_data, evidence, open_conditions, exclusions → context, answer, llm_calls, warnings, error
-    finish    : (answer가 없으면) error·intent 등으로 안내 answer 생성, 전체 비용·시간 로그
-
-LLM의 역할 (둘 다 ChatOpenAI 구조화 출력, 재시도 없음)
-    - 질문 해석 LLM(Interpretation): 혜택 목록(catalog) 중 질문 대상 ID와 질문 유형(intent)만 고른다.
-      Cypher·SQL은 만들지 않는다. 목록에 없는 ID는 interpret가 버린다.
-    - 답변 LLM(CardAnswer): 조회 결과(context)만 보고 답변 문장·근거 ID를 쓴다.
-      결과는 validate_answer가 다시 대조해 근거 없는 문장·값을 버리거나 프로그램 문구로 바꾼다.
-      연회비 금액은 LLM에 맡기지 않고 fee_answer가 등록 값으로 쓴다.
-
-검색 모드 A/B/C (CardGraphRAG.search_mode)
-    A: Neo4j 카탈로그(list_catalog) 전체를 질문 해석 LLM에 넘긴다. PostgreSQL·임베딩 미사용.
-    B: BenefitSearchService.catalog_rows(mode="B") — 질문 임베딩(pgvector) 후보만 넘긴다. Neo4j 카탈로그 조회가 실패해도 계속한다.
-    C: BenefitSearchService.catalog_rows(mode="C") — SQL 문자열 검색 + pgvector 결과를 RRF로 합친 후보만 넘긴다.
-    B·C 모두 후보에 Neo4j 관계(대상·제외 문구)로 순서를 보정하고, 연회비 질문이면 Neo4j의 ANNUAL_FEE 항목을 덧붙인다.
-    상세 조회는 모드와 관계없이 key 형식으로 갈린다: 그래프 key → Neo4jSearch.get_detail, ``pg:`` key → PostgreSQL.
-
-이 모듈은 DB에 쓰지 않는다(Neo4j는 READ_ACCESS 세션, PostgreSQL은 SELECT만).
+Execution order is interpret -> retrieve -> answer -> finish. Candidate search uses
+Neo4j keyword/vector fusion and RRF; details and PDF evidence are read from Neo4j.
 """
 from __future__ import annotations
 
@@ -59,11 +22,10 @@ from common.query_log_config import (
 from pydantic import BaseModel, Field
 
 from card_benefit.payment_card.db_pipeline.benefit_search_text import EXCLUSION_WORDS, excluded_tokens
-from common.query_logger import DEFAULT_SENSITIVE_KEYS
 
-from .benefit_search_service import BenefitSearchService, search_terms
+from .search_contract import search_terms
 from .neo4j_search import (
-    ALL_SECTIONS, CARD_LOG, CARD_LOGGER_NAME, DETAIL_LOG, REQUEST_ID, catalog_batch_plan, detail_plan, detail_statements, entity_ref, is_common_key, source,
+    ALL_SECTIONS, CARD_LOG, CARD_LOGGER_NAME, DETAIL_LOG, REQUEST_ID, catalog_batch_plan, detail_plan, detail_statements, entity_ref, source,
 )
 
 # region 1. 설정과 출력 형식
@@ -101,6 +63,8 @@ INITIAL_GRACE_WORDS = r"최초|처음|사용등록|신규.*등록|첫\s*달|다�
 INITIAL_GRACE_CLAIM = re.compile(r"최초|처음|사용등록|실적\s*유예|유예|익월|다음\s*달")
 INITIAL_GRACE_ASSERTION = re.compile(r"적용|제공|받을 수|받습니다|면제|충족")
 UNCERTAINTY_WORDS = re.compile(r"미확정|확인되지 않|알 수 없|판단할 수 없")
+UNRESOLVED_LANGUAGE = re.compile(r"미확정|확인되지\s*않|알\s*수\s*없|판단할\s*수\s*없|확정되지|확인\s*불가")
+REQUESTED_FACT_WORDS = re.compile(r"금액|구간|한도|적용|조건|할인율|캐시백")
 TIER_NAME = "금액 구간"
 TIER_INTENTS = ("BENEFIT_DETAIL", "BENEFIT_COMPARE")
 TIER_WORDS = r"얼마|금액|구간"
@@ -243,6 +207,8 @@ answer_text 작성 규칙 (고객이 읽는 설명문):
 - 원문에서 특정 값에 붙은 표기는 그 값과 함께 쓰고 다른 한도와 합치지 않는다.
 - 실적 기준은 conditions의 min_amt만 쓴다. evidence의 amount_note에 적힌 금액은 근거 문구에 있어도 쓰지 않는다.
 - 여러 혜택의 금액 구간이 같으면 혜택이나 가맹점에 따라 다르다고 쓰지 않는다.
+- limit_tiers에 실적 구간과 할인 한도가 연결되어 있으면 그 연결을 사용한다. 해당 연결이 있는 혜택을 한도 미확인 또는 미확정이라고 쓰지 않는다.
+- 원문에 명시되지 않은 "합산", "중복", "우선", "동시 적용" 방식은 덧붙이지 않는다.
 - "기재되어 있습니다"를 반복하지 않는다.
 - 내부 코드, 영문 상태값, ID, 필드명을 쓰지 않는다.
 - 데이터 검토 상태와 승인 여부는 쓰지 않는다. 화면이 따로 안내한다.
@@ -297,7 +263,7 @@ class CardState(TypedDict, total=False):
     started: float  # run이 기록한 시작 시각(perf_counter).
     question: str  # run 입력.
     catalog: list[dict]  # interpret가 읽은 혜택 목록.
-    candidate_search: dict  # B·C 모드의 후보 검색 결과 요약.
+    candidate_search: dict  # Neo4j N-mode candidate diagnostics.
     retrieval_trace: list[dict]  # 혜택별 상세 조회 엔진과 건수.
     exclusions: list[dict]  # 질문 낱말이 제외 문구에 있는 혜택과 검증 출처.
     intent: str  # interpret가 고른 질문 유형.
@@ -312,6 +278,7 @@ class CardState(TypedDict, total=False):
     other_unresolved: list[str]  # 이번 질문과 직접 관련이 없어 고객 화면에서 뺀 미확정 사항.
     context: dict  # answer가 LLM에 전달한 검색 결과.
     answer: dict  # answer 또는 finish가 만든 화면용 답변.
+    answer_diagnostics: dict  # 현재 실행 중 원본·검증 결과 비교(개발 UI 전용, app_log에 저장하지 않음).
     error: dict | None  # 실패 단계, 코드, 예외 형식 이름.
     warnings: Annotated[list[str], operator.add]  # 노드별 경고 누적.
     llm_calls: Annotated[list[dict], operator.add]  # 호출별 모델·토큰·비용 누적.
@@ -331,31 +298,8 @@ def configure_card_logging() -> None:
     logging.getLogger(CARD_LOGGER_NAME).setLevel(logging.DEBUG if enabled and level == "DEBUG" else logging.NOTSET)
 
 
-def create_benefit_search(neo4j_search=None):
-    """B·C 모드의 후보 검색을 만든다. A 모드는 호출하지 않으므로 PostgreSQL에 접속하지 않는다.
-
-    PostgreSQL 세션의 mapper는 db_pipeline 폴더의 SQL(embedding_repository.sql 등)을 쓴다.
-    OpenAIEmbedder는 질문 임베딩(유료 호출)에 쓰이며, 실제 호출은 검색 시점(B·C의 _vector)에 일어난다.
-    검색 경로는 SELECT만 하므로 검색 전용 연결 관리자(autocommit + 서버 읽기 전용)를 쓴다. SELECT마다 붙던
-    BEGIN·COMMIT 왕복이 없어지고, 쓰기 SQL은 세션과 DB 양쪽에서 거부된다. 등록·수정용 연결은 바꾸지 않는다.
-
-    Args:
-        neo4j_search: Neo4jSearch. 혜택명 보강 검색·관계 보정에 함께 쓴다(None이면 PostgreSQL만 사용).
-    """
-    from card_benefit.payment_card.db_pipeline.document_repository import MAPPER_ROOT
-    from card_benefit.payment_card.db_pipeline.embedding_service import EMBEDDING_LOG_KEYS, OpenAIEmbedder
-    from common.database_manager import DatabaseManager
-    from common.postgres_db_session import PostgresDbSession
-
-    load_project_environment()
-    session = PostgresDbSession(mapper_root=MAPPER_ROOT, camel_case_keys=False, sql_log_mode="none",
-                                database_manager=DatabaseManager(autocommit=True, read_only=True),
-                                sensitive_log_keys=(*DEFAULT_SENSITIVE_KEYS, *EMBEDDING_LOG_KEYS))
-    return BenefitSearchService(session, OpenAIEmbedder(), neo4j_search)
-
-
 def create_neo4j_benefit_search(neo4j_search, embedder=None, **options):
-    """N(Neo4j 단일 하이브리드 검색)의 후보 검색. PostgreSQL에 접속하지 않는다. 질문 임베딩은 B·C와 같은 OpenAIEmbedder다."""
+    """Create the Neo4j-only keyword/vector hybrid candidate search."""
     from card_benefit.payment_card.db_pipeline.embedding_service import OpenAIEmbedder
     from .neo4j_hybrid_search import Neo4jBenefitSearch
 
@@ -399,14 +343,6 @@ def estimate_cost(model: str, input_tokens: int | None, output_tokens: int | Non
 # validate_answer, enforce_exclusions, fee_answer 가 주로 호출된다.
 
 # region 2-1. 근거 수집과 제외 대상 판정 (retrieve 노드)
-def postgresql_common_key(key: str) -> str | None:
-    """Neo4j 공통 혜택 key ``["card_common_bnft", 공통서비스ID, 혜택ID]`` 를 같은 혜택의 PostgreSQL 조회 key로 바꾼다."""
-    if not is_common_key(key):
-        return None
-    _, common_id, bnft_id = json.loads(key)
-    return f"pg:CARD_COMMON_BNFT:{int(common_id)}:{bnft_id}"
-
-
 def detail_ref(detail: dict) -> str | None:
     """조회 결과의 혜택 참조. retrieve가 붙인 참조가 없으면 원본의 혜택 ID를 쓴다."""
     if detail.get("entity_ref"):
@@ -491,7 +427,7 @@ def answer_evidence_rows(evidence: list[dict], benefits: list[dict], per_benefit
             quote = row.get("quote") or ""
             lowered = quote.lower()
             name_hits = sum(term in lowered for term in name_terms)
-            topic_hits = sum(term in lowered for term in ("?? ??", "????", "????", "????", "????", "????", "??", "??", "??", "??"))
+            topic_hits = sum(term in lowered for term in ("\uc804\uc6d4 \uc2e4\uc801", "\uc774\uc6a9\uc2e4\uc801", "\ud560\uc778\ud55c\ub3c4", "\uc801\ub9bd\ud55c\ub3c4", "\uc81c\uc678", "\uc801\uc6a9", "\ud560\uc778", "\uc801\ub9bd"))
             normalized_quote = " ".join(quote.split()).casefold()
             table_hits = sum(" ".join(table.split()).casefold() in normalized_quote
                              or normalized_quote in " ".join(table.split()).casefold()
@@ -529,7 +465,7 @@ def compact_answer_context(context: dict) -> dict:
     return {**{key: value for key, value in context.items() if key != "benefits"}, "benefits": benefits}
 
 
-def find_exclusions(question: str, details: list[dict], read_source=None) -> list[dict]:
+def find_exclusions(question: str, details: list[dict]) -> list[dict]:
     """질문 낱말이 혜택의 적용 제외 문구에 있는지 원본 규칙과 조건으로 판정한다.
 
     ``read_source`` 가 있으면 PostgreSQL 원본을 읽고, 없으면 PostgreSQL과 대조된 그래프의 원본 JSON을 쓴다.
@@ -547,15 +483,15 @@ def find_exclusions(question: str, details: list[dict], read_source=None) -> lis
             continue
         benefit = source(detail["context"]["benefit"])
         row, verified_by = benefit, "neo4j_source_json"
-        if read_source is not None and benefit.get("card_id") is not None:
-            original = read_source(benefit["card_id"], benefit["card_bnft_id"])
-            if original is not None:
-                row, verified_by = original, "postgresql"
         tokens = excluded_tokens(row)
         targets = {target.get("target_nm", "").casefold() for rule in row.get("rule_list") or [] for target in rule.get("target_list") or []}
         # 적용 대상 이름에 들어 있는 낱말(예: 대상 '카카오T(택시)'의 '카카오T')은 제외 문구에 있어도 제외로 보지 않는다.
-        # 후보 검색(BenefitSearchService._rank_with_graph)의 target_terms와 같은 부분 일치 기준이다.
+        # Broad category words can occur in an exclusion scoped to an unrelated benefit rule
+        # (e.g. "subscription" under online shopping while the same item has telecom benefits).
+        # Keep those conditions in the retrieved context; only auto-enforce specific merchant/transaction terms.
+        broad_terms = {"\uc694\uae08", "\ud1b5\uc2e0\uc694\uae08", "\uad6c\ub3c5", "\uc815\uae30\uad6c\ub3c5", "ott", "\uacb0\uc81c", "\uc11c\ube44\uc2a4", "\uc790\ub3d9\ub0a9\ubd80", "\ud1b5\uc2e0", "\ud560\uc778", "\uc801\ub9bd"}
         matched = [term for term in terms if term.casefold() in tokens
+                   and term.casefold() not in broad_terms
                    and not any(term.casefold() in target for target in targets)]
         if matched:
             found.append({"benefit_id": detail_ref(detail), "name": benefit.get("item_nm") or benefit.get("bnft_nm"),
@@ -830,13 +766,15 @@ def _card_is_named(question: str, card_name: str) -> bool:
 def _candidate_matches_topic(row: dict, topic: str) -> bool:
     """Match only explicit catalog facts; no product identifiers or card names are hard-coded."""
     text = " ".join(str(value) for value in (
-        row.get("name"), row.get("rule_text"), row.get("limit_text"),
+        row.get("name"), row.get("rule_text"), row.get("limit_text"), row.get("search_text"),
         row.get("condition_text"), *(row.get("targets") or [])) if value).casefold()
     if topic == "telecom":
         carrier_or_phone = any(term in text for term in ("통신", "휴대전화", "휴대폰", "이동통신", "skt", "kt", "lg u+"))
         return carrier_or_phone and any(term in text for term in ("요금", "자동납부", "청구", "skt", "kt", "lg u+"))
     if topic == "subscription":
-        return any(term in text for term in ("구독", "정기결제", "정기 납부", "정기납부"))
+        direct = any(term in text for term in ("\uad6c\ub3c5", "\uc815\uae30\uacb0\uc81c", "\uc815\uae30 \ub0a9\ubd80", "\uc815\uae30\ub0a9\ubd80"))
+        monthly_service_autopay = all(term in text for term in ("\uc11c\ube44\uc2a4 \ub300\uc0c1", "\uc6d4\ub0a9", "\uc790\ub3d9\ub0a9\ubd80"))
+        return direct or monthly_service_autopay
     return False
 # endregion
 
@@ -1319,7 +1257,20 @@ def rule_conflicts(benefits: list[dict], amount: int | None) -> list[dict]:
     """규칙이 둘 이상인 혜택의 금액 구간과, 결제 금액에 함께 해당하는 규칙을 찾는다(보상액은 계산하지 않는다)."""
     conflicts = []
     for benefit in benefits:
-        if not rule_selection_open(benefit["rules"], benefit.get("conditions")):
+        rules = benefit["rules"]
+        conditions = benefit.get("conditions")
+        rule_text = benefit.get("rule_text") or ""
+        payout_is_approval_amount = (bool(benefit.get("limit_tiers")) and "\uc2b9\uc778 \uae08\uc561" in rule_text
+                                    and "\ud560\uc778" in rule_text)
+        unknown_spend_payout = any(
+            tier_token(_rule_parts(row)[0]) is None
+            and any(basis not in (None, "TXN_AMT", "TRANSACTION_AMOUNT")
+                    for basis, _, _ in _rule_ranges(
+                        _rule_parts(row)[0], _rule_parts(row)[0].get("rule_key"), conditions))
+            for row in rules
+        ) and not payout_is_approval_amount
+        # Preserve missing spend payouts even when the spend bands themselves are disjoint.
+        if not rule_selection_open(rules, conditions) and not unknown_spend_payout:
             continue
         spends = {group["scope"]: atom for group in benefit["conditions"] for branch in group["branches"]
                   for atom in branch["atoms"] if atom["type"] == "SPEND_REQ" and atom["min_amt"] is not None}
@@ -1378,6 +1329,40 @@ def tier_text(conflict: dict) -> str:
 def _in_scope(item: dict, benefit_id: str | None) -> bool:
     """근거가 해당 혜택 조회에서 나왔는지 확인한다. 정책 공통 근거는 조회한 모든 혜택에 속한다."""
     return benefit_id is None or benefit_id in item.get("benefit_ids", [benefit_id])
+
+
+def partial_limit_facts(context: dict) -> list[dict]:
+    """Return only source-backed limit text when payout-to-tier mapping is unresolved."""
+    evidence = context.get("evidence") or []
+
+    def normalized(value: str) -> str:
+        return "".join(re.findall(r"[0-9a-z\uAC00-\uD7A3]+", value.casefold()))
+
+    points = []
+    for benefit in context.get("benefits") or []:
+        benefit_id = benefit.get("benefit_id")
+        limit_texts = [str(limit.get("text") or "").strip()
+                       for limit in benefit.get("limits") or [] if str(limit.get("text") or "").strip()]
+        if not limit_texts:
+            continue
+        clauses = [clause.strip() for text in limit_texts for clause in re.split(r"[/;|]", text) if clause.strip()]
+        matching = []
+        for clause in clauses:
+            clause_text = normalized(clause)
+            if not clause_text:
+                continue
+            rows = [row for row in evidence if _in_scope(row, benefit_id)
+                    and clause_text in normalized(str(row.get("quote") or ""))]
+            if rows:
+                matching.extend(rows)
+        rows = list({row.get("evidence_id"): row for row in matching if row.get("evidence_id")}.values())
+        if not rows:
+            continue
+        text = f"{benefit.get('name')}: {' / '.join(limit_texts)}"
+        points.append({"text": customer_text(text), "evidence_ids": [row["evidence_id"] for row in rows],
+                       "benefit_id": benefit_id, "origin": "system", "benefit_name": benefit.get("name"),
+                       "verification": verification_level(text, rows)})
+    return points
 
 
 def foreign_spend_values(context: dict) -> set[float]:
@@ -1519,6 +1504,34 @@ def distorts_limit_tier(text: str, benefits: list[dict]) -> bool:
     if not views:
         return False
 
+    def matches_explicit_sequence(sentence: str, benefit: dict) -> bool:
+        """Accept a table-style 'conditions ... amounts respectively' only when order matches source tiers."""
+        mentions_order = any(cue in sentence for cue in ("\uac01\uac01", "\uac19\uc740 \uc21c\uc11c", "\uc21c\uc11c\ub85c"))
+        if not mentions_order:
+            return False
+        tiers = sorted(benefit.get("limit_tiers") or [], key=lambda tier: float(tier["min_amt"]))
+        if len(tiers) < 2:
+            return False
+        stated = stated_minimums(sentence)
+        expected_conditions = {float(tier["min_amt"]) for tier in tiers}
+        if not expected_conditions.issubset(stated):
+            return False
+        own_sequence = [float(tier["cap"]["amount"]) for tier in tiers]
+        shared_sequence = ([float(tier["shared"][0]["amount"]) for tier in tiers]
+                           if all(tier.get("shared") for tier in tiers) else [])
+        expected_sequences = [own_sequence]
+        if shared_sequence:
+            expected_sequences.append(shared_sequence)
+            expected_sequences.append(own_sequence + shared_sequence)
+            expected_sequences.append(shared_sequence + own_sequence)
+        amounts = [float(value) for kind, value, _ in value_tokens(sentence) if kind == "MONEY"]
+        # Drop the condition thresholds and transaction minimums; the remaining listed amounts must
+        # preserve the source order exactly. This validates the tier-to-cap relationship without
+        # treating unrelated payment thresholds as spend tiers.
+        actual = [value for value in amounts if value not in stated]
+        mentions_shared = "\ud1b5\ud569" in sentence
+        return actual in expected_sequences and (mentions_order or (shared_sequence and mentions_shared))
+
     def caps(tier):
         return {float(tier["cap"]["amount"])} | {float(group["amount"]) for group in tier.get("shared", [])}
 
@@ -1529,6 +1542,8 @@ def distorts_limit_tier(text: str, benefits: list[dict]) -> bool:
         for tier in tiers:
             starts.setdefault(float(tier["min_amt"]), []).append((bid, caps(tier), every, bounds))
     for sentence in SENTENCE_END.split(text):
+        if any(matches_explicit_sequence(sentence, benefit) for benefit in benefits):
+            continue
         current = None
         for match in VALUE_PATTERN.finditer(sentence):
             token = value_tokens(match.group(0))[0]
@@ -1659,9 +1674,10 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
     all_known = known_values(context, question, None)
     points, moved, warnings, dropped = [], [], [], 0
 
-    def drop(reason: str, text: str) -> None:
+    def drop(reason: str, text: str, material: bool = True) -> None:
         nonlocal dropped
-        dropped += 1
+        if material:
+            dropped += 1
         warnings.append(f"{reason}: {text[:60]}")
 
     for point in raw.points:
@@ -1672,7 +1688,9 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
         if benefit_id is not None:
             limit_problem = limit_tier_answer_problem(text, context, question, benefits[benefit_id])
             if limit_problem:
-                drop(limit_problem, text)
+                # A claim that a source-mapped tier is unknown is itself false; removing it
+                # does not make the answer partial when the verified tier facts remain.
+                drop(limit_problem, text, material=limit_problem != "structured limit tiers were incorrectly marked unresolved")
                 continue
         if STATUS_SENTENCE.search(text):
             moved.append(text)
@@ -1772,9 +1790,25 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
             warnings.append(f"조회 결과에 없는 값이 있는 미확정 문장을 버렸습니다: {text[:60]}")
         elif not picks_single_tier(text, conflicts):
             uncertain.append(text)
+    unresolved_language = UNRESOLVED_LANGUAGE
+    for source_text in (raw.conclusion.strip(), raw.answer_text.strip()):
+        for sentence in SENTENCE_END.split(source_text):
+            sentence = sentence.strip()
+            if (sentence and unresolved_language.search(sentence)
+                    and REQUESTED_FACT_WORDS.search(sentence)
+                    and sentence not in uncertain):
+                uncertain.append(sentence)
     reason = (raw.cannot_answer_reason or "").strip() or None
+    uncertainty_sources = [*uncertain, raw.conclusion.strip(), raw.answer_text.strip()]
+    unresolved_requested_fact = (
+        bool(uncertainty_sources)
+        and bool(LIMIT_QUESTION_WORDS.search(question)
+                 or re.search(r"\uC870\uAC74|\uD560\uC778\uC728|\uCE90\uC2DC\uBC31|\uC801\uC6A9\s*\uAE08\uC561", question))
+        and any(REQUESTED_FACT_WORDS.search(text)
+                and unresolved_language.search(text) for text in uncertainty_sources)
+    )
     if points:
-        status = "PARTIAL" if dropped else "ANSWERED"
+        status = "PARTIAL" if dropped or unresolved_requested_fact else "ANSWERED"
     else:
         status = "NOT_ANSWERABLE"
         reason = reason or MESSAGES["NO_GROUNDED_POINT"]
@@ -1784,7 +1818,8 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
     # 근거 문장이 하나도 없으면 자연어 답변도 내보내지 않는다.
     answer_text, source_cd = "", "none"
     if points:
-        problem = answer_text_problem(raw.answer_text.strip(), context, question, all_known, numbers)
+        problem = ("requested amount or condition remains unconfirmed" if unresolved_requested_fact
+                   else answer_text_problem(raw.answer_text.strip(), context, question, all_known, numbers))
         if problem is None:
             answer_text, source_cd = raw.answer_text.strip(), "llm"
         else:
@@ -1959,23 +1994,13 @@ def verification_plan(state: CardState) -> list[dict]:
 # endregion
 # region 3. LangGraph 노드
 class CardGraphRAG:
-    """Neo4j 검색과 LLM을 LangGraph로 연결한다. Streamlit이 한 번 만들어 재사용한다.
+    """Connect Neo4j hybrid candidate search and the answer LLM through LangGraph."""
 
-    생성 위치: streamlit_app.get_pipeline(모드별 캐시), search_eval.main(--answers, C 모드).
-    의존성은 생성자로 주입받는다(Java의 생성자 주입과 같다).
-        search          Neo4jSearch — 카탈로그·혜택 상세 Cypher 조회(neo4j_search.py)
-        interpret_llm   질문 해석용 ChatOpenAI(None이면 LLM_NOT_CONFIGURED)
-        answer_llm      답변용 ChatOpenAI
-        benefit_search  BenefitSearchService — B·C 후보 검색과 ``pg:`` key 상세 조회(A는 None)
-        search_mode     "A" / "B" / "C"
-    """
-
-    def __init__(self, search, interpret_llm=None, answer_llm=None, benefit_search=None, search_mode: str = "A"):
+    def __init__(self, search, interpret_llm=None, answer_llm=None, candidate_search=None):
         self.search = search
         self.interpret_llm = interpret_llm
         self.answer_llm = answer_llm
-        self.benefit_search = benefit_search
-        self.search_mode = search_mode          # A는 기존 전체 카탈로그, B·C는 검색 후보만 질문 해석에 넘긴다.
+        self.candidate_search = candidate_search or (search if hasattr(search, "catalog_rows") else None)
         self.model = card_model()
         self.graph = self._build()
 
@@ -2008,7 +2033,6 @@ class CardGraphRAG:
     def run(self, question: str) -> CardState:
         """질문 하나로 그래프를 한 번 실행하고 최종 State를 반환한다.
 
-        호출: streamlit_app(질문하기), search_eval.evaluate_answers.
         ``graph.invoke`` 는 START부터 END까지 노드를 동기 실행하고, 노드 반환값을 State에 합친 최종 dict를 돌려준다.
         """
         return self.graph.invoke(self._initial_state(question))
@@ -2090,7 +2114,6 @@ class CardGraphRAG:
         처리 순서
             1. 질문 길이 검사, LLM 설정 확인 (실패 시 LLM 호출 없이 반환)
             2. Neo4j 카탈로그 조회(list_catalog) — 카드 혜택·연회비 등 항목·공통 혜택 목록
-            3. (B·C) BenefitSearchService.catalog_rows로 후보만 남김. 연회비 질문이면 그래프의 ANNUAL_FEE 항목 추가
             4. 각 행 id를 entity_ref(종류:소유자:ID)로 바꿔 LLM 프롬프트에 넣음
             5. 질문 해석 LLM 호출 → intent, benefit_ids, ambiguity
             6. 서버 측 검증: 목록에 없는 ID 버림 → 연회비 선택 정리 → UNKNOWN이면 대상 비움 → 결제 금액 필터
@@ -2106,42 +2129,57 @@ class CardGraphRAG:
         if self.interpret_llm is None:
             return {**update, "error": {"stage": "interpret", "code": "LLM_NOT_CONFIGURED", "type": None}}
         try:
-            catalog = self.search.list_catalog()      # Neo4j 장애면 LLM 비용을 쓰지 않고 끝낸다.
+            graph_catalog = self.search.list_catalog()
         except Exception as error:
-            if self.search_mode != "B":
-                return {**update, "error": {"stage": "interpret", "code": "NEO4J_FAILED", "type": type(error).__name__}}
-            catalog = []                              # B는 PostgreSQL만으로 상세까지 조회할 수 있다.
-        graph_catalog = catalog
-        # 분기: A는 그래프 카탈로그 전체를 그대로 LLM에 넘긴다. B·C는 PostgreSQL 후보 검색으로 목록을 줄인다.
-        if self.search_mode != "A":
-            try:
-                catalog, outcome = self.benefit_search.catalog_rows(question, self.search_mode, catalog)
-            except Exception as error:
-                return {**update, "error": {"stage": "interpret", "code": "SEARCH_FAILED", "type": type(error).__name__}}
-            CARD_LOG.log_summary("CANDIDATES", request_id, mode=outcome.mode, hits=[hit.bnft_nm for hit in outcome.hits],
-                                 merged=outcome.merged_duplicates or None, elapsed_ms=outcome.elapsed_ms)
-            update["candidate_search"] = {
-                "mode": outcome.mode, "elapsed_ms": outcome.elapsed_ms, "merged_duplicates": outcome.merged_duplicates,
-                "hits": [{"source": hit.source, "key": hit.key, "benefit_id": hit.benefit_id,
-                          "id": entity_ref(hit.key, hit.benefit_id), "bnft_nm": hit.bnft_nm, "similarity": hit.similarity,
-                          "cards": [card["product_nm"] for card in hit.cards], "applied": hit.applied,
-                          "graph_targets": hit.graph_targets, "target_terms": hit.target_terms, "excluded_terms": hit.excluded_terms}
-                         for hit in outcome.hits]}
-            update["candidate_search"]["engines"] = outcome.engines
-            update["warnings"] = outcome.warnings
-            if FEE_WORDS.search(question):
-                # 연회비 항목은 임베딩이 없어 벡터·문자열 검색 후보에 나오지 않는다. 그래프의 구조화 항목으로만 보완한다.
-                known = {row["key"] for row in catalog}
-                fees = [row for row in graph_catalog if row.get("item_type") == "ANNUAL_FEE" and row["key"] not in known]
-                catalog = [*catalog, *fees]
-                update["candidate_search"]["engines"] = [*outcome.engines, "neo4j_item_catalog"]
-                update["warnings"] = [*outcome.warnings,
-                                      f"연회비 항목 {len(fees)}건은 벡터 검색이 아니라 그래프 구조화 조회로 후보에 넣었습니다(임베딩 없음)."]
-        # LLM과 서버가 같은 혜택을 가리키도록 ID 단독이 아닌 종류·소유자 포함 참조를 쓴다(카드·공통 혜택 ID 충돌 방지).
+            return {**update, "error": {"stage": "interpret", "code": "NEO4J_FAILED", "type": type(error).__name__}}
+        try:
+            catalog, outcome = self.candidate_search.catalog_rows(question, graph_catalog)
+        except Exception as error:
+            return {**update, "error": {"stage": "interpret", "code": "SEARCH_FAILED", "type": type(error).__name__}}
+        CARD_LOG.log_summary("CANDIDATES", request_id, mode="N", hits=[hit.bnft_nm for hit in outcome.hits],
+                             merged=outcome.merged_duplicates or None, elapsed_ms=outcome.elapsed_ms)
+        update["candidate_search"] = {
+            "mode": "N", "elapsed_ms": outcome.elapsed_ms, "merged_duplicates": outcome.merged_duplicates,
+            "hits": [{"source": hit.source, "key": hit.key, "benefit_id": hit.benefit_id,
+                      "id": entity_ref(hit.key, hit.benefit_id), "bnft_nm": hit.bnft_nm, "similarity": hit.similarity,
+                      "cards": [card["product_nm"] for card in hit.cards], "applied": hit.applied,
+                      "graph_targets": hit.graph_targets, "target_terms": hit.target_terms, "excluded_terms": hit.excluded_terms}
+                     for hit in outcome.hits]}
+        update["candidate_search"]["engines"] = outcome.engines
+        update["warnings"] = outcome.warnings
+        if FEE_WORDS.search(question):
+            known = {row["key"] for row in catalog}
+            fees = [row for row in graph_catalog if row.get("item_type") == "ANNUAL_FEE" and row["key"] not in known]
+            catalog = [*catalog, *fees]
+            update["candidate_search"]["engines"] = [*outcome.engines, "neo4j_item_catalog"]
+            update["warnings"] = [*outcome.warnings,
+                                  f"??? ?? {len(fees)}?? ?? ??? ??? ??? ??? ??? ??? ?????(??? ??)."]
+        # Existing N-mode topic supplementation ensures named-card topics survive broad top-k ranking.
+        topic_candidate_ids = []
+        explicit_topics = _requested_benefit_topics(question)
+        if explicit_topics:
+            full_named_cards = list(dict.fromkeys(row.get("card") for row in graph_catalog
+                                                   if row.get("card") and _card_is_named(question, row["card"])))
+            if len(full_named_cards) >= 2:
+                present_keys = {row.get("key") for row in catalog}
+                for row in graph_catalog:
+                    if row.get("card") not in full_named_cards:
+                        continue
+                    if not any(_candidate_matches_topic(row, topic) for topic in explicit_topics):
+                        continue
+                    if row.get("key") not in present_keys:
+                        catalog.append(row)
+                        present_keys.add(row.get("key"))
+                        topic_candidate_ids.append(entity_ref(row["key"], row["id"]))
+                if topic_candidate_ids:
+                    CARD_LOG.log_summary("TOPIC_CANDIDATES", request_id, cards=full_named_cards,
+                                         topics=list(explicit_topics), supplemented_ids=topic_candidate_ids)
+                    update["candidate_search"]["topic_supplement_ids"] = topic_candidate_ids
         catalog = [{**row, "id": entity_ref(row["key"], row["id"])} for row in catalog]
         rows = [{"id": row["id"], "name": row["name"], "card": row["card"], "type": row.get("item_type", "BENEFIT"),
                  "targets": row["targets"], "payment_min_amounts": row.get("payment_min_amounts", []),
                  **({"condition_text": row["condition_text"]} if row.get("condition_text") else {}),
+                 **({"search_text": row["search_text"][:1200]} if row.get("search_text") else {}),
                  **({"rule_text": row.get("item_rule_txt") or row.get("bnft_rule_txt")}
                     if row.get("item_rule_txt") or row.get("bnft_rule_txt") else {}),
                  **({"limit_text": row.get("item_limit_txt") or row.get("bnft_limit_txt")}
@@ -2178,10 +2216,8 @@ class CardGraphRAG:
                         if row["id"] not in chosen:
                             chosen.append(row["id"])
                             supplemented.append(row["id"])
-            if supplemented:
-                warnings.append("??? ?? ??? ?? ??? ?? ??????.")
             if coverage_gaps:
-                warnings.append("?? ?? ? ?? ???? ?? ??? ?? ?? ??? ????.")
+                warnings.append("No topic-matching benefit was found for every named-card/topic pair.")
         selected_ids = list(chosen)
         if update.get("candidate_search"):
             hit_ids = [hit["id"] for hit in update["candidate_search"]["hits"]]
@@ -2209,7 +2245,6 @@ class CardGraphRAG:
         if filtered:
             warnings.append(f"결제 금액 기준이 없는 혜택을 제외했습니다: {[by_id[item]['name'] for item in filtered]}")
         ambiguity = (parsed.ambiguity or "").strip()[:200] or None
-        # retrieve는 이 parameters만 사용한다. benefit_keys는 그래프 key(JSON 배열 문자열) 또는 "pg:..." key다.
         # sections는 intent별로 조회할 상세 항목(rules/conditions/limits/evidence)이다.
         parameters = {"benefit_ids": chosen, "benefit_names": [by_id[item]["name"] for item in chosen],
                       "benefit_keys": [by_id[item]["key"] for item in chosen],
@@ -2243,8 +2278,6 @@ class CardGraphRAG:
 
         처리 순서
             1. benefit_key마다 상세 조회: 그래프 key → Neo4jSearch.get_detail(Cypher 템플릿),
-               ``pg:`` key → BenefitSearchService.get_detail(PostgreSQL)
-            2. 그래프 공통 혜택의 근거가 0건이면 같은 공통 혜택의 PostgreSQL 근거로 대체(postgresql_fallback)
             3. collect_evidence: 근거를 evidence_id로 합침(PDF 원문 근거 연결)
             4. find_exclusions: 질문 낱말이 제외 문구에 있는지 판정(B·C는 PostgreSQL 원본, A는 그래프 source_json)
             5. split_unresolved: 미확정 사항을 질문 영향 조건 / 자료 상태 / 기타로 분리
@@ -2257,49 +2290,25 @@ class CardGraphRAG:
         CARD_LOG.log_summary("RETRIEVE START", request_id, statements=statements, benefit_ids=parameters["benefit_ids"])
         details, missing, trace = [], [], []
         try:
-            # 그래프 key 전체를 묶음 조회로 한 번에 읽는다(P3: 혜택 N개 × 상세 Cypher 5개 → 1문장). 지원하지 않으면 key마다 읽는다.
-            graph_keys = [key for key in parameters["benefit_keys"] if not key.startswith("pg:")]
-            batch = (self.search.get_details(graph_keys, sections)
-                     if graph_keys and getattr(type(self.search), "get_details", None) is not None else None)
+            batch = (self.search.get_details(parameters["benefit_keys"], sections)
+                     if parameters["benefit_keys"] and getattr(type(self.search), "get_details", None) is not None else None)
             for key in parameters["benefit_keys"]:
-                # 그래프에 없는 혜택(공통 혜택 등)은 검색 후보의 pg: 키로 PostgreSQL에서 읽는다.
-                if key.startswith("pg:"):
-                    detail = self.benefit_search.get_detail(key, sections)
-                elif batch is not None:
-                    detail = batch.get(key)
-                else:
-                    detail = self.search.get_detail(key, sections)
-                # N 경로의 공통 혜택 Evidence는 dp_supported_by로 적재된 exact source lineage를 사용한다.
-                # PostgreSQL fallback은 구형 비교 경로가 그래프 Evidence를 갖지 못했을 때만 사용한다.
-                fallback = postgresql_common_key(key) if detail is not None and "evidence" in sections and not detail["evidence"] else None
-                if fallback and self.benefit_search is not None and getattr(self.benefit_search, "engine", None) != "neo4j":
-                    original = self.benefit_search.get_detail(fallback, ("evidence",))
-                    detail["evidence"] = original["evidence"] if original else []
-                    if detail["evidence"]:
-                        # N(Neo4j 단일 검색)은 적재된 공통 혜택 근거 연결(COMMON_STG)을, B·C는 PostgreSQL 대체 조회를 쓴다.
-                        detail["evidence_source"] = ("neo4j_common_link" if getattr(self.benefit_search, "engine", None) == "neo4j"
-                                                     else "postgresql_fallback")
+                detail = batch.get(key) if batch is not None else self.search.get_detail(key, sections)
                 if detail is not None:
                     detail["entity_ref"] = entity_ref(key)
                 (details if detail is not None else missing).append(detail if detail is not None else key)
                 if detail is not None:
                     benefit_row = source(detail["context"]["benefit"])
                     trace.append({"benefit": benefit_row.get("item_nm") or benefit_row.get("bnft_nm") or benefit_row.get("name"),
-                                  "engine": "postgresql" if key.startswith("pg:") else "neo4j",
-                                  "evidence_engine": detail.get("evidence_source", "postgresql" if key.startswith("pg:") else "neo4j"),
+                                  "engine": "neo4j", "evidence_engine": detail.get("evidence_source", "neo4j"),
                                   "rules": len(detail["rules"]), "conditions": len(detail["conditions"]),
                                   "limits": len(detail["limits"]), "evidence": len(detail["evidence"])})
         except Exception as error:
             return {"path": ["retrieve"], "error": {"stage": "retrieve", "code": "NEO4J_FAILED",
-                                                    "type": type(error).__name__}}
+                                                     "type": type(error).__name__}}
         evidence = collect_evidence(details, intent)
-        read_source = None
-        # N(Neo4j 단일 검색)은 질문 시점에 PostgreSQL을 읽지 않는다. 제외 판정은 적재 시 원장과 대조된 그래프 source_json으로 한다.
-        if self.benefit_search is not None and getattr(self.benefit_search, "reads_postgresql_source", True):
-            read_source = lambda card_id, bnft_id: self.benefit_search.repository.one(  # noqa: E731
-                "select_card_bnft_detail", CARD_ID=card_id, BNFT_ID=bnft_id)
         try:
-            exclusions = find_exclusions(state["question"], details, read_source)
+            exclusions = find_exclusions(state["question"], details)
         except Exception as error:
             return {"path": ["retrieve"], "error": {"stage": "retrieve", "code": "SEARCH_FAILED", "type": type(error).__name__}}
         CARD_LOG.log_summary("RETRIEVE DONE", request_id, benefits=len(details), missing=len(missing) or None,
@@ -2361,10 +2370,10 @@ class CardGraphRAG:
                                     evidence, benefits,
                                     per_benefit=4 if state.get("intent") == "BENEFIT_COMPARE" and len(benefits) >= 4 else 12)]}
         # TERMS(할인 제공 유의사항·제외 목록): 선택된 카드 혜택에 적용 범위가 맞는 항목과 그 원문 근거만 붙인다.
-        if self.benefit_search is not None and hasattr(self.benefit_search, "card_terms"):
+        if self.candidate_search is not None and hasattr(self.candidate_search, "card_terms"):
             card_ids = sorted({item[0] for item in (_card_item(detail_ref(detail)) for detail in details) if item})
             try:
-                card_terms, terms_evidence = attach_terms(details, self.benefit_search.card_terms(card_ids, details=details))
+                card_terms, terms_evidence = attach_terms(details, self.candidate_search.card_terms(card_ids, details=details))
             except Exception as error:   # TERMS 조회 실패는 혜택 답변을 막지 않는다
                 card_terms, terms_evidence = [], []
                 notes.append(f"카드 유의사항(TERMS) 조회 실패: {type(error).__name__}")
@@ -2381,6 +2390,16 @@ class CardGraphRAG:
         prompt_context = compact_answer_context(context)
         text = json.dumps(prompt_context, ensure_ascii=False)
         prompt = ANSWER_PROMPT.format(question=state["question"], context=text)
+        if state.get("intent") == "BENEFIT_COMPARE":
+            required_benefits = [{"benefit_id": item["benefit_id"], "card": item.get("card"), "name": item.get("name")}
+                                 for item in benefits]
+            prompt += ("\n\nCOMPARISON COMPLETENESS CHECK: Include at least one evidence-backed point for every benefit in this exact list. "
+                       "Each point must use that benefit_id, and should include its relevant discount or cashback rate, "
+                       "transaction or previous-month-spend conditions, and monthly/shared cap when present in the context. "
+                       "Do not omit a benefit because another benefit on the same card seems more relevant. "
+                       "If the supplied evidence does not support a requested fact, state that it cannot be confirmed; "
+                       "do not guess. Before returning, check that every listed benefit_id appears in points.\n"
+                       + json.dumps(required_benefits, ensure_ascii=False))
         update: CardState = {"path": ["answer"], "context": context}
         try:
             parsed, call = self._call_llm("answer", self.answer_llm, CardAnswer, prompt, request_id)
@@ -2396,18 +2415,37 @@ class CardGraphRAG:
         validate_started = perf_counter()
         answer, warnings = validate_answer(parsed, {**context, "unresolved": state["unresolved"], "unresolved_topics": topics}, state["question"])
         CARD_LOG.log_summary("PERF", request_id, phase="validate_answer", elapsed_ms=(perf_counter() - validate_started) * 1000)
+        raw_answer_text = f"{parsed.conclusion} {parsed.answer_text}"
+        unresolved_tier_mapping = (state.get("intent") == "BENEFIT_COMPARE"
+                                   and UNRESOLVED_LANGUAGE.search(raw_answer_text)
+                                   and REQUESTED_FACT_WORDS.search(raw_answer_text))
+        if unresolved_tier_mapping:
+            safe_points = partial_limit_facts(context)
+            if len(safe_points) == len(context.get("benefits") or []) and safe_points:
+                note = ("\uACB0\uC81C \uAE08\uC561\uBCC4 \uCE90\uC2DC\uBC31 \uAE08\uC561\uACFC \uC870\uAC74\uC758 \uD61C\uD0DD\uBCC4 \uB300\uC751\uC740 "
+                        "\uAC80\uC0C9\uB41C \uADDC\uCE59 \uC911\uBCF5\uC73C\uB85C \uD655\uC778\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.")
+                answer = {**answer, "status": "PARTIAL", "points": safe_points,
+                          "answer_text": "\n".join(point["text"] for point in safe_points) + "\n\n" + note,
+                          "conclusion": note, "answer_source": "validated_sentences",
+                          "uncertain": [*answer.get("uncertain", []), note], "message": None}
+                warnings.append("Unresolved transaction amount mapping; displayed only source-backed limit facts.")
         answer, guarded = enforce_exclusions(answer, state.get("exclusions", []), evidence)
         warnings = [*warnings, *guarded]
         candidate_search = state.get("candidate_search") or {}
         coverage_gaps = candidate_search.get("coverage_gaps") or []
+        evidence_owners = {item["evidence_id"]: set(item.get("benefit_ids") or []) for item in context.get("evidence") or []}
         answered_benefits = {point.get("benefit_id") for point in answer.get("points") or [] if point.get("benefit_id")}
-        missing_benefits = sorted(ref for ref in refs if ref not in answered_benefits) if state.get("intent") == "BENEFIT_COMPARE" else []
+        answered_benefits.update(owner for point in answer.get("points") or []
+                                 for evidence_id in point.get("evidence_ids") or []
+                                 for owner in evidence_owners.get(evidence_id, set()))
+        missing_benefits = (sorted(ref for ref in refs if ref not in answered_benefits)
+                            if state.get("intent") == "BENEFIT_COMPARE" and candidate_search.get("requested_topics") else [])
         if coverage_gaps:
             answer["status"] = "PARTIAL" if answer["status"] != "NOT_ANSWERABLE" else answer["status"]
-            warnings.append("?? ?? ?? ? ?? ???? ?? ??? ?? ?? ??? ?? ??? ??????.")
+            warnings.append("Some requested comparison topics were not represented in the candidate set; answer is partial.")
         if missing_benefits:
             answer["status"] = "PARTIAL" if answer["status"] != "NOT_ANSWERABLE" else answer["status"]
-            warnings.append(f"?? ???? ??? ?? ? ??? ??? ?? ??: {missing_benefits}")
+            warnings.append(f"Selected benefits without a validated cited answer: {missing_benefits}")
         raw_points = [{"benefit_id": point.benefit_id, "text": point.text, "evidence_ids": list(point.evidence_ids)}
                       for point in parsed.points]
         diagnostics = {"raw": {"conclusion": parsed.conclusion, "answer_text": parsed.answer_text, "points": raw_points},
