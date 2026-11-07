@@ -7,7 +7,7 @@ import pytest
 
 fitz = pytest.importorskip("fitz")
 
-from card_benefit.payment_card.file_pipeline.chat import review_focus as rf
+from card_benefit.payment_card.file_pipeline.chat.review import review_focus as rf
 from card_benefit.payment_card.file_pipeline.chat.review.review_sheet import uuidish
 
 SENT = "alpha payments only are provided"
