@@ -2438,7 +2438,12 @@ class CardGraphRAG:
         return result["parsed"], call                     # 정상 파싱된 Pydantic 모델 인스턴스와 메트릭 반환
 
     def interpret(self, state: CardState) -> CardState:
-        """[LangGraph 1단계] 사용자 질문을 분석하여 의도(Intent)와 상세 조회 대상 혜택 목록을 확정한다."""
+        """[LangGraph 1단계] 질문 의도와 retrieve 대상 혜택을 확정한다.
+
+        Neo4j 전체 카탈로그를 읽고 candidate_search가 임베딩+Cypher 유사도와 Python 키워드/RRF로 후보를 만든다.
+        Interpret LLM은 후보 중 혜택 ID와 intent를 선택하며, 이 함수는 실제 카탈로그 ID 검증·비교 주제 보완·결제액 필터링을 수행한다.
+        선택된 key와 조회 섹션은 State의 search_parameters로 반환되어 retrieve 단계에 전달된다.
+        """
         request_id, question = state["request_id"], state["question"]  # State에서 요청 ID 및 원문 질문 추출
         REQUEST_ID.set(request_id)                        # 스레드 로컬에 요청 ID 바인딩
         # 노드는 State 전체가 아니라 바뀐 키만 담은 update dict를 반환한다. path는 reducer가 이어 붙인다.
@@ -2585,7 +2590,12 @@ class CardGraphRAG:
         return "retrieve" if state["search_parameters"]["benefit_keys"] else "finish"  # 조회 대상 혜택 키가 있으면 retrieve, 없으면 finish
 
     def retrieve(self, state: CardState) -> CardState:
-        """[LangGraph 2단계] 확정된 혜택 키를 기반으로 Neo4j 상세 데이터와 PDF 근거를 수집한다."""
+        """[LangGraph 2단계] interpret가 선택한 혜택 상세와 연결된 PDF 근거를 모은다.
+
+        Neo4jSearch.get_details()는 key들을 detail_batch CALL 서브쿼리로 묶어 조회한다.
+        반환 source_json/원장 JSON은 Python 상세 계약으로 정규화되고, Evidence는 evidence_id 기준으로 모인다.
+        이 단계는 제외 후보와 미확정 조건도 구성하고, 결과를 retrieved_data/evidence로 State에 돌려준다.
+        """
         request_id, parameters, intent = state["request_id"], state["search_parameters"], state["intent"]  # State에서 파라미터 추출
         REQUEST_ID.set(request_id)                        # 스레드 로컬에 요청 식별자 설정
         sections = tuple(parameters["sections"])          # 조회 대상 서브섹션(rules, conditions, limits, evidence) 튜플 변환
@@ -2632,7 +2642,11 @@ class CardGraphRAG:
         return "answer" if not state.get("error") and state.get("evidence") else "finish"  # 에러가 없고 PDF 근거가 1건 이상이면 answer, 아니면 finish
 
     def answer(self, state: CardState) -> CardState:
-        """[LangGraph 3단계] 검색된 문맥(context)으로 답변 LLM을 호출하고 결과를 엄격히 검증한다."""
+        """[LangGraph 3단계] 검색 상세와 PDF Evidence로 답변을 만들고 프로그램 검증을 거친다.
+
+        답변 대상 혜택에 소유권이 확인되는 Evidence만 문맥에 넣고, benefit_context로 원장 규칙·조건·한도를 구성한다.
+        Answer LLM은 이 문맥으로 구조화 응답을 만들며, validate_answer와 후속 가드가 point/Evidence/금액 관계를 확인한다.
+        """
         request_id, evidence = state["request_id"], state["evidence"]  # State에서 요청 ID 및 PDF 근거 목록 추출
         REQUEST_ID.set(request_id)                        # 스레드 로컬에 요청 ID 바인딩
         details, duplicates = drop_duplicate_benefits(state["retrieved_data"])  # 동일 내용의 중복 혜택 항목 제거

@@ -5,7 +5,7 @@ import re
 import unittest
 
 from card_benefit.payment_card.db_pipeline.neo4j_dry_run import PREFIX
-from card_benefit.payment_card.db_pipeline_origin_search import neo4j_search
+from card_benefit.payment_card.db_pipeline_origin_search import neo4j_search, neo4j_hybrid_search
 
 
 class FakeTx:
@@ -163,6 +163,41 @@ class SearchTests(unittest.TestCase):
             neo4j_search.DETAIL_LOG.reset(token)
         self.assertEqual(driver.tx.calls, [(neo4j_search.LIST_QUERY, {"keyword": "교통"})])
         self.assertIn("$keyword", driver.tx.calls[0][0])
+
+    def test_detailed_hybrid_log_inlines_full_vector_but_keeps_preview_summary_and_bound_execution(self):
+        driver = FakeDriver([])
+        vector = [index / 1000 for index in range(1536)]
+        parameters = {"qvec": vector}
+        token = neo4j_search.DETAIL_LOG.set(True)
+        try:
+            with self.assertLogs(neo4j_search.CARD_LOGGER_NAME, "INFO") as logs:
+                neo4j_search.Neo4jSearch(driver)._run(
+                    "card.hybrid_search", neo4j_hybrid_search.CANDIDATES_QUERY, "hybrid test", parameters)
+        finally:
+            neo4j_search.DETAIL_LOG.reset(token)
+        query_log = next(line for line in logs.output if "QUERY [" in line)
+        summary_log = next(line for line in logs.output if "CYPHER [" in line)
+        self.assertIn("vector.similarity.cosine(b.embedding,[0.0, 0.001, 0.002", query_log)
+        self.assertNotIn("$qvec", query_log)
+        self.assertIn("PARAMS {'qvec': '<VECTOR [0.000000, 0.001000", query_log)
+        self.assertIn("$qvec", driver.tx.calls[0][0])
+        self.assertIs(driver.tx.calls[0][1]["qvec"], vector)
+        self.assertIn("<VECTOR [0.000000, 0.001000", summary_log)
+
+    def test_detailed_terms_log_keeps_bound_driver_call(self):
+        driver = FakeDriver([])
+        parameters = {"card_ids": [2], "item_ids": ["I-1"]}
+        token = neo4j_search.DETAIL_LOG.set(True)
+        try:
+            with self.assertLogs(neo4j_search.CARD_LOGGER_NAME, "INFO") as logs:
+                neo4j_search.Neo4jSearch(driver)._run(
+                    "card.terms", neo4j_hybrid_search.TERMS_QUERY, "terms test", parameters)
+        finally:
+            neo4j_search.DETAIL_LOG.reset(token)
+        query_log = next(line for line in logs.output if "QUERY [" in line)
+        self.assertIn("p.card_id IN [2]", query_log)
+        self.assertIn("i.card_product_item_id IN ['I-1']", query_log)
+        self.assertEqual(driver.tx.calls[0], (neo4j_hybrid_search.TERMS_QUERY, parameters))
 
     def test_info_level_has_no_cypher_text_or_records(self):
         with self.assertLogs(neo4j_search.CARD_LOGGER_NAME, "INFO") as logs:

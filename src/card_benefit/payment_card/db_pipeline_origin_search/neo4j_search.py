@@ -36,7 +36,8 @@ HIDDEN_PROPERTIES = frozenset({"source_json", "key", "card_source", "card_source
 SOURCE_FIELDS = ("cond_basis_cd", "excl_raw_txt", "cond_status_cd", "value_unit_cd",
                  "rule_status_cd", "quote_txt", "card_cond_status_cd")
 
-# 공통 세션의 ``// name:`` mapper만 재사용한다. 실행은 READ_ACCESS를 보장하는 Neo4jSearch._query가 맡는다.
+# graph_questions.cypher의 ``// name:`` named query를 공통 세션 파서로 읽는다.
+# 실제 카드 질문 조회는 아래 Neo4jSearch._run → READ_ACCESS + execute_read 경로를 사용한다.
 MAPPERS = Neo4jDbSession(mapper_root=Path(__file__).resolve().parent).mappers
 CATALOG_QUERY = MAPPERS["graph_questions.catalog"]
 COMMON_CATALOG_QUERY = MAPPERS["graph_questions.common_catalog"]
@@ -75,10 +76,10 @@ STATEMENT_IDS = {query: statement_id for statement_id, (query, _) in STATEMENTS.
 SECTION_QUERIES = {"evidence": EVIDENCE_QUERY}
 ALL_SECTIONS = tuple(SECTION_QUERIES)
 
-# region 배치 조회 (P3, 2026-11-05) — 같은 named query를 한 문장으로 묶어 네트워크 왕복을 줄인다. 데이터 캐시는 없다.
-# 각 named query 본문을 CALL 서브쿼리에 넣고 ``$key``/``$keyword`` 만 바깥 변수로 바꾼다. 단독 실행용 끝 세미콜론은 제거한다.
-# 반환 행은 원래 RETURN 열 순서대로 다시 만든다. 근거 행만 로직이 읽는 열(owner_labels, rule_key, link, evidence)로 줄인다.
-# 청크·페이지·문서의 전체 속성은 전송하지 않지만 MATCH 경로(근거→청크→페이지→문서)는 그대로라 같은 근거만 조회된다.
+# region 배치 조회 (P3, 2026-11-05) — 개별 named query를 CALL 서브쿼리로 묶어 왕복 횟수를 줄인다.
+# 데이터 캐시는 없으며, 카탈로그·상세 결과를 한 번의 Cypher 실행 안에서 별도 리스트로 수집한다.
+# detail_batch는 UNWIND로 key마다 context를 읽고, 선택된 섹션은 OPTIONAL CALL로 붙여 key별 결과를 유지한다.
+# 청크·페이지·문서 노드는 계속 MATCH 경로에 쓰지만, Python이 소비하는 투영 필드만 반환해 결과 크기를 줄인다.
 CONTEXT_FIELDS = ("card", "benefit", "card_sources", "common", "common_docs", "card_labels", "benefit_labels", "extraction_sources")
 SECTION_FIELDS = {"evidence": ("owner_labels", "owner", "evidence_labels", "rule_key", "link", "evidence", "chunk", "page", "document")}
 SECTION_PRESENT = {"evidence": "evidence"}
@@ -91,7 +92,11 @@ CATALOG_FIELDS = {"catalog": ("key", "name", "id", "status", "card_source", "rul
 
 
 def _subquery(query: str, variable: str | None = None) -> str:
-    """named query를 서브쿼리 본문으로 쓴다. 파라미터 이름을 바꾸고 단독 실행용 종료 세미콜론을 제거한다."""
+    """named query를 배치 Cypher의 CALL 본문으로 옮긴다.
+
+    바깥 UNWIND가 만든 key/keyword를 서브쿼리 변수로 바꾸고, mapper 단독 실행용 세미콜론은 제거한다.
+    남은 $ 파라미터는 바인딩 이름을 놓친 경우이므로 조용히 실행하지 않고 오류로 알린다.
+    """
     body = (query.replace(f"${variable}", variable) if variable else query).rstrip().removesuffix(";")
     if "$" in body:
         raise ValueError("배치 서브쿼리에 바꾸지 않은 파라미터가 남았습니다")
@@ -108,7 +113,12 @@ def evidence_query_for(key: str) -> str:
 
 
 def detail_batch_query(evidence_query: str, sections: tuple[str, ...]) -> str:
-    """여러 혜택 key의 context + sections를 한 문장으로 조회한다(근거 Cypher가 같은 key끼리)."""
+    """여러 혜택의 context와 요청 섹션을 하나의 Cypher로 조회한다.
+
+    UNWIND가 key 목록을 행으로 펼치고, 상관 CALL (key)가 혜택별 context를 만든다.
+    결과는 WITH + collect로 key별 context 배열로 모은 뒤, 요청된 섹션만 OPTIONAL CALL로 추가한다.
+    get_details()가 같은 근거 경로의 key를 먼저 묶으므로 한 번의 쿼리에서 동일한 Evidence 조회를 공유한다.
+    """
     lines = ["UNWIND $keys AS key", "CALL (key) {", _subquery(CONTEXT_QUERY, "key"), "}",
              f"WITH key, collect({_map(CONTEXT_FIELDS)}) AS context"]
     carried = ["key", "context"]
@@ -123,8 +133,11 @@ def detail_batch_query(evidence_query: str, sections: tuple[str, ...]) -> str:
     return "\n".join(lines)
 
 
+# 키워드를 UNWIND해 같은 list_benefits named query를 단어마다 적용하고 keyword별 행을 반환한다.
 LIST_BATCH_QUERY = "\n".join(["UNWIND $keywords AS keyword", "CALL (keyword) {", _subquery(LIST_QUERY, "keyword"), "}",
                               "RETURN keyword, " + ", ".join(LIST_FIELDS)])
+# 네 개의 카탈로그 named query를 순차 OPTIONAL CALL로 실행하고, 각 결과를 독립된 리스트로 수집한다.
+# OPTIONAL CALL은 한 하위 조회가 0행이어도 다음 카탈로그 단계와 최종 RETURN을 유지한다.
 CATALOG_BATCH_QUERY = "\n".join([
     "OPTIONAL CALL () {", _subquery(CATALOG_QUERY), "}",
     f"WITH [x IN collect({_map(CATALOG_FIELDS['catalog'])}) WHERE x.key IS NOT NULL] AS catalog",
@@ -195,7 +208,11 @@ def catalog_rows(catalog: list[dict], items: list[dict], commons: list[dict]) ->
 
 
 def source(props: dict) -> dict:
-    """Decode source_json and overlay actual Neo4j columns; Neo4j projection wins."""
+    """source_json을 디코딩한 뒤 Neo4j에서 투영된 컬럼으로 덮어쓴다.
+
+    원본 JSON의 NULL/복합값은 보존하고, 실제 조회 컬럼을 우선한다. 규칙·조건·item_data처럼
+    JSON 문자열로 저장된 속성은 Python dict/list로 디코딩해 후속 검색 계약에 맞춘다.
+    """
     if not isinstance(props, dict):                       # 입력이 딕셔너리가 아니면 빈 딕셔너리 반환(방어적 null 체크)
         return {}
     value = props.get("source_json")                      # Neo4j 노드에 직렬화 저장된 source_json 속성 추출
@@ -245,7 +262,11 @@ def _condition_expressions(benefit: dict) -> list[tuple[str, str | None, dict]]:
 
 
 def _normalize_item_contract(benefit: dict) -> dict:
-    """Project table-faithful rule_list/item_cond_expr JSON into the stable Python detail contract."""
+    """원장 rule_list/item_cond_expr를 Python의 rules/conditions 조회 계약으로 투영한다.
+
+    적용 대상은 rule별 target_list에서 읽고, 조건 atom에는 BENEFIT/RULE 소유 정보와 rule_key를 남긴다.
+    원장 JSON을 별도 Neo4j RULE/COND 노드로 가정하지 않는다.
+    """
     raw_rules = _decode_json(benefit.get("rule_list"), [])
     rules = []
     for rule in raw_rules if isinstance(raw_rules, list) else []:
@@ -388,12 +409,18 @@ class Neo4jSearch:
         return self._run(statement_id, query, STATEMENTS.get(statement_id, ("", "미등록"))[1], params)
 
     def _run(self, statement_id: str, query: str, path: str, params: dict) -> list[dict]:
-        """``_query`` 의 실행부. 배치 문장(STATEMENTS에 없는 생성 문장)도 식별자·경로를 붙여 같은 방식으로 실행·기록한다."""
+        """바인딩 파라미터로 read-only Cypher를 실행하고, 요약 및 선택적 상세 로그를 남긴다.
+
+        DETAIL_LOG 또는 DEBUG에서만 쿼리 본문/레코드를 출력한다. 반환 레코드는 Python dict로 바꾸지만,
+        로그 렌더링은 별도 복사본을 사용하며 실제 tx.run에는 원래 query와 params를 전달한다.
+        """
         label = f"{REQUEST_ID.get()}/{statement_id}"
         detail = DETAIL_LOG.get() or CARD_LOG.logger.isEnabledFor(logging.DEBUG)  # 전문과 레코드는 DEBUG·검증 모드에서만
         if detail:
             bound = dict(params)
-            CARD_LOG.log_query(label, query, bound, render_combined=lambda _: render_cypher_log(CARD_LOG, query, bound))
+            # 상세 로그에서만 전체 임베딩을 인라인으로 남긴다. 일반 PARAMS 요약은 QueryLogger.sanitize()의 벡터 미리보기를 유지한다.
+            CARD_LOG.log_query(label, query, bound,
+                               render_combined=lambda _: render_cypher_log(CARD_LOG, query, bound, full_vector=True))
         started = perf_counter()                                      # Cypher 쿼리 실행 시작 시간 측정 (Java System.nanoTime() 유사)
         with self.driver.session(database=self.database, default_access_mode=READ_ACCESS) as session:  # 읽기 전용 트랜잭션 세션 획득 (Java try-with-resources 및 readOnly Connection 유사)
             rows = session.execute_read(lambda tx: [record.data() for record in tx.run(query, **params)])  # Cypher 실행 후 Neo4j Record를 Python dict로 변환 (Java ResultSet -> Map 변환 유사)
@@ -410,7 +437,12 @@ class Neo4jSearch:
         return rows                                                   # 조회된 행 dict 목록 반환 (Java List<Map<String, Object>>)
 
     def list_catalog(self) -> list[dict]:
-        """질문 해석(interpret)에 사용할 카드별·공통 혜택 및 연회비 메타데이터 목록을 조회한다."""
+        """interpret 단계에서 쓸 전체 카드/카드 혜택/공통 혜택 메타데이터를 조회해 Python 목록으로 합친다.
+
+        네 named query와 카드 상품 조회를 CATALOG_BATCH_QUERY 한 번으로 실행한 뒤,
+        source_json·rule_list·item_cond_expr를 디코딩하고 조건/대상 표시용 필드를 만든다.
+        TERMS 항목은 카드별 캐시에 저장해 answer 단계의 적용 범위 확인에 재사용한다.
+        """
         batch = self._run("card.catalog_batch", CATALOG_BATCH_QUERY, "card.catalog + card.item_catalog + card.common_catalog + card.products", {})[0]  # P3 서브쿼리 배칭으로 4개 Cypher를 단일 왕복 쿼리로 실행
         started = perf_counter()                                      # Python 인메모리 데이터 매핑 시작 시각
         self.catalog_products = [_ordered(row, CATALOG_FIELDS["products"]) for row in batch.get("products", [])]  # 카드 기본 메타데이터(card_id, product_nm) 정렬 및 캐시
@@ -447,7 +479,12 @@ class Neo4jSearch:
         return result
 
     def get_details(self, keys: list[str], sections: tuple[str, ...] = ALL_SECTIONS) -> dict[str, dict | None]:
-        """[P3 배치 조회] 여러 혜택의 상세 정보 및 PDF 근거를 서브쿼리 배칭으로 일괄 조회한다 (Java의 IN 절 배치 페치와 유사)."""
+        """retrieve 단계에서 여러 혜택 상세를 key별 결과 맵으로 일괄 조회한다.
+
+        중복 key를 제거하고 카드 항목/공통 혜택에 맞는 Evidence query로 그룹화한다.
+        그룹마다 detail_batch_query가 context와 선택 섹션을 CALL 서브쿼리로 조립하고,
+        Python은 원장 JSON을 정규화해 rules, conditions, limits, evidence를 상세 객체에 담는다.
+        """
         keys = list(dict.fromkeys(keys))                              # 중복 키 제거 (Java LinkedHashSet 변환과 유사하여 순서 보존)
         result: dict[str, dict | None] = {key: None for key in keys}  # 결과를 담을 맵 초기화 (모든 키에 대해 기본값 None 설정)
         groups: dict[str, list[str]] = {}                             # Cypher 쿼리 템플릿별로 키들을 그룹화할 맵 (Java Map<String, List<String>>)

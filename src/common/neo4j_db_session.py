@@ -106,12 +106,14 @@ def _cypher_string(text: str) -> str:
     return "'" + "".join(escaped) + "'"
 
 
-def _cypher_literal(value: Any, vector_min_length: int) -> str:
+def _cypher_literal(value: Any, vector_min_length: int, *, full_vector: bool = False) -> str:
     """드라이버 파라미터 값을 ``:param`` 줄에 쓸 Cypher 표현식 문자열로 바꾼다.
 
     Cypher 표현이 명확한 타입(null, bool, 숫자, 문자열, 날짜·시간, Point, list, map)만 변환한다.
     그 밖의 값(벡터로 보이는 긴 숫자 list, bytes, 알 수 없는 객체)은 ``_NotCypherLiteral`` 을 발생시켜
     호출자가 해당 줄을 "재현 불가"로 표시하게 한다.
+
+    ``full_vector=True`` 는 명시적으로 상세 로그를 만들 때만 사용하며, 이때 숫자 시퀀스도 전체 배열로 출력한다.
     """
     # isinstance 검사 순서가 중요하다: bool은 int의 하위 타입이고, datetime은 date의 하위 타입이므로
     # 더 구체적인 타입을 먼저 검사한다. list/map은 원소마다 이 함수를 재귀 호출한다.
@@ -134,7 +136,7 @@ def _cypher_literal(value: Any, vector_min_length: int) -> str:
         if value.srid is None:
             raise _NotCypherLiteral("point without srid")
         axes = ("x", "y", "z")
-        fields = [f"srid: {value.srid}", *(f"{axis}: {_cypher_literal(float(coord), vector_min_length)}"
+        fields = [f"srid: {value.srid}", *(f"{axis}: {_cypher_literal(float(coord), vector_min_length, full_vector=full_vector)}"
                                          for axis, coord in zip(axes, value))]
         return "point({" + ", ".join(fields) + "})"
     if isinstance(value, types.Duration):
@@ -159,11 +161,11 @@ def _cypher_literal(value: Any, vector_min_length: int) -> str:
         return (f"duration({{days: {value.days}, seconds: {value.seconds}, "
                 f"microseconds: {value.microseconds}}})")
     if isinstance(value, (list, tuple)):
-        if is_numeric_sequence(value, vector_min_length):
+        if is_numeric_sequence(value, vector_min_length) and not full_vector:
             raise _NotCypherLiteral("vector preview")
-        return "[" + ", ".join(_cypher_literal(item, vector_min_length) for item in value) + "]"
+        return "[" + ", ".join(_cypher_literal(item, vector_min_length, full_vector=full_vector) for item in value) + "]"
     if isinstance(value, Mapping):
-        return "{" + ", ".join(f"{_cypher_name(key)}: {_cypher_literal(item, vector_min_length)}"
+        return "{" + ", ".join(f"{_cypher_name(key)}: {_cypher_literal(item, vector_min_length, full_vector=full_vector)}"
                                for key, item in value.items()) + "}"
     raise _NotCypherLiteral(type(value).__name__)
 
@@ -274,22 +276,29 @@ def _cypher_parameter_tokens(query: str) -> list[tuple[int, int, str]]:
     return tokens
 
 
-def _inline_literal(value: Any, vector_min_length: int) -> str:
+def _inline_literal(value: Any, vector_min_length: int, *, full_vector: bool = False) -> str:
     """인라인 위치에 넣을 Cypher 리터럴. 연산자가 포함된 표현(음수, NaN·Infinity)은 괄호로 감싼다.
 
     map·list·문자열·함수 호출(``date('...')``)은 괄호 없이 둔다. 패턴의 속성 자리 ``(n $props)`` 는
     map 리터럴만 허용하고 괄호식은 허용하지 않기 때문이다.
     """
-    literal = _cypher_literal(value, vector_min_length)
+    literal = _cypher_literal(value, vector_min_length, full_vector=full_vector)
     return f"({literal})" if literal.startswith("-") or " / " in literal else literal
 
 
-def render_cypher_inline(query_logger: QueryLogger, query: str, parameters: Mapping[str, Any]) -> tuple[str | None, str]:
+def render_cypher_inline(
+    query_logger: QueryLogger,
+    query: str,
+    parameters: Mapping[str, Any],
+    *,
+    full_vector: bool = False,
+) -> tuple[str | None, str]:
     """로그 출력용으로 ``$name`` 자리에 값 리터럴을 넣은 Cypher 한 덩어리를 만든다(실행에는 쓰지 않음).
 
     안전하게 만들 수 없으면 ``(None, 사유)`` 를 돌려주고, 호출자는 ``:param`` 방식으로 대체한다.
     대체하는 경우: 텍스트를 끝까지 해석하지 못함, 쿼리가 쓰는 파라미터가 없음, 정확한 리터럴이 없는 값
-    (벡터 미리보기·bytes·알 수 없는 객체), 민감 키 마스킹이 적용됨(마스킹 값으로는 실행 결과를 재현할 수 없음).
+    (기본 모드의 벡터 미리보기·bytes·알 수 없는 객체), 민감 키 마스킹이 적용됨(마스킹 값으로는 실행 결과를 재현할 수 없음).
+    ``full_vector=True`` 는 호출자가 상세 로그 상황을 확인한 경우에만 전체 숫자 배열을 허용한다.
 
     Returns:
         ``(인라인 Cypher 또는 None, 대체 사유 또는 빈 문자열)``.
@@ -310,7 +319,8 @@ def render_cypher_inline(query_logger: QueryLogger, query: str, parameters: Mapp
     try:
         for _, _, name in tokens:
             if name not in literals:
-                literals[name] = _inline_literal(parameters[name], query_logger.VECTOR_LOG_SEQUENCE_MIN_LENGTH)
+                literals[name] = _inline_literal(parameters[name], query_logger.VECTOR_LOG_SEQUENCE_MIN_LENGTH,
+                                                 full_vector=full_vector)
     except _NotCypherLiteral as exc:
         return None, f"no exact literal for ${_cypher_name(name)} ({exc})"
     parts, cursor = [], 0
@@ -322,9 +332,15 @@ def render_cypher_inline(query_logger: QueryLogger, query: str, parameters: Mapp
     return "".join(parts), ""
 
 
-def render_cypher_log(query_logger: QueryLogger, query: str, parameters: Mapping[str, Any]) -> str:
+def render_cypher_log(
+    query_logger: QueryLogger,
+    query: str,
+    parameters: Mapping[str, Any],
+    *,
+    full_vector: bool = False,
+) -> str:
     """combined 로그 본문. 가능하면 값이 들어간 인라인 Cypher, 아니면 기존 ``:param`` 줄 + 원문과 재현 제한 주석."""
-    inline, reason = render_cypher_inline(query_logger, query, parameters)
+    inline, reason = render_cypher_inline(query_logger, query, parameters, full_vector=full_vector)
     if inline is not None:
         if inline is query:
             return query

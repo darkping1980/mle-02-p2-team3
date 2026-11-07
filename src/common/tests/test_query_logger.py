@@ -839,10 +839,10 @@ class Neo4jCypherLiteralTests(unittest.TestCase):
 class CypherInlineRenderTests(unittest.TestCase):
     """Neo4j 전용 인라인 렌더링: 문자열·주석·백틱 밖의 ``$name`` 만 리터럴로 바꾸고, 안전하지 않으면 :param으로 대체."""
 
-    def render(self, query, parameters, **kwargs):
+    def render(self, query, parameters, *, full_vector=False, **kwargs):
         from common.neo4j_db_session import render_cypher_inline
 
-        return render_cypher_inline(make_logger(**kwargs), query, parameters)
+        return render_cypher_inline(make_logger(**kwargs), query, parameters, full_vector=full_vector)
 
     def test_tokens_skip_strings_comments_backticks_and_respect_full_names(self):
         from common.neo4j_db_session import _cypher_parameter_tokens
@@ -872,6 +872,43 @@ class CypherInlineRenderTests(unittest.TestCase):
         inline, _ = self.render("MATCH (n) WHERE n.x = $id // keep $id\nRETURN '$id' AS lit, n.`$id2` AS c",
                                 {"id": 5, "id2": 6})
         self.assertEqual(inline, "MATCH (n) WHERE n.x = 5 // keep $id\nRETURN '$id' AS lit, n.`$id2` AS c")
+
+    def test_full_vector_is_only_inlined_when_explicitly_requested(self):
+        vector = [index / 1000 for index in range(1536)]
+        query = "MATCH (n) WHERE n.embedding = $qvec AND n.name IN $terms AND n.note = $question RETURN n"
+        parameters = {"qvec": vector, "terms": ["card", "benefit"], "question": "원문 질문"}
+        original = copy.deepcopy(parameters)
+
+        inline, reason = self.render(query, parameters)
+        self.assertIsNone(inline)                       # 기본 로그는 전체 벡터를 출력하지 않는다.
+        self.assertTrue(reason.startswith("no exact literal for $qvec"))
+
+        inline, reason = self.render(query, parameters, full_vector=True)
+        self.assertEqual(reason, "")
+        self.assertTrue(inline.startswith("MATCH (n) WHERE n.embedding = [0.0, 0.001, 0.002"))
+        self.assertIn("n.name IN ['card', 'benefit']", inline)
+        self.assertIn("n.note = '원문 질문'", inline)
+        self.assertTrue(inline.endswith("RETURN n"))
+        self.assertEqual(parameters, original)           # 렌더링은 호출자의 파라미터를 바꾸지 않는다.
+
+    def test_full_vector_log_masks_secrets_and_unknown_values_still_fall_back(self):
+        from common.neo4j_db_session import render_cypher_log
+
+        vector = [0.25] * 1536
+        text = render_cypher_log(
+            make_logger(sensitive_keys=DEFAULT_SENSITIVE_KEYS),
+            "RETURN $qvec AS embedding, $api_token AS token",
+            {"qvec": vector, "api_token": "secret-token"},
+            full_vector=True,
+        )
+        self.assertIn("NOT REPRODUCIBLE AS-IS: masked values", text)
+        self.assertNotIn("secret-token", text)
+        self.assertIn(":param qvec => <VECTOR", text)     # fallback ではベクトルをプレビューのままにする。
+
+        text = render_cypher_log(make_logger(), "RETURN $qvec, $raw", {"qvec": vector, "raw": b"x"},
+                                 full_vector=True)
+        self.assertIn("inline rendering skipped (no exact literal for $raw", text)
+        self.assertIn(":param qvec => <VECTOR", text)
 
     def test_unsafe_cases_fall_back(self):
         cases = (
