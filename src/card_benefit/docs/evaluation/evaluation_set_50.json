@@ -1,0 +1,601 @@
+{
+  "title": "Card Benefit GraphRAG 1-hop / 2-hop Evaluation Set",
+  "created_date": "2026-11-07",
+  "source_notion_url": "https://www.notion.so/40fc53ef970481a78786e935172d4b6d",
+  "hop_definition": "논리적 정보 탐색 난도: 1-hop 카드→혜택/기본속성, 2-hop 카드→혜택→조건·한도·제외",
+  "questions": [
+    {
+      "question_id": "CARD10-001",
+      "hop_type": "1-hop",
+      "question": "ONE PICK STYLE 하나 체크카드에 등록된 주요 혜택을 알려줘.",
+      "card_name": "ONE PICK STYLE 하나 체크카드",
+      "card_id": 2,
+      "benefit_id": null,
+      "benefit_ids": [
+        "20261101_000001",
+        "20261101_000002",
+        "20261101_000003",
+        "20261101_000004"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-002",
+      "hop_type": "1-hop",
+      "question": "ONE PICK STYLE 카드의 본인 연회비는 얼마야?",
+      "card_name": "ONE PICK STYLE 하나 체크카드",
+      "card_id": 2,
+      "benefit_id": "20261104_000039",
+      "benefit_ids": [],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-003",
+      "hop_type": "1-hop",
+      "question": "JADE Classic 카드의 공항 라운지 혜택은 무엇이야?",
+      "card_name": "JADE Classic",
+      "card_id": 5,
+      "benefit_id": "20261105_000105",
+      "benefit_ids": [
+        "20261105_000105"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-004",
+      "hop_type": "1-hop",
+      "question": "JADE Classic의 브랜드별 연회비를 알려줘.",
+      "card_name": "JADE Classic",
+      "card_id": 5,
+      "benefit_id": "20261104_000040",
+      "benefit_ids": [],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-005",
+      "hop_type": "1-hop",
+      "question": "JADE First에 골프 또는 프리미엄 아울렛 관련 혜택이 있어?",
+      "card_name": "JADE First",
+      "card_id": 20,
+      "benefit_id": "20261105_000092",
+      "benefit_ids": [
+        "20261105_000092"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-006",
+      "hop_type": "1-hop",
+      "question": "JADE First의 공항 라운지 혜택을 알려줘.",
+      "card_name": "JADE First",
+      "card_id": 20,
+      "benefit_id": "20261105_000093",
+      "benefit_ids": [
+        "20261105_000093"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-007",
+      "hop_type": "1-hop",
+      "question": "JADE Prime의 공항 라운지 혜택은 무엇이야?",
+      "card_name": "JADE Prime",
+      "card_id": 21,
+      "benefit_id": "20261105_000096",
+      "benefit_ids": [
+        "20261105_000096"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-008",
+      "hop_type": "1-hop",
+      "question": "JADE Prime의 기본 적립 혜택을 알려줘.",
+      "card_name": "JADE Prime",
+      "card_id": 21,
+      "benefit_id": "20261105_000097",
+      "benefit_ids": [
+        "20261105_000097"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-009",
+      "hop_type": "1-hop",
+      "question": "더 심플 하나카드의 월납 요금 청구할인 혜택을 알려줘.",
+      "card_name": "더 심플 하나카드",
+      "card_id": 22,
+      "benefit_id": "20261105_000099",
+      "benefit_ids": [
+        "20261105_000099"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-010",
+      "hop_type": "1-hop",
+      "question": "더 심플 하나카드의 연회비를 알려줘.",
+      "card_name": "더 심플 하나카드",
+      "card_id": 22,
+      "benefit_id": null,
+      "benefit_ids": [],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-011",
+      "hop_type": "1-hop",
+      "question": "카드의정석 SHOPPING의 온라인 쇼핑 관련 혜택을 알려줘.",
+      "card_name": "카드의정석 SHOPPING",
+      "card_id": 6,
+      "benefit_id": "20261104_000013",
+      "benefit_ids": [
+        "20261104_000013"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-012",
+      "hop_type": "1-hop",
+      "question": "카드의정석 SHOPPING에 Two-in-One 서비스가 있어?",
+      "card_name": "카드의정석 SHOPPING",
+      "card_id": 6,
+      "benefit_id": "20261104_000022",
+      "benefit_ids": [
+        "20261104_000022"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-013",
+      "hop_type": "1-hop",
+      "question": "EVERY WON POINT의 국내외 가맹점 기본 적립 혜택을 알려줘.",
+      "card_name": "EVERY WON POINT",
+      "card_id": 40,
+      "benefit_id": "20261105_000104",
+      "benefit_ids": [
+        "20261105_000104"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-014",
+      "hop_type": "1-hop",
+      "question": "EVERY WON POINT의 가족카드 연회비 정책을 알려줘.",
+      "card_name": "EVERY WON POINT",
+      "card_id": 40,
+      "benefit_id": "20261105_000103",
+      "benefit_ids": [
+        "20261105_000103"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-015",
+      "hop_type": "1-hop",
+      "question": "카드의정석 POINT II의 간편결제 추가 적립 혜택을 알려줘.",
+      "card_name": "카드의정석 POINT II",
+      "card_id": 23,
+      "benefit_id": "20261105_000100",
+      "benefit_ids": [
+        "20261105_000100"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-016",
+      "hop_type": "1-hop",
+      "question": "카드의정석 POINT II의 Two-in-One 서비스를 설명해 줘.",
+      "card_name": "카드의정석 POINT II",
+      "card_id": 23,
+      "benefit_id": "20261105_000101",
+      "benefit_ids": [
+        "20261105_000101"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-017",
+      "hop_type": "1-hop",
+      "question": "카드의정석2 DAILY의 고정소비 할인 혜택이 뭐야?",
+      "card_name": "카드의정석2 DAILY",
+      "card_id": 42,
+      "benefit_id": "20261105_000179",
+      "benefit_ids": [
+        "20261105_000179"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-018",
+      "hop_type": "1-hop",
+      "question": "카드의정석2 DAILY의 정기결제 혜택이 뭐야?",
+      "card_name": "카드의정석2 DAILY",
+      "card_id": 42,
+      "benefit_id": "20261105_000180",
+      "benefit_ids": [
+        "20261105_000180"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-019",
+      "hop_type": "1-hop",
+      "question": "카드의정석2 SIMPLE의 기본 할인 혜택을 알려줘.",
+      "card_name": "카드의정석2 SIMPLE",
+      "card_id": 24,
+      "benefit_id": "20261105_000177",
+      "benefit_ids": [
+        "20261105_000177"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-020",
+      "hop_type": "1-hop",
+      "question": "카드의정석2 SIMPLE의 연회비를 알려줘.",
+      "card_name": "카드의정석2 SIMPLE",
+      "card_id": 24,
+      "benefit_id": null,
+      "benefit_ids": [],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-021",
+      "hop_type": "2-hop",
+      "question": "ONE PICK STYLE의 편의점·카페 캐시백은 결제금액과 이용 횟수에 어떤 조건이 있어?",
+      "card_name": "ONE PICK STYLE 하나 체크카드",
+      "card_id": 2,
+      "benefit_id": "20261101_000001",
+      "benefit_ids": [
+        "20261101_000001"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-022",
+      "hop_type": "2-hop",
+      "question": "ONE PICK STYLE의 STYLE 영역 캐시백을 받으려면 어떤 대상 가맹점과 한도 조건을 만족해야 해?",
+      "card_name": "ONE PICK STYLE 하나 체크카드",
+      "card_id": 2,
+      "benefit_id": "20261101_000002",
+      "benefit_ids": [
+        "20261101_000002"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-023",
+      "hop_type": "2-hop",
+      "question": "JADE Classic의 공항 라운지는 연간 몇 회, 하루 몇 회 이용할 수 있어?",
+      "card_name": "JADE Classic",
+      "card_id": 5,
+      "benefit_id": "20261105_000105",
+      "benefit_ids": [
+        "20261105_000105"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-024",
+      "hop_type": "2-hop",
+      "question": "JADE Classic의 연회비는 카드 브랜드와 가족카드 여부에 따라 어떻게 달라져?",
+      "card_name": "JADE Classic",
+      "card_id": 5,
+      "benefit_id": "20261104_000040",
+      "benefit_ids": [
+        "20261104_000040"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-025",
+      "hop_type": "2-hop",
+      "question": "JADE First 공항 라운지의 본인·가족·동반자 통합 이용 횟수는 어떻게 돼?",
+      "card_name": "JADE First",
+      "card_id": 20,
+      "benefit_id": "20261105_000093",
+      "benefit_ids": [
+        "20261105_000093"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-026",
+      "hop_type": "2-hop",
+      "question": "JADE First의 제휴 주차장 무료 주차는 전월 실적과 월 이용 횟수 조건이 어떻게 돼?",
+      "card_name": "JADE First",
+      "card_id": 20,
+      "benefit_id": "20261105_000094",
+      "benefit_ids": [
+        "20261105_000094"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-027",
+      "hop_type": "2-hop",
+      "question": "JADE Prime의 공항 라운지 무료 이용 횟수 제한을 알려줘.",
+      "card_name": "JADE Prime",
+      "card_id": 21,
+      "benefit_id": "20261105_000096",
+      "benefit_ids": [
+        "20261105_000096"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-028",
+      "hop_type": "2-hop",
+      "question": "JADE Prime에서 기본 1.5% 적립을 받기 위한 지난달 이용 실적 조건은?",
+      "card_name": "JADE Prime",
+      "card_id": 21,
+      "benefit_id": "20261105_000097",
+      "benefit_ids": [
+        "20261105_000097"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-029",
+      "hop_type": "2-hop",
+      "question": "더 심플 하나카드의 월납 요금 할인 한도는 지난달 이용액 구간에 따라 어떻게 달라져?",
+      "card_name": "더 심플 하나카드",
+      "card_id": 22,
+      "benefit_id": "20261105_000099",
+      "benefit_ids": [
+        "20261105_000099"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-030",
+      "hop_type": "2-hop",
+      "question": "더 심플 하나카드의 월납 요금 할인 대상과 제외되는 결제 방식이 무엇인지 확인해 줘.",
+      "card_name": "더 심플 하나카드",
+      "card_id": 22,
+      "benefit_id": "20261105_000099",
+      "benefit_ids": [
+        "20261105_000099"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-031",
+      "hop_type": "2-hop",
+      "question": "카드의정석 SHOPPING의 온라인 쇼핑 할인 대상과 전월 실적 조건은 무엇이야?",
+      "card_name": "카드의정석 SHOPPING",
+      "card_id": 6,
+      "benefit_id": "20261104_000013",
+      "benefit_ids": [
+        "20261104_000013"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-032",
+      "hop_type": "2-hop",
+      "question": "카드의정석 SHOPPING의 4대 PAY 추가 할인은 기본 할인과 한도를 공유하니?",
+      "card_name": "카드의정석 SHOPPING",
+      "card_id": 6,
+      "benefit_id": "20261104_000017",
+      "benefit_ids": [
+        "20261104_000017"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-033",
+      "hop_type": "2-hop",
+      "question": "EVERY WON POINT의 국내외 기본 포인트 적립에는 전월 실적이나 월 적립한도가 있어?",
+      "card_name": "EVERY WON POINT",
+      "card_id": 40,
+      "benefit_id": "20261105_000104",
+      "benefit_ids": [
+        "20261105_000104"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-034",
+      "hop_type": "2-hop",
+      "question": "EVERY WON POINT 가족카드 연회비 면제에는 확인해야 할 적용 조건이 있어?",
+      "card_name": "EVERY WON POINT",
+      "card_id": 40,
+      "benefit_id": "20261105_000103",
+      "benefit_ids": [
+        "20261105_000103"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-035",
+      "hop_type": "2-hop",
+      "question": "POINT II 간편결제 추가 적립의 전월 실적 구간별 통합 월 한도를 알려줘.",
+      "card_name": "카드의정석 POINT II",
+      "card_id": 23,
+      "benefit_id": "20261105_000100",
+      "benefit_ids": [
+        "20261105_000100"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-036",
+      "hop_type": "2-hop",
+      "question": "POINT II의 Two-in-One 결제서비스가 적용되는 결제 유형과 조건을 알려줘.",
+      "card_name": "카드의정석 POINT II",
+      "card_id": 23,
+      "benefit_id": "20261105_000101",
+      "benefit_ids": [
+        "20261105_000101"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-037",
+      "hop_type": "2-hop",
+      "question": "카드의정석2 DAILY의 고정소비·정기결제 할인은 통합 한도를 공유해?",
+      "card_name": "카드의정석2 DAILY",
+      "card_id": 42,
+      "benefit_id": "20261105_000179",
+      "benefit_ids": [
+        "20261105_000179",
+        "20261105_000180"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-038",
+      "hop_type": "2-hop",
+      "question": "카드의정석2 DAILY 배달앱 할인은 어느 결제에 적용되고 어떤 실적 조건이 있어?",
+      "card_name": "카드의정석2 DAILY",
+      "card_id": 42,
+      "benefit_id": "20261105_000179",
+      "benefit_ids": [
+        "20261105_000179"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-039",
+      "hop_type": "2-hop",
+      "question": "카드의정석2 SIMPLE의 국내외 결제 기본 할인에서 제외되는 거래 유형은?",
+      "card_name": "카드의정석2 SIMPLE",
+      "card_id": 24,
+      "benefit_id": "20261105_000177",
+      "benefit_ids": [
+        "20261105_000177",
+        "20261105_000181"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-040",
+      "hop_type": "2-hop",
+      "question": "카드의정석2 SIMPLE의 Two-in-One 결제 시 할인율과 기본 할인 조건은 어떻게 달라져?",
+      "card_name": "카드의정석2 SIMPLE",
+      "card_id": 24,
+      "benefit_id": "20261105_000177",
+      "benefit_ids": [
+        "20261105_000177"
+      ],
+      "source_type": "NOTION_EXISTING"
+    },
+    {
+      "question_id": "CARD10-051",
+      "hop_type": "1-hop",
+      "question": "ONE PICK STYLE 체크카드의 결제계좌는 어느 은행 계좌를 사용해야 해?",
+      "card_name": "ONE PICK STYLE 하나 체크카드",
+      "card_id": 2,
+      "benefit_id": null,
+      "benefit_ids": [],
+      "source_type": "NEW"
+    },
+    {
+      "question_id": "CARD10-052",
+      "hop_type": "1-hop",
+      "question": "카드의정석 SHOPPING의 주말 주유 청구할인 금액은 얼마야?",
+      "card_name": "카드의정석 SHOPPING",
+      "card_id": 6,
+      "benefit_id": "20261104_000018",
+      "benefit_ids": [
+        "20261104_000018"
+      ],
+      "source_type": "NEW"
+    },
+    {
+      "question_id": "CARD10-053",
+      "hop_type": "1-hop",
+      "question": "카드의정석 POINT II의 가족카드 연회비 정책은 어떻게 돼?",
+      "card_name": "카드의정석 POINT II",
+      "card_id": 23,
+      "benefit_id": "20261105_000102",
+      "benefit_ids": [
+        "20261105_000102"
+      ],
+      "source_type": "NEW"
+    },
+    {
+      "question_id": "CARD10-054",
+      "hop_type": "1-hop",
+      "question": "카드의정석 SHOPPING의 브랜드별 연회비는 얼마야?",
+      "card_name": "카드의정석 SHOPPING",
+      "card_id": 6,
+      "benefit_id": "20261104_000041",
+      "benefit_ids": [
+        "20261104_000041"
+      ],
+      "source_type": "NEW"
+    },
+    {
+      "question_id": "CARD10-055",
+      "hop_type": "1-hop",
+      "question": "카드의정석2 DAILY의 국내외 가맹점 기본 할인은 얼마야?",
+      "card_name": "카드의정석2 DAILY",
+      "card_id": 42,
+      "benefit_id": "20261105_000178",
+      "benefit_ids": [
+        "20261105_000178"
+      ],
+      "source_type": "NEW"
+    },
+    {
+      "question_id": "CARD10-056",
+      "hop_type": "2-hop",
+      "question": "카드의정석 SHOPPING 오프라인 쇼핑은 전월 실적 구간별 월 한도와 건당 할인 대상 금액 한도가 어떻게 돼?",
+      "card_name": "카드의정석 SHOPPING",
+      "card_id": 6,
+      "benefit_id": "20261104_000015",
+      "benefit_ids": [
+        "20261104_000015"
+      ],
+      "source_type": "NEW"
+    },
+    {
+      "question_id": "CARD10-057",
+      "hop_type": "2-hop",
+      "question": "JADE Prime에서 월 적립 한도 소진 후의 1.0% 적립은 어떤 조건으로 적용돼?",
+      "card_name": "JADE Prime",
+      "card_id": 21,
+      "benefit_id": "20261105_000098",
+      "benefit_ids": [
+        "20261105_000098"
+      ],
+      "source_type": "NEW"
+    },
+    {
+      "question_id": "CARD10-058",
+      "hop_type": "2-hop",
+      "question": "EVERY WON POINT의 국내 온라인 간편결제 추가 적립 대상과 전월 실적·월 한도는 어떻게 돼?",
+      "card_name": "EVERY WON POINT",
+      "card_id": 40,
+      "benefit_id": "20261105_000104",
+      "benefit_ids": [
+        "20261105_000104"
+      ],
+      "source_type": "NEW"
+    },
+    {
+      "question_id": "CARD10-059",
+      "hop_type": "2-hop",
+      "question": "JADE Classic 프리미엄 바우처는 몇 회 선택할 수 있고, 1차년도와 이후 연도의 실적 조건은 어떻게 돼?",
+      "card_name": "JADE Classic",
+      "card_id": 5,
+      "benefit_id": null,
+      "benefit_ids": [],
+      "source_type": "NEW"
+    },
+    {
+      "question_id": "CARD10-060",
+      "hop_type": "2-hop",
+      "question": "ONE PICK STYLE의 놀이공원 현장할인에 필요한 전월 실적과 월·연 이용 횟수는 어떻게 돼?",
+      "card_name": "ONE PICK STYLE 하나 체크카드",
+      "card_id": 2,
+      "benefit_id": "20261101_000004",
+      "benefit_ids": [
+        "20261101_000004"
+      ],
+      "source_type": "NEW"
+    }
+  ]
+}
