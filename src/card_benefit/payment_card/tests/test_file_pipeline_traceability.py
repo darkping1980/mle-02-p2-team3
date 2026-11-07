@@ -82,6 +82,7 @@ class TraceabilityTests(unittest.TestCase):
         with self.assertRaisesRegex(FileExistsError, "파일이 이미 있습니다"):
             write_traceability(result, output)
 
+    @unittest.skip("main 의 src/common/ocr_engines.py 가 python-dotenv 를 모듈 최상단에서 필수로 임포트한다(팀 코드, main 의 pyproject 에 필수 의존성으로 선언됨). 선택 의존성 가정은 더는 성립하지 않는다.")
     def test_document_reader_import_does_not_require_optional_dotenv(self):
         repo_root = Path(__file__).resolve().parents[4]
         env = os.environ.copy()
