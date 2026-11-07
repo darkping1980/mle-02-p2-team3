@@ -446,6 +446,133 @@ class NumberValidationTests(unittest.TestCase):
         self.assertFalse(self.kept("혜택은 77개입니다.")[0])
         self.assertTrue(self.kept("혜택은 3개입니다.", ("EP",))[0])
 
+    def fixed_cap_context(self, include_style_evidence=True):
+        benefits = [
+            {"benefit_id": "PICK", "name": "ONE PICK 편의점·카페", "card": "샘플 체크카드",
+             "rules": [{"rule_key": "one_pick_100", "value": 100, "unit": "KRW", "targets": ["CU"]}],
+             "conditions": [{"scope": "one_pick_100", "branches": [{"branch_no": 1, "atoms": [
+                 {"type": "SPEND_REQ", "basis": "TXN_AMT", "min_amt": 3000, "max_amt": None,
+                  "text": "결제 건당 3천원 이상"}]}]}],
+             "limits": [{"text": "일 1회 / 월 30회 / 월 5천원"}], "limit_text": "일 1회 / 월 30회 / 월 5천원",
+             "limit_tiers": [], "tier_mappings": [], "rule_text": "결제 건당 3천원 이상 시 100원 캐시백",
+             "condition_text": "결제 건당 3천원 이상"},
+            {"benefit_id": "STYLE", "name": "STYLE 쇼핑", "card": "샘플 체크카드",
+             "rules": [{"rule_key": "style_500", "value": 500, "unit": "KRW", "targets": ["다이소"]}],
+             "conditions": [{"scope": "style_500", "branches": [{"branch_no": 1, "atoms": [
+                 {"type": "SPEND_REQ", "basis": "TXN_AMT", "min_amt": 10000, "max_amt": None,
+                  "text": "결제 건당 1만원 이상"}]}]}],
+             "limits": [{"text": "일 1회 / 월 10회 / 월 5천원"}], "limit_text": "일 1회 / 월 10회 / 월 5천원",
+             "limit_tiers": [], "tier_mappings": [], "rule_text": "결제 건당 1만원 이상 시 500원 캐시백",
+             "condition_text": "결제 건당 1만원 이상"},
+        ]
+        evidence = [
+            {"evidence_id": "P_RULE", "benefit_ids": ["PICK"], "quote": "결제 건당 3천원 이상 시 100원"},
+            {"evidence_id": "P_CAP", "benefit_ids": ["PICK"], "quote": "월 5천원"},
+            {"evidence_id": "P_COUNT", "benefit_ids": ["PICK"], "quote": "일 1회 / 월 30회"},
+            {"evidence_id": "S_RULE", "benefit_ids": ["STYLE"], "quote": "결제 건당 1만원 이상 시 500원"},
+            {"evidence_id": "S_CAP", "benefit_ids": ["STYLE"], "quote": "월 5천원"},
+            {"evidence_id": "S_COUNT", "benefit_ids": ["STYLE"], "quote": "일 1회 / 월 10회"},
+        ]
+        if not include_style_evidence:
+            evidence = [row for row in evidence if row["evidence_id"] != "S_CAP"]
+        return {"benefits": benefits, "evidence": evidence, "rule_selection_unresolved": [], "open_conditions": []}
+
+    def test_fixed_monthly_caps_and_transaction_rules_are_kept_per_benefit(self):
+        context = self.fixed_cap_context()
+        raw = card_answer([
+            point("ONE PICK 편의점·카페는 결제 건당 3천원 이상이면 100원 캐시백이며 월 한도는 5천원입니다. 하루 1회, 월 30회까지입니다.",
+                  ("P_RULE", "P_CAP", "P_COUNT"), "PICK"),
+            point("STYLE 쇼핑은 결제 건당 1만원 이상이면 500원 캐시백이며 월 한도는 5천원입니다. 하루 1회, 월 10회까지입니다.",
+                  ("S_RULE", "S_CAP", "S_COUNT"), "STYLE"),
+        ], answer_text=("ONE PICK 편의점·카페는 결제 건당 3천원 이상이면 100원 캐시백이며 월 한도는 5천원입니다. 하루 1회, 월 30회까지입니다.\n"
+                       "STYLE 쇼핑은 결제 건당 1만원 이상이면 500원 캐시백이며 월 한도는 5천원입니다. 하루 1회, 월 10회까지입니다."))
+        answer, warnings = validate_answer(raw, context, "ONE PICK과 STYLE의 이용금액 조건과 월 한도를 비교해 줘")
+        self.assertEqual(answer["status"], "ANSWERED", warnings)
+        self.assertEqual([row["evidence_ids"] for row in answer["points"]],
+                         [["P_RULE", "P_CAP", "P_COUNT"], ["S_RULE", "S_CAP", "S_COUNT"]])
+
+    def test_validated_transaction_threshold_is_restored_when_answer_text_omits_it(self):
+        context = self.fixed_cap_context()
+        context["benefits"][0]["conditions"][0]["branches"][0]["atoms"][0]["type"] = "USAGE_REQ"
+        raw = card_answer(
+            [point("ONE PICK 편의점·카페는 결제 건당 3천원 이상이면 100원 캐시백을 제공합니다.",
+                   ("P_RULE",), "PICK")],
+            answer_text="ONE PICK 편의점·카페는 100원 캐시백을 제공합니다.",
+            conclusion="ONE PICK 편의점·카페는 100원 캐시백을 제공합니다.",
+        )
+
+        answer, warnings = validate_answer(raw, context, "ONE PICK 편의점·카페 혜택의 적용 조건을 알려 줘.")
+
+        self.assertEqual(answer["status"], "ANSWERED", warnings)
+        self.assertIn("3천원 이상", answer["answer_text"])
+        self.assertEqual(answer["answer_source"], "validated_condition_completion")
+        self.assertTrue(any("검증된 결제 금액 조건" in warning for warning in warnings))
+
+    def test_validated_transaction_threshold_already_in_answer_is_not_repeated(self):
+        context = self.fixed_cap_context()
+        raw = card_answer(
+            [point("ONE PICK 편의점·카페는 결제 건당 3천원 이상이면 100원 캐시백을 제공합니다.",
+                   ("P_RULE",), "PICK")],
+            answer_text="ONE PICK 편의점·카페는 건당 3천원 이상 결제하면 100원 캐시백을 제공합니다.",
+        )
+
+        answer, _ = validate_answer(raw, context, "ONE PICK 혜택의 적용 조건은?")
+
+        self.assertEqual(answer["answer_source"], "llm")
+        self.assertEqual(answer["answer_text"].count("3천원 이상"), 1)
+
+    def test_monthly_cap_missing_from_cited_pdf_evidence_is_blocked(self):
+        context = self.fixed_cap_context()
+        raw = card_answer([point("ONE PICK 월 한도는 5천원입니다.", ("P_RULE",), "PICK")])
+        answer, warnings = validate_answer(raw, context, "ONE PICK 월 한도는?")
+        self.assertEqual(answer["status"], "NOT_ANSWERABLE")
+        self.assertTrue(any("monthly cap lacks cited PDF evidence" in warning for warning in warnings))
+
+    def test_unreferenced_cap_is_removed_from_display_prose(self):
+        context = self.fixed_cap_context()
+        raw = card_answer([point("결제 건당 3천원 이상이면 100원 캐시백입니다.", ("P_RULE",), "PICK")],
+                          conclusion="결제 건당 3천원 이상이면 100원 캐시백입니다.",
+                          answer_text="결제 건당 3천원 이상이면 100원 캐시백이며 월 한도는 5천원입니다.")
+        answer, warnings = validate_answer(raw, context, "ONE PICK 캐시백은?")
+        self.assertEqual(answer["status"], "ANSWERED")
+        self.assertNotIn("월 한도는 5천원", answer["answer_text"])
+        self.assertTrue(any("displayed monthly cap lacks a validated cited benefit point" in warning
+                            for warning in warnings))
+
+    def test_evidence_owned_by_another_benefit_cannot_support_fixed_cap(self):
+        context = self.fixed_cap_context()
+        raw = card_answer([point("ONE PICK 월 한도는 5천원입니다.", ("S_CAP",), "PICK")])
+        answer, warnings = validate_answer(raw, context, "ONE PICK 월 한도는?")
+        self.assertEqual(answer["status"], "NOT_ANSWERABLE")
+        self.assertTrue(any("근거 ID가 없는 문장" in warning or "monthly cap lacks cited PDF evidence" in warning
+                            for warning in warnings))
+
+    def test_amount_pair_from_another_benefit_is_blocked(self):
+        context = self.fixed_cap_context()
+        raw = card_answer([point("ONE PICK은 결제 건당 1만원 이상이면 500원 캐시백입니다.",
+                                 ("P_CAP", "S_RULE"), "PICK")])
+        answer, warnings = validate_answer(raw, context, "ONE PICK과 STYLE의 캐시백 조건을 비교해 줘")
+        self.assertEqual(answer["status"], "NOT_ANSWERABLE")
+        self.assertFalse(answer["points"])
+        self.assertTrue(any("다른 혜택의 근거 ID" in warning or "조회 결과에 없는 값" in warning
+                            for warning in warnings))
+
+    def test_structured_previous_month_tier_mapping_remains_enforced(self):
+        benefit = {"benefit_id": "T", "name": "구간형 혜택", "card": "샘플 카드", "rules": [],
+                   "conditions": [], "limits": [{"text": "전월 30만원 이상 월 1만원, 60만원 이상 월 2만원"}],
+                   "limit_text": "전월 30만원 이상 월 1만원, 60만원 이상 월 2만원", "tier_mappings": [],
+                   "limit_tiers": [{"min_amt": 300000, "max_amt": 600000, "cap": {"amount": 10000}, "shared": []},
+                                   {"min_amt": 600000, "max_amt": None, "cap": {"amount": 20000}, "shared": []}]}
+        context = {"benefits": [benefit], "evidence": [{"evidence_id": "TIER", "benefit_ids": ["T"],
+                   "quote": "전월 실적 30만원 이상 월 한도 1만원, 60만원 이상 월 한도 2만원"}],
+                   "rule_selection_unresolved": [], "open_conditions": []}
+        wrong = card_answer([point("전월 실적 60만원 이상이면 월 한도는 1만원입니다.", ("TIER",), "T")])
+        correct = card_answer([point("전월 실적 60만원 이상이면 월 한도는 2만원입니다.", ("TIER",), "T")])
+        bad_answer, _ = validate_answer(wrong, context, "전월 실적 60만원이면 월 한도는?")
+        good_answer, _ = validate_answer(correct, context, "전월 실적 60만원이면 월 한도는?")
+        self.assertEqual(bad_answer["status"], "NOT_ANSWERABLE")
+        self.assertEqual(good_answer["status"], "ANSWERED")
+
 
 class RuleConflictTests(unittest.TestCase):
     q5 = "1만원 이상 결제하면 캐시백은 얼마인가?"
@@ -1307,6 +1434,16 @@ class RebuiltGraphContractTests(unittest.TestCase):
         self.assertEqual(len(terms), 1)
         self.assertEqual(terms[0]["benefit_ids"], ["card_product_item:23:20261105_000100"])
 
+    def test_terms_evidence_page_metadata_is_carried_to_final_evidence_list(self):
+        final_evidence = [{"evidence_id": "EV1", "page_no": 2, "quote": "실적 기준", "benefit_ids": ["B1"]}]
+        terms_evidence = [{"evidence_id": "EV2", "page_no": 2, "quote": "원문 인용", "benefit_ids": ["B1"]}]
+
+        card_graphrag.merge_terms_evidence(final_evidence, terms_evidence)
+
+        self.assertEqual(final_evidence[-1]["page_no"], 2)
+        self.assertEqual(final_evidence[-1]["quote"], "원문 인용")
+        self.assertEqual(final_evidence[-1]["benefit_ids"], ["B1"])
+
     def test_catalog_payment_filter_uses_only_explicit_transaction_minimums(self):
         from card_benefit.payment_card.db_pipeline_origin_search import neo4j_search
         rows = neo4j_search.catalog_rows([{
@@ -1487,6 +1624,16 @@ class StreamlitTests(unittest.TestCase):
         self.assertIn("1000원", shown)
         for word in ("일부 답변", "검토 필요", "검토 대기", "검증 실패", "DRAFT", "PENDING", "추정 비용"):
             self.assertNotIn(word, shown)
+
+    def test_answer_markdown_is_rendered_without_escaping_formatting(self):
+        self.second.parsed = card_answer([point("**더 심플 하나카드** 혜택 안내입니다.", ("E1",))],
+                                         conclusion="혜택 안내입니다.",
+                                         answer_text="**더 심플 하나카드** 혜택 안내입니다.")
+        app = self.ask(AppTest.from_file(APP).run(timeout=30))
+        self.assertFalse(app.exception)
+        rendered_sources = [item.value for item in app.markdown]
+        self.assertTrue(any("**더 심플 하나카드**" in value for value in rendered_sources))
+        self.assertFalse(any(r"\*\*더 심플 하나카드\*\*" in value for value in rendered_sources))
         self.assertTrue(any(item.value == "카드 혜택 안내" for item in app.subheader))
 
     def test_answer_evidence_and_developer_info(self):
@@ -1617,6 +1764,79 @@ class StreamlitTests(unittest.TestCase):
 
 
 class NewContractRegressionTests(unittest.TestCase):
+    def test_requested_daily_frequency_is_completed_from_the_same_benefit_evidence(self):
+        context = {
+            "benefits": [{"benefit_id": "P1", "name": "ONE PICK 편의점·카페", "rules": [], "limits": [], "conditions": []},
+                         {"benefit_id": "S1", "name": "STYLE 쇼핑", "rules": [], "limits": [], "conditions": []}],
+            "evidence": [
+                {"evidence_id": "P_DAY", "quote": "일 1회 / 월 30회", "benefit_ids": ["P1"]},
+                {"evidence_id": "S_DAY", "quote": "일 1회 / 월 10회", "benefit_ids": ["S1"]},
+            ],
+            "rule_selection_unresolved": [],
+            "payment_amount": None, "open_conditions": [],
+        }
+        raw = card_answer(
+            [point("ONE PICK 편의점·카페는 일 1회, 월 30회입니다.", ("P_DAY",), "P1"),
+             point("STYLE 쇼핑은 일 1회, 월 10회입니다.", ("S_DAY",), "S1")],
+            conclusion="두 혜택의 이용 횟수를 비교했습니다.",
+            answer_text="ONE PICK 편의점·카페는 월 30회, STYLE 쇼핑은 월 10회까지입니다.")
+        answer, _ = validate_answer(raw, context, "두 혜택의 횟수를 비교해 줘")
+        self.assertEqual(answer["status"], "ANSWERED")
+        self.assertIn("ONE PICK 편의점·카페: 일 1회", answer["answer_text"])
+        self.assertIn("STYLE 쇼핑: 일 1회", answer["answer_text"])
+
+    def test_approval_amount_discount_is_qualified_by_cited_source_condition(self):
+        condition_quote = "월납 요금 승인 금액이 할인 한도보다 적을 경우 승인 금액만큼 할인 적용"
+        context = {
+            "benefits": [{"benefit_id": "B1", "name": "월납 요금 할인", "rules": [], "limits": [], "conditions": [],
+                          "rule_text": condition_quote, "limit_text": "월 할인 한도 10,000원"}],
+            "evidence": [
+                {"evidence_id": "B1_RULE", "quote": condition_quote, "benefit_ids": ["B1"]},
+                {"evidence_id": "B1_CAP", "quote": "월 할인 한도 10,000원", "benefit_ids": ["B1"]},
+            ],
+            "rule_selection_unresolved": [],
+            "payment_amount": None, "open_conditions": [],
+        }
+        raw = card_answer([point("승인 금액만큼 할인되며 월 한도는 10,000원입니다.",
+                                 ("B1_CAP",), "B1")],
+                          conclusion="월납 요금 할인 혜택입니다.",
+                          answer_text="자동납부하면 승인 금액만큼 할인되며 월 한도는 10,000원입니다.")
+        answer, _ = validate_answer(raw, context, "월납 요금 할인은 어떻게 적용돼?")
+        self.assertEqual(answer["status"], "ANSWERED")
+        self.assertIn("승인 금액이 할인 한도보다 적을 경우 승인 금액만큼 할인", answer["points"][0]["text"])
+        self.assertIn("승인 금액이 할인 한도보다 적을 경우 승인 금액만큼 할인", answer["answer_text"])
+        self.assertIn("B1_RULE", answer["points"][0]["evidence_ids"])
+
+    def test_approval_amount_claim_is_dropped_without_cited_limit_condition(self):
+        context = {
+            "benefits": [{"benefit_id": "B1", "name": "월납 요금 할인", "rules": [], "limits": [], "conditions": [],
+                          "rule_text": "승인 금액이 할인 한도보다 적을 경우 승인 금액만큼 할인 적용"}],
+            "evidence": [{"evidence_id": "B1_RULE", "quote": "승인 금액만큼 할인 적용", "benefit_ids": ["B1"]}],
+            "rule_selection_unresolved": [],
+            "payment_amount": None, "open_conditions": [],
+        }
+        raw = card_answer([point("승인 금액만큼 할인됩니다.", ("B1_RULE",), "B1")], answer_text="승인 금액만큼 할인됩니다.")
+        answer, _ = validate_answer(raw, context, "할인 방식은?")
+        self.assertEqual(answer["status"], "NOT_ANSWERABLE")
+        self.assertEqual(answer["points"], [])
+
+    def test_shared_tier_cap_is_supported_by_cited_table_even_when_each_row_value_follows_comma(self):
+        context = {
+            "benefits": [{"benefit_id": "B1", "name": "고정소비", "rules": [], "conditions": [], "limits": [],
+                          "limit_tiers": [{"cap": {"amount": 3000},
+                                           "shared": [{"amount": 8000, "members": ["고정소비", "정기결제"]}]}]}],
+            "evidence": [{"evidence_id": "TABLE", "quote": "통합 할인한도\n3,000원\n5,000원\n8,000원",
+                          "benefit_ids": ["B1"]}],
+            "rule_selection_unresolved": [], "payment_amount": None, "open_conditions": [],
+        }
+        point_text = "고정소비와 정기결제의 통합 한도는 전월 실적 구간에 따라 8천원, 1만1천원 또는 1만7천원입니다."
+        self.assertIsNone(card_graphrag._monthly_cap_answer_problem(
+            "통합 월 한도는 8천원입니다.",
+            [{"text": point_text, "evidence_ids": ["TABLE"], "benefit_id": None}], context))
+
+    def test_answer_prompt_requires_shared_frequency_conditions(self):
+        self.assertIn("혜택별로 근거가 확인된 일·월 이용 횟수", card_graphrag.ANSWER_PROMPT)
+
     def test_item_and_common_use_distinct_name_and_rule_fields(self):
         item_detail = detail()
         name = "\ud1b5\uc2e0\uc694\uae08 \ud560\uc778"
@@ -1814,46 +2034,50 @@ class LiveAccuracyTests(unittest.TestCase):
 
     def test_catalog_payment_minimums_come_only_from_transaction_spend_atoms(self):
         rows = {row["name"]: sorted(row["payment_min_amounts"]) for row in self.search.list_catalog()}
-        self.assertEqual(next(value for name, value in rows.items() if "ONE PICK" in name), [3000, 10000])
-        self.assertEqual(next(value for name, value in rows.items() if name.startswith("STYLE")), [3000, 10000])
+        self.assertEqual(next(value for name, value in rows.items() if "ONE PICK" in name), [3000])
+        self.assertEqual(next(value for name, value in rows.items() if name.startswith("STYLE")), [10000])
         self.assertEqual(next(value for name, value in rows.items() if "1%" in name), [10000])
         self.assertTrue(all(amount > 0 for values in rows.values() for amount in values))
 
     def test_q5_replay(self):
         one_pick, style, transit = self.benefit("ONE PICK"), self.benefit("STYLE"), self.benefit("대중교통")
-        raw = card_answer([point("검색 결과상 1만원 이상 결제 건은 대상 가맹점에서 건당 500원 캐시백으로 기재되어 있습니다.", ("20261101_000034",)),
-                           point("다만 이 혜택은 DRAFT이고 근거도 PENDING이므로 확정된 혜택으로 볼 수 없습니다.", ("20261101_000035",))],
-                          conclusion="건당 500원입니다.",
-                          uncertain=["편의점·카페 혜택과 쇼핑·서점·문구·패션 혜택 모두 1만원 이상 결제 시 500원으로 기재되어 있으나, 각각 해당 대상 가맹점 및 적용 조건을 충족해야 합니다.",
-                                     "두 금액 구간 규칙의 중첩 적용 방식은 미확정입니다."])
+        raw = card_answer([point("ONE PICK 편의점·카페는 결제 건당 3천원 이상 시 100원 캐시백입니다.",
+                                 ("20261107_003042",), one_pick),
+                           point("STYLE 쇼핑은 결제 건당 1만원 이상 시 500원 캐시백입니다.",
+                                 ("20261107_003043",), style)],
+                          conclusion="ONE PICK 편의점·카페는 건당 3천원 이상 결제 시 100원, STYLE 쇼핑은 건당 1만원 이상 결제 시 500원입니다.")
         state = self.ask("1만원 이상 결제하면 캐시백은 얼마인가?", "BENEFIT_DETAIL", (one_pick, style, transit), raw)
         self.assertEqual(state["search_parameters"]["benefit_ids"], [one_pick, style])
         answer = state["answer"]
-        self.assertIn("확정할 수 없습니다", answer["conclusion"])
+        self.assertEqual(answer["status"], "ANSWERED")
         self.assertEqual(sorted(p["benefit_id"] for p in answer["points"]), sorted([one_pick, style]))
         self.assertEqual({p["verification"] for p in answer["points"]}, {"RAW_MATCH"})
-        cited = {p["benefit_id"]: p["evidence_ids"][0] for p in answer["points"]}
+        cited = {p["benefit_id"]: p["evidence_ids"] for p in answer["points"]}
         evidence = {item["evidence_id"]: item for item in state["evidence"]}
-        for benefit_id, evidence_id in cited.items():
-            self.assertIn(benefit_id, evidence[evidence_id]["benefit_ids"])
+        self.assertEqual(cited[one_pick], ["20261107_003042"])
+        self.assertEqual(cited[style], ["20261107_003043"])
+        for benefit_id, evidence_ids in cited.items():
+            for evidence_id in evidence_ids:
+                self.assertIn(benefit_id, evidence[evidence_id]["benefit_ids"])
         self.assertEqual(answer["uncertain"], [])
         self.assertNotIn("대중교통 제외", " ".join(state["unresolved"]))
 
     def test_q3_replay_keeps_facts_and_separates_status(self):
         one_pick, style = self.benefit("ONE PICK"), self.benefit("STYLE")
-        raw = card_answer([point("표시된 이용 한도는 ONE PICK이 일 1회·월 30회, STYLE이 일 1회·월 10회이며, 두 혜택 모두 월 5천원입니다.",
-                                 ("20261101_000036", "20261101_000037", "20261101_000042", "20261101_000043")),
-                           point("ONE PICK 월 30회와 STYLE 월 10회의 차이는 20회입니다.", ("20261101_000036", "20261101_000042")),
-                           point("두 혜택 모두 결제 건당 3천원 이상이면 100원, 1만원 이상이면 500원으로 표시되어 있습니다.", ("20261101_000034", "20261101_000040")),
-                           point("이 데이터는 DRAFT이고 혜택 검토 및 근거 확인이 PENDING이며, 100원·500원 규칙의 중첩 선택 방식도 미확정이므로 확정 혜택으로 단정할 수 없습니다.",
-                                 ("20261101_000034", "20261101_000040"))],
-                          conclusion="두 혜택은 대상과 월 횟수가 다릅니다.")
+        raw = card_answer([point("ONE PICK은 일 1회·월 30회까지이며 월 한도는 5천원입니다.",
+                                 ("20261101_000036", "20261101_000037"), one_pick),
+                           point("STYLE은 일 1회·월 10회까지이며 월 한도는 5천원입니다.",
+                                 ("20261101_000042", "20261101_000043"), style),
+                           point("ONE PICK 편의점·카페는 결제 건당 3천원 이상 시 100원입니다.",
+                                 ("20261107_003042",), one_pick),
+                           point("STYLE 쇼핑은 결제 건당 1만원 이상 시 500원입니다.",
+                                 ("20261107_003043",), style)],
+                          conclusion="두 혜택의 대상과 결제 건당 캐시백 기준은 서로 다릅니다.")
         state = self.ask("ONE PICK과 STYLE 혜택의 차이는?", "BENEFIT_COMPARE", (one_pick, style), raw)
         answer = state["answer"]
-        self.assertEqual(len(answer["points"]), 3)
+        self.assertEqual(len(answer["points"]), 4)
         self.assertEqual(answer["status"], "ANSWERED")
-        self.assertIn("미확정", answer["conclusion"])
-        self.assertEqual([p["verification"] for p in answer["points"]], ["RAW_MATCH", "CALCULATED", "RAW_MATCH"])
+        self.assertEqual([p["verification"] for p in answer["points"]], ["RAW_MATCH"] * 4)
 
     def test_q3_swapped_limit_is_detected(self):
         one_pick, style = self.benefit("ONE PICK"), self.benefit("STYLE")

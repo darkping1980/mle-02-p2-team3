@@ -196,22 +196,22 @@ def catalog_rows(catalog: list[dict], items: list[dict], commons: list[dict]) ->
 
 def source(props: dict) -> dict:
     """Decode source_json and overlay actual Neo4j columns; Neo4j projection wins."""
-    if not isinstance(props, dict):
+    if not isinstance(props, dict):                       # 입력이 딕셔너리가 아니면 빈 딕셔너리 반환(방어적 null 체크)
         return {}
-    value = props.get("source_json")
+    value = props.get("source_json")                      # Neo4j 노드에 직렬화 저장된 source_json 속성 추출
     try:
-        decoded = json.loads(value) if isinstance(value, str) and value else value
-    except (TypeError, ValueError):
-        decoded = {}
-    result = dict(decoded) if isinstance(decoded, dict) else {}
-    for name, item in props.items():
-        if name == "source_json":
+        decoded = json.loads(value) if isinstance(value, str) and value else value  # JSON 문자열 역직렬화(Jackson ObjectMapper 역할)
+    except (TypeError, ValueError):                       # JSON 파싱 실패 시 예외 처리
+        decoded = {}                                      # 파싱 실패 시 빈 딕셔너리로 폴백
+    result = dict(decoded) if isinstance(decoded, dict) else {}  # 파싱된 맵의 복사본 생성
+    for name, item in props.items():                      # Neo4j 노드의 최신 속성들로 덮어쓰기 순회
+        if name == "source_json":                         # source_json 자체는 결과 필드에서 제외
             continue
-        result[name] = _decode_json(item, item) if name in {"rule_list", "item_cond_expr", "item_data", "relation_list"} else item
+        result[name] = _decode_json(item, item) if name in {"rule_list", "item_cond_expr", "item_data", "relation_list"} else item  # 중첩 JSON 속성 디코딩
     for name in ("rule_list", "item_cond_expr", "item_data", "relation_list"):
-        if name in result:
-            result[name] = _decode_json(result[name], result[name])
-    return result
+        if name in result:                                # 중첩 컬럼이 여전히 문자열 상태면 파싱 보장
+            result[name] = _decode_json(result[name], result[name])  # JSON 객체/리스트로 최종 변환
+    return result                                         # Neo4j 속성이 오버레이된 최종 딕셔너리 반환
 
 
 def _decode_json(value, fallback=None):
@@ -394,12 +394,12 @@ class Neo4jSearch:
         if detail:
             bound = dict(params)
             CARD_LOG.log_query(label, query, bound, render_combined=lambda _: render_cypher_log(CARD_LOG, query, bound))
-        started = perf_counter()
-        with self.driver.session(database=self.database, default_access_mode=READ_ACCESS) as session:
-            rows = session.execute_read(lambda tx: [record.data() for record in tx.run(query, **params)])
-        query_elapsed_ms = (perf_counter() - started) * 1000
-        serialization_started = perf_counter()
-        returned_bytes = len(json.dumps(rows, ensure_ascii=False, default=str).encode("utf-8"))
+        started = perf_counter()                                      # Cypher 쿼리 실행 시작 시간 측정 (Java System.nanoTime() 유사)
+        with self.driver.session(database=self.database, default_access_mode=READ_ACCESS) as session:  # 읽기 전용 트랜잭션 세션 획득 (Java try-with-resources 및 readOnly Connection 유사)
+            rows = session.execute_read(lambda tx: [record.data() for record in tx.run(query, **params)])  # Cypher 실행 후 Neo4j Record를 Python dict로 변환 (Java ResultSet -> Map 변환 유사)
+        query_elapsed_ms = (perf_counter() - started) * 1000          # 쿼리 순수 실행 시간(ms) 계산
+        serialization_started = perf_counter()                        # 결과 데이터 직렬화 크기 측정 시작
+        returned_bytes = len(json.dumps(rows, ensure_ascii=False, default=str).encode("utf-8"))  # 결과 행들의 JSON 직렬화 바이트 수 계산
         CARD_LOG.log_summary("CYPHER", label, params=CARD_LOG.sanitize(params), rows=len(rows), path=path,
                              elapsed_ms=query_elapsed_ms)
         CARD_LOG.log_summary("PERF", REQUEST_ID.get(), phase=f"{statement_id}_result_size", rows=len(rows),
@@ -407,40 +407,30 @@ class Neo4jSearch:
                              size_measure_ms=(perf_counter() - serialization_started) * 1000)
         if detail:
             CARD_LOG.log_result_data(label, [flatten_record(row) for row in rows])
-        return rows
+        return rows                                                   # 조회된 행 dict 목록 반환 (Java List<Map<String, Object>>)
 
     def list_catalog(self) -> list[dict]:
-        """질문 해석에 쓸 카드별·공통 혜택 목록과 적용 대상을 반환한다.
-
-        Cypher 3건을 차례로 실행해 한 목록으로 합친다.
-            catalog        카드 상품 항목(dp_card_product_item) 중 BENEFIT 행
-            item_catalog   혜택 외 상품 항목(dp_card_product_item, 연회비 등) → item_data.fee_lines의 같은 사실 참조 포함
-            common_catalog 공통 혜택(dp_card_common_bnft) 전체와 적용 카드 이름
-                           (적용 관계가 없으면 card="적용 카드 미확인")
-        각 행의 key는 그래프 노드 key(JSON 배열 문자열)이며, retrieve의 get_detail 인자로 그대로 쓰인다.
-
-        세 Cypher는 서브쿼리로 묶어 한 문장(왕복 1회)으로 실행한다(P3). 조회 조건·정렬·행 처리는 기존과 같다.
-        """
-        batch = self._run("card.catalog_batch", CATALOG_BATCH_QUERY, "card.catalog + card.item_catalog + card.common_catalog + card.products", {})[0]
-        started = perf_counter()
-        self.catalog_products = [_ordered(row, CATALOG_FIELDS["products"]) for row in batch.get("products", [])]
-        item_rows = [_ordered(row, CATALOG_FIELDS["items"]) for row in batch["items"]]
-        self.catalog_terms = {}
-        for row in item_rows:
-            if row.get("item_type") != "TERMS":
+        """질문 해석(interpret)에 사용할 카드별·공통 혜택 및 연회비 메타데이터 목록을 조회한다."""
+        batch = self._run("card.catalog_batch", CATALOG_BATCH_QUERY, "card.catalog + card.item_catalog + card.common_catalog + card.products", {})[0]  # P3 서브쿼리 배칭으로 4개 Cypher를 단일 왕복 쿼리로 실행
+        started = perf_counter()                                      # Python 인메모리 데이터 매핑 시작 시각
+        self.catalog_products = [_ordered(row, CATALOG_FIELDS["products"]) for row in batch.get("products", [])]  # 카드 기본 메타데이터(card_id, product_nm) 정렬 및 캐시
+        item_rows = [_ordered(row, CATALOG_FIELDS["items"]) for row in batch["items"]]  # 연회비/유의사항 등 부가 항목 행 목록 정렬
+        self.catalog_terms = {}                                       # 카드별 유의사항(TERMS) 캐시용 dict (Java Map<Integer, List<Map>>)
+        for row in item_rows:                                         # 부가 항목 행들을 순회
+            if row.get("item_type") != "TERMS":                       # 유의사항(TERMS)이 아니면(예: ANNUAL_FEE) 건너뜀
                 continue
-            card = source({"source_json": row.get("card_source")})
+            card = source({"source_json": row.get("card_source")})    # 카드 정보 원본 JSON 파싱
             item = source({"source_json": row.get("item_source"), "item_data": row.get("item_data"),
-                           "item_rule_txt": row.get("item_rule_txt"), "item_cd": row.get("item_cd")})
-            card_id = row.get("card_id", card.get("card_id"))
-            if card_id is not None:
+                           "item_rule_txt": row.get("item_rule_txt"), "item_cd": row.get("item_cd")})  # 항목 정보 원본 JSON 파싱
+            card_id = row.get("card_id", card.get("card_id"))        # 카드 ID 식별
+            if card_id is not None:                                   # 카드 ID가 존재하면
                 self.catalog_terms.setdefault(int(card_id), []).append({**item, "card_id": int(card_id),
-                    "card_product_item_id": row.get("id"), "product_nm": card.get("product_nm")})
+                    "card_product_item_id": row.get("id"), "product_nm": card.get("product_nm")})  # 카드 ID별 유의사항 목록에 추가 (Map.computeIfAbsent 유사)
         rows = catalog_rows([_ordered(row, CATALOG_FIELDS["catalog"]) for row in batch["catalog"]],
-                            item_rows, [_ordered(row, CATALOG_FIELDS["commons"]) for row in batch["commons"]])
+                            item_rows, [_ordered(row, CATALOG_FIELDS["commons"]) for row in batch["commons"]])  # 카탈로그 행들을 interpret 프롬프트 형식으로 통합
         CARD_LOG.log_summary("PERF", REQUEST_ID.get(), phase="catalog_python_transform",
                              elapsed_ms=(perf_counter() - started) * 1000, catalog_rows=len(rows), product_rows=len(self.catalog_products))
-        return rows
+        return rows                                                   # 통합된 카탈로그 dict 리스트 반환 (interpret 노드로 전달)
 
     def list_benefits(self, keyword: str = "") -> list[dict]:
         """혜택명에 keyword가 들어간 카드·공통 혜택을 찾는다."""
@@ -457,21 +447,32 @@ class Neo4jSearch:
         return result
 
     def get_details(self, keys: list[str], sections: tuple[str, ...] = ALL_SECTIONS) -> dict[str, dict | None]:
-        """[P3 배치 조회] 여러 혜택의 상세 정보 및 PDF 근거를 서브쿼리 배칭으로 일괄 조회한다.
-
-        Java의 MyBatis나 JPA에서 N+1 쿼리 문제를 해결하기 위해 IN 절이나
-        서브쿼리를 묶어 단일 네트워크 트랜잭션으로 조회하는 패턴과 동일하다.
-        단일 get_detail()을 루프에서 N번 호출하면 네트워크 왕복(Round-Trip)이 혜택 수만큼 발생하므로,
-        동일한 named Cypher(context + evidence)를 CALL 서브쿼리로 묶어 1회 왕복으로 가져온다.
-
-        입력:
-            keys: 조회할 혜택 고유 키 목록 (예: ['item:10:20', ...]).
-            sections: 함께 페치할 섹션 튜플 (기본값: ('evidence',)).
-
-        반환:
-            dict[key, detail_dict]: 혜택 키를 맵의 키로 하고, context, rules, conditions,
-            limits, evidence(PDF 근거)를 담은 상세 dict를 값으로 하는 매핑.
-        """
+        """[P3 배치 조회] 여러 혜택의 상세 정보 및 PDF 근거를 서브쿼리 배칭으로 일괄 조회한다 (Java의 IN 절 배치 페치와 유사)."""
+        keys = list(dict.fromkeys(keys))                              # 중복 키 제거 (Java LinkedHashSet 변환과 유사하여 순서 보존)
+        result: dict[str, dict | None] = {key: None for key in keys}  # 결과를 담을 맵 초기화 (모든 키에 대해 기본값 None 설정)
+        groups: dict[str, list[str]] = {}                             # Cypher 쿼리 템플릿별로 키들을 그룹화할 맵 (Java Map<String, List<String>>)
+        for key in keys:                                              # 요청된 혜택 키들을 순회
+            groups.setdefault(evidence_query_for(key), []).append(key)# 혜택 종류(일반/공통)에 맞는 쿼리별로 키 분류
+        names = [name for name in SECTION_QUERIES if name in sections]# 조회할 섹션 목록 필터링 (기본: 'evidence')
+        for evidence_query, group in groups.items():                  # 그룹화된 각 쿼리와 해당 키 목록을 순회
+            evidence_id = STATEMENT_IDS.get(evidence_query, "card.evidence")  # 로깅용 Cypher 식별자 추출
+            path = "card.context + " + " + ".join(evidence_id if name == "evidence" else f"card.{name}" for name in names)  # 실행 경로 문자열 구성
+            rows = self._run("card.detail_batch", detail_batch_query(evidence_query, sections), path, {"keys": group})  # CALL 서브쿼리 배칭 Cypher 1회 실행
+            transform_started = perf_counter()                        # 레코드 파싱 시작 시각
+            for row in rows:                                          # 반환된 각 행(혜택 상세)을 순회
+                if not row.get("context"):                            # 기본 context가 비어있으면 건너뜀
+                    continue
+                detail = {"context": _finish_context(_ordered(row["context"][0], CONTEXT_FIELDS))}  # 카드/혜택 기본 메타데이터 구조화
+                benefit = source(detail["context"]["benefit"])        # 혜택 노드의 source_json 원본 추출
+                detail.update(_normalize_item_contract(benefit))      # 규칙, 조건 메타데이터 정규화 반영
+                detail["limits"] = ([{"limit_text": benefit.get("item_limit_txt") or benefit.get("bnft_limit_txt")}]
+                                     if benefit.get("item_limit_txt") or benefit.get("bnft_limit_txt") else [])  # 한도 텍스트 구성
+                detail["evidence"] = [_ordered(item, SECTION_FIELDS["evidence"]) for item in row.get("evidence", [])] if "evidence" in sections else []  # PDF 근거 목록 매핑
+                result[row["key"]] = detail                           # 완성된 상세 dict를 결과 맵에 저장 (Java map.put(key, detail))
+            CARD_LOG.log_summary("PERF", REQUEST_ID.get(), phase="detail_python_transform",
+                                 elapsed_ms=(perf_counter() - transform_started) * 1000, requested_keys=len(group),
+                                 detail_rows=len(rows), returned_bytes=len(json.dumps(rows, ensure_ascii=False, default=str).encode("utf-8")))
+        return result                                                 # key -> detail_dict 매핑 반환 (retrieve 노드로 전달)
         keys = list(dict.fromkeys(keys))
         result: dict[str, dict | None] = {key: None for key in keys}
         groups: dict[str, list[str]] = {}

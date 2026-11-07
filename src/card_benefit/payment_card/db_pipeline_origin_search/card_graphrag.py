@@ -200,6 +200,8 @@ answer_text 작성 규칙 (고객이 읽는 설명문):
 - 카드 비교에서는 benefits에 전달된 각 선택 혜택을 빠짐없이 한 번씩 points에 포함하고, 그 카드의 혜택만 설명한다.
 - 두 카드 비교의 answer_text는 카드별 핵심 혜택과 적용 조건을 포함해 최대 5문장으로 작성하며, points 문장을 장황하게 반복하지 않는다.
 - 혜택을 받을 때 필요한 횟수·금액 한도, 지난달 실적 같은 이용 조건을 답에 포함한다. 제외 대상은 질문과 직접 관련될 때만 짧게 쓴다.
+- 질문이 횟수를 요구하면 혜택별로 근거가 확인된 일·월 이용 횟수를 모두 표시한다.
+- 원문이 승인 금액이 할인 한도보다 적을 때만 그 금액만큼 할인한다고 한 경우, 이 조건과 한도를 함께 밝혀 승인액 전체가 무조건 할인되는 것처럼 쓰지 않는다.
 - 질문이 묻지 않았어도 혜택을 못 받게 하는 혜택별 조건은 빼지 않는다. 카드 공통 제외 문구는 질문과 직접 관련될 때만 쓴다.
 - 중복 설명을 하지 않는다. 단순한 질문은 필요한 만큼만 답하고, 상세 설명을 요청한 경우에만 늘린다.
 - 한 문장에 조건을 세 개 이상 넣지 않는다. 앞에서 말한 값을 되풀이하지 않는다.
@@ -253,41 +255,32 @@ answer_text 작성 규칙 (고객이 읽는 설명문):
 
 
 class CardState(TypedDict, total=False):
-    """LangGraph 노드 간에 전달되고 공유되는 워크플로우 상태 (State).
+    """LangGraph 노드 간 전달·공유되는 파이프라인 State(런타임에는 Python dict/Java Map으로 동작)."""
 
-    [Java DTO와의 비교]
-    - Java의 엄격한 타입 DTO와 달리, 런타임에는 일반 Python dict (Map<String, Object>)로 동작한다.
-    - 각 노드는 전체 State를 재생성하지 않고, 자신이 변경/추가한 키-값만 담은 델타(Delta) dict를 반환한다.
-    - 일반 필드(intent, answer 등): 반환된 최신 값으로 이전 State의 값을 덮어쓴다(Overwrite).
-    - 누적 필드(Annotated[list, operator.add]): 리듀서(Reducer)가 동작하여 이전 리스트에
-      반환된 리스트를 이어 붙인다(List.addAll). path, warnings, llm_calls가 이에 해당한다.
-    - 그래프 실행이 완료되면 최종 CardState가 그대로 Streamlit UI의 outcome에 전달된다.
-    """
-
-    request_id: str  # run이 만든 요청 식별자.
-    started: float  # run이 기록한 시작 시각(perf_counter).
-    question: str  # run 입력.
-    catalog: list[dict]  # interpret가 읽은 혜택 목록.
-    candidate_search: dict  # Neo4j N-mode candidate diagnostics.
-    retrieval_trace: list[dict]  # 혜택별 상세 조회 엔진과 건수.
-    exclusions: list[dict]  # 질문 낱말이 제외 문구에 있는 혜택과 검증 출처.
-    intent: str  # interpret가 고른 질문 유형.
-    search_parameters: dict  # interpret가 검증한 조회 조건; retrieve는 이 값만 사용한다.
-    retrieved_data: list[dict]  # retrieve가 만든 혜택별 Neo4j 조회 원본.
-    retrieved_for: str  # 검증 모드: 조회에 쓴 질문·검색 조건.
-    evidence: list[dict]  # retrieve가 evidence_id 기준으로 합친 근거.
-    statements: list[str]  # retrieve가 실행한 Cypher 식별자.
-    unresolved: list[str]  # 조회 결과에서 판별한 미확정 사항 전체(개발자 기록).
-    open_conditions: list[dict]  # 이번 질문에 영향을 주는 미확정 카드 이용 조건.
-    data_notices: list[str]  # 카드 이용 조건이 아닌 자료 검토 상태 안내.
-    other_unresolved: list[str]  # 이번 질문과 직접 관련이 없어 고객 화면에서 뺀 미확정 사항.
-    context: dict  # answer가 LLM에 전달한 검색 결과.
-    answer: dict  # answer 또는 finish가 만든 화면용 답변.
-    answer_diagnostics: dict  # 현재 실행 중 원본·검증 결과 비교(개발 UI 전용, app_log에 저장하지 않음).
-    error: dict | None  # 실패 단계, 코드, 예외 형식 이름.
-    warnings: Annotated[list[str], operator.add]  # 노드별 경고 누적.
-    llm_calls: Annotated[list[dict], operator.add]  # 호출별 모델·토큰·비용 누적.
-    path: Annotated[list[str], operator.add]  # 실제 실행된 노드 순서.
+    request_id: str                                       # 요청별 고유 추적 ID(UUID)
+    started: float                                        # 파이프라인 시작 시각 타임스탬프(perf_counter)
+    question: str                                         # 사용자 원문 입력 질문 문자열
+    catalog: list[dict]                                   # Neo4j 전체 혜택 메타데이터 목록(Map의 List)
+    candidate_search: dict                                # N 모드 하이브리드(벡터+키워드+RRF) 후보 검색 진단 정보
+    retrieval_trace: list[dict]                           # 혜택별 상세 조회 엔진 및 항목별 건수 추적 로그
+    exclusions: list[dict]                                # 질문 낱말 매칭으로 판정된 적용 제외 혜택 목록
+    intent: str                                           # 질문 해석(interpret) 노드가 판별한 의도(Intent)
+    search_parameters: dict                               # 검증된 Neo4j 상세 조회 파라미터(benefit_keys, sections 등)
+    retrieved_data: list[dict]                            # Neo4j 그래프에서 조회한 혜택/규칙/조건 원본 데이터
+    retrieved_for: str                                    # 검증 모드용 캐시 키(질문 및 조회 조건 해시)
+    evidence: list[dict]                                  # PDF 원문에서 추출하여 evidence_id 단위로 병합한 근거 목록
+    statements: list[str]                                 # retrieve 단계에서 실행된 Cypher 쿼리 식별자 목록
+    unresolved: list[str]                                 # 혜택 데이터 중 미확정/검토 필요 사항 전체 목록
+    open_conditions: list[dict]                           # 이번 질문 판정에 직접 영향을 주는 미확정 카드 이용 조건
+    data_notices: list[str]                               # 담당자 미검토 등 데이터 신뢰도 안내 문구 목록
+    other_unresolved: list[str]                           # 질문과 무관하여 화면 표시에서 제외된 기타 미확정 항목
+    context: dict                                         # answer 노드가 답변 생성 LLM 프롬프트에 주입한 정제 문맥
+    answer: dict                                          # answer/finish 노드가 최종 생성 및 검증 완료한 화면용 답변(Map)
+    answer_diagnostics: dict                              # 답변 생성 전후 비교 및 사후 검증 진단 데이터(개발 UI 전용)
+    error: dict | None                                    # 실패 발생 시 단계(stage), 에러 코드(code), 예외 클래스 정보
+    warnings: Annotated[list[str], operator.add]          # 리듀서(operator.add)로 각 노드의 경고 리스트를 누적 병합(addAll)
+    llm_calls: Annotated[list[dict], operator.add]        # 리듀서로 각 LLM 호출의 모델명·토큰 수·비용(USD)을 누적 기록
+    path: Annotated[list[str], operator.add]              # 리듀서로 실제 경유한 노드 이름 순서(["interpret", "retrieve", ...]) 누적
 
 
 def configure_card_logging() -> None:
@@ -369,43 +362,34 @@ def previous_month_spend(question: str) -> int | None:
 
 
 def collect_evidence(details: list[dict], intent: str) -> list[dict]:
-    """혜택별 근거를 evidence_id 하나로 합치고 질문 유형에 맞는 주체만 남긴다.
-
-    [PDF 원문 근거 연결] 각 detail["evidence"] 행은 (근거 연결 link, 원문 근거 evidence, rule_key)이다.
-    같은 PDF 인용(evidence_id)이 여러 혜택·규칙에 연결돼 있으면 한 건으로 합치고, 어느 혜택(benefit_ids)·
-    규칙(rule_keys)·연결 주체(subjects: CARD/BNFT/RULE/ITEM)에 속하는지 목록으로 남긴다.
-    이후 validate_answer는 benefit_ids로 "그 혜택의 근거만 인용했는지"를 검사한다.
-
-    Returns:
-        페이지·evidence_id 순으로 정렬한 근거 목록(State의 evidence).
-    """
-    allowed = EVIDENCE_SUBJECTS_BY_INTENT.get(intent)
-    merged: dict[str, dict] = {}
-    for detail in details:
-        benefit_row = source(detail["context"]["benefit"])
-        benefit_name = benefit_row.get("item_nm") or benefit_row.get("bnft_nm") or benefit_row.get("name")
-        benefit_id = detail_ref(detail)
-        for row in detail["evidence"]:
-            subject = row["link"].get("ev_subject_cd")
-            if subject is None:
-                lineage = str(row["link"].get("source_table", ""))
+    """혜택별 상세 레코드에서 PDF 근거(evidence)를 추출하여 evidence_id 단위로 병합 및 필터링한다."""
+    allowed = EVIDENCE_SUBJECTS_BY_INTENT.get(intent)     # 질문 의도(Intent)별로 허용된 근거 대상 코드(CARD, BNFT 등) 조회
+    merged: dict[str, dict] = {}                          # evidence_id를 키로 사용하는 중복 제거용 Map 초기화
+    for detail in details:                                # 조회된 혜택 상세 정보 목록 순회
+        benefit_row = source(detail["context"]["benefit"])  # 혜택 노드의 속성 딕셔너리 추출
+        benefit_name = benefit_row.get("item_nm") or benefit_row.get("bnft_nm") or benefit_row.get("name")  # 혜택 표시명 추출
+        benefit_id = detail_ref(detail)                   # 혜택 고유 식별자(엔터티 참조 문자열) 추출
+        for row in detail["evidence"]:                    # 해당 혜택에 연결된 PDF 근거 레코드 목록 순회
+            subject = row["link"].get("ev_subject_cd")    # 근거 연결 주체 코드(CARD/BNFT/RULE/ITEM) 추출
+            if subject is None:                           # 연결 주체 코드가 없으면 출처 테이블 계보(lineage)로 판정
+                lineage = str(row["link"].get("source_table", ""))  # 출처 테이블 메타데이터 문자열 변환
                 if lineage.startswith("derived:card_common_bnft+"):
-                    subject = "COMMON_STG"
+                    subject = "COMMON_STG"                # 공통 혜택 스테이징 출처로 분류
                 elif lineage.startswith("derived:dp_supported_by+") or lineage.startswith("derived:card_evidence_link+"):
-                    subject = "EXTRACTION_STAGE"
-            if allowed is not None and subject not in allowed:
+                    subject = "EXTRACTION_STAGE"          # PDF 추출 파이프라인 출처로 분류
+            if allowed is not None and subject not in allowed:  # 질문 의도에서 허용하지 않는 주체면 제외(Skip)
                 continue
-            props = source(row["evidence"])
-            item = merged.setdefault(props["evidence_id"], {
+            props = source(row["evidence"])               # PDF Evidence 노드의 속성 딕셔너리 추출
+            item = merged.setdefault(props["evidence_id"], {  # Map.computeIfAbsent처럼 없으면 새 항목 등록
                 "evidence_id": props["evidence_id"], "page_no": props.get("page_no"),
                 "approval_status": props.get("approval_status_cd"), "quote": props.get("quote_txt", ""),
                 "subjects": [], "items": [], "benefits": [], "benefit_ids": [], "rule_keys": []})
             for field, value in (("subjects", subject), ("benefits", benefit_name), ("benefit_ids", benefit_id),
                                  ("rule_keys", row.get("rule_key")),
                                  ("items", row["link"].get("ev_item_key"))):
-                if value and value != "-" and value not in item[field]:
+                if value and value != "-" and value not in item[field]:  # 유효한 값이면서 중복되지 않은 경우에만 리스트에 추가
                     item[field].append(value)
-    return sorted(merged.values(), key=lambda item: (item["page_no"] or 0, item["evidence_id"]))
+    return sorted(merged.values(), key=lambda item: (item["page_no"] or 0, item["evidence_id"]))  # PDF 페이지 번호 및 ID 순 정렬 반환
 
 
 def answer_evidence_rows(evidence: list[dict], benefits: list[dict], per_benefit: int = 12) -> list[dict]:
@@ -471,39 +455,25 @@ def compact_answer_context(context: dict) -> dict:
 
 
 def find_exclusions(question: str, details: list[dict]) -> list[dict]:
-    """질문 낱말이 혜택의 적용 제외 문구에 있는지 Neo4j 조회 원본(source_json)으로 판정한다.
-
-    [N 모드 단일 동작]
-    - retrieve 노드에서 상세 조회된 혜택 노드의 source_json에서 제외 규칙 및 제외 토큰을 추출한다.
-    - 예: "KTX도 대중교통 캐시백 돼?" 질문에서 'KTX'가 대중교통 혜택의 제외 문구 토큰에 포함되어 있고,
-      적용 대상 이름(target_nm)에는 없으면 제외(Exclusion) 대상으로 판정한다.
-    - 판정 결과는 answer 노드의 enforce_exclusions()로 넘어가 최종 답변을
-      "혜택을 받을 수 없습니다" 고정 문구로 방어(Guard)하는 데 사용된다.
-
-    Returns:
-        [{"benefit_id", "name", "terms", "verified_by"}] (State의 exclusions 키에 저장).
-    """
-    terms = search_terms(question)
-    found = []
-    for detail in details:
+    """질문 낱말이 혜택의 적용 제외 문구에 있는지 Neo4j 조회 원본(source_json)으로 판정한다."""
+    terms = search_terms(question)                        # 질문 문자열에서 의미 있는 검색 낱말(명사·외래어) 토큰 추출
+    found = []                                            # 제외 조건에 매칭된 결과 혜택 목록 초기화
+    for detail in details:                                # 상세 조회된 각 혜택 레코드 순회
         if is_fee_detail(detail):      # 연회비 항목에는 적용 제외 규칙이 없다.
             continue
-        benefit = source(detail["context"]["benefit"])
-        row, verified_by = benefit, "neo4j_source_json"
-        tokens = excluded_tokens(row)
-        targets = {target.get("target_nm", "").casefold() for rule in row.get("rule_list") or [] for target in rule.get("target_list") or []}
+        benefit = source(detail["context"]["benefit"])    # 혜택 노드의 속성 딕셔너리 추출
+        row, verified_by = benefit, "neo4j_source_json"   # 판정 근거 소스 표기 지정
+        tokens = excluded_tokens(row)                     # 혜택 메타데이터에서 제외 대상 단어 집합(Set) 추출
+        targets = {target.get("target_nm", "").casefold() for rule in row.get("rule_list") or [] for target in rule.get("target_list") or []}  # 적용 대상 가맹점 명칭 집합
         # 적용 대상 이름에 들어 있는 낱말(예: 대상 '카카오T(택시)'의 '카카오T')은 제외 문구에 있어도 제외로 보지 않는다.
-        # Broad category words can occur in an exclusion scoped to an unrelated benefit rule
-        # (e.g. "subscription" under online shopping while the same item has telecom benefits).
-        # Keep those conditions in the retrieved context; only auto-enforce specific merchant/transaction terms.
-        broad_terms = {"\uc694\uae08", "\ud1b5\uc2e0\uc694\uae08", "\uad6c\ub3c5", "\uc815\uae30\uad6c\ub3c5", "ott", "\uacb0\uc81c", "\uc11c\ube44\uc2a4", "\uc790\ub3d9\ub0a9\ubd80", "\ud1b5\uc2e0", "\ud560\uc778", "\uc801\ub9bd"}
-        matched = [term for term in terms if term.casefold() in tokens
-                   and term.casefold() not in broad_terms
-                   and not any(term.casefold() in target for target in targets)]
-        if matched:
-            found.append({"benefit_id": detail_ref(detail), "name": benefit.get("item_nm") or benefit.get("bnft_nm"),
-                          "terms": matched, "verified_by": verified_by})
-    return found
+        broad_terms = {"\uc694\uae08", "\ud1b5\uc2e0\uc694\uae08", "\uad6c\ub3c5", "\uc815\uae30\uad6c\ub3c5", "ott", "\uacb0\uc81c", "\uc11c\ube44\uc2a4", "\uc790\ub3d9\ub0a9\ubd80", "\ud1b5\uc2e0", "\ud560\uc778", "\uc801\ub9bd"}  # 일반 범주어(오탐 방지용)
+        matched = [term for term in terms if term.casefold() in tokens  # 질문 단어가 제외 토큰에 포함되고
+                   and term.casefold() not in broad_terms  # 일반 범주어가 아니며
+                   and not any(term.casefold() in target for target in targets)]  # 적용 대상 명칭에도 포함되지 않은 단어 매칭
+        if matched:                                       # 제외 매칭 단어가 1개 이상 존재하면
+            found.append({"benefit_id": detail_ref(detail), "name": benefit.get("item_nm") or benefit.get("bnft_nm"),  # 결과 맵 생성
+                          "terms": matched, "verified_by": verified_by})  # 제외 목록에 추가
+    return found                                          # 매칭된 제외 혜택 목록 반환
 
 
 def topic_marker(word: str) -> str:
@@ -788,41 +758,28 @@ def _candidate_matches_topic(row: dict, topic: str) -> bool:
 
 # region 2-2. 답변 LLM 문맥 구성과 미확정 사항 판별 (retrieve·answer 노드)
 def benefit_context(detail: dict, previous_spend: int | None = None) -> dict:
-    """Neo4j 상세 레코드(JSON/dict)를 답변 LLM 프롬프트에 주입할 표준 문맥 구조로 변환한다.
-
-    [데이터 계층 변환 구조]
-    - Java의 Entity -> Response DTO 매핑과 동일하게, DB 원본 필드 중 불필요한 속성을 걷어내고
-      답변 생성과 사후 검증(validate_answer)에 필요한 핵심 필드만 정제한다.
-    - 규칙(rule_list): value_num(할인율/금액), value_unit_cd(PCT/KRW), target_nm(가맹점 대상 목록) 추출.
-    - 조건(conditions): condition_groups()를 통해 DNF(OR 그룹 내 AND 조건) 트리 구조로 재구성.
-    - 구간 한도(limit_tiers): limit_tier_view()를 통해 실적 기준(전월 30만/80만 등)별
-      혜택 자체 한도(own cap)와 통합 한도(shared cap) 목록을 구조화하여 포함.
-    - 제외 문구(exclusions): BNFT_EXCL, SPEND_EXCL 조건에서 제외 텍스트를 추출.
-
-    반환:
-        dict: benefit_id, name, card, rules, conditions, limit_tiers, limits, targets 등을 담은 문맥 dict.
-    """
-    benefit = source(detail["context"]["benefit"])
-    if benefit.get("card_product_item_id") is not None or benefit.get("card_common_bnft_id") is not None:
-        is_item = benefit.get("card_product_item_id") is not None
-        item_data = benefit.get("item_data") if is_item else {}
-        item_data = item_data if isinstance(item_data, dict) else {}
-        rule_rows = benefit.get("rule_list") if is_item else []
-        rule_rows = rule_rows if isinstance(rule_rows, list) else []
-        groups = condition_groups(detail.get("conditions") or [])
-        limits_text = benefit.get("item_limit_txt") if is_item else benefit.get("bnft_limit_txt")
-        limits = [{"text": limits_text}] if limits_text else []
-        targets = [target.get("target_nm") for rule in rule_rows for target in (rule.get("target_list") or [])
+    """Neo4j 상세 레코드(JSON/dict)를 답변 LLM 프롬프트에 주입할 표준 문맥 구조로 변환한다."""
+    benefit = source(detail["context"]["benefit"])        # 혜택 노드의 직렬화 속성 역직렬화 및 추출
+    if benefit.get("card_product_item_id") is not None or benefit.get("card_common_bnft_id") is not None:  # 정형 항목 또는 공통 혜택인 경우
+        is_item = benefit.get("card_product_item_id") is not None  # 개별 상품 항목 여부 플래그
+        item_data = benefit.get("item_data") if is_item else {}    # 항목 세부 데이터(Map) 추출
+        item_data = item_data if isinstance(item_data, dict) else {}  # 타입 안정성 보장
+        rule_rows = benefit.get("rule_list") if is_item else []    # 할인율/금액 규칙 리스트 추출
+        rule_rows = rule_rows if isinstance(rule_rows, list) else []  # 빈 리스트 폴백
+        groups = condition_groups(detail.get("conditions") or [])  # 전월실적/횟수 조건을 DNF(OR 내 AND) 트리로 구조화
+        limits_text = benefit.get("item_limit_txt") if is_item else benefit.get("bnft_limit_txt")  # 통합한도/한도 원문 텍스트
+        limits = [{"text": limits_text}] if limits_text else []    # 한도 목록 리스트 구성
+        targets = [target.get("target_nm") for rule in rule_rows for target in (rule.get("target_list") or [])  # 적용 대상 가맹점명 추출(Stream flatMap)
                    if isinstance(target, dict) and target.get("target_nm")]
-        exclusions = [atom.get("text") for group in groups for branch in group["branches"]
+        exclusions = [atom.get("text") for group in groups for branch in group["branches"]  # 제외 조건(BNFT_EXCL, SPEND_EXCL) 텍스트 추출
                       for atom in branch["atoms"] if atom.get("text") and atom.get("type") in ("BNFT_EXCL", "SPEND_EXCL")]
-        name = benefit.get("item_nm") if is_item else benefit.get("bnft_nm")
-        card = source(detail["context"].get("card") or {}).get("product_nm")
-        tier_view = limit_tier_view(item_data)
-        if not tier_view:
+        name = benefit.get("item_nm") if is_item else benefit.get("bnft_nm")  # 혜택/항목 명칭
+        card = source(detail["context"].get("card") or {}).get("product_nm")  # 해당 카드의 공식 상품명
+        tier_view = limit_tier_view(item_data)            # 전월 실적 구간별 한도 구조화 뷰 생성
+        if not tier_view:                                 # 구조화 한도가 없으면 추출 원천에서 대체 생성 시도
             tier_view = extraction_limit_tier_view(detail.get("context", {}).get("extraction_sources", []),
                                                    detail.get("evidence", []))
-        return {"benefit_id": detail_ref(detail), "name": name, "card": card,
+        return {"benefit_id": detail_ref(detail), "name": name, "card": card,  # LLM 프롬프트에 전달할 핵심 필드 매핑 DTO 반환
                 "type": benefit.get("item_subtype_cd") if is_item else benefit.get("bnft_type_cd"),
                 "verification_status": benefit.get("verification_status_cd"),
                 "rule_text": benefit.get("item_rule_txt") if is_item else benefit.get("bnft_rule_txt"),
@@ -836,9 +793,9 @@ def benefit_context(detail: dict, previous_spend: int | None = None) -> dict:
                 "limit_text": limits_text, "exclusion_text": "\n".join(exclusions), "targets": targets,
                 **({"common_service": {"name": (detail["context"].get("common") or {}).get("common_nm")}}
                    if detail["context"].get("common") else {})}
-    if detail.get("simplified"):
-        text = detail.get("benefit_text") or {}
-        common = detail["context"].get("common")
+    if detail.get("simplified"):                          # 간이 구조 레코드일 경우의 폴백 처리
+        text = detail.get("benefit_text") or {}           # 혜택 텍스트 딕셔너리 추출
+        common = detail["context"].get("common")          # 공통 서비스 정보 추출
         return {"benefit_id": detail_ref(detail), "name": benefit.get("bnft_nm") or benefit.get("benefit_name"),
                 "card": (detail["context"].get("card") or {}).get("product_name"),
                 "type": benefit.get("bnft_type_cd"), "verification_status": benefit.get("verification_status_cd"),
@@ -1735,73 +1692,64 @@ def fixed_conclusion(conclusion: str, conflicts: list[dict], amount: int | None,
 
 # region 2-4. 답변 검증 (LLM 출력 → 화면용 answer)
 def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict, list[str]]:
-    """[사후 팩트체크 검증] LLM 생성 답변을 DB 조회 원본(context)과 대조하여 엄격히 검증한다.
+    """LLM 생성 답변을 DB 조회 원본(context) 및 PDF 근거와 대조하여 사후 팩트체크를 수행한다."""
+    evidence = {item["evidence_id"]: item for item in context["evidence"]}  # 검색된 유효 PDF 근거 ID 맵(O(1) 빠른 조회를 위한 HashMap)
+    benefits = {item["benefit_id"]: item for item in context.get("benefits", [])}  # 조회된 혜택 DTO 맵
+    conflicts = context.get("rule_selection_unresolved", [])  # 단일 혜택 내 복수 규칙 충돌 목록
+    numbers = numbers_in(json.dumps(context, ensure_ascii=False)) | numbers_in(question)  # 문맥과 질문에 등장하는 모든 숫자 집합(Set)
+    all_known = known_values(context, question, None)     # 환각 판정 기준이 되는 기지 값(단위, 통화, 숫자) 집합
+    points, moved, warnings, dropped = [], [], [], 0      # 통과된 문장, 이동된 문장, 경고 목록, 탈락 문장 수 초기화
 
-    Java 엔터프라이즈 시스템의 Business Validation Layer에 해당한다.
-    생성형 AI 모델의 환각(Hallucination), 임의 수치 왜곡, 무관한 근거 인용을 차단한다.
-
-    검증 순서:
-        1. 근거 ID 검증: points 내의 evidence_ids가 문맥(context['evidence'])에 실제 존재하고,
-           해당 혜택 소유의 근거가 맞는지 확인 (다른 혜택 근거를 도용한 경우 제거).
-        2. 근거 부재 문장 폐기: 근거가 뒷받침되지 않는 문장은 답변에서 전면 제외.
-        3. 수치/비율 팩트체크: 문장에 언급된 금액·비율·횟수가 DB 원본 규칙(rules, limits, tiers)에
-           실제 존재하는지 대조 (존재하지 않으면 환각으로 판정하여 문장 탈락).
-        4. 구간 한도 및 미확정 조건 점검: 다중 구간이 충돌하거나 미확정 상태인 경우
-           임의 단정을 막고 시스템 고정 안내 문구로 교정.
-        5. 검증 등급 부여: 통과한 각 문장에 verification 상태를 부여하고 화면용 answer를 구성.
-
-        6. 결론(conclusion) 검증·보정(fixed_conclusion), 미확정 사항 정리 및 최종 상태(status) 결정.
-
-    Args:
-        raw: 답변 LLM이 반환한 Pydantic 구조화 출력 (CardAnswer 객체).
-        context: answer 노드가 LLM에 전달했던 검색 문맥 dict + unresolved 메타데이터.
-        question: 사용자 원문 질문 문자열 (질문에 언급된 숫자는 기지 값으로 허용).
-
-    Returns:
-        tuple[answer_dict, warnings_list]: 정제된 화면용 답변 dict와 검증 탈락/경고 문자열 리스트.
-    """
-    evidence = {item["evidence_id"]: item for item in context["evidence"]}
-    benefits = {item["benefit_id"]: item for item in context.get("benefits", [])}
-    conflicts = context.get("rule_selection_unresolved", [])
-    numbers = numbers_in(json.dumps(context, ensure_ascii=False)) | numbers_in(question)
-    all_known = known_values(context, question, None)
-    points, moved, warnings, dropped = [], [], [], 0
-
-    def drop(reason: str, text: str, material: bool = True) -> None:
+    def drop(reason: str, text: str, material: bool = True) -> None:  # 검증 탈락 처리 내부 헬퍼 함수
         nonlocal dropped
         if material:
             dropped += 1
         warnings.append(f"{reason}: {text[:60]}")
 
-    for point in raw.points:
-        text = point.text.strip()
-        if not text:
+    for point in raw.points:                              # LLM이 생성한 각 세부 문장(Point DTO) 순회
+        text = point.text.strip()                         # 문장 앞뒤 공백 제거
+        if not text:                                      # 빈 문장은 스킵
             continue
-        benefit_id = point.benefit_id if point.benefit_id in benefits else None
-        if benefit_id is not None:
-            limit_problem = limit_tier_answer_problem(text, context, question, benefits[benefit_id])
-            if limit_problem:
-                # A claim that a source-mapped tier is unknown is itself false; removing it
-                # does not make the answer partial when the verified tier facts remain.
-                drop(limit_problem, text, material=limit_problem != "structured limit tiers were incorrectly marked unresolved")
-                continue
-        if STATUS_SENTENCE.search(text):
-            moved.append(text)
+        benefit_id = point.benefit_id if point.benefit_id in benefits else None  # 문장이 언급한 혜택 ID 유효성 확인
+        if STATUS_SENTENCE.search(text):                  # "검토 중", "미확정" 등 내부 상태 서술 문장 탐지
+            moved.append(text)                            # 미확정 목록으로 이동
             warnings.append(f"상태 문장을 미확정 항목으로 옮겼습니다: {text[:60]}")
             continue
         benefit_id = point.benefit_id if point.benefit_id in benefits else None
-        if point.benefit_id and benefit_id is None:
+        if point.benefit_id and benefit_id is None:       # DB에 없는 가짜 혜택 ID 인용 시 경고
             warnings.append(f"조회하지 않은 혜택 ID를 제거했습니다: {point.benefit_id}")
-        unknown_ids = sorted(set(point.evidence_ids) - set(evidence))
+        unknown_ids = sorted(set(point.evidence_ids) - set(evidence))  # 실제 조회되지 않은 가짜 근거 ID 추출(차집합)
         if unknown_ids:
             warnings.append(f"조회되지 않은 근거 ID를 제거했습니다: {unknown_ids}")
-        known_ids = list(dict.fromkeys(item for item in point.evidence_ids if item in evidence))
-        ids = [item for item in known_ids if _in_scope(evidence[item], benefit_id)]
+        known_ids = list(dict.fromkeys(item for item in point.evidence_ids if item in evidence))  # 유효한 근거 ID만 중복 제거 후 추출
+        ids = [item for item in known_ids if _in_scope(evidence[item], benefit_id)]  # 해당 혜택 소유의 근거만 필터링(타 혜택 근거 도용 차단)
         if len(ids) < len(known_ids):
             warnings.append(f"다른 혜택의 근거 ID를 제거했습니다: {sorted(set(known_ids) - set(ids))}")
-        if not ids:
+        if not ids:                                       # 뒷받침하는 PDF 근거가 0건이면 환각으로 판정하여 문장 탈락
             drop("근거 ID가 없는 문장을 버렸습니다", text)
             continue
+        if benefit_id is not None:
+            limit_problem = limit_tier_answer_problem(
+                text, context, question, benefits[benefit_id], evidence_ids=ids)
+            if limit_problem:
+                drop(limit_problem, text, material=limit_problem != "structured limit tiers were incorrectly marked unresolved")
+                continue
+            requires_approval_qualifier = _APPROVAL_LIMIT_CONDITION.search(
+                json.dumps(benefits[benefit_id], ensure_ascii=False))
+            if requires_approval_qualifier and _APPROVAL_AMOUNT_CLAIM.search(text):
+                # Attach a retrieved condition quote only when the Evidence relationship belongs to this benefit.
+                source_condition_rows = [item for item in context.get("evidence", [])
+                                         if _in_scope(item, benefit_id)
+                                         and _APPROVAL_LIMIT_CONDITION.search(item.get("quote") or "")]
+                ids = list(dict.fromkeys([*ids, *(item["evidence_id"] for item in source_condition_rows)]))
+            text, approval_amount_qualified = qualify_approval_amount_discount(
+                text, benefits[benefit_id], [evidence[item] for item in ids])
+            if (requires_approval_qualifier and _APPROVAL_AMOUNT_CLAIM.search(point.text)
+                    and not _APPROVAL_LIMIT_QUALIFIER.search(point.text) and not approval_amount_qualified):
+                drop("승인 금액 할인 조건을 뒷받침하는 한도 Evidence가 없어 문장을 버렸습니다", point.text)
+                continue
+            if approval_amount_qualified:
+                warnings.append("승인 금액 할인 문장에 원문 한도 조건을 보완했습니다.")
         pending_grace = any(item.get("topic") == INITIAL_GRACE_TOPIC for item in context.get("open_conditions", []))
         cites_pending_scope = any(
             evidence[evidence_id].get("approval_status") == "PENDING"
@@ -1811,30 +1759,30 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
                                    and not UNCERTAINTY_WORDS.search(text)):
             drop("초기 실적 유예의 미확정 적용 범위를 확정한 문장을 버렸습니다", text)
             continue
-        unknown = unknown_values(text, known_values(context, question, benefit_id), numbers)
-        if unknown:
+        unknown = unknown_values(text, known_values(context, question, benefit_id), numbers)  # DB에 없는 임의 수치/비율 탐지
+        if unknown:                                       # 임의 조작된 숫자가 있으면 환각 판정 탈락
             drop(f"조회 결과에 없는 값 {unknown}이 있는 문장을 버렸습니다", text)
             continue
-        foreign = foreign_spend_in(text, context)
+        foreign = foreign_spend_in(text, context)         # 타 혜택의 실적 기준 혼동 탐지
         if foreign:
             drop(f"다른 혜택의 실적 기준 {foreign}이 있는 문장을 버렸습니다", text)
             continue
-        if distorts_tier(text, conflicts):
+        if distorts_tier(text, conflicts):                # 금액 구간 왜곡 검사
             drop("금액 구간의 기준과 지급액이 원문과 다른 문장을 버렸습니다", text)
             continue
-        if distorts_limit_tier(text, [item for item in context.get("benefits", []) if benefit_id in (None, item["benefit_id"])]):
+        if distorts_limit_tier(text, [item for item in context.get("benefits", []) if benefit_id in (None, item["benefit_id"])]):  # 실적-한도 매핑 왜곡 검사
             drop("실적 구간과 한도 금액의 짝이 원문과 다른 문장을 버렸습니다", text)
             continue
-        name = picks_single_tier(text, conflicts, benefit_id)
+        name = picks_single_tier(text, conflicts, benefit_id)  # 미확정 다중 구간 중 하나만 임의 단정했는지 검사
         if name:
             drop(f"{name}의 규칙 선택이 미확정인데 일부 구간 금액만 답한 문장을 버렸습니다", text)
             continue
-        if INVENTED_RULE.search(text) and any(benefit_id in (None, item["benefit_id"]) for item in conflicts):
+        if INVENTED_RULE.search(text) and any(benefit_id in (None, item["benefit_id"]) for item in conflicts):  # 허위 규칙 표현 검사
             drop("데이터에 없는 규칙 적용 방식이 있는 문장을 버렸습니다", text)
             continue
-        points.append({"text": text, "evidence_ids": ids, "benefit_id": benefit_id, "origin": "llm",
+        points.append({"text": text, "evidence_ids": ids, "benefit_id": benefit_id, "origin": "llm",  # 모든 사후 검증을 통과한 유효 문장 저장
                        "benefit_name": benefits[benefit_id]["name"] if benefit_id else None,
-                       "verification": verification_level(text, [evidence[item] for item in ids])})
+                       "verification": verification_level(text, [evidence[item] for item in ids])})  # 근거 승인 상태에 따른 신뢰도 등급 부여
 
     for conflict in conflicts:
         if len(conflict["applicable_rule_keys"]) < 2:
@@ -1912,9 +1860,25 @@ def validate_answer(raw: CardAnswer, context: dict, question: str) -> tuple[dict
     answer_text, source_cd = "", "none"
     if points:
         problem = ("requested amount or condition remains unconfirmed" if unresolved_requested_fact
-                   else answer_text_problem(raw.answer_text.strip(), context, question, all_known, numbers))
+                   else answer_text_problem(raw.answer_text.strip(), context, question, all_known, numbers, points))
         if problem is None:
             answer_text, source_cd = raw.answer_text.strip(), "llm"
+        elif problem == "validated transaction amount condition omitted from answer text":
+            # A point has already passed benefit-scope and Evidence checks. Restore only
+            # those grounded conditions that the free-form answer_text left out.
+            missing_conditions = missing_validated_transaction_condition_points(
+                raw.answer_text.strip(), context, points, question)
+            additions = list(dict.fromkeys(point["text"] for point in missing_conditions))
+            answer_text = "\n\n".join(part for part in (raw.answer_text.strip(), *additions) if part)
+            source_cd = "validated_condition_completion"
+            warnings.append("검증된 결제 금액 조건이 자연어 답변에서 빠져 근거 문장으로 보완했습니다.")
+        elif problem == "validated frequency condition omitted from answer text":
+            missing_frequencies = missing_validated_frequency_facts(
+                raw.answer_text.strip(), context, points, question)
+            addition = format_frequency_completion(missing_frequencies)
+            answer_text = "\n\n".join(part for part in (raw.answer_text.strip(), addition) if part)
+            source_cd = "validated_condition_completion"
+            warnings.append("검증된 혜택별 횟수 조건이 자연어 답변에서 빠져 근거 문장으로 보완했습니다.")
         else:
             warnings.append(f"자연어 답변 대신 검증된 문장을 표시합니다: {problem}")
             body = " ".join(dict.fromkeys(point["text"] for point in points if point["text"] != conclusion))
@@ -1959,21 +1923,78 @@ def _has_structured_limit_tiers(benefit: dict) -> bool:
     return bool(benefit.get("limit_tiers") or benefit.get("tier_mappings"))
 
 
-def _unstructured_limit_pair_claim(text: str) -> bool:
+def _unstructured_limit_pair_claim(text: str, benefit: dict | None = None) -> bool:
+    """Identify unsupported previous-month spend tiers, not per-transaction rules."""
+    condition_bases = {
+        str(atom.get("basis") or "").upper()
+        for group in (benefit or {}).get("conditions") or []
+        for branch in group.get("branches") or []
+        for atom in branch.get("atoms") or []
+        if atom.get("basis")
+    }
+    if condition_bases and not condition_bases.intersection({"PREV_MONTH_SPEND", "PREVIOUS_MONTH_SPEND"}):
+        return False
     for sentence in SENTENCE_END.split(text):
         if not re.search(r"한도|할인|적립", sentence):
+            continue
+        if not PREVIOUS_MONTH_SPEND.search(sentence):
             continue
         amounts = [match for match in VALUE_PATTERN.finditer(sentence)
                    if value_tokens(match.group(0))[0][0] == "MONEY"]
         thresholds = [match for match in amounts
                       if re.match(r"\s*(?:이상|초과|이하|미만)", sentence[match.end():])]
         cap_amounts = [match for match in amounts if match not in thresholds]
-        if thresholds and cap_amounts:
+        spend_thresholds = []
+        for threshold in thresholds:
+            before = sentence[:threshold.start()]
+            # Keep a prior-month spend basis in the same condition clause; transaction thresholds
+            # separated from a negative spend statement must not be treated as spend tiers.
+            clause = re.split(r"[,;]|(?:건당|결제\s*건)", before)[-1]
+            if PREVIOUS_MONTH_SPEND.search(clause):
+                spend_thresholds.append(value_tokens(threshold.group(0))[0][1])
+        if len(set(spend_thresholds)) >= 2 and cap_amounts:
             return True
     return False
 
 
-def limit_tier_answer_problem(text: str, context: dict, question: str, benefit: dict | None = None) -> str | None:
+def _monthly_cap_claim_values(text: str) -> set[float]:
+    """Return amounts stated as monthly caps, excluding spend thresholds and transaction values."""
+    values = set()
+    for sentence in SENTENCE_END.split(text):
+        clauses = re.split(r"[,;]|\s*(?:이며|이고|그리고|또한)\s*", sentence)
+        for clause in clauses:
+            if "한도" not in clause:
+                continue
+            for match in VALUE_PATTERN.finditer(clause):
+                token = value_tokens(match.group(0))[0]
+                if token[0] == "MONEY" and not re.match(r"\s*(?:이상|초과|이하|미만)", clause[match.end():]):
+                    values.add(token[1])
+    return values
+
+
+def _fixed_monthly_cap_values(benefit: dict) -> set[float]:
+    """Read one fixed monthly cap from this benefit's limit text; tier structures are excluded."""
+    if _has_structured_limit_tiers(benefit):
+        return set()
+    texts = [str(benefit.get("limit_text") or "")]
+    texts.extend(str(limit.get("text") or "") for limit in benefit.get("limits") or [])
+    monthly_values = {
+        token[1]
+        for text in texts
+        for token in value_tokens(text)
+        if token[0] == "MONEY" and (token[2] == "MONTH" or "월" in text)
+    }
+    # Multiple distinct monthly monetary values indicate that the source is not a single fixed cap.
+    return monthly_values if len(monthly_values) == 1 else set()
+
+
+def limit_tier_answer_problem(
+    text: str,
+    context: dict,
+    question: str,
+    benefit: dict | None = None,
+    evidence_ids: list[str] | None = None,
+) -> str | None:
     """Do not infer tier-to-cap pairs without structure or call known pairs unresolved."""
     if not LIMIT_QUESTION_WORDS.search(question):
         return None
@@ -2011,12 +2032,217 @@ def limit_tier_answer_problem(text: str, context: dict, question: str, benefit: 
         if LIMIT_TIER_UNCERTAINTY.search(text):
             return "structured limit tiers were incorrectly marked unresolved"
         return None
-    if not any(structured) and _unstructured_limit_pair_claim(text):
-        return "tier-to-cap mapping is unavailable in retrieved structured data"
+    if not any(structured):
+        if any(_unstructured_limit_pair_claim(text, item) for item in targets):
+            return "tier-to-cap mapping is unavailable in retrieved structured data"
+        claimed_caps = _monthly_cap_claim_values(text)
+        if claimed_caps:
+            for item in targets:
+                fixed_caps = _fixed_monthly_cap_values(item)
+                if not fixed_caps or not claimed_caps.issubset(fixed_caps):
+                    return "monthly cap is not a single fixed value in this benefit's limit text"
+                if evidence_ids is None:
+                    continue
+                cited = [row for row in context.get("evidence") or []
+                         if row.get("evidence_id") in evidence_ids and _in_scope(row, item.get("benefit_id"))]
+                evidenced_caps = {
+                    token[1]
+                    for row in cited
+                    for token in value_tokens(str(row.get("quote") or ""))
+                    if token[0] == "MONEY"
+                }
+                if not claimed_caps.issubset(evidenced_caps):
+                    return "monthly cap lacks cited PDF evidence owned by this benefit"
     return None
 
 
-def answer_text_problem(text: str, context: dict, question: str, known: set, numbers: set) -> str | None:
+def _monthly_cap_answer_problem(text: str, validated_points: list[dict], context: dict) -> str | None:
+    """Ensure the displayed prose only states cap values present in validated, cited benefit points."""
+    claimed = _monthly_cap_claim_values(text)
+    if not claimed:
+        return None
+    benefits = {item.get("benefit_id"): item for item in context.get("benefits") or []}
+    evidence = {item.get("evidence_id"): item for item in context.get("evidence") or []}
+    supported = set()
+    for point in validated_points:
+        point_text = point.get("text", "")
+        benefit = benefits.get(point.get("benefit_id"))
+        if "한도" not in point_text:
+            continue
+        known_caps = set()
+        scoped_benefits = [benefit] if benefit else list(benefits.values())
+        for item in scoped_benefits:
+            known_caps.update(_fixed_monthly_cap_values(item))
+            for tier in item.get("limit_tiers") or []:
+                cap = tier.get("cap") or {}
+                if cap.get("amount") is not None:
+                    known_caps.add(float(cap["amount"]))
+                known_caps.update(float(shared["amount"]) for shared in tier.get("shared") or []
+                                  if shared.get("amount") is not None)
+        cited_source_values = {
+            token[1]
+            for evidence_id in point.get("evidence_ids") or []
+            for source in [evidence.get(evidence_id)]
+            if source is not None and _in_scope(source, point.get("benefit_id"))
+            for token in value_tokens(source.get("quote") or "") if token[0] == "MONEY"
+        }
+        point_values = {token[1] for token in value_tokens(point_text) if token[0] == "MONEY"}
+        supported.update(known_caps & cited_source_values & point_values)
+    missing = claimed - supported
+    return f"displayed monthly cap lacks a validated cited benefit point: {sorted(missing)}" if missing else None
+
+
+def _mentions_transaction_threshold(text: str, amount: float) -> bool:
+    """Check that an amount appears as a transaction threshold, not just as another cap."""
+    for match in VALUE_PATTERN.finditer(text):
+        tokens = value_tokens(match.group(0))
+        if not tokens or tokens[0][0] != "MONEY" or tokens[0][1] != float(amount):
+            continue
+        nearby = text[max(0, match.start() - 32):min(len(text), match.end() + 24)]
+        if re.search(r"건당|결제|매출", nearby) and re.search(r"이상|초과|최소", nearby):
+            return True
+    return False
+
+
+def missing_validated_transaction_condition_points(
+    text: str,
+    context: dict,
+    validated_points: list[dict],
+    question: str = "",
+) -> list[dict]:
+    """Return grounded points whose transaction minimum is absent from the displayed prose.
+
+    A point is eligible only when its own benefit has a structured TXN_AMT minimum and
+    the already validated point itself states that same threshold. This keeps unrelated
+    card spend tiers and unvalidated values out of the completeness check.
+    """
+    if not re.search(r"조건|적용|대상|비교|얼마\s*이상|건당\s*얼마|최소\s*결제", question):
+        return []
+    benefits = {item.get("benefit_id"): item for item in context.get("benefits") or []}
+    missing = []
+    for point in validated_points:
+        benefit = benefits.get(point.get("benefit_id"))
+        if benefit is None:
+            continue
+        thresholds = {
+            float(atom["min_amt"])
+            for group in benefit.get("conditions") or []
+            for branch in group.get("branches") or []
+            for atom in branch.get("atoms") or []
+            if atom.get("min_amt") is not None
+            and str(atom.get("type") or "").upper() in {"SPEND_REQ", "USAGE_REQ"}
+            and str(atom.get("basis") or "").upper() in {"TXN_AMT", "TRANSACTION_AMOUNT"}
+        }
+        stated = [amount for amount in thresholds
+                  if _mentions_transaction_threshold(point.get("text") or "", amount)]
+        if stated and any(not _mentions_transaction_threshold(text, amount) for amount in stated):
+            missing.append(point)
+    return missing
+
+
+def _frequency_facts(text: str) -> set[tuple[str, float]]:
+    """Return period-qualified use counts; an unqualified count is not a daily/monthly fact."""
+    return {(period, amount) for kind, amount, period in value_tokens(text or "")
+            if kind == "COUNT" and period in {"DAY", "MONTH", "YEAR"}}
+
+
+def missing_validated_frequency_facts(
+    text: str,
+    context: dict,
+    validated_points: list[dict],
+    question: str = "",
+) -> list[dict]:
+    """Find cited, benefit-owned frequency facts stated by points but omitted in answer_text."""
+    if not re.search(r"횟수|몇\s*(?:회|번)|이용\s*횟", question):
+        return []
+    benefits = {item.get("benefit_id"): item for item in context.get("benefits") or []}
+    evidence = {item.get("evidence_id"): item for item in context.get("evidence") or []}
+    displayed = _frequency_facts(text)
+    missing = []
+    for point in validated_points:
+        benefit = benefits.get(point.get("benefit_id"))
+        if benefit is None:
+            continue
+        point_facts = _frequency_facts(point.get("text") or "")
+        cited_source_facts = set()
+        for evidence_id in point.get("evidence_ids") or []:
+            row = evidence.get(evidence_id)
+            if row and _in_scope(row, point.get("benefit_id")):
+                cited_source_facts.update(_frequency_facts(row.get("quote") or ""))
+        grounded = point_facts & cited_source_facts
+        for period, amount in sorted(grounded - displayed):
+            missing.append({"benefit_id": point["benefit_id"], "benefit_name": point.get("benefit_name") or benefit.get("name"),
+                            "period": period, "count": amount})
+    return missing
+
+
+def format_frequency_completion(facts: list[dict]) -> str:
+    """Render only missing frequency facts that already passed benefit and Evidence validation."""
+    labels = {"DAY": "일", "MONTH": "월", "YEAR": "연"}
+    grouped = {}
+    for fact in facts:
+        grouped.setdefault(fact["benefit_name"], set()).add(
+            (fact["period"], fact["count"]))
+    parts = []
+    for name, counts in grouped.items():
+        rendered = [f"{labels[period]} {int(count) if count.is_integer() else count:g}회"
+                    for period, count in sorted(counts)]
+        parts.append(f"{name}: {' / '.join(rendered)}")
+    return f"횟수 조건: {'; '.join(parts)}." if parts else ""
+
+
+_APPROVAL_AMOUNT_CLAIM = re.compile(r"승인\s*금액\s*만큼\s*할인")
+_APPROVAL_LIMIT_CONDITION = re.compile(
+    r"승인\s*금액.{0,80}(?:할인\s*한도|월\s*할인\s*한도).{0,20}(?:보다\s*)?(?:적|작|낮)"
+)
+_APPROVAL_LIMIT_QUALIFIER = re.compile(
+    r"(?:승인\s*금액|승인액).{0,45}(?:할인\s*한도|월\s*한도).{0,20}(?:보다\s*)?(?:적|작|낮)"
+)
+
+
+def qualify_approval_amount_discount(text: str, benefit: dict, evidence_rows: list[dict]) -> tuple[str, bool]:
+    """Restore the source's below-cap qualifier when a cited point overstates an approval-amount discount."""
+    source_text = " ".join(
+        str(row.get("quote") or "") for row in evidence_rows)
+    if (not _APPROVAL_LIMIT_CONDITION.search(json.dumps(benefit, ensure_ascii=False))
+            or not _APPROVAL_LIMIT_CONDITION.search(source_text)
+            or not _APPROVAL_AMOUNT_CLAIM.search(text)
+            or _APPROVAL_LIMIT_QUALIFIER.search(text)):
+        return text, False
+    return _APPROVAL_AMOUNT_CLAIM.sub(
+        "승인 금액이 할인 한도보다 적을 경우 승인 금액만큼 할인", text), True
+
+
+def _unqualified_approval_amount_claim(text: str, context: dict, validated_points: list[dict]) -> bool:
+    """Detect an uncapped-sounding answer when source data explicitly limits the claim to below-cap approvals."""
+    benefits = {item.get("benefit_id"): item for item in context.get("benefits") or []}
+    evidence = {item.get("evidence_id"): item for item in context.get("evidence") or []}
+    for point in validated_points:
+        benefit = benefits.get(point.get("benefit_id"))
+        if benefit is None:
+            continue
+        source_text = json.dumps(benefit, ensure_ascii=False) + " " + " ".join(
+            str(evidence[eid].get("quote") or "") for eid in point.get("evidence_ids") or [] if eid in evidence)
+        cited_source = " ".join(str(evidence[eid].get("quote") or "")
+                                 for eid in point.get("evidence_ids") or [] if eid in evidence)
+        if (not _APPROVAL_LIMIT_CONDITION.search(source_text)
+                or not _APPROVAL_LIMIT_CONDITION.search(cited_source)):
+            continue
+        for sentence in SENTENCE_END.split(text):
+            if (_APPROVAL_AMOUNT_CLAIM.search(sentence)
+                    and not _APPROVAL_LIMIT_QUALIFIER.search(sentence)):
+                return True
+    return False
+
+
+def answer_text_problem(
+    text: str,
+    context: dict,
+    question: str,
+    known: set,
+    numbers: set,
+    validated_points: list[dict] | None = None,
+) -> str | None:
     """LLM 자연어 답변을 그대로 보여 줄 수 없는 사유. points와 같은 값·규칙 검증을 적용한다."""
     if not text:
         return "자연어 답변이 없습니다"
@@ -2025,6 +2251,9 @@ def answer_text_problem(text: str, context: dict, question: str, known: set, num
     limit_problem = limit_tier_answer_problem(text, context, question)
     if limit_problem:
         return limit_problem
+    cap_problem = _monthly_cap_answer_problem(text, validated_points or [], context)
+    if cap_problem:
+        return cap_problem
     unknown = unknown_values(text, known, numbers)
     if unknown:
         return f"조회 결과에 없는 값 {unknown}이 있습니다"
@@ -2047,6 +2276,12 @@ def answer_text_problem(text: str, context: dict, question: str, known: set, num
         return "구간이 같은 혜택의 금액이 다르다고 썼습니다"
     if conflicts and INVENTED_RULE.search(text):
         return "데이터에 없는 규칙 적용 방식이 있습니다"
+    if missing_validated_transaction_condition_points(text, context, validated_points or [], question):
+        return "validated transaction amount condition omitted from answer text"
+    if _unqualified_approval_amount_claim(text, context, validated_points or []):
+        return "validated approval amount discount condition omitted from answer text"
+    if missing_validated_frequency_facts(text, context, validated_points or [], question):
+        return "validated frequency condition omitted from answer text"
     return None
 # endregion
 
@@ -2098,49 +2333,34 @@ class CardGraphRAG:
         self.graph = self._build()
 
     def _build(self):
-        """LangGraph 노드(Node)와 조건부 엣지(Conditional Edge)를 선언하고 실행 가능한 그래프로 컴파일한다.
-
-        [Java Workflow / Spring Batch 비교]
-        - Spring Batch의 JobBuilder / Step 설정과 유사한 선언적 파이프라인 구성이다.
-        - add_node: 실행할 처리 서비스(interpret, retrieve, answer, finish)를 등록한다.
-        - add_edge: 무조건적인 순차 전이를 연결한다 (예: START -> interpret).
-        - add_conditional_edges: 라우팅 함수(after_interpret, after_retrieve)가 State를 검사해
-          반환하는 노드 이름("retrieve" | "answer" | "finish")으로 분기한다.
-        - compile(): 정의된 그래프를 검증하고 동기/비동기 실행이 가능한 CompiledGraph 인스턴스를 반환한다.
-        """
-        from langgraph.graph import END, START, StateGraph
+        """LangGraph 노드(Node)와 조건부 엣지(Conditional Edge)를 선언하고 실행 가능한 그래프로 컴파일한다."""
+        from langgraph.graph import END, START, StateGraph  # LangGraph 그래프 구성요소 임포트
 
         # 그래프 구조:
         # START -> interpret -> [retrieve | finish] -> [answer | finish] -> finish -> END
-        builder = StateGraph(CardState)
-        builder.add_node("interpret", self.interpret)
-        builder.add_node("retrieve", self.retrieve)
-        builder.add_node("answer", self.answer)
-        builder.add_node("finish", self.finish)
-        builder.add_edge(START, "interpret")
-        builder.add_conditional_edges("interpret", self.after_interpret, ["retrieve", "finish"])
-        builder.add_conditional_edges("retrieve", self.after_retrieve, ["answer", "finish"])
-        builder.add_edge("answer", "finish")
-        builder.add_edge("finish", END)
-        return builder.compile()
+        builder = StateGraph(CardState)                   # 공유 상태 스키마(CardState)를 기반으로 상태 그래프 빌더 생성
+        builder.add_node("interpret", self.interpret)     # 1단계 질문 해석 노드 등록(질문 의도 분류 및 조회 대상 후보 선정)
+        builder.add_node("retrieve", self.retrieve)       # 2단계 Neo4j 상세 조회 노드 등록(혜택 메타데이터 및 PDF 근거 일괄 수집)
+        builder.add_node("answer", self.answer)           # 3단계 답변 생성 및 검증 노드 등록(LLM 답변 생성 후 엄격한 팩트체크)
+        builder.add_node("finish", self.finish)           # 4단계 최종 정리 노드 등록(미응답 안내 메시지 결정 및 비용/로그 집계)
+        builder.add_edge(START, "interpret")              # 시작점(START)에서 첫 번째 노드인 interpret로 무조건 전이 연결
+        builder.add_conditional_edges("interpret", self.after_interpret, ["retrieve", "finish"])  # 의도/후보 판정 결과에 따른 조건부 분기 연결
+        builder.add_conditional_edges("retrieve", self.after_retrieve, ["answer", "finish"])      # 근거 유무 및 DB 오류에 따른 조건부 분기 연결
+        builder.add_edge("answer", "finish")              # answer 완료 후 최종 마무리 노드인 finish로 무조건 전이
+        builder.add_edge("finish", END)                   # finish 완료 후 종료점(END)으로 이동하여 그래프 실행 종료
+        return builder.compile()                          # 선언된 상태 그래프 유효성 검증 및 동기 실행 가능한 인스턴스로 컴파일
 
     def _initial_state(self, question: str, mode: str | None = None) -> CardState:
         """요청을 기록하고 그래프 입력 State를 만든다."""
-        request_id = uuid4().hex[:8]
-        CARD_LOG.log_summary("REQUEST", request_id, question=repr(question), model=self.model, mode=mode,
+        request_id = uuid4().hex[:8]                      # 요청별 고유 추적 ID 생성(8자리 Hex 문자열)
+        CARD_LOG.log_summary("REQUEST", request_id, question=repr(question), model=self.model, mode=mode,  # 신규 요청 요약 로그 출력
                              started_at=datetime.now().astimezone().isoformat(timespec="seconds"))
-        return {"request_id": request_id, "started": perf_counter(), "question": question.strip(),
+        return {"request_id": request_id, "started": perf_counter(), "question": question.strip(),  # 파이프라인 진입용 초기 상태 dict 생성
                 "error": None, "warnings": [], "llm_calls": [], "path": []}
 
     def run(self, question: str) -> CardState:
-        """사용자 질문을 입력받아 LangGraph 전체 파이프라인을 1회 동기 실행하고 최종 State를 반환한다.
-
-        Streamlit UI(streamlit_app.py L418)에서 질문 제출 시 호출되는 단일 진입점 메서드다.
-        Java의 Facade Service 호출과 유사하며, 내부에서 _initial_state()를 생성한 뒤
-        self.graph.invoke()를 통해 START 노드부터 END 노드까지 State를 전달하며 실행한다.
-        반환값은 모든 노드의 처리가 완료된 최종 CardState(dict)이다.
-        """
-        return self.graph.invoke(self._initial_state(question))
+        """사용자 질문을 입력받아 LangGraph 전체 파이프라인을 1회 동기 실행하고 최종 State를 반환한다."""
+        return self.graph.invoke(self._initial_state(question))  # 초기 State를 주입하여 START부터 END까지 전체 그래프 동기 실행
 
     # 개발 검증 모드. 그래프와 같은 노드·라우팅 함수를 사용자가 누른 단계까지만 호출한다.
     def _step(self, state: CardState, node, route=None) -> CardState:
@@ -2173,87 +2393,51 @@ class CardGraphRAG:
         return self._step(state, self.answer)
 
     def _call_llm(self, node: str, llm, schema, prompt: str, request_id: str) -> tuple[object | None, dict]:
-        """구조화 출력을 한 번 호출한다. 호출 기록은 형식 오류일 때도 사용량을 보존한다.
-
-        Args:
-            node: 호출한 노드 이름(interpret / answer). 비용 기록에 남는다.
-            llm: ChatOpenAI 인스턴스.
-            schema: Interpretation 또는 CardAnswer(Pydantic). strict JSON Schema로 응답 형식을 강제한다.
-            prompt: 완성된 프롬프트 문자열.
-
-        Returns:
-            (파싱된 Pydantic 객체 또는 None, 호출 기록 dict). 응답 형식이 스키마와 다르면 None + parse_failed=True.
-
-        Raises:
-            Exception: API 호출 예외(타임아웃·인증 등)는 그대로 전파된다. 호출하는 노드가 잡아 LLM_FAILED로 바꾼다.
-        """
-        CARD_LOG.logger.debug("LLM PROMPT [%s/%s]\n%s", request_id, node, prompt)
-        started = perf_counter()
-        call = {"node": node, "model": self.model, "response_model": None, "input_tokens": None,
+        """구조화 출력을 한 번 호출한다. 호출 기록은 형식 오류일 때도 사용량을 보존한다."""
+        CARD_LOG.logger.debug("LLM PROMPT [%s/%s]\n%s", request_id, node, prompt)  # 디버그 모드 시 전송할 프롬프트 전문 로깅
+        started = perf_counter()                          # API 호출 시작 타임스탬프 기록
+        call = {"node": node, "model": self.model, "response_model": None, "input_tokens": None,  # 토큰/비용 집계용 dict 초기화
                 "output_tokens": None, "cached_tokens": None, "reasoning_tokens": None, "cost_usd": None}
         try:
             # gpt-6-luna의 Chat Completions 함수 호출은 effort none에서만 동작하므로 json_schema를 쓴다.
-            result = llm.with_structured_output(schema, method="json_schema", strict=True,
-                                                include_raw=True).invoke(prompt)
+            result = llm.with_structured_output(schema, method="json_schema", strict=True,  # Pydantic 스키마 기반 Strict JSON Schema 구조화 출력 설정
+                                                include_raw=True).invoke(prompt)             # LLM API 동기 호출 실행
         finally:
-            call["elapsed_ms"] = (perf_counter() - started) * 1000
-        raw = result["raw"]
-        usage = getattr(raw, "usage_metadata", None) or {}
-        call["response_model"] = (getattr(raw, "response_metadata", None) or {}).get("model_name")
-        call["input_tokens"], call["output_tokens"] = usage.get("input_tokens"), usage.get("output_tokens")
-        call["cached_tokens"] = (usage.get("input_token_details") or {}).get("cache_read") or 0
-        call["reasoning_tokens"] = (usage.get("output_token_details") or {}).get("reasoning") or 0
-        call["cost_usd"] = estimate_cost(self.model, call["input_tokens"], call["output_tokens"], call["cached_tokens"])
-        if result.get("parsing_error") is not None or result.get("parsed") is None:
-            call["parse_failed"] = True
-            return None, call
-        return result["parsed"], call
+            call["elapsed_ms"] = (perf_counter() - started) * 1000  # API 호출에 소요된 밀리초(ms) 계산
+        raw = result["raw"]                               # 원본 API 응답 객체 추출
+        usage = getattr(raw, "usage_metadata", None) or {}  # 토큰 사용량 메타데이터 추출
+        call["response_model"] = (getattr(raw, "response_metadata", None) or {}).get("model_name")  # 실제 응답한 모델명 추출
+        call["input_tokens"], call["output_tokens"] = usage.get("input_tokens"), usage.get("output_tokens")  # 입력/출력 토큰 수 기록
+        call["cached_tokens"] = (usage.get("input_token_details") or {}).get("cache_read") or 0             # 프롬프트 캐시 히트 토큰 수 기록
+        call["reasoning_tokens"] = (usage.get("output_token_details") or {}).get("reasoning") or 0          # 추론 토큰(Thinking tokens) 수 기록
+        call["cost_usd"] = estimate_cost(self.model, call["input_tokens"], call["output_tokens"], call["cached_tokens"])  # 단가 기준 예상 비용(USD) 계산
+        if result.get("parsing_error") is not None or result.get("parsed") is None:  # JSON Schema 파싱 실패 여부 확인
+            call["parse_failed"] = True                   # 파싱 실패 플래그 기록
+            return None, call                             # 실패 시 None과 메트릭 반환
+        return result["parsed"], call                     # 정상 파싱된 Pydantic 모델 인스턴스와 메트릭 반환
 
     def interpret(self, state: CardState) -> CardState:
-        """[LangGraph 1단계] 사용자 질문을 분석하여 의도(Intent)와 상세 조회 대상 혜택 목록을 확정한다.
-
-        Java의 파라미터 유효성 검증 및 의도 분석 서비스에 해당한다.
-        답변 금액이나 최종 정답을 계산하는 단계가 아니며, 전체 데이터 중 어떤 혜택을
-        Neo4j에서 상세 조회할지 대상 목록(search_parameters)만 확정한다.
-
-        처리 순서:
-            1. 입력 검증: 질문 길이 및 interpret_llm 설정 확인.
-            2. Neo4j 카탈로그 로드: self.search.list_catalog()로 전체 혜택/항목/공통 서비스 목록 확보.
-            3. N 모드 후보 검색: self.candidate_search.catalog_rows()를 통해
-               질문 임베딩 + Neo4j 벡터 검색 + 키워드 매칭 + RRF 순위 융합 수행 (top-k 8개 후보 선정).
-            4. 연회비/비교 질문 토픽 보완:
-               - 질문에 '연회비' 낱말이 있으면 ANNUAL_FEE 항목을 후보에 보완.
-               - 2개 이상 카드의 비교 질문인 경우 누락된 카드의 대상 혜택을 추가 보완.
-            5. 질문 해석 LLM 호출: INTERPRET_PROMPT에 후보 목록과 질문을 주입하여
-               Interpretation(intent, benefit_ids, ambiguity) 구조화 출력 수신.
-            6. 서버 측 엄격 검증:
-               - 후보 목록에 없는 환각 ID 제거 및 warnings 기록.
-               - 결제 금액 필터: 질문에 결제금액이 있으면 최소 결제금액 미달 혜택 제외.
-            7. search_parameters 구성: 검증 통과된 benefit_keys, 조회 섹션(sections) 확정.
-
-        입력 State: request_id, question
-        출력 State: path=["interpret"], catalog, intent, search_parameters, candidate_search, llm_calls, warnings
-        """
-        request_id, question = state["request_id"], state["question"]
-        REQUEST_ID.set(request_id)
+        """[LangGraph 1단계] 사용자 질문을 분석하여 의도(Intent)와 상세 조회 대상 혜택 목록을 확정한다."""
+        request_id, question = state["request_id"], state["question"]  # State에서 요청 ID 및 원문 질문 추출
+        REQUEST_ID.set(request_id)                        # 스레드 로컬에 요청 ID 바인딩
         # 노드는 State 전체가 아니라 바뀐 키만 담은 update dict를 반환한다. path는 reducer가 이어 붙인다.
-        update: CardState = {"path": ["interpret"]}
-        if not question or len(question) > MAX_QUESTION_CHARS:
+        update: CardState = {"path": ["interpret"]}       # 델타 업데이트 딕셔너리 초기화
+        if not question or len(question) > MAX_QUESTION_CHARS:  # 유효성 검사: 빈 문자열이거나 최대 길이 초과 여부 확인
             code = "EMPTY_QUESTION" if not question else "QUESTION_TOO_LONG"
             return {**update, "intent": "UNKNOWN", "error": {"stage": "interpret", "code": code, "type": None}}
-        if self.interpret_llm is None:
+        if self.interpret_llm is None:                    # 의도 분석 LLM 인스턴스 주입 여부 확인
             return {**update, "error": {"stage": "interpret", "code": "LLM_NOT_CONFIGURED", "type": None}}
         try:
-            graph_catalog = self.search.list_catalog()
-        except Exception as error:
+            graph_catalog = self.search.list_catalog()    # Neo4j 그래프 DB에서 전체 혜택 메타데이터 카탈로그 로드(DAO 호출)
+        except Exception as error:                        # Neo4j 연결/조회 예외 포착
             return {**update, "error": {"stage": "interpret", "code": "NEO4J_FAILED", "type": type(error).__name__}}
         try:
-            catalog, outcome = self.candidate_search.catalog_rows(question, graph_catalog)
-        except Exception as error:
+            catalog, outcome = self.candidate_search.catalog_rows(question, graph_catalog)  # N 모드 하이브리드(임베딩+전문검색+RRF) 후보 검색
+        except Exception as error:                        # 후보 검색 실패 예외 포착
             return {**update, "error": {"stage": "interpret", "code": "SEARCH_FAILED", "type": type(error).__name__}}
         CARD_LOG.log_summary("CANDIDATES", request_id, mode="N", hits=[hit.bnft_nm for hit in outcome.hits],
                              merged=outcome.merged_duplicates or None, elapsed_ms=outcome.elapsed_ms)
-        update["candidate_search"] = {
+        update["candidate_search"] = {                    # 후보 검색 결과 진단 정보를 update 맵에 저장
             "mode": "N", "elapsed_ms": outcome.elapsed_ms, "merged_duplicates": outcome.merged_duplicates,
             "hits": [{"source": hit.source, "key": hit.key, "benefit_id": hit.benefit_id,
                       "id": entity_ref(hit.key, hit.benefit_id), "bnft_nm": hit.bnft_nm, "similarity": hit.similarity,
@@ -2262,7 +2446,7 @@ class CardGraphRAG:
                      for hit in outcome.hits]}
         update["candidate_search"]["engines"] = outcome.engines
         update["warnings"] = outcome.warnings
-        if FEE_WORDS.search(question):
+        if FEE_WORDS.search(question):                    # 질문에 '연회비' 키워드가 포함된 경우 연회비 항목 보완
             known = {row["key"] for row in catalog}
             fees = [row for row in graph_catalog if row.get("item_type") == "ANNUAL_FEE" and row["key"] not in known]
             catalog = [*catalog, *fees]
@@ -2290,8 +2474,8 @@ class CardGraphRAG:
                     CARD_LOG.log_summary("TOPIC_CANDIDATES", request_id, cards=full_named_cards,
                                          topics=list(explicit_topics), supplemented_ids=topic_candidate_ids)
                     update["candidate_search"]["topic_supplement_ids"] = topic_candidate_ids
-        catalog = [{**row, "id": entity_ref(row["key"], row["id"])} for row in catalog]
-        rows = [{"id": row["id"], "name": row["name"], "card": row["card"], "type": row.get("item_type", "BENEFIT"),
+        catalog = [{**row, "id": entity_ref(row["key"], row["id"])} for row in catalog]  # 카탈로그 행마다 고유 엔터티 참조 ID 부여
+        rows = [{"id": row["id"], "name": row["name"], "card": row["card"], "type": row.get("item_type", "BENEFIT"),  # 프롬프트 주입용 경량 DTO 리스트 구성
                  "targets": row["targets"], "payment_min_amounts": row.get("payment_min_amounts", []),
                  **({"condition_text": row["condition_text"]} if row.get("condition_text") else {}),
                  **({"search_text": row["search_text"][:1200]} if row.get("search_text") else {}),
@@ -2299,20 +2483,20 @@ class CardGraphRAG:
                     if row.get("item_rule_txt") or row.get("bnft_rule_txt") else {}),
                  **({"limit_text": row.get("item_limit_txt") or row.get("bnft_limit_txt")}
                     if row.get("item_limit_txt") or row.get("bnft_limit_txt") else {})} for row in catalog]
-        update["catalog"] = rows
-        prompt = INTERPRET_PROMPT.format(catalog=json.dumps(rows, ensure_ascii=False), question=question)
+        update["catalog"] = rows                          # State의 catalog 필드에 후보 목록 저장
+        prompt = INTERPRET_PROMPT.format(catalog=json.dumps(rows, ensure_ascii=False), question=question)  # 프롬프트 템플릿 완성
         try:
-            parsed, call = self._call_llm("interpret", self.interpret_llm, Interpretation, prompt, request_id)
-        except Exception as error:
+            parsed, call = self._call_llm("interpret", self.interpret_llm, Interpretation, prompt, request_id)  # 해석 LLM 호출(의도 및 선택 혜택 파싱)
+        except Exception as error:                        # API 통신 실패 시 폴백
             return {**update, "llm_calls": [self._failed_call("interpret")],
                     "error": {"stage": "interpret", "code": "LLM_FAILED", "type": type(error).__name__}}
-        update["llm_calls"] = [call]
-        if parsed is None:
+        update["llm_calls"] = [call]                      # 호출 메트릭을 State의 llm_calls에 누적
+        if parsed is None:                                # JSON Schema 파싱 실패 시
             return {**update, "error": {"stage": "interpret", "code": "LLM_FAILED", "type": "ParsingError"}}
         # LLM 출력 검증: LLM이 고른 ID 중 실제 목록에 있는 것만 남긴다(환각 ID 차단).
-        by_id = {row["id"]: row for row in catalog}
-        chosen = list(dict.fromkeys(item for item in parsed.benefit_ids if item in by_id))
-        dropped = [item for item in parsed.benefit_ids if item not in by_id]
+        by_id = {row["id"]: row for row in catalog}       # ID 기반 카탈로그 조회용 Map 생성
+        chosen = list(dict.fromkeys(item for item in parsed.benefit_ids if item in by_id))  # 유효 ID만 중복 제거 후 선정(환각 ID 필터링)
+        dropped = [item for item in parsed.benefit_ids if item not in by_id]  # 환각으로 탈락된 가짜 ID 목록
         warnings = [f"혜택 목록에 없는 ID를 버렸습니다: {dropped}"] if dropped else []
         requested_topics = _requested_benefit_topics(question) if parsed.intent == "BENEFIT_COMPARE" else {}
         named_cards = list(dict.fromkeys(row.get("card") for row in catalog
@@ -2355,13 +2539,13 @@ class CardGraphRAG:
             chosen = []
         elif intent == "BENEFIT_COMPARE" and len(chosen) < 2:
             warnings.append("비교 질문이지만 확인된 혜택이 2개 미만입니다.")
-        amount = payment_amount(question)
-        chosen, filtered = filter_by_payment(chosen, by_id, amount, intent)
+        amount = payment_amount(question)                 # 질문에서 특정 결제 금액(예: "5만원 결제 시") 파싱
+        chosen, filtered = filter_by_payment(chosen, by_id, amount, intent)  # 최소 결제 금액 미달 혜택 필터링
         if filtered:
             warnings.append(f"결제 금액 기준이 없는 혜택을 제외했습니다: {[by_id[item]['name'] for item in filtered]}")
-        ambiguity = (parsed.ambiguity or "").strip()[:200] or None
+        ambiguity = (parsed.ambiguity or "").strip()[:200] or None  # 질문의 모호성 설명 텍스트 추출
         # sections는 intent별로 조회할 상세 항목(rules/conditions/limits/evidence)이다.
-        parameters = {"benefit_ids": chosen, "benefit_names": [by_id[item]["name"] for item in chosen],
+        parameters = {"benefit_ids": chosen, "benefit_names": [by_id[item]["name"] for item in chosen],  # retrieve 노드에 전달할 확정 파라미터 DTO
                       "benefit_keys": [by_id[item]["key"] for item in chosen],
                       "sections": list(SECTIONS_BY_INTENT.get(intent, ())),
                       "payment_amount": amount, "ambiguity": ambiguity}
@@ -2370,71 +2554,44 @@ class CardGraphRAG:
                              intent=intent, benefits=parameters["benefit_names"], sections=parameters["sections"],
                              dropped=dropped or None, filtered=filtered or None, payment_amount=amount,
                              ambiguity=repr(ambiguity) if ambiguity else None, **_token_fields(call))
-        return {**update, "intent": intent, "search_parameters": parameters,
+        return {**update, "intent": intent, "search_parameters": parameters,  # Delta State 반환
                 "warnings": [*update.get("warnings", []), *warnings]}
 
     def after_interpret(self, state: CardState) -> str:
-        """[조건부 라우팅 1] interpret 결과에 따라 retrieve 또는 finish 노드로 분기한다.
-
-        - 오류(error) 발생 또는 의도 불명(UNKNOWN) 또는 조회 대상 혜택(benefit_keys)이 없으면
-          Neo4j 상세 조회와 LLM 답변 생성을 건너뛰고 "finish"로 이동한다.
-        - 유효한 대상 혜택 키가 1개 이상 존재하면 "retrieve"로 이동한다.
-
-        Returns:
-            "retrieve" 또는 "finish" (조건부 Edge의 다음 노드 이름).
-        """
-        if state.get("error") or state.get("intent") == "UNKNOWN":
+        """[조건부 라우팅 1] interpret 결과에 따라 retrieve 또는 finish 노드로 분기한다."""
+        if state.get("error") or state.get("intent") == "UNKNOWN":  # 에러 발생 또는 질문 의도가 불명확하면 즉시 finish로 이동
             return "finish"
-        return "retrieve" if state["search_parameters"]["benefit_keys"] else "finish"
+        return "retrieve" if state["search_parameters"]["benefit_keys"] else "finish"  # 조회 대상 혜택 키가 있으면 retrieve, 없으면 finish
 
     def retrieve(self, state: CardState) -> CardState:
-        """[LangGraph 2단계] 확정된 혜택 키를 기반으로 Neo4j 상세 데이터와 PDF 근거를 수집한다.
-
-        Java의 DAO 다건 조회 및 Fetch Join 단계에 해당하며, LLM 없이 순수 DB 쿼리로만 실행된다.
-        PostgreSQL을 런타임에 직접 읽지 않으며, 오직 Neo4j 그래프 데이터베이스만 조회한다.
-
-        처리 순서:
-            1. Cypher 일괄 조회 (get_details):
-               - search_parameters의 benefit_keys에 대해 P3 서브쿼리 배칭으로 단일 왕복 조회.
-               - 카드-혜택-규칙-조건-한도 메타데이터 및 dp_supported_by 관계의 PDF Evidence를 일괄 페치.
-            2. PDF 근거 수집 및 병합 (collect_evidence):
-               - 여러 혜택이 공유하는 동일한 PDF 인용구(evidence_id)를 단일화하고 소유 혜택 목록 매핑.
-            3. 적용 제외 조건 선제 판정 (find_exclusions):
-               - 사용자의 질문 낱말이 혜택의 제외 문구(excl_raw_txt)에 있는지 Neo4j source_json으로 대조.
-            4. 미확정 사항 분류 (split_unresolved):
-               - 질문에 영향을 주는 조건(open_conditions)과 단순 안내(data_notices)를 분리.
-
-        입력 State: search_parameters(benefit_keys, sections, payment_amount), intent, question
-        출력 State: path=["retrieve"], retrieved_data, evidence, statements, retrieval_trace,
-                    exclusions, unresolved, open_conditions, data_notices, other_unresolved, warnings
-        """
-        request_id, parameters, intent = state["request_id"], state["search_parameters"], state["intent"]
-        REQUEST_ID.set(request_id)
-        sections = tuple(parameters["sections"])
-        statements = detail_statements(sections)
-        started = perf_counter()
+        """[LangGraph 2단계] 확정된 혜택 키를 기반으로 Neo4j 상세 데이터와 PDF 근거를 수집한다."""
+        request_id, parameters, intent = state["request_id"], state["search_parameters"], state["intent"]  # State에서 파라미터 추출
+        REQUEST_ID.set(request_id)                        # 스레드 로컬에 요청 식별자 설정
+        sections = tuple(parameters["sections"])          # 조회 대상 서브섹션(rules, conditions, limits, evidence) 튜플 변환
+        statements = detail_statements(sections)          # 실행될 Cypher 쿼리 식별자 목록 조회
+        started = perf_counter()                          # DB 조회 시작 시각 기록
         CARD_LOG.log_summary("RETRIEVE START", request_id, statements=statements, benefit_ids=parameters["benefit_ids"])
-        details, missing, trace = [], [], []
+        details, missing, trace = [], [], []              # 조회 상세 목록, 누락 키, 추적 로그 초기화
         try:
-            batch = (self.search.get_details(parameters["benefit_keys"], sections)
+            batch = (self.search.get_details(parameters["benefit_keys"], sections)  # P3 Cypher 서브쿼리 배칭으로 Neo4j 1회 왕복 일괄 조회
                      if parameters["benefit_keys"] and getattr(type(self.search), "get_details", None) is not None else None)
-            for key in parameters["benefit_keys"]:
-                detail = batch.get(key) if batch is not None else self.search.get_detail(key, sections)
+            for key in parameters["benefit_keys"]:        # 각 혜택 식별 키 순회
+                detail = batch.get(key) if batch is not None else self.search.get_detail(key, sections)  # 배치 맵에서 결과 추출(없으면 단건 조회 폴백)
                 if detail is not None:
-                    detail["entity_ref"] = entity_ref(key)
-                (details if detail is not None else missing).append(detail if detail is not None else key)
+                    detail["entity_ref"] = entity_ref(key)  # 참조 엔터티 표기 추가
+                (details if detail is not None else missing).append(detail if detail is not None else key)  # 조회 성공/누락 리스트 분류
                 if detail is not None:
-                    benefit_row = source(detail["context"]["benefit"])
+                    benefit_row = source(detail["context"]["benefit"])  # 혜택 속성 역직렬화
                     trace.append({"benefit": benefit_row.get("item_nm") or benefit_row.get("bnft_nm") or benefit_row.get("name"),
                                   "engine": "neo4j", "evidence_engine": detail.get("evidence_source", "neo4j"),
                                   "rules": len(detail["rules"]), "conditions": len(detail["conditions"]),
-                                  "limits": len(detail["limits"]), "evidence": len(detail["evidence"])})
-        except Exception as error:
+                                  "limits": len(detail["limits"]), "evidence": len(detail["evidence"])})  # 건수 메트릭 추적
+        except Exception as error:                        # Neo4j 통신/실행 오류 포착 시
             return {"path": ["retrieve"], "error": {"stage": "retrieve", "code": "NEO4J_FAILED",
                                                      "type": type(error).__name__}}
-        evidence = collect_evidence(details, intent)
+        evidence = collect_evidence(details, intent)      # PDF 원문 근거를 evidence_id 기준으로 병합 및 필터링
         try:
-            exclusions = find_exclusions(state["question"], details)
+            exclusions = find_exclusions(state["question"], details)  # 질문 낱말 매칭을 통한 적용 제외 대상 판정
         except Exception as error:
             return {"path": ["retrieve"], "error": {"stage": "retrieve", "code": "SEARCH_FAILED", "type": type(error).__name__}}
         CARD_LOG.log_summary("RETRIEVE DONE", request_id, benefits=len(details), missing=len(missing) or None,
@@ -2443,57 +2600,26 @@ class CardGraphRAG:
                              limits=sum(len(d["limits"]) for d in details), evidence=len(evidence),
                              evidence_ids=[item["evidence_id"] for item in evidence],
                              elapsed_ms=(perf_counter() - started) * 1000)
-        conditions, notices, others = split_unresolved(details, state["question"], intent, parameters.get("payment_amount"))
-        return {"path": ["retrieve"], "retrieved_data": details, "evidence": evidence, "statements": statements,
+        conditions, notices, others = split_unresolved(details, state["question"], intent, parameters.get("payment_amount"))  # 미확정 조건 분류
+        return {"path": ["retrieve"], "retrieved_data": details, "evidence": evidence, "statements": statements,  # Delta State 반환
                 "retrieval_trace": trace, "exclusions": exclusions,
                 "unresolved": find_unresolved(details), "open_conditions": conditions, "data_notices": notices, "other_unresolved": others,
                 "warnings": [f"조회되지 않은 혜택 {len(missing)}건이 있습니다."] if missing else []}
 
     def after_retrieve(self, state: CardState) -> str:
-        """[조건부 라우팅 2] 조회 결과와 PDF 근거 확보 여부에 따라 answer 또는 finish로 분기한다.
-
-        - 조회 중 DB 오류(error)가 발생했거나, 뒷받침할 PDF Evidence가 0건이면
-          환각(Hallucination) 방지를 위해 LLM을 호출하지 않고 즉시 "finish"로 이동한다.
-        - 오류가 없고 유효한 근거가 1건 이상 확보되었을 때만 "answer" 노드로 이동한다.
-
-        Returns:
-            "answer" 또는 "finish" (조건부 Edge의 다음 노드 이름).
-        """
-        return "answer" if not state.get("error") and state.get("evidence") else "finish"
+        """[조건부 라우팅 2] 조회 결과와 PDF 근거 확보 여부에 따라 answer 또는 finish로 분기한다."""
+        return "answer" if not state.get("error") and state.get("evidence") else "finish"  # 에러가 없고 PDF 근거가 1건 이상이면 answer, 아니면 finish
 
     def answer(self, state: CardState) -> CardState:
-        """[LangGraph 3단계] 검색된 문맥(context)으로 답변 LLM을 호출하고 결과를 엄격히 검증한다.
-
-        Java의 핵심 비즈니스 로직 및 사후 팩트체크 단계에 해당한다.
-        연회비는 환각 방지를 위해 등록 값으로 프로그램이 직접 작성하고 LLM을 호출하지 않는다.
-
-        처리 순서:
-            1. 연회비 단독 질문 분기:
-               - 연회비 항목만 조회된 경우 fee_answer()가 item_data 등록 값을 바탕으로
-                 텍스트와 표를 즉시 생성하며, LLM API 호출을 건너뛴다 (비용·환각 0%).
-            2. 혜택 문맥 정제 (benefit_context, compact_answer_context):
-               - 혜택별 규칙 수치, 실적 구간 한도(limit_tiers), 상위 PDF 근거(혜택당 최대 12개)를
-                 정제하여 프롬프트 토큰을 최소화한 context 구성.
-            3. 답변 LLM 호출: ANSWER_PROMPT에 context와 질문을 주입하여
-               CardAnswer(conclusion, points, evidence_ids) 구조화 출력 수신.
-            4. 사후 검증 (validate_answer):
-               - LLM이 인용한 수치/할인율과 실제 규칙 대조, 근거 ID 유효성 교차 검증.
-            5. 제외 조건 강제 (enforce_exclusions):
-               - retrieve에서 식별된 제외 키워드가 있으면 LLM 답변을 덮어쓰고 미지급 안내로 고정.
-            6. 연회비 복합 질문 병합:
-               - 혜택과 연회비가 같이 조회된 경우 LLM 문장에서 연회비를 빼고 프로그램 작성 표를 병합.
-
-        입력 State: retrieved_data, evidence, search_parameters, open_conditions, exclusions, unresolved, question
-        출력 State: path=["answer"], context, answer, llm_calls, warnings, answer_diagnostics
-        """
-        request_id, evidence = state["request_id"], state["evidence"]
-        REQUEST_ID.set(request_id)
-        details, duplicates = drop_duplicate_benefits(state["retrieved_data"])
-        fees = [detail for detail in details if is_fee_detail(detail)]
-        details = [detail for detail in details if not is_fee_detail(detail)]
-        fee = fee_answer(fees, state["question"], evidence) if fees else None
+        """[LangGraph 3단계] 검색된 문맥(context)으로 답변 LLM을 호출하고 결과를 엄격히 검증한다."""
+        request_id, evidence = state["request_id"], state["evidence"]  # State에서 요청 ID 및 PDF 근거 목록 추출
+        REQUEST_ID.set(request_id)                        # 스레드 로컬에 요청 ID 바인딩
+        details, duplicates = drop_duplicate_benefits(state["retrieved_data"])  # 동일 내용의 중복 혜택 항목 제거
+        fees = [detail for detail in details if is_fee_detail(detail)]  # 연회비 항목 분리(Java Stream filter)
+        details = [detail for detail in details if not is_fee_detail(detail)]  # 일반 혜택 항목 분리
+        fee = fee_answer(fees, state["question"], evidence) if fees else None  # 연회비 전용 정형 답변 생성(환각 방지 위해 프로그램 직접 작성)
         notes = [f"연회비 항목과 같은 사실이라 혜택 답변에서 뺐습니다: {name}" for name in duplicates]
-        if fee and not details:
+        if fee and not details:                           # 연회비 단독 질문인 경우 LLM 호출을 건너뛰고 조기 반환(비용 0%)
             # 연회비만 물은 질문은 LLM을 부르지 않는다. 금액은 등록 값 그대로다.
             answer = {"status": "PARTIAL" if fee["review"] else "ANSWERED", "conclusion": fee["text"].splitlines()[1].lstrip("- "),
                       "answer_text": fee["text"], "answer_source": FEE_SOURCE, "points": fee["points"], "uncertain": [],
@@ -2501,12 +2627,12 @@ class CardGraphRAG:
             CARD_LOG.log_summary("ANSWER", request_id, status=answer["status"], fee_rows=len(fee["rows"]), llm="skipped")
             return {"path": ["answer"], "context": {"fees": fee["rows"]}, "answer": answer, "warnings": notes}
         # LLM 문맥 구성: 답변 대상 혜택에 연결된 근거만 남기고, 혜택 상세는 benefit_context로 필요한 필드만 추린다.
-        refs = {detail_ref(detail) for detail in details}
-        evidence = [item for item in evidence if set(item.get("benefit_ids", [])) & refs]
-        monthly_spend = previous_month_spend(state["question"])
-        benefits = [benefit_context(detail, monthly_spend) for detail in details]
-        amount = state["search_parameters"].get("payment_amount")
-        context = {"benefits": benefits, "payment_amount": amount,
+        refs = {detail_ref(detail) for detail in details}  # 대상 혜택 식별자 집합(Set)
+        evidence = [item for item in evidence if set(item.get("benefit_ids", [])) & refs]  # 해당 혜택에 연결된 PDF 근거만 필터링(교집합)
+        monthly_spend = previous_month_spend(state["question"])  # 질문에서 언급된 전월 실적 조건 파싱
+        benefits = [benefit_context(detail, monthly_spend) for detail in details]  # 혜택 상세 데이터를 프롬프트용 구조화 문맥으로 변환
+        amount = state["search_parameters"].get("payment_amount")  # 질문의 결제 금액 추출
+        context = {"benefits": benefits, "payment_amount": amount,  # 답변 LLM에 전달할 context Map 구성
                    "rule_selection_unresolved": rule_conflicts(benefits, amount), "open_conditions": state["open_conditions"],
                    "excluded_terms": state.get("exclusions", []),
                    "evidence": [{key: item[key] for key in ("evidence_id", "page_no", "approval_status", "quote", "benefit_ids")}
@@ -2524,6 +2650,9 @@ class CardGraphRAG:
             if card_terms:
                 context["card_terms"] = card_terms
                 merge_terms_evidence(context["evidence"], terms_evidence)
+                # TERMS 근거도 답변 로그·Streamlit 출처 목록에서 페이지를 확인할 수 있도록
+                # 최종 State의 evidence 목록에 같은 메타데이터로 합친다.
+                merge_terms_evidence(evidence, terms_evidence)
         foreign = foreign_spend_values(context)
         for item in context["evidence"]:
             labels = [token_label(token) for token in value_tokens(item["quote"]) if token[0] == "MONEY" and token[1] in foreign]
@@ -2558,7 +2687,7 @@ class CardGraphRAG:
                        "If the supplied evidence does not support a requested fact, state that it cannot be confirmed; "
                        "do not guess. Before returning, check that every listed benefit_id appears in points.\n"
                        + json.dumps(required_benefits, ensure_ascii=False))
-        update: CardState = {"path": ["answer"], "context": context}
+        update: CardState = {"path": ["answer"], "context": context, "evidence": evidence}
         try:
             parsed, call = self._call_llm("answer", self.answer_llm, CardAnswer, prompt, request_id)
         except Exception as error:
@@ -2622,7 +2751,7 @@ class CardGraphRAG:
             update["context"] = {**context, "fees": fee["rows"]}
         return {**update, "answer": answer, "warnings": [*warnings, *notes]}
 
-    def finish(self, state: CardState) -> CardState:
+    def finish(self, state: CardState) -> CardState:  # LangGraph 4단계 / 마무리 노드, 최종 결과 확정 및 통계 기록
         """[LangGraph 4단계 / 마무리 노드] 정상 답변 및 실패/미응답 경로의 최종 결과를 확정하고 실행 통계를 기록한다.
 
         모든 실행 경로(정상 완료 또는 after_* 분기에서의 조기 종료)가 마지막으로 통과하는 종착 노드다.
@@ -2644,7 +2773,7 @@ class CardGraphRAG:
         입력 State: CardState 전체
         출력 State: path=["finish"], answer(미생성 시 안내 답변 포함), warnings(누적 경고)
         """
-        request_id = state["request_id"]
+        request_id = state["request_id"]  # 현재 요청의 고유 ID를 추출
         update: CardState = {"path": ["finish"]}
         if state.get("answer") is None:
             ambiguity = (state.get("search_parameters") or {}).get("ambiguity")
@@ -2674,7 +2803,7 @@ class CardGraphRAG:
             error=error["code"] if error else None, total_ms=(perf_counter() - state["started"]) * 1000)
         return update
 
-    def _finish_code(self, state: CardState) -> str:
+    def _finish_code(self, state: CardState) -> str:  # 상태를 보고 적절한 오류 코드 선택
         """State를 보고 안내 문구 코드를 고른다."""
         if state.get("error"):
             return state["error"]["code"]

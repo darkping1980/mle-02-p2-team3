@@ -99,12 +99,12 @@ st.session_state.setdefault("execution_log_session_id", str(uuid4()))
 
 
 # region 파이프라인 생성 (모드별 캐시)
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False)                    # Spring의 Singleton Bean처럼 앱 전역에서 1회만 초기화하여 재사용(캐싱)
 def get_pipeline():
     """Create and cache the sole Neo4j hybrid GraphRAG pipeline."""
-    search = connect()
-    candidate_search = card_graphrag.create_neo4j_benefit_search(search)
-    return card_graphrag.CardGraphRAG(search, *card_graphrag.create_llms(), candidate_search=candidate_search)
+    search = connect()                                    # Neo4j 드라이버 연결 및 검색 클라이언트 획득(Connection Pool 역할)
+    candidate_search = card_graphrag.create_neo4j_benefit_search(search)  # N 모드용 Neo4j 하이브리드 검색 객체 생성(의존성 주입)
+    return card_graphrag.CardGraphRAG(search, *card_graphrag.create_llms(), candidate_search=candidate_search)  # LangGraph 실행 파이프라인 싱글톤 생성 및 반환
 # endregion
 
 
@@ -158,10 +158,11 @@ def customer_response_for_log(outcome: dict) -> str:
 
 
 def show_text(text: str) -> None:
-    """원문 기호를 이스케이프하고, 한 줄 바꿈도 화면에서 줄이 바뀌게 표시한다."""
+    """검증된 답변의 Markdown 서식을 유지하고, HTML은 비활성화한 채 표시한다."""
     cleaned = customer_text(text)
     if cleaned:
-        st.markdown("\n\n".join(plain(part).replace("\n", "  \n") for part in cleaned.split("\n\n")))
+        formatted = "\n\n".join(part.replace("\n", "  \n") for part in cleaned.split("\n\n"))
+        st.markdown(formatted, unsafe_allow_html=False)
 # endregion
 
 
@@ -380,61 +381,61 @@ with st.form("question_form"):
     submitted = st.form_submit_button("질문하기", type="primary")
 
 # 질문 제출 처리. submitted는 폼 버튼을 누른 그 재실행에서만 True다.
-if submitted:
-    streamlit_request_started = perf_counter()
-    question = question.strip()
-    session_id = st.session_state.execution_log_session_id
-    request_id = str(uuid4())
-    last = st.session_state.get("outcome")
-    if not question:
-        st.warning("질문을 입력하세요.")
+if submitted:                                             # 폼 제출 이벤트 발생 시 처리(HTTP POST 요청 처리와 유사)
+    streamlit_request_started = perf_counter()            # 전체 처리 시간 측정을 위한 시작 타임스탬프 기록
+    question = question.strip()                           # 사용자 입력 문자열 앞뒤 공백 제거(Java의 String.trim())
+    session_id = st.session_state.execution_log_session_id  # 현재 브라우저 세션 ID(HttpSessionId와 유사) 추출
+    request_id = str(uuid4())                             # 요청 추적을 위한 고유 트랜잭션 UUID 생성
+    last = st.session_state.get("outcome")                # 세션에 캐시된 직전 질문의 실행 결과(Map) 조회
+    if not question:                                      # 입력 검증: 빈 문자열 체크
+        st.warning("질문을 입력하세요.")                  # 화면에 경고 알림 렌더링
     # 분기: 직전과 같은 질문·모드이고 오류가 없었으면 LLM 비용을 쓰지 않고 이전 결과를 재사용한다.
-    elif (last and last["question"] == question and not last.get("error") and not force):
-        request_event = log_event("REQUEST", question)
-        if dev_mode():
-            st.info("같은 질문이라 API를 호출하지 않고 이전 결과를 표시합니다.")
-        st.session_state.outcome = {**last, "reused": True}
-        if APP_DB_LOG_ENABLED:
-            events = [request_event,
-                      log_event("RESPONSE", customer_response_for_log(st.session_state.outcome))]
-            app_log_started = perf_counter()
-            persist_app_logs(session_id, request_id, events,
+    elif (last and last["question"] == question and not last.get("error") and not force):  # 동일 질문 및 캐시 유효성 검사
+        request_event = log_event("REQUEST", question)    # 요청 로그 이벤트 객체 생성
+        if dev_mode():                                    # 개발자 모드 플래그 활성화 여부 확인
+            st.info("같은 질문이라 API를 호출하지 않고 이전 결과를 표시합니다.")  # 캐시 히트 안내 메시지 출력
+        st.session_state.outcome = {**last, "reused": True}  # 얕은 복사로 reused 플래그만 변경하여 세션 상태 갱신
+        if APP_DB_LOG_ENABLED:                            # PostgreSQL 로그 저장 활성화 여부 확인
+            events = [request_event,                      # 저장할 이벤트 목록 리스트 초기화
+                      log_event("RESPONSE", customer_response_for_log(st.session_state.outcome))]  # 응답 이벤트 추가
+            app_log_started = perf_counter()              # DB 저장 소요 시간 측정 시작
+            persist_app_logs(session_id, request_id, events,  # PostgreSQL의 app_log 테이블에 배치 저장 수행
                              detail_text=outcome_detail_text(st.session_state.outcome),
                              pdf_evidence_text=outcome_pdf_evidence_text(st.session_state.outcome),
                              neo4j_summary=outcome_neo4j_summary(st.session_state.outcome),
                              pdf_evidence_summary=outcome_pdf_evidence_summary(st.session_state.outcome))
             CARD_LOG.log_summary("PERF", st.session_state.outcome.get("request_id", request_id), phase="app_log_save",
                                  elapsed_ms=(perf_counter() - app_log_started) * 1000, reused=True)
-    else:
-        request_event = log_event("REQUEST", question)
-        query_events = []
-        outcome_for_log = None
+    else:                                                 # 새로운 질문이거나 캐시 미스인 경우 파이프라인 실제 실행
+        request_event = log_event("REQUEST", question)    # 요청 로그 이벤트 생성
+        query_events = []                                 # 실행 도중 캡처될 Cypher/SQL 쿼리 로그 목록 초기화
+        outcome_for_log = None                            # 로그 적재를 위한 최종 결과 변수 초기화
         try:
-            pipeline = get_pipeline()
-            with st.spinner("카드 혜택을 찾아 답변을 준비하고 있습니다..."):
+            pipeline = get_pipeline()                     # 싱글톤 파이프라인 인스턴스 획득
+            with st.spinner("카드 혜택을 찾아 답변을 준비하고 있습니다..."):  # UI 로딩 스피너 컨텍스트 표시
                 # GraphRAG 실행: interpret → (retrieve → answer) → finish. 반환값은 최종 State(dict)다.
                 # 노드가 직접 잡는 실패(LLM·Neo4j·후보 검색)는 예외가 아니라 State의 error와 answer.status=ERROR로 돌아온다.
-                with capture_request_queries() as query_events:
-                    st.session_state.outcome = pipeline.run(question)
-                outcome_for_log = st.session_state.outcome
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
+                with capture_request_queries() as query_events:  # 실행 중 발생한 DB 쿼리 인터셉트 및 수집
+                    st.session_state.outcome = pipeline.run(question)  # LangGraph 파이프라인 진입점 호출 및 결과를 세션에 저장
+                outcome_for_log = st.session_state.outcome  # 로그 기록용 결과 참조 복사
+        except Exception as e:                            # 예기치 못한 런타임 예외 발생 시 폴백 처리
+            import traceback                              # 스택 트레이스 출력을 위한 모듈 임포트
+            traceback.print_exc()                         # 콘솔에 에러 스택 트레이스 로깅
 
-            st.session_state.outcome = None
-            st.error(ERROR_TEXT)
-            if dev_mode():
-                st.exception(e)
+            st.session_state.outcome = None               # 오류 발생 시 세션 결과 초기화
+            st.error(ERROR_TEXT)                          # 화면에 사용자 친화적 에러 메시지 렌더링
+            if dev_mode():                                # 개발 모드일 경우 세부 예외 정보 추가 렌더링
+                st.exception(e)                           # 상세 예외 스택 UI에 출력
         finally:
-            if APP_DB_LOG_ENABLED:
-                events = [request_event, *query_events]
-                error = error_message(outcome_for_log)
+            if APP_DB_LOG_ENABLED:                        # 요청 완료 후 항상 실행되는 로그 적재 블록
+                events = [request_event, *query_events]   # 요청 이벤트와 수집된 쿼리 이벤트 병합
+                error = error_message(outcome_for_log)    # 결과 딕셔너리에서 에러 메시지 추출
                 if error:
-                    events.append(log_event("ERROR", error))
+                    events.append(log_event("ERROR", error))  # 에러 이벤트 목록에 추가
                 else:
-                    events.append(log_event("RESPONSE", customer_response_for_log(outcome_for_log or {})))
-                app_log_started = perf_counter()
-                persist_app_logs(session_id, request_id, events,
+                    events.append(log_event("RESPONSE", customer_response_for_log(outcome_for_log or {})))  # 정상 응답 이벤트 추가
+                app_log_started = perf_counter()          # DB 저장 시간 측정 시작
+                persist_app_logs(session_id, request_id, events,  # PostgreSQL 원장 테이블에 세션/요청 단위 일괄 로깅
                                  detail_text=outcome_detail_text(outcome_for_log),
                                  pdf_evidence_text=outcome_pdf_evidence_text(outcome_for_log),
                                  neo4j_summary=outcome_neo4j_summary(outcome_for_log),

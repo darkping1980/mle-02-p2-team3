@@ -243,7 +243,7 @@ class LiveNeo4jTests(unittest.TestCase):
                             for branch in group["branches"] for atom in branch["atoms"]))
 
         one_pick = next(row for row in self.catalog if row["id"] == "20261101_000001")
-        self.assertEqual(one_pick["payment_min_amounts"], [3000, 10000])
+        self.assertEqual(one_pick["payment_min_amounts"], [3000])
         one_pick_detail = self.search.get_details([one_pick["key"]])[one_pick["key"]]
         self.assertTrue(any(neo4j_search.source(row["atom"]).get("cond_basis_cd") == "TXN_AMT"
                             for row in one_pick_detail["conditions"]))

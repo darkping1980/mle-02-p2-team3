@@ -363,28 +363,28 @@ def persist_app_logs(
     pdf_evidence_summary: str | None = None,
 ) -> None:
     """요청의 이벤트를 요청당 한 행으로 모아 INSERT한다. 저장 예외는 검색으로 전파하지 않는다."""
-    if not events:
+    if not events:                                        # 저장할 이벤트가 없으면 조기 반환(Early Return)
         return
 
-    ordered_events = sorted(events, key=lambda event: event[2])
-    request_events = [message for log_type, message, _ in ordered_events if log_type == "REQUEST"]
-    query_events = [message for log_type, message, _ in ordered_events if log_type == "QUERY"]
-    response_events = [message for log_type, message, _ in ordered_events if log_type == "RESPONSE"]
-    error_events = [message for log_type, message, _ in ordered_events if log_type == "ERROR"]
-    request_text = request_events[0] if request_events else ""
-    execution_log = "\n\n".join(query_events)
-    response_text = "\n\n".join(response_events)
-    error_text = "\n\n".join(error_events) or None
-    created_at = next(
+    ordered_events = sorted(events, key=lambda event: event[2])  # 발생 시각(event[2]) 오름차순으로 로그 이벤트 정렬
+    request_events = [message for log_type, message, _ in ordered_events if log_type == "REQUEST"]    # REQUEST 타입 메시지만 추출(Java Stream filter)
+    query_events = [message for log_type, message, _ in ordered_events if log_type == "QUERY"]        # QUERY(Cypher/SQL) 실행문 추출
+    response_events = [message for log_type, message, _ in ordered_events if log_type == "RESPONSE"]  # 최종 응답 메시지 추출
+    error_events = [message for log_type, message, _ in ordered_events if log_type == "ERROR"]        # 에러 메시지 추출
+    request_text = request_events[0] if request_events else ""                                         # 첫 번째 질문 텍스트(없으면 빈 문자열)
+    execution_log = "\n\n".join(query_events)                                                          # 수집된 모든 DB 쿼리를 개행으로 병합(String.join)
+    response_text = "\n\n".join(response_events)                                                       # 응답 텍스트 병합
+    error_text = "\n\n".join(error_events) or None                                                     # 에러가 있으면 병합 문자열, 없으면 SQL NULL 대응
+    created_at = next(                                                                                 # 최초 요청 발생 시각 획득(없으면 첫 이벤트 시각)
         (created_at for log_type, _, created_at in ordered_events if log_type == "REQUEST"),
         ordered_events[0][2],
     )
 
     try:
-        manager = _log_database_manager()
-        with manager.connect(camel_case_keys=False) as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
+        manager = _log_database_manager()                                                              # PostgreSQL 연결 풀 매니저 획득
+        with manager.connect(camel_case_keys=False) as connection:                                     # DB 커넥션 획득(Java try-with-resources와 동일)
+            with connection.cursor() as cursor:                                                        # JDBC PreparedStatement 역할의 커서 생성
+                cursor.execute(                                                                        # Upsert(ON CONFLICT) 쿼리 실행
                     """INSERT INTO db_pipeline.app_log
                            (session_id, request_id, client_ip, request_text, execution_log,
                             response_text, detail_text, pdf_evidence_text, neo4j_summary,
@@ -405,7 +405,7 @@ def persist_app_logs(
                      response_text, detail_text, pdf_evidence_text, neo4j_summary,
                      pdf_evidence_summary, error_text, created_at),
                 )
-    except Exception as error:
+    except Exception as error:                                                                         # 로깅 실패가 비즈니스 로직(검색)에 영향 주지 않도록 격리
         LOG.warning("검색 로그 저장 실패 (%s); 검색 결과는 유지합니다.", type(error).__name__)
 
 

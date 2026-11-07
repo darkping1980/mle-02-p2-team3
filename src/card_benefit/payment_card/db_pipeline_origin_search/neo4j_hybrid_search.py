@@ -88,117 +88,93 @@ class Neo4jBenefitSearch:
         return self.neo4j_search._run(statement_id, cypher, STATEMENTS[statement_id], params)
 
     def search(self, question: str, top_k: int = 5, use_graph: bool = True) -> SearchOutcome:
-        """[N 모드 단일 검색기] 질문 임베딩 + Neo4j Cypher 벡터 검색 + 키워드 빈도 매칭 + RRF 순위 융합.
-
-        PostgreSQL이나 별도 검색 엔진 없이 Neo4j 그래프와 임베딩만으로 실행되는 단일 검색 경로다.
-        Java의 Repository/Search Service에서 두 개의 검색 결과(키워드, 벡터)를 가져와
-        In-Memory RRF(Reciprocal Rank Fusion) 알고리즘으로 병합·정렬하는 과정에 해당한다.
-
-        입력:
-            question: 사용자 자연어 질문 문자열.
-            top_k: 최종 반환할 상위 혜택 후보 수 (기본 5개).
-            use_graph: 그래프 관계 탐색 여부.
-
-        반환:
-            SearchOutcome(mode="N", hits=SearchHit 목록, elapsed_ms, engines):
-            각 SearchHit는 혜택 식별자, 카드명, 유사도 점수, 매칭 채널 정보를 포함한다.
-        """
-        started = perf_counter()
-        embed_started = perf_counter()
-        # 1. 질문 텍스트를 고차원 벡터로 변환 (외부 임베딩 API 또는 모델 호출)
-        vector = self.embedder.embed([question])[0] if self.embedder is not None else None
+        """질문 임베딩 + Neo4j Cypher 벡터 검색 + 키워드 빈도 매칭 + RRF 순위 융합 검색 (N 모드 단일 경로)."""
+        started = perf_counter()                                      # 전체 검색 소요 시간 측정을 위한 시작 타임스탬프 (Java System.nanoTime() 유사)
+        embed_started = perf_counter()                                # 질문 임베딩 API 호출 시간 측정을 위한 시작 시각
+        vector = self.embedder.embed([question])[0] if self.embedder is not None else None  # 임베더가 있으면 질문을 고차원 벡터(float 리스트)로 변환
         CARD_LOG.log_summary("PERF", REQUEST_ID.get(), phase="question_embedding", elapsed_ms=(perf_counter() - embed_started) * 1000,
                              calls=1 if self.embedder is not None else 0, dimensions=len(vector) if vector is not None else None)
-        # 2. Neo4j Cypher 실행: 벡터 인덱스 기반 유사도(sim) 및 기본 혜택 속성 조회
-        rows = self._run("card.hybrid_search", CANDIDATES_QUERY, qvec=vector)
-        terms = [term.casefold() for term in search_terms(question)]
-        cards = getattr(self.neo4j_search, "catalog_products", None)
-        if cards is None:
-            cards = self._run("card.products", PRODUCTS_QUERY)
-        transform_started = perf_counter()
-        # 3. 질문에서 특정 카드 상품명 식별 (단어 완전 일치 우선, 부분 일치 차선)
-        identified = []
-        for card in cards:
-            tokens = _name_tokens(card["product_nm"] or "")
-            hits = [token for token in tokens if token in question.casefold()]
-            if tokens and len(hits) == len(tokens):
-                identified.append(card["card_id"])
-        if not identified and cards:
+        rows = self._run("card.hybrid_search", CANDIDATES_QUERY, qvec=vector)  # Neo4j Cypher 실행: 벡터 인덱스 코사인 유사도(sim) 및 기본 혜택 속성 조회
+        terms = [term.casefold() for term in search_terms(question)]  # 질문에서 명사/키워드 추출 후 소문자 정규화 (Java String.toLowerCase())
+        cards = getattr(self.neo4j_search, "catalog_products", None)  # 캐시된 카드 상품 목록 확인 (없으면 None)
+        if cards is None:                                             # 캐시된 카드 목록이 없으면
+            cards = self._run("card.products", PRODUCTS_QUERY)        # Neo4j에서 카드 상품 메타데이터(card_id, product_nm) 직접 조회
+        transform_started = perf_counter()                            # Python 내 순위 융합 및 데이터 가공 시작 시각
+        identified = []                                               # 질문에서 식별된 카드 ID 목록 (Java List<Integer>)
+        for card in cards:                                            # 전체 등록 카드 목록을 순회
+            tokens = _name_tokens(card["product_nm"] or "")           # 카드 상품명을 공백·특수문자 기준 토큰 리스트로 분리
+            hits = [token for token in tokens if token in question.casefold()]  # 카드명 토큰 중 질문에 포함된 토큰 추출 (Stream filter)
+            if tokens and len(hits) == len(tokens):                   # 모든 토큰이 질문에 포함되어 있으면 완전 일치로 간주
+                identified.append(card["card_id"])                    # 식별된 카드 ID 목록에 추가
+        if not identified and cards:                                  # 완전 일치 카드가 없으면 부분 겹침(Overlap) 점수 계산
             overlaps = [(sum(token in question.casefold() for token in _name_tokens(c["product_nm"] or "")), c["card_id"])
-                        for c in cards]
-            best = max((score for score, _ in overlaps), default=0)
-            if best:
-                identified = [card_id for score, card_id in overlaps if score == best]
-        # 4. 각 혜택 레코드에 대해 키워드 매칭 점수(kw) 및 식별된 카드 소속 여부(own_card) 판정
-        candidates = []
-        for row in rows:
-            row = dict(row)
-            text = "\n".join(str(x or "") for x in (row.get("name"), row.get("search_text"), row.get("rule_text"), row.get("limit_text"))).casefold()
-            if row["is_card"]:
-                card_name = row.get("product_nm") or ""
-                kw_fields = [card_name.casefold(), text]
-                own = row.get("card_id") in identified
-            else:
-                kw_fields = [text, " ".join(x.get("product_nm", "") for x in row["apply_cards"]).casefold()]
-                own = any(x.get("card_id") in identified for x in row["apply_cards"])
-            row["kw"] = sum(any(term in field for field in kw_fields) for term in terms)
-            row["sim"] = float(row["sim"]) if row.get("sim") is not None else None
-            row["own_card"] = own
-            row["key"] = _entity_key(row)
-            candidates.append(row)
-        # 5. 키워드 점수 및 벡터 점수 기준 각각 정렬
-        keyword = sorted([r for r in candidates if r["kw"] > 0], key=lambda r: (-r["kw"], r["name"], r["key"]))
-        vector_ranked = sorted([r for r in candidates if r["sim"] is not None], key=lambda r: (-r["sim"], r["key"]))
-        keyword = keyword[:FETCH_PER_TABLE * 2]
-        vector_ranked = vector_ranked[:FETCH_PER_TABLE * 2]
-        # 6. RRF(Reciprocal Rank Fusion) 점수 융합: score += 1.0 / (RRF_K + rank)
-        scores = {}
-        for channel, ranked in (("keyword", keyword), ("vector", vector_ranked)):
-            for rank, row in enumerate(ranked, start=1):
-                item = scores.setdefault(row["key"], {"row": row, "score": 0.0, "channels": []})
-                item["score"] += 1.0 / (RRF_K + rank)
-                item["channels"].append(channel)
-        fused = sorted(scores.values(), key=lambda x: (-x["score"], x["row"]["key"]))
-        # 7. '모든 혜택' 질문 시 식별된 카드의 누락 혜택 전수 보완 및 카드 우선순위 반영
-        all_benefits = bool(ALL_BENEFITS.search(question))
-        if self.complete_card and all_benefits and identified:
-            own_hits = [x for x in candidates if x["is_card"] and x["card_id"] in identified]
-            present = {x["row"]["key"] for x in fused}
-            fused = [{"row": x, "score": 0.0, "channels": []} for x in own_hits if x["key"] not in present] + fused
-        if self.card_priority and identified:
-            fused = [x for x in fused if x["row"]["own_card"]] + [x for x in fused if not x["row"]["own_card"]]
-        selected = fused[:top_k]
-        hits = []
-        for item in selected:
-            row = item["row"]
-            applies = row["apply_cards"] if not row["is_card"] else [{"card_id": row["card_id"], "product_nm": row["product_nm"]}]
+                        for c in cards]                               # 각 카드별 토큰 매칭 개수 집계
+            best = max((score for score, _ in overlaps), default=0)    # 가장 많이 겹치는 최대 매칭 점수 확인
+            if best:                                                  # 1개 이상 겹친 카드가 있으면
+                identified = [card_id for score, card_id in overlaps if score == best]  # 동점 최고 점수 카드 ID들을 식별 목록에 저장
+        candidates = []                                               # 키워드 점수와 벡터 점수가 결합될 후보 dict 리스트 (Java List<Map>)
+        for row in rows:                                              # Neo4j 벡터 검색 결과 레코드(dict)를 하나씩 순회
+            row = dict(row)                                           # 불변 레코드를 수정 가능한 Python dict(Java HashMap)로 복사
+            text = "\n".join(str(x or "") for x in (row.get("name"), row.get("search_text"), row.get("rule_text"), row.get("limit_text"))).casefold()  # 검색 대상 필드들을 단일 텍스트로 합침
+            if row["is_card"]:                                        # 개별 카드 전용 혜택(BENEFIT)인 경우
+                card_name = row.get("product_nm") or ""               # 소속 카드 상품명 추출
+                kw_fields = [card_name.casefold(), text]              # 카드명과 혜택 본문을 키워드 검색 대상 필드로 지정
+                own = row.get("card_id") in identified                # 해당 혜택의 카드가 질문에서 식별된 카드인지 확인 (boolean)
+            else:                                                     # 여러 카드에 적용되는 공통 혜택(COMMON)인 경우
+                kw_fields = [text, " ".join(x.get("product_nm", "") for x in row["apply_cards"]).casefold()]  # 혜택 본문과 적용 카드명들을 대상 필드로 지정
+                own = any(x.get("card_id") in identified for x in row["apply_cards"])  # 적용 카드 중 하나라도 식별된 카드에 속하는지 확인
+            row["kw"] = sum(any(term in field for field in kw_fields) for term in terms)  # 질문의 키워드가 필드에 등장한 빈도 점수 계산
+            row["sim"] = float(row["sim"]) if row.get("sim") is not None else None  # 벡터 유사도 점수를 실수형(float)으로 변환
+            row["own_card"] = own                                     # 식별된 카드 소속 여부 플래그 저장
+            row["key"] = _entity_key(row)                             # 혜택 식별 고유 키(item_id 또는 common_id) 생성
+            candidates.append(row)                                    # 계산된 메타데이터를 후보 리스트에 추가
+        keyword = sorted([r for r in candidates if r["kw"] > 0], key=lambda r: (-r["kw"], r["name"], r["key"]))  # 키워드 점수(kw) 내림차순 정렬
+        vector_ranked = sorted([r for r in candidates if r["sim"] is not None], key=lambda r: (-r["sim"], r["key"]))  # 벡터 점수(sim) 내림차순 정렬
+        keyword = keyword[:FETCH_PER_TABLE * 2]                       # 키워드 상위 후보 슬라이싱 (Java subList)
+        vector_ranked = vector_ranked[:FETCH_PER_TABLE * 2]           # 벡터 상위 후보 슬라이싱
+        scores = {}                                                   # RRF 융합 점수를 누적할 dict (Java Map<String, RrfScoreDto>)
+        for channel, ranked in (("keyword", keyword), ("vector", vector_ranked)):  # 키워드 랭킹과 벡터 랭킹을 순서대로 순회
+            for rank, row in enumerate(ranked, start=1):              # 1위부터 순위(rank) 매기기
+                item = scores.setdefault(row["key"], {"row": row, "score": 0.0, "channels": []})  # 키가 없으면 기본 구조 생성 (Map.putIfAbsent)
+                item["score"] += 1.0 / (RRF_K + rank)                 # RRF 공식: 1 / (60 + 순위) 점수를 누적 합산하여 두 채널 점수 융합
+                item["channels"].append(channel)                      # 어떤 채널(keyword/vector)에서 선정되었는지 기록
+        fused = sorted(scores.values(), key=lambda x: (-x["score"], x["row"]["key"]))  # 융합된 RRF 점수 기준 내림차순 정렬
+        all_benefits = bool(ALL_BENEFITS.search(question))            # 질문이 "모든 혜택"을 묻는 정규식 패턴인지 검사
+        if self.complete_card and all_benefits and identified:        # '모든 혜택' 질문이고 특정 카드가 식별된 경우
+            own_hits = [x for x in candidates if x["is_card"] and x["card_id"] in identified]  # 해당 카드의 모든 혜택을 추출
+            present = {x["row"]["key"] for x in fused}                # 현재 융합 순위에 포함된 키 집합 (Java Set)
+            fused = [{"row": x, "score": 0.0, "channels": []} for x in own_hits if x["key"] not in present] + fused  # 누락된 혜택을 강제 보완
+        if self.card_priority and identified:                         # 카드 우선순위 옵션이 켜져 있고 카드가 식별된 경우
+            fused = [x for x in fused if x["row"]["own_card"]] + [x for x in fused if not x["row"]["own_card"]]  # 해당 카드 혜택을 앞쪽에 우선 배치
+        selected = fused[:top_k]                                      # 최종 요구된 상위 top_k개 후보만 선택
+        hits = []                                                     # 화면 및 LangGraph에 전달할 SearchHit 객체 리스트
+        for item in selected:                                         # 선택된 각 후보 항목을 순회
+            row = item["row"]                                         # 후보의 원본 레코드 dict 추출
+            applies = row["apply_cards"] if not row["is_card"] else [{"card_id": row["card_id"], "product_nm": row["product_nm"]}]  # 적용 카드 정보 구성
             hits.append(SearchHit("CARD_BNFT" if row["is_card"] else "CARD_COMMON_BNFT", row["key"], str(row["id"]),
                 row.get("bnft_cd"), row["name"], row.get("bnft_type_cd"), applies, bool(applies), row.get("search_text"),
-                row.get("sim"), row["kw"], row.get("origin_cd"), item["channels"], [], [], []))
+                row.get("sim"), row["kw"], row.get("origin_cd"), item["channels"], [], [], []))  # SearchHit DTO 객체 생성 및 리스트 추가
         self.last_trace = {"identified_cards": identified, "pool": len(candidates), "keyword_candidates": len(keyword),
-                           "vector_candidates": len(vector_ranked), "completed_card": all_benefits and bool(identified)}
+                           "vector_candidates": len(vector_ranked), "completed_card": all_benefits and bool(identified)}  # 디버깅용 통계 저장
         CARD_LOG.log_summary("PERF", REQUEST_ID.get(), phase="hybrid_python_merge", elapsed_ms=(perf_counter() - transform_started) * 1000,
                              candidate_rows=len(rows), candidate_bytes=len(json.dumps(rows, ensure_ascii=False, default=str).encode("utf-8")),
                              selected=len(hits), products=len(cards))
-        engines = (["neo4j_keyword"] if terms else []) + (["neo4j_vector"] if vector is not None else []) + ["neo4j_rrf"]
+        engines = (["neo4j_keyword"] if terms else []) + (["neo4j_vector"] if vector is not None else []) + ["neo4j_rrf"]  # 사용된 검색 엔진 명칭 리스트
         CARD_LOG.log_summary("HYBRID", "neo4j", identified=identified or None, hits=len(hits), pool=len(candidates))
-        return SearchOutcome("N", hits, (perf_counter()-started)*1000, [], [], engines)
+        return SearchOutcome("N", hits, (perf_counter()-started)*1000, [], [], engines)  # N 모드 결과 객체 반환 (Java SearchOutcome DTO)
 
     def catalog_rows(self, question, graph_catalog, top_k=8):
-        """[후보 카탈로그 변환] Neo4j 전체 카탈로그와 N 모드 search() 결과를 결합하여 프롬프트용 행을 구성한다.
-
-        interpret 노드에서 LLM에 전달할 후보 목록(rows)을 만들 때 호출된다.
-        search(question, top_k)로 융합 랭킹 상위 혜택을 추출한 뒤,
-        전체 그래프 카탈로그에서 매칭되는 상세 정보(카드명, 규칙 텍스트 등)를 매핑한다.
-
-        입력:
-            question: 사용자 질문 문자열.
-            graph_catalog: Neo4j list_catalog()로 가져온 전체 혜택 목록 dict 리스트.
-            top_k: 선별할 최대 후보 수 (기본 8개).
-
-        반환:
-            (rows: list[dict], outcome: SearchOutcome) 튜플.
-        """
+        """Neo4j 전체 카탈로그와 N 모드 search() 결과를 결합하여 interpret 노드용 후보 행 목록을 구성한다."""
+        from .neo4j_search import entity_ref                          # 혜택 고유 식별 문자열 생성 헬퍼 함수 임포트
+        catalog = {entity_ref(row["key"], row.get("id")): row for row in graph_catalog}  # 전체 카탈로그를 entity_ref 키로 Map 변환 (빠른 O(1) 조회를 위함)
+        outcome = self.search(question, top_k=top_k)                  # N 모드 하이브리드 검색 실행 (top_k개 SearchHit 수신)
+        rows = []                                                     # interpret 노드의 프롬프트에 넣을 혜택 메타데이터 리스트
+        for hit in outcome.hits:                                      # 검색된 SearchHit를 순회
+            known = catalog.get(entity_ref(hit.key, hit.benefit_id))  # 전체 카탈로그 Map에서 상세 정보(규칙, 한도 텍스트 등) 조회
+            rows.append(known or {"key": hit.key, "id": hit.benefit_id, "name": hit.bnft_nm,
+                                  "status": None, "card": ", ".join(c.get("product_nm", "") for c in hit.cards),
+                                  "targets": [], "payment_min_amounts": []})  # 카탈로그에 있으면 매핑 행, 없으면 기본 dict 생성하여 추가
+        return rows, outcome                                          # (후보 dict 리스트, 검색 결과 객체) 튜플 반환 (interpret 노드로 전달)
         from .neo4j_search import entity_ref
         catalog = {entity_ref(row["key"], row.get("id")): row for row in graph_catalog}
         outcome = self.search(question, top_k=top_k)

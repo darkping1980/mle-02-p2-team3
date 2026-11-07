@@ -1,30 +1,30 @@
 # 카드 혜택 GraphRAG — LangGraph 실행 구조 가이드
 
-> 저장 권장 위치: `src/card_benefit/docs/guide/LANGGRAPH_CARD_GRAPHRAG_STRUCTURE_GUIDE.md`  
-> 작성 기준: 2026-11-07 **최신 로컬 소스 및 한국어 주석 보강 완료 기준**. 코드 링크는 현재 로컬 작업 트리의 상대 경로 및 실제 줄 번호(`L행번호`)를 반영했다.  
+> 저장 권장 위치: `src/card_benefit/docs/guide/LANGGRAPH_CARD_GRAPHRAG_STRUCTURE_GUIDE.md`
+> 작성 기준: 2026-11-07 GitHub `main` 커밋 **`aa46df9` (N-only 리팩터링 푸시 후)**. 코드 링크는 이 버전에 고정했다. 이후 추가 수정이 있다면 현재 파일과 비교하여 줄 번호·동작을 재확인한다.
 > 범위: **사용자 질문을 처리하는 LangGraph 검색·답변 경로**. PDF 추출·PostgreSQL 등록·Neo4j 적재는 이 그래프의 실행 전 단계다.
 
 ## 0. 발표 전에 따라볼 실제 함수 링크
 
-> 아래 링크는 **로컬 작업 트리의 실제 소스 파일과 줄 번호**로 이동합니다. VS Code 또는 로컬 에디터에서 클릭 시 해당 함수 정의로 바로 이동할 수 있습니다.
+> 아래 링크는 **A/B/C 제거 후 GitHub 커밋 `aa46df9`**의 소스 줄로 이동합니다. 발표 연습 시 소스 줄이 바뀌지 않도록 **커밋 고정 링크**를 사용했습니다. 로컬 작업 트리 또는 이후 `main` 수정과 다를 수 있습니다.
 
 | 순서 | 클릭할 함수·위치 | 코드에서 볼 것 |
 |---|---|---|
-| 1. 화면 실행 | [`get_pipeline()`](../../payment_card/db_pipeline_origin_search/streamlit_app.py#L103) · [`pipeline.run(question)`](../../payment_card/db_pipeline_origin_search/streamlit_app.py#L418) | 질문 제출이 파이프라인을 어디에서 호출하는지 |
-| 2. 실행 흐름 정의 | [`CardGraphRAG._build()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2100) | 4개 노드와 2개 분기 지점을 먼저 확인 |
-| 3. 공유 상태 | [`CardState`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L255) | 노드 사이에 전달되는 `question`, `evidence`, `answer`, `error` 및 리듀서(`operator.add`) |
-| 4. 실행 시작 | [`run()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2135) | `graph.invoke()`가 그래프 실행을 시작 |
-| 5. 질문 해석 | [`interpret()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2212) · [`after_interpret()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2376) | 후보·의도 결정 후 계속 조회할지 분기 |
-| 6. 데이터 조회 | [`retrieve()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2390) · [`after_retrieve()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2452) | Neo4j 혜택·PDF 근거 조회 후 답변 가능 여부 |
-| 7. 답변·검증 | [`answer()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2464) · [`validate_answer()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L1737) | LLM 답변을 만든 뒤 값과 근거 대조 |
-| 8. 마무리 | [`finish()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2625) | 응답 또는 미응답 안내를 최종 State로 정리 |
-| 추가 A. 후보 검색 | [`Neo4jBenefitSearch.search()`](../../payment_card/db_pipeline_origin_search/neo4j_hybrid_search.py#L90) · [`catalog_rows()`](../../payment_card/db_pipeline_origin_search/neo4j_hybrid_search.py#L187) | N 모드 키워드·벡터 기반 후보 구성 |
-| 추가 B. 상세 조회 | [`Neo4jSearch.get_details()`](../../payment_card/db_pipeline_origin_search/neo4j_search.py#L459) | 혜택 상세와 근거를 Cypher로 일괄 조회(P3 배칭) |
-| 추가 C. PostgreSQL 로그 | [`persist_app_logs()`](../../payment_card/db_pipeline_origin_search/execution_log.py#L356) | Streamlit의 별도 경로에서 `app_log` 저장 |
+| 1. 화면 실행 | [`get_pipeline()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/streamlit_app.py#L101-L105) · [`pipeline.run(question)`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/streamlit_app.py#L409-L414) | 질문 제출이 파이프라인을 어디에서 호출하는지 |
+| 2. 실행 흐름 정의 | [`CardGraphRAG._build()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2007-L2023) | 4개 노드와 2개 분기 지점을 먼저 확인 |
+| 3. 공유 상태 | [`CardState`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L255-L285) | 노드 사이에 전달되는 `question`, `evidence`, `answer`, `error` |
+| 4. 실행 시작 | [`run()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2033-L2038) | `graph.invoke()`가 그래프 실행을 시작 |
+| 5. 질문 해석 | [`interpret()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2107) · [`after_interpret()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2261-L2269) | 후보·의도 결정 후 계속 조회할지 분기 |
+| 6. 데이터 조회 | [`retrieve()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2271-L2305) · [`after_retrieve()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2326-L2332) | Neo4j 혜택·PDF 근거 조회 후 답변 가능 여부 |
+| 7. 답변·검증 | [`answer()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2334-L2405) · [`validate_answer()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L1647) | LLM 답변을 만든 뒤 값과 근거 대조 |
+| 8. 마무리 | [`finish()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2478-L2513) | 응답 또는 미응답 안내를 최종 State로 정리 |
+| 추가 A. 후보 검색 | [`Neo4jBenefitSearch.search()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_hybrid_search.py#L90-L101) · [`catalog_rows()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_hybrid_search.py#L165-L175) | N 모드 키워드·벡터 기반 후보 구성 |
+| 추가 B. 상세 조회 | [`Neo4jSearch.get_details()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_search.py#L459-L489) | 혜택 상세와 근거를 Cypher로 일괄 조회 |
+| 추가 C. PostgreSQL 로그 | [`persist_app_logs()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/execution_log.py#L356) | Streamlit의 별도 경로에서 `app_log` 저장 |
 
 **짧은 학습 순서:** `get_pipeline` → `_build` → `CardState` → `run` → `interpret` → `retrieve` → `answer` → `finish`. 처음부터 파일 전체를 읽기보다 위 함수의 **입력 State → 반환 dict → 다음 분기 조건**만 확인해도 실행 흐름을 설명하기 편합니다.
 
-**링크 사용법:** 함수명을 클릭하면 로컬 소스 파일의 해당 행이 열립니다. 아래 문서의 줄 번호 표기도 최신 로컬 코드를 기준으로 갱신했습니다.
+**링크 사용법:** 함수명을 클릭하면 GitHub 소스의 해당 행이 열립니다. VS Code의 로컬 코드로 따라갈 때는 파일에서 `Ctrl+F`로 함수명을 찾으세요. 아래 문서의 기존 ‘약 ○행’ 표기도 현재 확인한 위치로 수정했습니다.
 
 ---
 
@@ -34,13 +34,13 @@
 - `card_graphrag.py`의 `interpret()`는 `self.search.list_catalog()` → `self.candidate_search.catalog_rows(question, graph_catalog)` → `_call_llm("interpret", ...)` 순서로 실행된다. 이전의 `self.search_mode` / A·B·C 분기는 실행 코드에서 제거됐다.
 - `neo4j_hybrid_search.py`의 `search(question, top_k, use_graph)`는 질문 임베딩, Neo4j 후보 Cypher, 키워드·벡터 RRF를 담당한다. 모드를 전달받지 않는다.
 - **과거 모드 제거 ≠ PostgreSQL 전부 제거:** PostgreSQL 원장·적재·`app_log` 기능은 별개로 남는다.
-- **주석 정합성:** 소스코드 내 독스트링과 내부 주석은 최신 N 모드 단일 파이프라인 구조에 맞춰 정정 완료되었다. 이 문서는 **현재 로컬 소스의 호출문과 함수 정의를 기준**으로 설명한다.
+- **주석 및 링크 기준:** 로컬 소스에는 N 모드 전용 상세 주석이 보강되어 있습니다. 본 문서의 소스 링크는 아직 미푸시 상태인 로컬 코드 대신 기존 **GitHub 커밋 a46df9 퍼머링크**를 유지합니다. 최종 commit/push 완료 후 최신 커밋 해시와 주석 시작 위치로 일괄 갱신될 예정입니다.
 
 ### 실제 질문 해석 LLM 호출이 어디에 있는가?
 
-1. [`interpret()` 후보 목록 생성](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2236-L2243)
-2. [`INTERPRET_PROMPT`에 `rows` + `question` 넣기](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2291-L2302)
-3. [`_call_llm()`의 `.invoke(prompt)` 실제 API 호출](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2195-L2205)
+1. [`interpret()` 후보 목록 생성](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2131-L2138)
+2. [`INTERPRET_PROMPT`에 `rows` + `question` 넣기](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2178-L2190)
+3. [`_call_llm()`의 `.invoke(prompt)` 실제 API 호출](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2089-L2092)
 4. 반환 스키마는 `Interpretation(intent, benefit_ids, ambiguity)`. 서버가 **실제 후보 목록에 존재하는 ID인지 재검증**한 뒤 `search_parameters`를 만든다. **이 단계는 답변 금액을 생성하는 단계가 아니다.**
 
 ```python
@@ -55,9 +55,9 @@ result = llm.with_structured_output(schema, method="json_schema",
                                     strict=True, include_raw=True).invoke(prompt)
 ```
 
-**브레이크포인트 추천:** `streamlit_app.py:418`(질문 제출) → `card_graphrag.py:2236`(후보) → `2291`(`prompt`) → `2203`(`.invoke`) → `2364`(`search_parameters`). `F10`은 다음 실행문, `F11`은 함수 내부, `F5`는 다음 중단점까지 진행이다.
+**브레이크포인트 추천:** `streamlit_app.py:414`(질문 제출) → `card_graphrag.py:2136`(후보) → `2188`(`prompt`) → `2092`(`.invoke`) → `2258`(`search_parameters`). `F10`은 다음 실행문, `F11`은 함수 내부, `F5`는 다음 중단점까지 진행이다.
 
-> **로컬 코드 추적 팁:** VS Code에서 링크를 클릭하면 로컬 소스의 해당 줄로 바로 이동합니다. 실제 Python 함수 경계는 들여쓰기와 다음 함수 선언으로 확인합니다.
+> **GitHub 노란색 강조 주의:** `#L2107-L2259`처럼 URL에서 지정한 범위만 색이 표시된다. **노란색 영역의 끝이 함수 끝이라는 뜻이 아니다.** 실제 Python 함수 경계는 들여쓰기와 다음 함수 선언으로 확인한다.
 
 ---
 
@@ -89,10 +89,10 @@ flowchart TD
 
 파일: `src/card_benefit/payment_card/db_pipeline_origin_search/streamlit_app.py`
 
-- [N-only 파이프라인 `get_pipeline()`](../../payment_card/db_pipeline_origin_search/streamlit_app.py#L103): 검색 모드를 고르거나 전달하지 않고 Neo4j 기반 검색만 사용한다.
-- [`get_pipeline()`](../../payment_card/db_pipeline_origin_search/streamlit_app.py#L103): `@st.cache_resource`를 이용해 Neo4j 연결·검색 어댑터·두 LLM·`CardGraphRAG` 객체를 생성/캐시한다.
-- [질문 폼 제출](../../payment_card/db_pipeline_origin_search/streamlit_app.py#L377-L381) → [`pipeline.run(question)` 호출](../../payment_card/db_pipeline_origin_search/streamlit_app.py#L418): 폼이 제출되면 파이프라인을 실행한다.
-- 최종 [`CardState`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L255-L285)는 `st.session_state.outcome`에 보관되어 답변·근거·오류·실행 경로 등을 화면에 표시한다.
+- [N-only 파이프라인 `get_pipeline()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/streamlit_app.py#L101): 검색 모드를 고르거나 전달하지 않고 Neo4j 기반 검색만 사용한다.
+- [`get_pipeline()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/streamlit_app.py#L101-L105): `@st.cache_resource`를 이용해 Neo4j 연결·검색 어댑터·두 LLM·`CardGraphRAG` 객체를 생성/캐시한다.
+- [질문 폼 제출](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/streamlit_app.py#L372-L379) → [`pipeline.run(question)` 호출](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/streamlit_app.py#L409-L414): 폼이 제출되면 파이프라인을 실행한다.
+- 최종 [`CardState`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L255-L285)는 `st.session_state.outcome`에 보관되어 답변·근거·오류·실행 경로 등을 화면에 표시한다.
 - Streamlit은 상호작용 때 스크립트를 위에서 아래로 다시 실행한다. **LangGraph가 스스로 실행되는 것이 아니라 질문 제출 처리에서 `run()`을 호출**한다. 같은 질문 재사용 분기가 있을 수도 있다.
 
 ```python
@@ -114,14 +114,14 @@ st.session_state.outcome = pipeline.run(question)
 
 파일: `src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py`
 
-- [`CardState`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L255-L285) — 255행: 실행 중 공유 상태(`TypedDict`)
-- [`CardGraphRAG`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2089) — 2089행: 파이프라인 클래스
-- [`CardGraphRAG._build()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2100) — 2100행: 노드·Edge·조건부 분기 등록
-- [`CardGraphRAG._initial_state()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2127) — 2127행: 초기 State 생성
-- [`CardGraphRAG.run()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2135) — 2135행: `graph.invoke()` 실행
-- [`interpret()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2212) / [`after_interpret()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2376) — 2212 / 2376행
-- [`retrieve()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2390) / [`after_retrieve()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2452) — 2390 / 2452행
-- [`answer()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2464) / [`finish()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2625) — 2464 / 2625행
+- [`CardState`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L255-L285) — 289행: 실행 중 공유 상태(`TypedDict`)
+- [`CardGraphRAG`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L1996) — 1961행: 파이프라인 클래스
+- [`CardGraphRAG._build()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2007-L2023) — 1982행: 노드·Edge·조건부 분기 등록
+- [`CardGraphRAG._initial_state()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2025-L2031) — 2000행: 초기 State 생성
+- [`CardGraphRAG.run()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2033-L2038) — 2008행: `graph.invoke()` 실행
+- [`interpret()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2107) / [`after_interpret()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2261) — 2083 / 2226행
+- [`retrieve()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2271) / [`after_retrieve()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2326) — 2236 / 2317행
+- [`answer()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2334) / [`finish()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2478) — 2325 / 2440행
 
 ```python
 # card_graphrag.py — 실제 연결 형태
@@ -182,18 +182,18 @@ update = {"intent": "BENEFIT_LIMIT", "path": ["interpret"],
 
 ## 4. 노드별 실제 실행 과정
 
-### 4.1 [interpret() — 현재 N-only 코드](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2212): Neo4j 후보에서 LLM이 조회 대상을 선택
+### 4.1 [interpret() — 현재 N-only 코드](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2107-L2259): Neo4j 후보에서 LLM이 조회 대상을 선택
 
 > **A/B/C 모드가 제거된 최신 구현이다.** 더 이상 `self.search_mode != "A"` 또는 `self.search_mode != "B"` 같은 조건문을 사용하지 않는다. `benefit_search.catalog_rows(question, "N", ...)` 호출도 없다.
 
 질문 하나가 다음 순서로 처리된다.
 
 1. `state["question"]`을 읽고 빈 질문·길이·LLM 설정을 확인한다.
-2. [self.search.list_catalog()](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2236)로 **Neo4j 카탈로그**를 읽는다. Neo4j 조회에 실패하면 이전 B 모드로 우회하지 않고 `NEO4J_FAILED`를 반환한다.
-3. [self.candidate_search.catalog_rows(question, graph_catalog)](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2241)로 **N 모드 전용 후보 검색**을 수행한다. 내부에서는 [Neo4jBenefitSearch.search()](../../payment_card/db_pipeline_origin_search/neo4j_hybrid_search.py#L90)가 질문 임베딩·Neo4j Cypher·키워드와 벡터 유사도 순위 통합(RRF)을 처리한다.
+2. [self.search.list_catalog()](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2131-L2134)로 **Neo4j 카탈로그**를 읽는다. Neo4j 조회에 실패하면 이전 B 모드로 우회하지 않고 `NEO4J_FAILED`를 반환한다.
+3. [self.candidate_search.catalog_rows(question, graph_catalog)](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2135-L2138)로 **N 모드 전용 후보 검색**을 수행한다. 내부에서는 [Neo4jBenefitSearch.search()](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_hybrid_search.py#L90-L163)가 질문 임베딩·Neo4j Cypher·키워드와 벡터 유사도 순위 통합(RRF)을 처리한다.
 4. 연회비 질문은 `ANNUAL_FEE` 후보를 보완하고, 카드 비교 질문의 명시된 주제도 필요에 따라 보완한다.
-5. [rows와 INTERPRET_PROMPT 생성](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2291-L2302): 후보 ID·혜택 이름·규칙·한도 등의 목록과 사용자 질문을 LLM 입력문으로 결합한다.
-6. [_call_llm('interpret', ...)](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2303-L2305)로 **질문 해석 LLM**을 호출한다. 결과는 `Interpretation(intent, benefit_ids, ambiguity)` 형식이다.
+5. [rows와 INTERPRET_PROMPT 생성](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2178-L2188): 후보 ID·혜택 이름·규칙·한도 등의 목록과 사용자 질문을 LLM 입력문으로 결합한다.
+6. [_call_llm('interpret', ...)](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2189-L2190)로 **질문 해석 LLM**을 호출한다. 결과는 `Interpretation(intent, benefit_ids, ambiguity)` 형식이다.
 7. LLM이 선택한 `benefit_ids`가 실제 후보 목록에 있는지 확인한 뒤, `search_parameters.benefit_keys` 등을 만들어 반환한다.
 
 ```python
@@ -205,13 +205,13 @@ prompt = INTERPRET_PROMPT.format(catalog=json.dumps(rows, ensure_ascii=False), q
 parsed, call = self._call_llm("interpret", self.interpret_llm, Interpretation, prompt, request_id)
 ```
 
-여기서 `_call_llm()`이 실행하는 [with_structured_output(...).invoke(prompt)](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2203-L2205)가 **실제 LLM API 호출 지점**이다. `interpret()`는 답변 금액을 생성하지 않고 질문 유형·조회할 혜택을 정한다. `LLM이 Cypher를 만들어서 실행하는 구조`가 아니다.
+여기서 `_call_llm()`이 실행하는 [with_structured_output(...).invoke(prompt)](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2089-L2092)가 **실제 LLM API 호출 지점**이다. `interpret()`는 답변 금액을 생성하지 않고 질문 유형·조회할 혜택을 정한다. `LLM이 Cypher를 만들어서 실행하는 구조`가 아니다.
 
-**디버깅 순서:** `2236행`에서 `graph_catalog` 확인 → `2291행`에서 `rows`, `prompt` 확인 → `2203행`에서 LLM 호출 확인 → `2364행`에서 `search_parameters` 확인.
+**디버깅 순서:** `2136행`에서 `graph_catalog` 확인 → `2188행`에서 `rows`, `prompt` 확인 → `2092행`에서 LLM 호출 확인 → `2258행`에서 `search_parameters` 확인.
 
 > **검색과 LLM의 구분:** 질문 임베딩을 만드는 `embedder.embed([question])`도 외부 API를 사용할 수 있지만, 이는 `Interpretation`을 생성하는 해석 LLM 호출과는 다른 작업이다.
 
-### 4.2 [`after_interpret`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2376): 조회할 수 있는가?
+### 4.2 [`after_interpret`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2261-L2269): 조회할 수 있는가?
 
 ```python
 if state.get("error") or state.get("intent") == "UNKNOWN":
@@ -221,18 +221,18 @@ return "retrieve" if state["search_parameters"]["benefit_keys"] else "finish"
 
 오류, `UNKNOWN`, 대상 혜택 없음 → `finish`. 대상 혜택이 있으면 → `retrieve`.
 
-### 4.3 [`retrieve`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2390): Neo4j 상세와 PDF 근거 수집
+### 4.3 [`retrieve`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2271-L2324): Neo4j 상세와 PDF 근거 수집
 
 - `search_parameters.benefit_keys`와 `sections`로 **정해진 Cypher 템플릿**을 실행한다.
-- 실제 코드에는 [`get_details()`](../../payment_card/db_pipeline_origin_search/neo4j_search.py#L459) 일괄 조회(P3 배칭)가 있으면 이를 우선 사용하고, 없으면 [`get_detail()`](../../payment_card/db_pipeline_origin_search/neo4j_search.py#L514)을 사용한다.
+- 실제 코드에는 [`get_details()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_search.py#L459-L489) 일괄 조회(P3 배칭)가 있으면 이를 우선 사용하고, 없으면 [`get_detail()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_search.py#L504)을 사용한다.
 - 혜택별 context, rules, conditions, limits, evidence를 가져온다. PDF 근거에는 evidence ID·문서·페이지·인용이 연결된다.
-- [`collect_evidence()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L371)는 여러 혜택의 근거를 evidence ID 기준으로 합친다.
-- [`find_exclusions()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L473)는 질문과 제외 조건을 대조한다.
-- [`split_unresolved()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L1210)는 불확실성을 **질문 영향 조건 / 자료 상태 / 그 외**로 분리한다.
+- [`collect_evidence()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L366)는 여러 혜택의 근거를 evidence ID 기준으로 합친다.
+- [`find_exclusions()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L468)는 질문과 제외 조건을 대조한다.
+- [`split_unresolved()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L1190)는 불확실성을 **질문 영향 조건 / 자료 상태 / 그 외**로 분리한다.
 
 **N-only 런타임은 질문 응답용 혜택 검색을 Neo4j로 처리한다.** PostgreSQL은 이 그래프의 N 검색에서 원장 관리·사전 적재 경로이지, 일반 질문의 후보/상세를 매번 PostgreSQL에서 읽는 모드가 아니다. 단, `execution_log.py` 등 앱 로깅은 별도 경로를 통해 PostgreSQL에 쓸 수 있으므로 **애플리케이션 전체가 DB 쓰기 0이라는 뜻은 아니다.**
 
-### 4.4 [`after_retrieve`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2452): 답변할 근거가 있는가?
+### 4.4 [`after_retrieve`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2326-L2332): 답변할 근거가 있는가?
 
 ```python
 return "answer" if not state.get("error") and state.get("evidence") else "finish"
@@ -240,33 +240,26 @@ return "answer" if not state.get("error") and state.get("evidence") else "finish
 
 조회 오류가 있거나 PDF 근거가 없으면 LLM 답변을 만들지 않고 `finish`로 간다.
 
-### 4.5 [`answer`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2464): 답변 작성 및 검증
+### 4.5 [`answer`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2334-L2476): 답변 작성 및 검증
 
-1. 중복 혜택을 제거한다. 연회비만 있는 경우 [`fee_answer()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L659)가 **프로그램에서** 연회비 문장을 만든다.
-2. 그 외에는 [`benefit_context()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L790)로 검색 결과를 답변용 `context`로 축약한다.
-3. [`CardAnswer`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L146) 구조화 출력으로 답변 LLM을 호출한다.
-4. [`validate_answer()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L1737)가 근거 ID, 값, 구간 등 조회 결과와 답변을 대조한다.
-5. [`enforce_exclusions()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L515)가 제외 조건을 확인한다.
+1. 중복 혜택을 제거한다. 연회비만 있는 경우 [`fee_answer()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L652)가 **프로그램에서** 연회비 문장을 만든다.
+2. 그 외에는 [`benefit_context()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L783)로 검색 결과를 답변용 `context`로 축약한다.
+3. [`CardAnswer`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L146) 구조화 출력으로 답변 LLM을 호출한다.
+4. [`validate_answer()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L1647)가 근거 ID, 값, 구간 등 조회 결과와 답변을 대조한다.
+5. [`enforce_exclusions()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L508)가 제외 조건을 확인한다.
 6. 통과한 내용과 경고를 `state.answer`, `state.warnings`로 반환한다.
 
 중요한 helper:
 
-- [`benefit_context()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L790) (790행): Neo4j `source_json`을 읽어 규칙·조건·한도·구간별 한도 등을 문맥으로 만든다.
-- [`limit_tier_view()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L929) (929행): `item_data.limit_tiers`가 있을 때만 구조화된 구간별 한도를 읽는다.
-- **현재 소스 차이:** 기존 가이드에 있던 `point2_shared_cap_policy()`는 확인한 커밋의 `card_graphrag.py`에 **존재하지 않음**. 이에 대한 설명을 현재 동작으로 단정하지 말 것. 구간 한도 처리는 [`extraction_limit_tier_view()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L875) 및 [`limit_tier_view()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L929)에서 다시 확인할 수 있음.
-- [`validate_answer()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L1737) (1737행): LLM이 만든 값·근거·불확실성을 검사한다.
-- [`split_unresolved()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L1210) (1210행): 규칙 미확정 정보가 질문에 영향을 주는지 분류한다.
+- [`benefit_context()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L783) (845행): Neo4j `source_json`을 읽어 규칙·조건·한도·구간별 한도 등을 문맥으로 만든다.
+- [`limit_tier_view()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L909) (971행): `item_data.limit_tiers`가 있을 때만 구조화된 구간별 한도를 읽는다.
+- **현재 소스 차이:** 기존 가이드에 있던 `point2_shared_cap_policy()`는 확인한 커밋의 `card_graphrag.py`에 **존재하지 않음**. 이에 대한 설명을 현재 동작으로 단정하지 말 것. 구간 한도 처리는 [`extraction_limit_tier_view()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L855) 및 [`limit_tier_view()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L909)에서 다시 확인할 수 있음.
+- [`validate_answer()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L1647) (1632행): LLM이 만든 값·근거·불확실성을 검사한다.
+- [`split_unresolved()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L1190) (1252행): 규칙 미확정 정보가 질문에 영향을 주는지 분류한다.
 
 **실무 사례 — 더 심플 하나카드:** `item_data={}`이고 Neo4j `source_json.item_data.limit_tiers`가 없으면 프로그램은 `30만~80만 미만 → 1만원`처럼 **근거가 연결된 구간 정보를 전달할 수 없다.** P0/P1/P2 코드를 수정해도 기존 DB 데이터가 보정·재적재되지 않으면 정답이 자동으로 복구되지 않는다. 데이터 손실과 코드 검증을 분리해서 봐야 한다.
 
-### 4.6 [`finish`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2625): 성공/실패 공통 마무리
-
-모든 경로는 `finish`를 지난다.
-
-- 이미 생성된 `answer`가 있으면 답변을 재생성하지 않는다.
-- 답변이 없으면 `error`, `intent`, 대상/근거 유무에 따라 화면용 안내를 만든다.
-- 경로(`path`), 토큰 사용량, 비용 추정, 경고, 전체 실행 시간 등을 기록한다.
-- **주의:** `finish`가 API 비용을 저장한다는 의미의 DB write를 직접 수행한다는 뜻은 아니다. 실제 DB 로그 적재는 Streamlit의 별도 로깅 경로를 확인한다.
+### 4.6 [`finish`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2478-L2513): 성공/실패 공통 마무리
 
 모든 경로는 `finish`를 지난다.
 
@@ -314,17 +307,17 @@ return "answer" if not state.get("error") and state.get("evidence") else "finish
 
 ## 7. 코드 분석·디버깅 순서
 
-1. [`streamlit_app.py`의 N 모드·`get_pipeline()`](../../payment_card/db_pipeline_origin_search/streamlit_app.py#L103)과 [질문 제출 경로](../../payment_card/db_pipeline_origin_search/streamlit_app.py#L377-L419)를 확인한다.
-2. [`CardState`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L255)와 [`_build()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2100)로 그래프 구조를 먼저 그린다.
-3. [`run()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2135) → [`_initial_state()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2127) → `graph.invoke()`를 추적한다.
-4. [`interpret()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2212)에서 `search_parameters`가 어떻게 만들어지는지 확인한다.
-5. [`after_interpret()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2376)가 왜 `retrieve` 또는 `finish`를 선택하는지 확인한다.
-6. [`retrieve()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2390)의 `retrieved_data`, `evidence`와 [Neo4j 상세 조회](../../payment_card/db_pipeline_origin_search/neo4j_search.py#L459)의 `source_json`을 비교한다.
-7. [`answer()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2464)의 `context`에 `limit_tiers`가 실렸는지 확인한다.
-8. [`validate_answer()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L1737)에서 답변이 거부·보정되는 이유를 확인한다.
-9. [`finish()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2625)를 통해 최종 `answer`, `error`, `warnings`, `llm_calls`, `path`를 확인한다.
+1. [`streamlit_app.py`의 N 모드·`get_pipeline()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/streamlit_app.py#L101-L105)과 [질문 제출 경로](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/streamlit_app.py#L372-L415)를 확인한다.
+2. [`CardState`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L255-L285)와 [`_build()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2007-L2023)로 그래프 구조를 먼저 그린다.
+3. [`run()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2033-L2038) → [`_initial_state()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2025-L2031) → `graph.invoke()`를 추적한다.
+4. [`interpret()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2107-L2259)에서 `search_parameters`가 어떻게 만들어지는지 확인한다.
+5. [`after_interpret()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2261-L2269)가 왜 `retrieve` 또는 `finish`를 선택하는지 확인한다.
+6. [`retrieve()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2271-L2324)의 `retrieved_data`, `evidence`와 [Neo4j 상세 조회](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_search.py#L459-L489)의 `source_json`을 비교한다.
+7. [`answer()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2334-L2476)의 `context`에 `limit_tiers`가 실렸는지 확인한다.
+8. [`validate_answer()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L1647)에서 답변이 거부·보정되는 이유를 확인한다.
+9. [`finish()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2478-L2513)를 통해 최종 `answer`, `error`, `warnings`, `llm_calls`, `path`를 확인한다.
 
-**브레이크포인트 추천(발표 전 연습):** [`run()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2135) → [`interpret()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2212) → [`retrieve()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2390) → [`answer()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2464) → [`finish()`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2625). 실제 디버깅은 로컬 소스에서 이 함수 시작 부분에 중단점을 걸고 State를 관찰한다.
+**브레이크포인트 추천(발표 전 연습):** [`run()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2033) → [`interpret()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2107) → [`retrieve()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2271) → [`answer()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2334) → [`finish()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2478). 실제 디버깅은 로컬 소스에서 이 함수 시작 부분에 중단점을 걸고 State를 관찰한다.
 
 ### 자주 혼동하는 세 가지
 
@@ -336,16 +329,16 @@ return "answer" if not state.get("error") and state.get("evidence") else "finish
 
 | 확인할 내용 | 파일 |
 |---|---|
-| Streamlit 진입·N 모드 | [`streamlit_app.py`](../../payment_card/db_pipeline_origin_search/streamlit_app.py#L103) |
-| LangGraph State/Node/Edge | [`card_graphrag.py`](../../payment_card/db_pipeline_origin_search/card_graphrag.py#L2100) |
-| N 모드 Neo4j 후보 검색 | [`neo4j_hybrid_search.py`](../../payment_card/db_pipeline_origin_search/neo4j_hybrid_search.py#L90) |
-| Neo4j 상세 조회·Cypher | [`neo4j_search.py`](../../payment_card/db_pipeline_origin_search/neo4j_search.py#L459) |
-| 저장·실행 로그 | [`execution_log.py`](../../payment_card/db_pipeline_origin_search/execution_log.py#L356) |
+| Streamlit 진입·N 모드 | [`streamlit_app.py`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/streamlit_app.py#L101) |
+| LangGraph State/Node/Edge | [`card_graphrag.py`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2007) |
+| N 모드 Neo4j 후보 검색 | [`neo4j_hybrid_search.py`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_hybrid_search.py#L90) |
+| Neo4j 상세 조회·Cypher | [`neo4j_search.py`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_search.py#L459) |
+| 저장·실행 로그 | [`execution_log.py`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/execution_log.py#L356) |
 | 기존 조회·검증 심화 가이드 | `src/card_benefit/docs/guide/CARD_GRAPHRAG_QUERY_VALIDATION_DETAIL.md` |
 | PostgreSQL·Neo4j 스키마 심화 | `src/card_benefit/docs/guide/SCHEMA_DEEP_DIVE_POSTGRESQL_NEO4J.md` |
 | 카드 22/099 오류 원인 분석 | `src/card_benefit/docs/issue_analysis/20261106_more_simple_limit_tier_root_cause_and_fix.md` |
 
-위 함수 링크는 **최신 로컬 작업 트리의 소스 파일과 줄 번호(`L행번호`)를 기준으로 갱신한 상대 링크**다. VS Code 및 로컬 마크다운 뷰어에서 함수 정의 또는 보강된 한국어 주석으로 바로 이동할 수 있다. 추후 변경 사항이 GitHub `main`에 최종 푸시되면, 해당 커밋의 퍼머링크(Permalink)로 전환할 수 있다.
+위 함수 링크는 **N-only 코드가 푸시된 GitHub 커밋 `aa46df9` 기준으로 위치를 확인해 고정한 링크**다. 따라서 클릭한 코드의 줄 번호는 유지되지만, 이후 `main` 및 로컬 수정 내용과는 다를 수 있다. 최신 로컬 파일에서는 같은 함수 이름으로 찾아 실제 동작을 대조한다.
 
 ---
 

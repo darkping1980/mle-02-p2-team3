@@ -827,3 +827,125 @@ All actual AppTest requests ran against the local Neo4j-backed N-mode path. `APP
 ### Remaining source-data work
 
 - To return the expected 3,000/100 ONE PICK and 10,000/500 STYLE answers as ANSWERED, repair the extraction row-to-benefit/rule/Evidence links using page-1 row-level PDF coordinates, then reload the affected source/graph mapping under a separately authorized data-change task. Until then the current safe PARTIAL behavior is expected.
+
+## ONE PICK STYLE 원장 정정 및 Neo4j 부분 동기화 (2026-11-07)
+
+### 사전 백업 및 검증
+
+- 승인된 적용 전제와 실제 연결을 재확인했다. PostgreSQL은 `postgres` 데이터베이스이며 대상 복합 PK는 `(2, 20261101_000001)` 및 `(2, 20261101_000002)`였다. 대상 혜택의 원래 규칙 키 및 21개 Evidence 링크가 사전 검증 목록과 일치한 후에만 트랜잭션을 적용했다.
+- 원장 백업: `tmp/onepick_style_preimage_20261107.json` (두 혜택 전체 행/embedding, 21개 링크, 기존 Evidence와 문서 메타데이터 포함), SHA-256 `58233b6f1ff1f012618bb23f3b2a3c6df467acbfd815b2359970b56ba11a8b05`.
+- Neo4j 복구용 사전 이미지: `tmp/onepick_style_neo4j_preimage_20261107.json` (DB `6ac1f0f8`의 두 혜택 속성과 기존 21개 `dp_supported_by` 링크), SHA-256 `bc07643ff11f7b4918f8802b07a21af06165494969039fb235932a241b69e24f`.
+- 두 파일은 저장소의 무시 대상 `tmp/` 아래에 있다. PostgreSQL 복구는 백업 행·Evidence·링크를 원래 키 기준으로 트랜잭션에 재삽입하고 수정된 항목을 원본 값으로 복구하는 방식이다. Neo4j 복구는 저장된 item 속성과 21개 관계를 복원하는 방식이다. 복구는 현재 승인된 데이터 수정을 취소하는 별도 DB 쓰기이므로 필요 시 별도 실행 승인이 필요하다.
+- 공식 PDF SHA-256은 문서 원장과 일치했다: `6ec9641c2e318ce9429a916f5d01c0468ccc3cffb238eb1162a43b280e25c6d2`.
+
+### PostgreSQL 적용 결과
+
+- 변경된 혜택 행 2건: ONE PICK `(2, 20261101_000001)`은 `one_pick_100`만, STYLE `(2, 20261101_000002)`은 `style_500`만 유지하도록 `rule_list`, `item_rule_txt`, `item_search_txt`, `item_data`를 수정했다. `item_cond_expr` 및 `item_limit_txt`는 유지했고, 기존의 정상 조건·한도 값은 보존했다. `item_data`에는 PDF 1페이지의 행 위치, 추출 chunk, PDF 해시 및 해당 규칙/Evidence 연결을 기록했다.
+- Evidence 2건 생성: `20261107_003042`의 원문은 `결제 건당\n3천원 이상 시 \n100원`, `20261107_003043`의 원문은 `결제 건당\n1만원 이상 시 \n500원`이다. 두 인용문은 공식 PDF 추출 텍스트의 각 행에서 발췌했으며, 검토 상태는 `PENDING`으로 유지했다. 어느 검토 상태도 `APPROVED`로 변경하지 않았다.
+- 링크 8건 삭제: `20261101_000004`, `_000005`, `_000010`, `_000011`, `_000046`, `_000047`, `_000048`, `_000049`.
+- 링크 4건 갱신: `20261101_000044`, `_000045`, `_000050`, `_000051`를 올바른 신규 Evidence ID로 연결했다. 승인 계획대로 나머지 9개 링크는 그대로 유지했다. 결과적으로 두 혜택 범위의 링크는 21개에서 13개가 되었다.
+- 기존 AI 추출·스테이징 레코드, 기존 원본 Evidence 레코드, 보관 테이블은 변경하지 않았다. 트랜잭션 적용 영수증은 `tmp/onepick_style_apply_receipt_20261107.json`에 기록했다.
+
+### 임베딩 및 Neo4j 동기화
+
+- 프로젝트의 `build_card_bnft_text()` 규칙과 `text-embedding-3-small`을 사용해 변경된 검색 텍스트 두 건만 한 번의 batch 호출로 재임베딩했다. 응답은 2개, 각 1,536차원이며 유한한 수치였다. 텍스트 해시는 ONE PICK `9c14b6397ac9b07262e05277f3cefcfe10b19a58efeca9c82d59af525a8dd2e8`, STYLE `3066427c9e5c007b325dc844b703fba2e4b2cb708c9aee6e75288660fe8eb37a`로 확인했다. embedding payload는 `tmp/onepick_style_embeddings_20261107.json`에 보관했다.
+- 전체 그래프 삭제/재적재 없이 Neo4j DB `6ac1f0f8`의 두 혜택만 갱신하고 Evidence 2개를 추가했다. 대상 item의 기존 `dp_supported_by` 21개를 교체해 PostgreSQL 링크에 해당하는 13개를 재생성했으며 새 Evidence 각각에 chunk 관계를 연결했다. 사후 확인에서 두 item, 13개 링크, 새 Evidence 2개와 chunk 연결, 1,536차원 embedding이 일치했다. PostgreSQL의 두 item 속성 및 직접 링크 집합과 Neo4j 데이터는 차이 0이었다. 이 범위에서 `dp_supported_by`는 21개에서 13개가 되었고 신규 chunk 관계 2개가 추가됐다. 전체 그래프 노드/관계 총량은 이 작업에서 측정하지 않았다.
+- 재구축 코드의 전체 dry-run은 추출 단계 형제 Evidence를 통해 옛 잘못된 링크 4개를 파생 생성할 수 있음을 확인했다. 이번 부분 동기화는 PostgreSQL의 명시적 `card_evidence_link` 13개만 반영해 그 링크를 차단했다. 향후 전체 재구축 시 동일 현상이 재유입되지 않도록 `neo4j_relational_model.build()`의 형제 Evidence 확장 규칙을 후속 코드 과제로 남긴다.
+
+### 실제 N 모드 Streamlit AppTest 결과
+
+- 실제 `streamlit_app.py` AppTest 경로에서 실행했으며, 결과는 PostgreSQL `app_log_id` 735–739에서 복구했다. AppTest 초기화 예외는 없었다. 출력 인코딩 오류가 마지막 질문의 테스트 보고 문자열 직렬화 중 발생했으나 GraphRAG 응답과 app_log 저장은 완료되어 저장 로그로 응답을 확인했다. 이 다섯 실행의 개별 벽시계 시간을 모두 보존하지 못했으므로 시간 수치는 보고하지 않는다.
+
+| app_log_id | 질문 | 상태 및 실제 결과 | 답변 Evidence |
+|---:|---|---|---|
+| 735 | ONE PICK 편의점·카페 건당 기준/금액 | `ANSWERED`: 건당 3,000원 이상이면 100원, 하루 1회·월 30회, 월 5,000원 한도. | `20261101_000032`, `_000033`, `20261107_003042`, `_000036`, `_000037` |
+| 736 | STYLE 쇼핑 건당 기준/금액 | `ANSWERED`: 건당 10,000원 이상이면 500원, 하루 1회·월 10회, 월 5,000원 한도. | `20261107_003043`, `20261101_000042`, `_000043` |
+| 737 | ONE PICK 및 STYLE 규칙·한도 비교 | 출력 응답 문장은 두 혜택의 3,000/100 및 10,000/500 매핑과 각 5,000원 한도를 정확히 담았으나 최종 `NOT_ANSWERABLE`로 저장되고 검증된 points는 비었다. 검증기가 구조화 tier-to-cap 매핑 부재를 이유로 문장 근거를 제거했다. 아래 미해결 항목 참조. | PDF Evidence 목록에는 각 혜택의 서비스·월한도 및 신규 행별 인용이 포함됐으나 답변 points에는 없음 |
+| 738 | POINT II 전월 실적 60만원 한도 | `ANSWERED`: 통합 월 한도 20,000원. | `20261105_002745`, `_002740`, `_002742` |
+| 739 | 더 심플 하나카드와 카드의정석2 DAILY 통신·구독 비교 | `ANSWERED`: 두 카드의 대상·실적 및 DAILY 통신 5%, 건당 30,000원 이상, 구독 50%, 통합 한도 8,000/11,000/17,000원을 답변에 포함. | `20261105_002680`–`002688`, `003035`, `002839`, `002841`, `002843`–`002845`, `003031`, `003034` |
+
+- 최종 저장된 사용자 응답과 PDF 근거는 일치했으며, 첫 두 단일 질문과 POINT II·통신/구독 회귀는 `ANSWERED`였다. 비교 질문의 본문은 기대 금액을 담았지만 검증 결과가 `NOT_ANSWERABLE`이므로 성공으로 간주하지 않는다. `PENDING` Evidence 때문에 app_log에 개발 검토 안내가 계속 표시됐다.
+
+### 테스트 및 미완료 사항
+
+- `python -m py_compile` 통과: `card_graphrag.py`, `neo4j_search.py`, `neo4j_hybrid_search.py`.
+- 관련 pytest 실행: `test_card_graphrag.py`, `test_neo4j_batch_queries.py`, `test_neo4j_origin_search.py`, `test_neo4j_hybrid_search.py`, `test_benefit_embedding.py` — 240 passed, 14 skipped (31.73s).
+- 전체 payment_card 회귀: `$env:PYTHONPATH='src/card_benefit;src'; python -m pytest src/card_benefit/payment_card/tests -q` — 576 passed, 18 skipped, 99 subtests passed (36.58s). 실제 실행 경로 AppTest 다섯 건은 별도로 위 결과에 기록했다.
+- 실제 Neo4j 부분 동기화 및 PostgreSQL 대조 조회 통과. 다섯 AppTest 요청이 실제 N 모드 경로에서 처리되어 app_log에 저장됐으며, 한 건은 검증기 때문에 `NOT_ANSWERABLE`이다.
+- 비교 응답 검증의 현재 tier-to-cap 구조 가정은 원장 수정만으로 해결되지 않았다. 사용자 제한대로 Python 실행 로직은 임의 수정하지 않았으므로 이 비교 상태는 미완료이며, 다음 코드 수정은 별도 승인 범위에서 진행해야 한다. 또한 전체 그래프 재구축 경로의 형제 Evidence 자동확장도 재유입 방지 과제로 남았다.
+- 코드 문법 복구를 위해 `card_graphrag.py`에서 기존 `validate_answer()` 구성에 남은 중복 두 줄만 제거했다. 이는 Python 구문 오류를 복구하기 위한 최소 수정이며, 검증 동작을 바꾸려는 수정은 아니었다. 동시 진행된 Antigravity 주석과 가이드 변경을 되돌리거나 덮어쓰지 않았다.
+- PostgreSQL 및 Neo4j의 요청 외 데이터는 변경하지 않았고, Git commit/push를 하지 않았다.
+
+## Fixed cap 검증과 ONE PICK·STYLE 비교 재검증 (2026-11-07)
+
+### app_log_id=737 원인 확인
+
+- 과거 `app_log_id=737`의 `detail_text`에는 최종 상태와 통과 point만 저장되어 있었고, point가 빈 배열이었다. `response_text`는 UI용 최종 문장, `execution_log`는 실행한 Cypher 텍스트였으며 원본 구조화 CardAnswer나 validate 입력 context는 저장되지 않았다. 따라서 그 요청의 원본 CardAnswer 객체 자체는 사후 복원할 수 없다. 대신 최종 AppTest 재실행에서 원본 CardAnswer와 검증 context를 메모리에서 캡처해 같은 데이터 경로의 원인을 재현했다.
+- 이전 `validate_answer()`는 `limit_tier_answer_problem()`을 호출하고, 그 함수가 `_unstructured_limit_pair_claim()`을 통해 “한도/할인/적립” 문장 안에 금액 조건과 다른 금액이 함께 있다는 이유로 `tier-to-cap mapping is unavailable in retrieved structured data`를 반환하면 point를 버렸다. 이 분기는 결제 건당 조건의 basis가 `TXN_AMT`인지 전월 실적 `PREV_MONTH_SPEND`인지 검사하지 않았다. 그래서 거래 최소금액·지급액·고정 월 한도를 한 문장에 쓴 점도 전월 실적 구간-한도 매핑으로 오인될 수 있었다.
+- 실제 재실행 context에서 ONE PICK은 `one_pick_100` 하나, `SPEND_REQ` basis `TXN_AMT`, 최소 3,000원, `limit_text=월 5천원 / 일 1회 / 월 30회`였고, STYLE은 `style_500` 하나, basis `TXN_AMT`, 최소 10,000원, 같은 월 고정 한도와 월 10회 조건이었다. Evidence는 각각 신규 행 Evidence `20261107_003042`·`20261107_003043` 및 혜택별 월 한도 Evidence `20261101_000037`·`20261101_000043`를 가리켰다. 검토 상태는 변경하지 않았다.
+
+### 검증 로직 및 반례
+
+- `validate_answer()`는 point의 Evidence ID를 먼저 유효성·혜택 소유 범위로 필터한 후 한도 검증에 넘긴다. 수정된 미구조화 구간 검사는 전월 실적 basis와 구간 표현이 있을 때만 작동하고 `TXN_AMT` 규칙은 전월 실적 구간으로 해석하지 않는다.
+- 구조화되지 않은 고정 월 한도는 해당 혜택의 limit text에 단일 월 금액이 있고, 그 point가 같은 혜택 소유의 인용 PDF Evidence에서 동일 금액을 제시할 때 인정한다. 복수 월 금액은 단일 고정 한도로 보지 않는다. 표시용 자연어에도 validated point에 없는 월 한도 금액이 들어가면 자연어 전체 대신 검증된 point 문장을 구성한다.
+- 추가 회귀 테스트는 다음을 확인한다: 고정 월 한도 통과, 지급 규칙/한도 금액이 다른 혜택에서 섞인 point 거부, PDF에 월 한도 인용이 없는 point 거부, 타 혜택 소유 Evidence 거부, 표시 자연어에만 추가된 한도 제거, 기존 structured 전월 실적 구간의 잘못된 cap은 거부하고 올바른 cap은 통과.
+- 이전 전체 Neo4j 재구축 전제의 live 테스트는 과거 잘못 연결된 혜택·Evidence를 예상해 일부 실패했다. 이를 현재 PostgreSQL 정정 및 Neo4j 연결에 맞췄다: ONE PICK의 transaction minimum은 3,000원 하나, STYLE은 10,000원 하나이며, 비교 회귀는 분리된 신규 Evidence ID와 혜택 소유 ID를 사용한다. 이는 생산 코드를 바꾸지 않고 테스트 기대값을 최신 데이터 관계에 맞춘 것이다.
+
+### 최종 N 모드 AppTest 결과 (DB 로그 쓰기 비활성화)
+
+실제 `streamlit_app.py` AppTest에서 Neo4j와 LLM 경로를 실행했다. `APP_DB_LOG_ENABLED=0`으로 PostgreSQL app_log 저장을 비활성화했으며 Neo4j도 읽기만 했다.
+
+| 질문 | 상태 | 벽시계 | 답변 및 근거 확인 |
+|---|---:|---:|---|
+| ONE PICK 편의점·카페 단일 | ANSWERED | 10.51초 | 건당 3천원 이상 → 100원, 일 1회·월 30회, 월 5천원. Evidence `20261107_003042`, `20261101_000032`, `_000033`, `_000036`, `_000037` 모두 1페이지. |
+| STYLE 쇼핑 단일 | ANSWERED | 7.17초 | 건당 1만원 이상 → 500원, 일 1회·월 10회, 월 5천원. Evidence `20261107_003043`, `20261101_000042`, `_000043` 모두 1페이지. |
+| ONE PICK·STYLE 비교 | ANSWERED | 7.38초 | 편의점·카페 3천원→100원과 STYLE 쇼핑 1만원→500원을 각각 분리하고, 각각 월 5천원 및 일/월 횟수를 답했다. `20261107_003042`, `_003043` 및 혜택별 사용 횟수·한도 Evidence를 유지했다. captured raw points 2개 모두 validate 통과, warnings 0. |
+| POINT II, 실적 60만원 | ANSWERED | 6.64초 | 통합 월 한도 2만원. PDF 3페이지 Evidence `20261105_002745`, `_002740`, `_002742`. 프로그램이 규칙 선택 미확정 문구를 보완했다는 내부 경고는 있었으나 사용자 답변과 cited point는 원문 수치와 일치했다. |
+| 더 심플·DAILY 통신/구독 비교 | ANSWERED | 11.79초 | 두 카드 및 구독 할인, 실적 구간 한도 근거를 검증했다. 이번 LLM 자연어 본문에는 DAILY 통신할인의 건당 3만원 조건이 빠졌지만, 같은 실행에서 캡처한 validated point에는 `건당 3만원 이상`과 Evidence `20261105_003035`, `_003036`가 포함됐다. 이 건은 답변 본문 완전성 이슈로 별도 후속 확인 대상이며 이번 fixed-cap 수정으로 상태를 강제하지 않았다. |
+
+- 재현 비교 raw CardAnswer에는 혜택별 point가 2개였고, 각각 해당 rule/Evidence와 `월 5천원`을 인용했다. 수정 후 두 point는 `ANSWERED`로 유지되고, 혜택 ID·Evidence 소유 관계도 서로 바뀌지 않았다.
+- AppTest 총시간은 실제 실행 벽시계이며 반복 요청/모델 변동의 영향을 받는다. `missing ScriptRunContext`는 Streamlit AppTest bare mode의 경고였고 앱 예외가 아니었다.
+
+### 테스트 및 작업 트리
+
+- `python -m py_compile` 통과: `card_graphrag.py`, `test_card_graphrag.py`, `test_neo4j_origin_search.py`.
+- 전체 `payment_card/tests`: 582 passed, 18 skipped, 99 subtests passed (18.17s).
+- 실제 Neo4j read-only 통합: `RUN_NEO4J_INTEGRATION=1 pytest ... -k "LiveNeo4jTests or LiveAccuracyTests"` — 14 passed, 204 deselected (20.05s).
+- 통합 테스트 첫 실행의 4개 실패는 원장/Evidence 정정 전의 옛 expectation(ONE PICK에 두 payout threshold, 삭제된 `_000034/_000040` 혼합 Evidence)을 사용한 테스트 픽스처였다. live Neo4j의 현재 연결을 재확인해 픽스처를 행별 Evidence와 새 단일 규칙에 맞춘 뒤 위 14개가 통과했다.
+- Antigravity의 한국어 주석 및 guide 변경은 유지했다. 현재 Git HEAD와 worktree의 `validate_answer()` points 구성은 모두 benefit_name/verification 한 쌍씩 정상이며 이 구간에 중복 문장 또는 구문 손상은 없다. 과거 보고에서 언급된 두 줄 제거는 현재 HEAD와 비교한 worktree diff에 별도 제거로 나타나지 않는다. 현재 구문 검사, 전체 테스트, live 테스트가 정상이다.
+- `git diff --check`에서 Antigravity 수정 guide의 기존 4행 trailing whitespace가 보고됐다. guide는 요청대로 건드리지 않았다. Git commit/push 및 DB 쓰기는 하지 않았다.
+
+
+## 2026-11-07 — 검증된 통신요금 조건의 최종 답변 누락 및 Evidence 페이지 전달 보완
+
+### 확인된 원인
+
+- 실제 N 모드 실행에서 `validate_answer()`가 LLM의 개별 `CardAnswer.points`를 검증해 DAILY 통신요금 point를 유지했지만, 자연어 `answer_text`에는 건당 3만원 조건이 빠진 실행이 확인됐다. Streamlit `show_outcome()`는 일반 화면에서 `answer_text`를 우선 표시하므로 point가 살아 있어도 사용자가 보는 본문에는 조건이 나타나지 않았다.
+- `answer_text_problem()`은 알려지지 않은 수치·근거 범위·실적 구간 왜곡 등을 검사했지만, 검증된 포인트에 포함된 `TXN_AMT` 최소 조건이 자연어 본문에도 들어갔는지는 확인하지 않았다.
+- Evidence `20261105_003035`, `20261105_003036`는 PostgreSQL `db_pipeline.card_source_evidence`에 `page_no=2`, `card_doc_id=20261105_000048`, `card_doc_chunk_id=20261105_000191`, 인용문이 저장되어 있었다. `card_evidence_link`의 링크 ID는 각각 `20261105_000708`, `20261105_000709`이며, 이들은 `card_product_item_id=20261105_000184`(전월 실적 기준), `20261105_000185`(전월 실적 산정 기간·기준)에 연결되어 있었다.
+- 읽기 전용 Neo4j 조회에서도 Evidence 노드 `page_no=2`와 Evidence→Chunk→Page→Document 경로가 확인됐다. `Neo4jSearch.get_details()` 및 `collect_evidence()`도 페이지와 인용문을 보존했다. 즉 PostgreSQL/Neo4j/Cypher 원천 누락은 아니었다.
+- 페이지가 없는 것처럼 보인 원인은 TERMS의 PERFORMANCE 근거가 `attach_terms()`를 통해 Answer context에만 합쳐지고, 답변 결과의 State `evidence`에는 합쳐지지 않았던 것이다. 이에 따라 Streamlit/로그의 근거 목록에서는 003035·003036이 빠져 페이지 조회가 null로 나타났다. 이 메타데이터 문제는 3만원 조건 누락 원인과 별개다.
+
+### 수정 내용
+
+- `card_graphrag.py`: `missing_validated_transaction_condition_points()`와 `_mentions_transaction_threshold()`를 추가했다. 혜택별 조건에서 `SPEND_REQ` 또는 `USAGE_REQ` + `TXN_AMT`/`TRANSACTION_AMOUNT` 최소값을 확인하고, 이미 혜택 소유권·Evidence 검증을 통과한 point가 같은 기준을 말하지만 자연어 답변에는 그 금액과 조건 표현이 없을 때에만 해당 point 문장을 최종 본문에 덧붙인다. 질문이 조건·적용·대상·비교 또는 최소 결제액을 묻지 않는 경우는 적용하지 않는다.
+- 기존 수치·Evidence 검증, 카드별 조건·혜택 연결, 실적 구간 검증은 유지한다. 특정 카드명·혜택 ID·금액은 코드에 넣지 않았다.
+- `answer()`에서 PERFORMANCE TERMS 근거를 Answer context와 최종 State `evidence` 양쪽에 병합하고, 병합된 evidence를 반환하도록 했다. 따라서 Streamlit 및 `app_log` 출력에서도 실제 페이지·인용문이 표시된다.
+- `test_card_graphrag.py`: 검증된 TXN_AMT point의 조건 누락 보완, 이미 조건이 있는 문장 중복 방지, TERMS Evidence의 페이지·인용문 보존 테스트를 추가했다.
+- Antigravity 가이드의 내용과 소스 주석은 보존했다. 요청한 trailing whitespace만 가이드 3·4행의 총 4개 공백 문자에서 제거했다.
+
+### 실제 검증 결과
+
+- 실제 N 모드 Streamlit AppTest 다섯 질문: 모두 예외 없이 `ANSWERED`.
+  1. ONE PICK 편의점·카페: 건당 3,000원 이상 100원, 일 1회·월 30회, 월 5,000원.
+  2. STYLE 쇼핑: 건당 1만원 이상 500원, 일 1회·월 10회, 월 5,000원.
+  3. ONE PICK·STYLE 비교: 두 혜택의 금액 조건과 이용 횟수·한도 분리 유지.
+  4. POINT II: 전월 실적 60만원 이상에서 특별·추가 적립 통합 월 한도 2만원.
+  5. 더 심플·DAILY 비교: DAILY 통신요금 5% 할인, 자동납부 건당 3만원 이상 조건, 전월 실적 50만원 이상, 구독 50% 및 공식 홈페이지/앱 정기결제 조건, 전월 실적 구간별 통합 한도 8천원/1만1천원/1만7천원, 정기결제 자체 월 5천원 한도를 최종 답변에 포함. 더 심플의 실적 구간별 월 1만원/1만5천원 한도도 유지.
+- TERMS Evidence 003035와 003036는 Streamlit outcome에서 페이지 2와 원문이 조회됨을 추가 AppTest로 확인했다.
+- Python 구문 검사: `py_compile` 통과.
+- 전체 `src/card_benefit/payment_card/tests`: 585 passed, 18 skipped, 99 subtests passed.
+- 실제 Neo4j 읽기 통합 테스트 (`RUN_NEO4J_INTEGRATION=1`, `LiveNeo4jTests or LiveAccuracyTests`): 14 passed, 589 deselected.
+- `git diff --check`: 통과. Git commit/push 및 PostgreSQL·Neo4j 데이터 변경은 수행하지 않았다.
+
+- 추가 AppTest 렌더 검증: 더 심플·DAILY 비교 질문을 N 모드로 실행하고 `app.markdown`의 렌더된 실제 답변에도 `건당 3만원 이상`이 표시되며, 응답 예외가 없음을 assertion으로 확인했다.
