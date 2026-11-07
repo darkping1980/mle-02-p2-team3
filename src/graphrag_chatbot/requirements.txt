@@ -1,0 +1,5 @@
+streamlit>=1.40
+psycopg[binary]>=3.2
+anthropic>=0.40
+pyvis>=0.3.2
+python-dotenv>=1.0
