@@ -24,6 +24,7 @@ Streamlit 실행 모델 (Java 개발자 참고)
     show_outcome → show_text / show_open_items / show_evidence / show_generation (화면 출력 전용, DB·LLM 미사용)
     화면 문구 정리(customer_text 등)는 표시만 바꾸며 결과 State의 값은 바꾸지 않는다.
 """
+import os
 import re
 import sys
 from pathlib import Path
@@ -92,6 +93,7 @@ _FACT = re.compile(r"\d")
 
 card_graphrag.configure_card_logging()      # 재실행마다 호출해도 handler는 공통 함수가 한 번만 붙인다.
 APP_DB_LOG_ENABLED = app_db_log_enabled()
+DEVELOPER_UI_ENABLED = os.getenv("CARD_GRAPHRAG_ENABLE_DEVELOPER_UI", "").strip() == "1"
 configure_application_logging(APP_DB_LOG_ENABLED, CARD_LOGGER_NAME)
 st.session_state.setdefault("execution_log_session_id", str(uuid4()))
 
@@ -165,8 +167,8 @@ def show_text(text: str) -> None:
 
 # region 결과 화면 출력 (show_outcome과 하위 출력 함수)
 def dev_mode() -> bool:
-    """사이드바 '개발자 모드' 토글 값(session_state['dev_mode'])."""
-    return bool(st.session_state.get("dev_mode"))
+    """개발자 UI가 명시적으로 활성화된 환경에서만 내부 정보를 노출한다."""
+    return DEVELOPER_UI_ENABLED and bool(st.session_state.get("dev_mode"))
 
 
 def use_example() -> None:
@@ -249,7 +251,7 @@ def show_outcome(outcome: dict) -> None:
     if answer["status"] == "ERROR":
         st.error(ERROR_TEXT)
     elif answer["status"] == "PARTIAL":
-        st.warning("일부 혜택이나 조건을 확인하지 못해 부분적으로 안내합니다. 확인된 근거와 미확인 항목을 함께 살펴봐 주세요.")
+        st.warning("일부 혜택이나 조건은 원문에서 연결을 확인하지 못했습니다. 아래 안내는 확인된 내용만 포함합니다.")
     elif answer["message"]:
         message = CUSTOMER_MESSAGES.get(answer["message"]) or customer_text(answer["message"])
         if message:
@@ -263,6 +265,8 @@ def show_outcome(outcome: dict) -> None:
         conclusion = customer_text(answer["conclusion"])
         if conclusion:
             st.markdown(f"**{plain(conclusion)}**")
+    if dev_mode() or answer["status"] == "PARTIAL":
+        show_open_items(outcome, pages)
     if not dev_mode():
         return
     if answer.get("fee_rows"):
@@ -285,7 +289,6 @@ def show_outcome(outcome: dict) -> None:
                 origin = " · 프로그램이 조회 값으로 작성" if point["origin"] == "system" else ""
                 source_text += f" · {VERIFICATION_LABELS[point['verification']]}{origin}"
             st.caption(source_text)
-    show_open_items(outcome, pages)
     # PDF 근거를 "답변 문장이 인용한 근거"와 "조회는 됐지만 인용되지 않은 근거"로 나눠 보여 준다.
     cited = {item for point in answer["points"] for item in point["evidence_ids"]}
     cited.update(item for condition in outcome.get("open_conditions") or [] for item in condition["evidence_ids"])
@@ -356,7 +359,8 @@ with st.expander("지원 카드 10종 보기", expanded=False):
 st.caption("카드를 선택하지 않아도 됩니다. 카드 혜택 추천·비교를 포함해 자유롭게 질문해 주세요.")
 
 with st.sidebar:
-    st.toggle("개발자 모드", key="dev_mode", help="내부 검증 상태, LLM 호출 정보, 단계별 개발 검증 화면을 표시합니다.")
+    if DEVELOPER_UI_ENABLED:
+        st.toggle("개발자 모드", key="dev_mode", help="내부 검증 상태, LLM 호출 정보, 단계별 개발 검증 화면을 표시합니다.")
     if dev_mode():
         st.warning("개발용 미승인 자료입니다. 실제 카드 혜택으로 사용하지 마세요.")
         run_mode = st.radio("실행 모드", ("자동 실행", "개발 검증"), key="run_mode")

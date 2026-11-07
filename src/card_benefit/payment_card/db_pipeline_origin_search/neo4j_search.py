@@ -457,10 +457,20 @@ class Neo4jSearch:
         return result
 
     def get_details(self, keys: list[str], sections: tuple[str, ...] = ALL_SECTIONS) -> dict[str, dict | None]:
-        """여러 혜택의 ``get_detail`` 을 근거 Cypher 종류별 한 문장으로 조회한다(P3). key → get_detail(key)와 같은 구조.
+        """[P3 배치 조회] 여러 혜택의 상세 정보 및 PDF 근거를 서브쿼리 배칭으로 일괄 조회한다.
 
-        혜택 N개 × (context + sections) 문장을 1문장(혜택·연회비 항목·공통 혜택이 섞이면 종류 수만큼)으로 줄인다.
-        근거 행은 로직이 읽는 열(owner_labels, rule_key, link, evidence)만 담는다.
+        Java의 MyBatis나 JPA에서 N+1 쿼리 문제를 해결하기 위해 IN 절이나
+        서브쿼리를 묶어 단일 네트워크 트랜잭션으로 조회하는 패턴과 동일하다.
+        단일 get_detail()을 루프에서 N번 호출하면 네트워크 왕복(Round-Trip)이 혜택 수만큼 발생하므로,
+        동일한 named Cypher(context + evidence)를 CALL 서브쿼리로 묶어 1회 왕복으로 가져온다.
+
+        입력:
+            keys: 조회할 혜택 고유 키 목록 (예: ['item:10:20', ...]).
+            sections: 함께 페치할 섹션 튜플 (기본값: ('evidence',)).
+
+        반환:
+            dict[key, detail_dict]: 혜택 키를 맵의 키로 하고, context, rules, conditions,
+            limits, evidence(PDF 근거)를 담은 상세 dict를 값으로 하는 매핑.
         """
         keys = list(dict.fromkeys(keys))
         result: dict[str, dict | None] = {key: None for key in keys}

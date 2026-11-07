@@ -88,17 +88,35 @@ class Neo4jBenefitSearch:
         return self.neo4j_search._run(statement_id, cypher, STATEMENTS[statement_id], params)
 
     def search(self, question: str, top_k: int = 5, use_graph: bool = True) -> SearchOutcome:
+        """[N 모드 단일 검색기] 질문 임베딩 + Neo4j Cypher 벡터 검색 + 키워드 빈도 매칭 + RRF 순위 융합.
+
+        PostgreSQL이나 별도 검색 엔진 없이 Neo4j 그래프와 임베딩만으로 실행되는 단일 검색 경로다.
+        Java의 Repository/Search Service에서 두 개의 검색 결과(키워드, 벡터)를 가져와
+        In-Memory RRF(Reciprocal Rank Fusion) 알고리즘으로 병합·정렬하는 과정에 해당한다.
+
+        입력:
+            question: 사용자 자연어 질문 문자열.
+            top_k: 최종 반환할 상위 혜택 후보 수 (기본 5개).
+            use_graph: 그래프 관계 탐색 여부.
+
+        반환:
+            SearchOutcome(mode="N", hits=SearchHit 목록, elapsed_ms, engines):
+            각 SearchHit는 혜택 식별자, 카드명, 유사도 점수, 매칭 채널 정보를 포함한다.
+        """
         started = perf_counter()
         embed_started = perf_counter()
+        # 1. 질문 텍스트를 고차원 벡터로 변환 (외부 임베딩 API 또는 모델 호출)
         vector = self.embedder.embed([question])[0] if self.embedder is not None else None
         CARD_LOG.log_summary("PERF", REQUEST_ID.get(), phase="question_embedding", elapsed_ms=(perf_counter() - embed_started) * 1000,
                              calls=1 if self.embedder is not None else 0, dimensions=len(vector) if vector is not None else None)
+        # 2. Neo4j Cypher 실행: 벡터 인덱스 기반 유사도(sim) 및 기본 혜택 속성 조회
         rows = self._run("card.hybrid_search", CANDIDATES_QUERY, qvec=vector)
         terms = [term.casefold() for term in search_terms(question)]
         cards = getattr(self.neo4j_search, "catalog_products", None)
         if cards is None:
             cards = self._run("card.products", PRODUCTS_QUERY)
         transform_started = perf_counter()
+        # 3. 질문에서 특정 카드 상품명 식별 (단어 완전 일치 우선, 부분 일치 차선)
         identified = []
         for card in cards:
             tokens = _name_tokens(card["product_nm"] or "")
@@ -111,6 +129,7 @@ class Neo4jBenefitSearch:
             best = max((score for score, _ in overlaps), default=0)
             if best:
                 identified = [card_id for score, card_id in overlaps if score == best]
+        # 4. 각 혜택 레코드에 대해 키워드 매칭 점수(kw) 및 식별된 카드 소속 여부(own_card) 판정
         candidates = []
         for row in rows:
             row = dict(row)
@@ -127,10 +146,12 @@ class Neo4jBenefitSearch:
             row["own_card"] = own
             row["key"] = _entity_key(row)
             candidates.append(row)
+        # 5. 키워드 점수 및 벡터 점수 기준 각각 정렬
         keyword = sorted([r for r in candidates if r["kw"] > 0], key=lambda r: (-r["kw"], r["name"], r["key"]))
         vector_ranked = sorted([r for r in candidates if r["sim"] is not None], key=lambda r: (-r["sim"], r["key"]))
         keyword = keyword[:FETCH_PER_TABLE * 2]
         vector_ranked = vector_ranked[:FETCH_PER_TABLE * 2]
+        # 6. RRF(Reciprocal Rank Fusion) 점수 융합: score += 1.0 / (RRF_K + rank)
         scores = {}
         for channel, ranked in (("keyword", keyword), ("vector", vector_ranked)):
             for rank, row in enumerate(ranked, start=1):
@@ -138,6 +159,7 @@ class Neo4jBenefitSearch:
                 item["score"] += 1.0 / (RRF_K + rank)
                 item["channels"].append(channel)
         fused = sorted(scores.values(), key=lambda x: (-x["score"], x["row"]["key"]))
+        # 7. '모든 혜택' 질문 시 식별된 카드의 누락 혜택 전수 보완 및 카드 우선순위 반영
         all_benefits = bool(ALL_BENEFITS.search(question))
         if self.complete_card and all_benefits and identified:
             own_hits = [x for x in candidates if x["is_card"] and x["card_id"] in identified]
@@ -163,6 +185,20 @@ class Neo4jBenefitSearch:
         return SearchOutcome("N", hits, (perf_counter()-started)*1000, [], [], engines)
 
     def catalog_rows(self, question, graph_catalog, top_k=8):
+        """[후보 카탈로그 변환] Neo4j 전체 카탈로그와 N 모드 search() 결과를 결합하여 프롬프트용 행을 구성한다.
+
+        interpret 노드에서 LLM에 전달할 후보 목록(rows)을 만들 때 호출된다.
+        search(question, top_k)로 융합 랭킹 상위 혜택을 추출한 뒤,
+        전체 그래프 카탈로그에서 매칭되는 상세 정보(카드명, 규칙 텍스트 등)를 매핑한다.
+
+        입력:
+            question: 사용자 질문 문자열.
+            graph_catalog: Neo4j list_catalog()로 가져온 전체 혜택 목록 dict 리스트.
+            top_k: 선별할 최대 후보 수 (기본 8개).
+
+        반환:
+            (rows: list[dict], outcome: SearchOutcome) 튜플.
+        """
         from .neo4j_search import entity_ref
         catalog = {entity_ref(row["key"], row.get("id")): row for row in graph_catalog}
         outcome = self.search(question, top_k=top_k)

@@ -882,10 +882,42 @@ class UnbackedStatusTests(unittest.TestCase):
 
     def test_answer_prompt_asks_for_conclusion_first_and_no_data_status(self):
         prompt = card_graphrag.ANSWER_PROMPT
-        for word in ("첫 문단은 질문의 핵심 답", "문단은 빈 줄로", "조건을 세 개 이상", "open_conditions", "표현을 쓰지 않는다",
+        for word in ("첫 문단은 질문의 핵심 답", "중복 설명을 하지 않는다", "조건을 세 개 이상", "open_conditions", "표현을 쓰지 않는다",
                      "기준 금액과 지급액을 짝지어", "구간 사실만 쓴다"):
             self.assertIn(word, prompt)
         self.assertNotIn("개발용", prompt)
+
+    def test_limit_question_prompt_is_direct_and_excludes_unrelated_benefits(self):
+        _, _, llm = run(first=interpret_llm("BENEFIT_LIMIT"), question="전월 실적 60만원이면 통합 월 한도는?")
+        self.assertIn("Answer the asked limit directly in one or two sentences", llm.prompts[0])
+        self.assertIn("Do not add unrelated services", llm.prompts[0])
+
+    def test_comparison_prompt_groups_short_facts_by_selected_benefit(self):
+        _, _, llm = run(first=interpret_llm("BENEFIT_COMPARE"), question="두 카드의 혜택과 한도를 비교해 줘")
+        self.assertIn("one short row or bullet per selected benefit", llm.prompts[0])
+        self.assertIn("Summarize only exclusions that change whether this customer qualifies", llm.prompts[0])
+
+    def test_ambiguous_transaction_tier_fallback_withholds_wrong_benefit_pairings(self):
+        context = tier_context()
+        answer = {"status": "ANSWERED", "conclusion": "3천원 이상 100원, 1만원 이상 500원입니다.",
+                  "answer_text": "3천원 이상 100원, 1만원 이상 500원입니다.", "points": [], "uncertain": []}
+        corrected, note = card_graphrag.transaction_tier_fallback(
+            answer, context, "ONE PICK 편의점·카페 캐시백은 결제 건당 얼마 이상일 때 몇 원이야?")
+        self.assertEqual(corrected["status"], "PARTIAL")
+        self.assertNotIn("3천원", corrected["answer_text"])
+        self.assertNotIn("100원", corrected["answer_text"])
+        self.assertIn("조건과 지급액의 적용 관계", corrected["answer_text"])
+        self.assertTrue(note)
+
+    def test_ambiguous_transaction_tier_fallback_keeps_only_confirmed_caps_when_asked(self):
+        context = tier_context()
+        answer = {"status": "ANSWERED", "conclusion": "3천원 이상 100원, 1만원 이상 500원입니다.",
+                  "answer_text": "3천원 이상 100원, 1만원 이상 500원입니다.", "points": [], "uncertain": []}
+        corrected, _ = card_graphrag.transaction_tier_fallback(
+            answer, context, "ONE PICK과 STYLE 이용금액 조건과 월 한도를 비교해 줘")
+        self.assertEqual(corrected["status"], "PARTIAL")
+        self.assertIn("월 5천원", corrected["answer_text"])
+        self.assertNotIn("100원", corrected["answer_text"])
 
 
 class GenericRuleTests(unittest.TestCase):
@@ -1382,9 +1414,11 @@ class StreamlitTests(unittest.TestCase):
         app = self.ask(AppTest.from_file(APP).run(timeout=30))
         self.assertFalse(app.exception)
         self.assertEqual(app.session_state["outcome"]["answer"]["status"], "PARTIAL")
-        self.assertTrue(any("\ubd80\ubd84\uc801\uc73c\ub85c \uc548\ub0b4\ud569\ub2c8\ub2e4" in item.value for item in app.warning))
+        self.assertTrue(any("\uc6d0\ubb38\uc5d0\uc11c \uc5f0\uacb0\uc744 \ud655\uc778\ud558\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4" in item.value for item in app.warning))
 
     def setUp(self):
+        self._developer_ui_original = os.environ.get("CARD_GRAPHRAG_ENABLE_DEVELOPER_UI")
+        os.environ["CARD_GRAPHRAG_ENABLE_DEVELOPER_UI"] = "1"
         st.cache_resource.clear()
         self.first, self.second = interpret_llm(), answer_llm()
         self.neo_search = FakeNeo4jBenefitSearch()
@@ -1399,6 +1433,10 @@ class StreamlitTests(unittest.TestCase):
         for item in self.patches:
             item.stop()
         st.cache_resource.clear()
+        if self._developer_ui_original is None:
+            os.environ.pop("CARD_GRAPHRAG_ENABLE_DEVELOPER_UI", None)
+        else:
+            os.environ["CARD_GRAPHRAG_ENABLE_DEVELOPER_UI"] = self._developer_ui_original
 
     def ask(self, app, question="대중교통 혜택은?"):
         app.text_area(key="question").set_value(question)
@@ -1421,6 +1459,16 @@ class StreamlitTests(unittest.TestCase):
         self.assertFalse(any(item.key == "search_mode" or item.label == "검색 방식" for item in app.radio))
         app = self.dev(app)
         self.assertEqual([item.key for item in app.radio], ["run_mode"])     # 개발자 모드에도 검색 방식 선택은 없다
+
+    def test_developer_controls_are_hidden_without_explicit_environment_flag(self):
+        os.environ.pop("CARD_GRAPHRAG_ENABLE_DEVELOPER_UI", None)
+        try:
+            app = AppTest.from_file(APP).run(timeout=30)
+        finally:
+            os.environ["CARD_GRAPHRAG_ENABLE_DEVELOPER_UI"] = "1"
+        self.assertFalse(app.exception)
+        self.assertFalse(any(item.label == "개발자 모드" for item in app.toggle))
+        self.assertFalse(any(item.key == "run_mode" for item in app.radio))
 
     def test_question_uses_neo4j_only_search_by_default(self):
         app = self.ask(AppTest.from_file(APP).run(timeout=30))

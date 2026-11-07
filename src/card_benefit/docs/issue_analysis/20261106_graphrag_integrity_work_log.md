@@ -733,16 +733,16 @@ card.terms는 271·273에서 빈 결과에도 약 96 ms 왕복이 있었지만 2
 - 스테이지된 11개 파일에서 비밀번호/토큰 형태 문자열 검사 매칭 없음; 임시 파일 및 인증 파일 미포함.
 
 
-## ## N ?? ?? ? ?? ????? (2026-11-07)
+## Partial checkpoint before N-only cleanup (2026-11-07)
 
-??? ?? ??? ??? ?? ?? ??? ????. ?? ?? ??? ????? ???.
+The prior task is intentionally recorded as partially complete; the worktree was preserved.
 
-- ?? payment_card ???: 594 passed, 18 skipped, 99 subtests passed.
-- ?? Neo4j ?? ?? ?? ???: 9 passed; ??? ?? ??? ?? ???? ????.
-- Streamlit AppTest ?? 3??? ?? ?? ????.
-- POINT II 60?? ?? ??? ????? ??? ANSWERED??.
-- ONE PICK/STYLE? ?? ???? ??? ?? ?? ??? ???? ?? PARTIAL? ????.
-- ?? ??: A/B/C ?? ?? ?? ?? ? N ?? ??, ONE PICK/STYLE? ?? ?? ?? ??.
+- Full payment_card suite at checkpoint: 594 passed, 18 skipped, 99 subtests passed.
+- Read-only Neo4j integration at checkpoint: 9 passed; remaining selection was deselected.
+- Three Streamlit AppTest questions returned without exceptions.
+- POINT II 600,000-won spend question and the telco/subscription comparison were ANSWERED.
+- ONE PICK/STYLE stayed PARTIAL because source evidence did not clearly preserve the tier-to-benefit mapping.
+- Remaining work was removal of A/B/C-only runtime code, N-mode regression, and source mapping follow-up for ONE PICK/STYLE.
 
 ## N-only runtime cleanup and resumed validation (2026-11-07)
 
@@ -766,21 +766,64 @@ The work remains in progress; the earlier checkpoint is preserved above.
 - Resolve the ONE PICK/STYLE source/data mapping gap; do not promote it from PARTIAL without stronger source evidence. This likely requires fixing extraction/graph source data and is outside the current no-data-write restriction.
 - Do not access or stop localhost:8501. No PostgreSQL or Neo4j writes, commit or push were performed.
 
-### N-only ?? ? ?? ??
+### Additional verification after N-only cleanup
 
-- `neo4j_search.py`? ?? ???? ??? A/B/C ??? ? `pg:` ?? ??? ????.
-- N ?? Python ?? ?? ??? `git diff --check`? ?? ????.
-- Neo4j batch query ?? ???: 12 passed (2.25s).
-- ?? ???? ?? Neo4j ?? ??? ? ?? ?? ??? ??? ?????, ?? ?? ????? ?? LLM? ???? ???.
+- Removed obsolete A/B/C and `pg:` descriptions from `neo4j_search.py`.
+- Python compilation and `git diff --check` passed.
+- Neo4j batch query regression: 12 passed (2.25s).
+- No external LLM was called in this verification.
 
+## Audit of remaining A/B/C runtime references (2026-11-07)
 
-## A/B/C ?? ?? ?? ?? (2026-11-07)
+- Re-scanned Python runtime and tests. The deleted `BenefitSearchService`, `search_eval`, `request_pipeline`, `create_benefit_search`, `SEARCH_MODE` setting, and A/B/C branches are absent from the N user-question path.
+- Removed two obsolete search-wiring tests from `src/common/tests/test_read_only_manager.py`; they instantiated the deleted PostgreSQL candidate service and exercised `search_mode="C"` / `request_pipeline`.
+- The only remaining `search_mode` string in relevant tests is a negative assertion that the Streamlit UI has no search-mode widget. It is not a runtime branch.
+- Removed the `mode` input from `Neo4jBenefitSearch.search()` and `catalog_rows()`; the adapter now reports the fixed N label in `SearchOutcome`.
+- `benefit_search_text.py`, `embedding_service.py`, and `common_benefit_service.py` remain because separate ledger, embedding, and ingestion workflows use them. They are not alternate question-search modes.
+- Updated `db_pipeline_origin_search/README.md` to describe the N-only path. Older handoff and design/wiki documents retain historical A/B/C references and are not imported or called at runtime.
+- Post-removal verification: `PYTHONPATH=src/card_benefit;src pytest -q src/card_benefit/payment_card/tests src/common/tests/test_read_only_manager.py --basetemp .pytest_cache/nmode-final-check`: 581 passed, 18 skipped, 99 subtests passed (38.17s).
+- The first invocation without `PYTHONPATH` failed collection for 14 modules because the package root was not configured. The rerun with the package paths succeeded; Windows emitted a temporary-directory cleanup permission warning after the failed invocation.
+- Actual Neo4j read-only `LiveAccuracyTests`: 9 passed, 170 deselected (14.73s) after the N-only adapter signature was simplified. No graph or PostgreSQL data was written.
 
-- Python ?? ??? ???? ?? ????. ??? `BenefitSearchService`, `search_eval`, `request_pipeline`, `create_benefit_search`, `SEARCH_MODE` ?? ? A/B/C ??? N ??? ?? ??? ?? ?? ??.
-- ?? ?? `src/common/tests/test_read_only_manager.py`? ?? ??? wiring ??? 2?? ????. ? ???? ??? PostgreSQL ?? ?? ???? ???? `search_mode="C"` ? `request_pipeline`? ???? ??? ?????.
-- ?? `search_mode` ???? UI? ?? ?? ??? ??? ???? ?? ???(`test_card_graphrag.py`) ? ????, ?? ??? ???.
-- `benefit_search_text.py`, `embedding_service.py`, `common_benefit_service.py` ?? ??/??? ??, ?? ?? ?? ? ?? ??? ??????? ????? ????. N ?? ??? ?? ?? ??? ???.
-- `db_pipeline_origin_search/README.md`? N-only ?? ??? ????. ?? A/B/C ?? ??? ?? ?? ????? ??/?? ?? ??? ??? ???? ?? ????, ??? ?? ??? import??? ???? ???.
-- ?? ? ??: `PYTHONPATH=src/card_benefit;src pytest -q src/card_benefit/payment_card/tests src/common/tests/test_read_only_manager.py --basetemp .pytest_cache/nmode-checkpoint-run` ?? 581 passed, 18 skipped, 99 subtests passed (37.09s).
-- ? ??? ??? ?? ????? 14? ?? ??? ????. ??? ??? ???? ?? ??? ? ????? ????, Windows ?? ?? ?? ?? ??? ? ?? ?? ? ????.
-- ?? ?? Neo4j ?? ?? ?? ???(9 passed)? ?? N-only ?? ??? ????. ?? ????? DB ??/??? ??? ???? ???.
+## Answer quality and ONE PICK transaction-tier safety (2026-11-07)
+
+### Read-only source review
+
+- Rechecked PostgreSQL `db_pipeline.card_product_item`, Neo4j `dp_card_product_item` and linked Evidence, and the official ONE PICK STYLE debit-card PDF. No PostgreSQL or Neo4j writes were made.
+- The official PDF page 1 visually separates the rows: ONE PICK convenience/cafe is 3,000 KRW per transaction -> 100 KRW; STYLE shopping is 10,000 KRW -> 500 KRW. Each has a 5,000 KRW monthly cap; usage limits are 1 per day / 30 per month for ONE PICK and 1 per day / 10 per month for STYLE.
+- The registered PostgreSQL/Neo4j items contradict that row separation: each item carries both payout tiers (3,000/100 and 10,000/500). Each item's Evidence links point to a shared quote containing both rows. The extraction staging note also records uncertainty about how the overlapping fixed cashbacks apply. No stored per-row key or source location resolves the mapping. Consequently code cannot safely produce the requested per-benefit payout pairing without changing source mapping or inventing a rule; both remain PARTIAL.
+- The PDF visual is clear, but the current graph evidence projection does not preserve the row-to-benefit coordinates. Resolving this as ANSWERED requires repairing the extraction/ledger-to-Evidence mapping and reloading data, which was prohibited in this task.
+
+### Code changes
+
+- `card_graphrag.py`: added a generic detector for overlapping `TXN_AMT` payout rules scoped to a benefit and question, plus `transaction_tier_fallback()`. When such a question asks for per-transaction amounts, the final answer now withholds the unsupported benefit-specific payout pairs regardless of whether the Answer LLM guessed confidently. For questions that also ask for monthly caps, only Evidence-matched limit facts remain; otherwise only a concise mapping uncertainty is shown. The behavior does not hardcode a card, product ID, question, or expected amount.
+- `card_graphrag.py`: added question-intent response-shape guidance. Limit questions get a direct 1-2 sentence instruction; comparisons ask for short benefit rows, no repeated opening/closing summary, and only applicable exclusions. Existing facts and validation remain in place.
+- `streamlit_app.py`: developer UI is hidden unless `CARD_GRAPHRAG_ENABLE_DEVELOPER_UI=1`; developer verification, diagnostics, Evidence inspection, and logs remain available when enabled. In the normal UI, the PARTIAL notice now identifies that source mapping is unconfirmed and relevant open conditions are shown without internal state names. Non-PARTIAL answers no longer show unrelated unresolved notices.
+- `test_card_graphrag.py`: added fallback and developer-UI gating tests and updated prompt/UI assertions.
+
+### Actual AppTest / GraphRAG runs
+
+All actual AppTest requests ran against the local Neo4j-backed N-mode path. `APP_DB_LOG_ENABLED=0` prevented `app_log` writes. The existing localhost:8501 server was not used or stopped. Timings below are AppTest request wall time; candidate time and LLM timings come from the same outcome. The initial full-run first output was lost to Windows cp949 console encoding after the app request completed; the run was repeated with UTF-8 output. The five final question results were captured, and the comparison was rerun after the compact-format prompt change.
+
+| Question | Result | AppTest wall time | Candidate search | Interpret LLM | Answer LLM | Key outcome |
+|---|---:|---:|---:|---:|---:|---|
+| Telco + subscription comparison | ANSWERED | 16.67s on final compact-prompt rerun (initial 19.95s) | 1.13s final | 2.46s final | 7.89s final; 17,465 input / 1,061 output tokens | Both cards' eligible services, Simple thresholds/caps, DAILY 5% telecom and 50% subscriptions, and DAILY combined caps were present. Final output was shorter (output tokens 1,529 -> 1,061; Answer call 11.06s -> 7.89s). |
+| POINT II, 600,000 KRW previous-month spend | ANSWERED | 5.74s | 0.61s | 1.35s | 2.06s; 5,254 input / 163 output tokens | Direct one-sentence answer: 20,000 KRW combined monthly point cap; Evidence IDs included 20261105_002745, 002740, 002742. |
+| ONE PICK + STYLE comparison | PARTIAL | 15.13s after safe fallback (earlier 9.72s) | 2.15s final | 3.08s final | 5.32s; 5,626 input / 602 output tokens | Only verified 5,000 KRW monthly caps and daily/monthly usage limits are stated. Per-benefit payout pairs are withheld; Evidence links are 20261101_000034/035 and 000040/041. |
+| ONE PICK convenience/cafe single question | PARTIAL | 7.48s after safe fallback | 0.51s | 2.05s | 3.18s; 4,218 input / 295 output tokens | No 3,000/100 or 10,000/500 pair is asserted for this benefit; answer says the mapping cannot be confirmed. |
+| STYLE shopping single question | PARTIAL | 6.46s after safe fallback | 0.82s | 1.43s | 2.98s; 4,195 input / 284 output tokens | No payout pair is attributed to STYLE; answer says the mapping cannot be confirmed. |
+
+- Wall time varies between repeated AppTest runs; these values include AppTest/UI overhead and are not pure Streamlit-server timings. No answer accuracy was traded for speed. The comparison still has a large Answer prompt (about 17.5k tokens) and remains the latency bottleneck.
+- In the three final ONE PICK runs after the safety change, the comparison contains the two verified caps and clear mapping warning; the single-benefit answers contain only the mapping warning. This is intentionally PARTIAL rather than falsely presenting the PDF's row values as graph-verified facts.
+
+### Verification
+
+- `pytest -q src/card_benefit/payment_card/tests`: 576 passed, 18 skipped, 99 subtests passed (36.27s). This includes Streamlit AppTest coverage for the normal hidden-developer-UI path and explicit developer-mode path.
+- Actual Neo4j read-only integration: `RUN_NEO4J_INTEGRATION=1 pytest -q src/card_benefit/payment_card/tests/test_neo4j_origin_search.py src/card_benefit/payment_card/tests/test_card_graphrag.py -k "LiveNeo4jTests or LiveAccuracyTests"`: 14 passed, 198 deselected (20.97s).
+- After tightening fallback Evidence IDs to rows that contain a matching threshold/payout pair, targeted fallback/prompt tests passed: 8 passed, 176 deselected; `compileall` passed.
+- An earlier full-suite run had two test expectation failures after the prompt wording and normal-view unresolved-item changes. The assertions were updated to the intentional wording/visibility policy; the final full-suite run passed.
+- No commit, push, PostgreSQL write, Neo4j write, or use/termination of the existing 8501 process occurred.
+
+### Remaining source-data work
+
+- To return the expected 3,000/100 ONE PICK and 10,000/500 STYLE answers as ANSWERED, repair the extraction row-to-benefit/rule/Evidence links using page-1 row-level PDF coordinates, then reload the affected source/graph mapping under a separately authorized data-change task. Until then the current safe PARTIAL behavior is expected.
