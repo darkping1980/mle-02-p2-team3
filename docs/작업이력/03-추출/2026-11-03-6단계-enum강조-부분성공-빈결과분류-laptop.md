@@ -26,7 +26,7 @@
 
 ## 검증
 
-- 추출 테스트: 첫 실행은 50 passed. 최종 재실행은 54 passed, 1 failed였다. 실패는 이 작업에서 추가하지 않은 `review_sheet` 테스트가 저장소 밖 `/home/lee/workspace/bad.md` 쓰기를 시도해 샌드박스에서 거부된 것이다.
+- 추출 테스트: 첫 실행은 50 passed. 최종 재실행은 54 passed, 1 failed였다. 실패는 이 작업에서 추가하지 않은 `review_sheet` 테스트가 저장소 밖 `~/workspace/bad.md` 쓰기를 시도해 샌드박스에서 거부된 것이다.
 - 로컬 진단 CLI는 하나카드 입력에서 빈 결과 4개를 분류했다. 저장 결과에는 청크 원문 필드가 없다.
 - `hostname`과 `/etc/machine-id` 앞 8자를 확인해 문서 작성 조건을 통과했다.
 
