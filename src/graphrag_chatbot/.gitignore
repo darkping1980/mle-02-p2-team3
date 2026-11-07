@@ -1,0 +1,11 @@
+.env
+.venv/
+__pycache__/
+# 측정 로그: 질문 앞부분이 들어 있어서 저장소에 올리지 않습니다. (errors/ 안의 다른 문서는 올릴 수 있게 이 파일만 제외)
+errors/timing.jsonl
+# 윈도우가 다운로드 파일에 붙이는 표시 파일
+*:Zone.Identifier
+# 정체 확인 전의 잡파일 (이 폴더 바로 아래 것만. 맨 앞 /는 하위 폴더의 .streamlit/config.toml을 막지 않기 위함)
+/download
+/env.example
+/config.toml
