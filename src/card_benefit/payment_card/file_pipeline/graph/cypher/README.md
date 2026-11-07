@@ -9,7 +9,7 @@
 1. 샘플 만들기 (저장소 밖 `/tmp`에 생성):
 
 ```bash
-cd /home/lee/workspace/mle-02-p2-team3
+cd ~/workspace/mle-02-p2-team3
 export UV_CACHE_DIR=/tmp/uv-cache PYTHONPATH=src:src/card_benefit
 uv run --locked --no-sync python -m payment_card.file_pipeline.graph.cypher_export --csv-dir /tmp/fp-check-hana --list-cards 20
 uv run --locked --no-sync python -m payment_card.file_pipeline.graph.cypher_export --csv-dir /tmp/fp-check-hana --card-id <카드 id> --output /tmp/fp-sample-hana.cypher
