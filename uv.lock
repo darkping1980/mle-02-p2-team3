@@ -1437,6 +1437,15 @@ wheels = [
 ]
 
 [[package]]
+name = "jsonpickle"
+version = "4.1.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c2/37/95fb728a57b0b17864041daea006bbedd9765e8030755e4ca84ba20ae137/jsonpickle-4.1.4.tar.gz", hash = "sha256:8adf24cca611809b55ff5ed2ace850e1a3e4370dad5d363df71569b8f46c9645", size = 317936, upload-time = "2026-10-15T15:16:53.184Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c9/25/7fc775e2c25d5484a1333bb2d3d59adf024438dee1ff416675293fb6ea75/jsonpickle-4.1.4-py3-none-any.whl", hash = "sha256:c46024ba4acd8adb9a8b8485d074e141cbfacafe334c2aa982e5b32efabc2f0e", size = 47763, upload-time = "2026-10-15T15:16:51.794Z" },
+]
+
+[[package]]
 name = "jsonpointer"
 version = "3.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3651,6 +3660,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pyvis"
+version = "0.3.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ipython" },
+    { name = "jinja2" },
+    { name = "jsonpickle" },
+    { name = "networkx" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ab/4b/e37e4e5d5ee1179694917b445768bdbfb084f5a59ecd38089d3413d4c70f/pyvis-0.3.2-py3-none-any.whl", hash = "sha256:5720c4ca8161dc5d9ab352015723abb7a8bb8fb443edeb07f7a322db34a97555", size = 756038, upload-time = "2023-02-24T20:29:46.758Z" },
+]
+
+[[package]]
 name = "pywinpty"
 version = "3.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4622,6 +4645,7 @@ dependencies = [
     { name = "pymupdf" },
     { name = "pypdf", extra = ["image"] },
     { name = "python-dotenv" },
+    { name = "pyvis" },
     { name = "scikit-learn" },
     { name = "sentence-transformers" },
     { name = "sqlalchemy" },
@@ -4671,6 +4695,7 @@ requires-dist = [
     { name = "pymupdf", specifier = ">=1.28.2" },
     { name = "pypdf", extras = ["image"], specifier = ">=6.19.0" },
     { name = "python-dotenv", specifier = ">=1.2.3" },
+    { name = "pyvis", specifier = ">=0.3.2" },
     { name = "scikit-learn", specifier = "==1.9.1" },
     { name = "sentence-transformers", specifier = ">=6.1.0" },
     { name = "sqlalchemy", specifier = ">=2.1.1" },
