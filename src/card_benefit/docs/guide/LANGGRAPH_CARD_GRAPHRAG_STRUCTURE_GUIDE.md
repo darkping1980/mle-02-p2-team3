@@ -182,23 +182,34 @@ update = {"intent": "BENEFIT_LIMIT", "path": ["interpret"],
 
 ## 4. 노드별 실제 실행 과정
 
-### 4.1 [`interpret`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2107-L2259): 대상 혜택과 질문 의도 선택
+### 4.1 [interpret() — 현재 N-only 코드](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2107-L2259): Neo4j 후보에서 LLM이 조회 대상을 선택
 
-1. 질문 비어 있음/길이·LLM 설정을 확인한다.
-2. [`Neo4jSearch.list_catalog()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_search.py#L412)로 실제 등록 혜택을 확인한다.
-3. [`Neo4jBenefitSearch.catalog_rows(question, graph_catalog)`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_hybrid_search.py#L165-L175)로 질문에 맞는 **후보를 Neo4j 기반 하이브리드 검색**으로 추린다.
-4. `INTERPRET_PROMPT`와 [`Interpretation`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L132) Pydantic 출력 스키마로 **질문 해석 LLM**을 호출한다.
-5. LLM이 선택한 `benefit_ids`를 **실제 카탈로그와 대조**해 존재하지 않는 ID를 제거한다.
-6. 질문 유형(`intent`)에 따라 조회할 섹션을 결정하고 `search_parameters`에 담는다.
+> **A/B/C 모드가 제거된 최신 구현이다.** 더 이상 `self.search_mode != "A"` 또는 `self.search_mode != "B"` 같은 조건문을 사용하지 않는다. `benefit_search.catalog_rows(question, "N", ...)` 호출도 없다.
 
-질문 유형은 `BENEFIT_DETAIL`, `BENEFIT_CONDITION`, `BENEFIT_LIMIT`, `BENEFIT_COMPARE`, `EVIDENCE_SEARCH`, `UNKNOWN`이다. **LLM이 Cypher를 생성하지 않는다.**
+질문 하나가 다음 순서로 처리된다.
 
-N 모드의 검색 후보 생성은 다음 파일이 맡는다.
+1. `state["question"]`을 읽고 빈 질문·길이·LLM 설정을 확인한다.
+2. [self.search.list_catalog()](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2131-L2134)로 **Neo4j 카탈로그**를 읽는다. Neo4j 조회에 실패하면 이전 B 모드로 우회하지 않고 `NEO4J_FAILED`를 반환한다.
+3. [self.candidate_search.catalog_rows(question, graph_catalog)](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2135-L2138)로 **N 모드 전용 후보 검색**을 수행한다. 내부에서는 [Neo4jBenefitSearch.search()](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_hybrid_search.py#L90-L163)가 질문 임베딩·Neo4j Cypher·키워드와 벡터 유사도 순위 통합(RRF)을 처리한다.
+4. 연회비 질문은 `ANNUAL_FEE` 후보를 보완하고, 카드 비교 질문의 명시된 주제도 필요에 따라 보완한다.
+5. [rows와 INTERPRET_PROMPT 생성](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2178-L2188): 후보 ID·혜택 이름·규칙·한도 등의 목록과 사용자 질문을 LLM 입력문으로 결합한다.
+6. [_call_llm('interpret', ...)](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2189-L2190)로 **질문 해석 LLM**을 호출한다. 결과는 `Interpretation(intent, benefit_ids, ambiguity)` 형식이다.
+7. LLM이 선택한 `benefit_ids`가 실제 후보 목록에 있는지 확인한 뒤, `search_parameters.benefit_keys` 등을 만들어 반환한다.
 
-- `neo4j_hybrid_search.py`: [`Neo4jBenefitSearch.search()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_hybrid_search.py#L90-L163) (90행), [`catalog_rows()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_hybrid_search.py#L165-L175) (165행)
-- Neo4j 내부에서 키워드·이름·벡터 유사도, RRF 통합, 관계 기반 순위 보정, 공통혜택 중복 병합을 수행한다.
-- `neo4j_search.py`: [`Neo4jSearch`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_search.py#L372) 읽기 전용 조회 객체.
-- **질문 임베딩을 만들기 위해 OpenAI API를 호출할 수 있다.** 이는 `interpret`/`answer`의 구조화 출력 LLM 2회와 성격이 다른 별도 호출이다. 모델/API 비용을 계산할 때 구분해야 한다.
+```python
+# card_graphrag.py interpret(): 실제 N-only 핵심 호출을 발췌
+graph_catalog = self.search.list_catalog()
+catalog, outcome = self.candidate_search.catalog_rows(question, graph_catalog)
+# catalog -> LLM 프롬프트용 rows 생성
+prompt = INTERPRET_PROMPT.format(catalog=json.dumps(rows, ensure_ascii=False), question=question)
+parsed, call = self._call_llm("interpret", self.interpret_llm, Interpretation, prompt, request_id)
+```
+
+여기서 `_call_llm()`이 실행하는 [with_structured_output(...).invoke(prompt)](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2089-L2092)가 **실제 LLM API 호출 지점**이다. `interpret()`는 답변 금액을 생성하지 않고 질문 유형·조회할 혜택을 정한다. `LLM이 Cypher를 만들어서 실행하는 구조`가 아니다.
+
+**디버깅 순서:** `2136행`에서 `graph_catalog` 확인 → `2188행`에서 `rows`, `prompt` 확인 → `2092행`에서 LLM 호출 확인 → `2258행`에서 `search_parameters` 확인.
+
+> **검색과 LLM의 구분:** 질문 임베딩을 만드는 `embedder.embed([question])`도 외부 API를 사용할 수 있지만, 이는 `Interpretation`을 생성하는 해석 LLM 호출과는 다른 작업이다.
 
 ### 4.2 [`after_interpret`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2261-L2269): 조회할 수 있는가?
 
