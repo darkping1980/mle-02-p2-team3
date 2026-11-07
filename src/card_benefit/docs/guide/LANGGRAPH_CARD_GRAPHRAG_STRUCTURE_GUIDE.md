@@ -28,6 +28,39 @@
 
 ---
 
+## 0.1 N 모드 단일화 후 가장 중요한 차이
+
+- `streamlit_app.py`의 `get_pipeline()`은 **검색 모드 인자를 받지 않는다.** `CardGraphRAG` 생성 시 `candidate_search`에 Neo4j 후보 검색기만 넣는다.
+- `card_graphrag.py`의 `interpret()`는 `self.search.list_catalog()` → `self.candidate_search.catalog_rows(question, graph_catalog)` → `_call_llm("interpret", ...)` 순서로 실행된다. 이전의 `self.search_mode` / A·B·C 분기는 실행 코드에서 제거됐다.
+- `neo4j_hybrid_search.py`의 `search(question, top_k, use_graph)`는 질문 임베딩, Neo4j 후보 Cypher, 키워드·벡터 RRF를 담당한다. 모드를 전달받지 않는다.
+- **과거 모드 제거 ≠ PostgreSQL 전부 제거:** PostgreSQL 원장·적재·`app_log` 기능은 별개로 남는다.
+- **주의:** 새로 푸시한 소스의 일부 독스트링/주석에는 과거 B·C 표현이 남아 있다. 이 문서는 **현재 호출문과 함수 정의를 기준**으로 설명한다.
+
+### 실제 질문 해석 LLM 호출이 어디에 있는가?
+
+1. [`interpret()` 후보 목록 생성](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2131-L2138)
+2. [`INTERPRET_PROMPT`에 `rows` + `question` 넣기](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2178-L2190)
+3. [`_call_llm()`의 `.invoke(prompt)` 실제 API 호출](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2089-L2092)
+4. 반환 스키마는 `Interpretation(intent, benefit_ids, ambiguity)`. 서버가 **실제 후보 목록에 존재하는 ID인지 재검증**한 뒤 `search_parameters`를 만든다. **이 단계는 답변 금액을 생성하는 단계가 아니다.**
+
+```python
+# 실제 코드의 연결 관계를 발췌한 예시
+graph_catalog = self.search.list_catalog()
+catalog, outcome = self.candidate_search.catalog_rows(question, graph_catalog)
+# catalog를 프롬프트용 rows로 정리한 뒤
+prompt = INTERPRET_PROMPT.format(catalog=json.dumps(rows, ensure_ascii=False), question=question)
+parsed, call = self._call_llm("interpret", self.interpret_llm, Interpretation, prompt, request_id)
+# _call_llm 내부:
+result = llm.with_structured_output(schema, method="json_schema",
+                                    strict=True, include_raw=True).invoke(prompt)
+```
+
+**브레이크포인트 추천:** `streamlit_app.py:414`(질문 제출) → `card_graphrag.py:2136`(후보) → `2188`(`prompt`) → `2092`(`.invoke`) → `2258`(`search_parameters`). `F10`은 다음 실행문, `F11`은 함수 내부, `F5`는 다음 중단점까지 진행이다.
+
+> **GitHub 노란색 강조 주의:** `#L2107-L2259`처럼 URL에서 지정한 범위만 색이 표시된다. **노란색 영역의 끝이 함수 끝이라는 뜻이 아니다.** 실제 Python 함수 경계는 들여쓰기와 다음 함수 선언으로 확인한다.
+
+---
+
 ## 1. 가장 먼저 알아야 할 실행 구조
 
 현재 사용자 질문 경로는 **N (Neo4j 후보·상세 단일 검색 경로)** 만 사용한다. A/B/C 검색 분기는 제거했지만 LangGraph 노드 4개는 그대로 유지된다. `Streamlit → CardGraphRAG.run(question) → graph.invoke(initial_state) → CardState 반환 → 화면 출력` 순서로 작동한다.
@@ -153,7 +186,7 @@ update = {"intent": "BENEFIT_LIMIT", "path": ["interpret"],
 
 1. 질문 비어 있음/길이·LLM 설정을 확인한다.
 2. [`Neo4jSearch.list_catalog()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_search.py#L412)로 실제 등록 혜택을 확인한다.
-3. N 모드에서 [`Neo4jBenefitSearch.catalog_rows()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_hybrid_search.py#L165-L175)로 질문에 맞는 **후보를 Neo4j 기반 하이브리드 검색**으로 추린다.
+3. [`Neo4jBenefitSearch.catalog_rows(question, graph_catalog)`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_hybrid_search.py#L165-L175)로 질문에 맞는 **후보를 Neo4j 기반 하이브리드 검색**으로 추린다.
 4. `INTERPRET_PROMPT`와 [`Interpretation`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L132) Pydantic 출력 스키마로 **질문 해석 LLM**을 호출한다.
 5. LLM이 선택한 `benefit_ids`를 **실제 카탈로그와 대조**해 존재하지 않는 ID를 제거한다.
 6. 질문 유형(`intent`)에 따라 조회할 섹션을 결정하고 `search_parameters`에 담는다.
@@ -186,7 +219,7 @@ return "retrieve" if state["search_parameters"]["benefit_keys"] else "finish"
 - [`find_exclusions()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L468)는 질문과 제외 조건을 대조한다.
 - [`split_unresolved()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L1190)는 불확실성을 **질문 영향 조건 / 자료 상태 / 그 외**로 분리한다.
 
-**N 모드는 질문 응답용 혜택 검색을 Neo4j로 처리한다.** PostgreSQL은 이 그래프의 N 검색에서 원장 관리·사전 적재 경로이지, 일반 질문의 후보/상세를 매번 PostgreSQL에서 읽는 모드가 아니다. 단, `execution_log.py` 등 앱 로깅은 별도 경로를 통해 PostgreSQL에 쓸 수 있으므로 **애플리케이션 전체가 DB 쓰기 0이라는 뜻은 아니다.**
+**N-only 런타임은 질문 응답용 혜택 검색을 Neo4j로 처리한다.** PostgreSQL은 이 그래프의 N 검색에서 원장 관리·사전 적재 경로이지, 일반 질문의 후보/상세를 매번 PostgreSQL에서 읽는 모드가 아니다. 단, `execution_log.py` 등 앱 로깅은 별도 경로를 통해 PostgreSQL에 쓸 수 있으므로 **애플리케이션 전체가 DB 쓰기 0이라는 뜻은 아니다.**
 
 ### 4.4 [`after_retrieve`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L2326-L2332): 답변할 근거가 있는가?
 
