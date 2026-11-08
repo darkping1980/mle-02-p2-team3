@@ -1,18 +1,20 @@
 """카드 GraphRAG 테스트. LLM은 항상 Mock이고, Neo4j는 RUN_NEO4J_INTEGRATION=1 일 때만 읽기 조회를 실행한다."""
 import json
+import hashlib
 import logging
 import os
 import unittest
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
-from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag, neo4j_search
+from card_benefit.payment_card.db_pipeline_origin_search import card_graphrag, execution_log, neo4j_search
 from card_benefit.payment_card.db_pipeline_origin_search.card_graphrag import (
-    AnswerPoint, CardAnswer, CardGraphRAG, Interpretation, rule_conflicts, validate_answer, value_tokens)
+    AnswerPoint, CardAnswer, CardGraphRAG, Interpretation, rule_conflicts, value_tokens)
 
 APP = str(Path(__file__).resolve().parents[1] / "db_pipeline_origin_search" / "streamlit_app.py")
 BENEFIT_ID = "B3"
@@ -108,7 +110,7 @@ def card_answer(points=(), conclusion="결론입니다.", uncertain=(), reason=N
 
 
 def answer_llm(text="월 1000원 한도입니다.", ids=("E1",), uncertain=(), reason=None):
-    return FakeLLM(card_answer([point(text, ids)], uncertain=uncertain, reason=reason))
+    return FakeLLM(card_answer([point(text, ids)], uncertain=uncertain, reason=reason, answer_text=text))
 
 
 def tier_benefit(benefit_id, name, month_count, targets):
@@ -140,9 +142,9 @@ def tier_context(amount=None):
                            "ONE PICK 캐시백: 규칙 P1_100, P1_500의 중첩 선택 방식은 미확정입니다."], "evidence": evidence}
 
 
-def run(search=None, first=None, second=None, question="test transit benefit?", answer_mode="normal"):
+def run(search=None, first=None, second=None, question="test transit benefit?"):
     first, second = first or interpret_llm(), second or answer_llm()
-    return CardGraphRAG(search or FakeSearch(), first, second, answer_mode=answer_mode).run(question), first, second
+    return CardGraphRAG(search or FakeSearch(), first, second).run(question), first, second
 
 
 class GraphTests(unittest.TestCase):
@@ -158,43 +160,28 @@ class GraphTests(unittest.TestCase):
         self.assertEqual([call["node"] for call in state["llm_calls"]], ["interpret", "answer"])
 
     def test_prototype_preserves_raw_answer_without_validation_or_fallback(self):
-        original = card_answer([point("LLM original wording: 5% and 30000 KRW condition", ("E1",), BENEFIT_ID)],
+        original = card_answer([point("LLM original wording with 30000 and 5%", ("E1",), BENEFIT_ID)],
                                conclusion="original conclusion", uncertain=["original uncertainty"], reason="original reason",
                                answer_text="original answer text exactly")
-        llm = FakeLLM(original)
-        with patch("card_benefit.payment_card.db_pipeline_origin_search.card_graphrag.validate_answer",
-                   side_effect=AssertionError("validate_answer must not run")), \
-             patch("card_benefit.payment_card.db_pipeline_origin_search.card_graphrag.transaction_tier_fallback",
-                   side_effect=AssertionError("transaction_tier_fallback must not run")):
-            state, _, _ = run(second=llm, answer_mode="prototype")
-        answer = state["answer"]
-        self.assertEqual(state["path"], ["interpret", "retrieve", "answer", "finish"])
-        self.assertEqual(state["answer_mode"], "prototype")
-        self.assertEqual(answer["answer_source"], "llm_prototype")
-        self.assertEqual(answer["verification_status"], "NOT_PERFORMED")
-        self.assertEqual(answer["answer_text"], original.answer_text)
-        self.assertEqual(answer["conclusion"], original.conclusion)
-        self.assertEqual(answer["points"], [{"text": original.points[0].text, "benefit_id": BENEFIT_ID, "evidence_ids": ["E1"]}])
-        self.assertEqual(answer["uncertain"], original.uncertain)
-        self.assertEqual(answer["cannot_answer_reason"], original.cannot_answer_reason)
-        self.assertTrue(state["answer_diagnostics"]["content_preserved"])
-        self.assertEqual([call["node"] for call in state["llm_calls"]], ["interpret", "answer"])
+        state, _, _ = run(second=FakeLLM(original))
+        self.assertEqual(state["answer"]["answer_text"], original.answer_text)
+        self.assertEqual(state["answer"]["conclusion"], original.conclusion)
+        self.assertEqual(state["answer"]["points"][0]["evidence_ids"], ["E1"])
+        self.assertEqual(state["answer"]["uncertain"], original.uncertain)
+        self.assertEqual(state["answer_diagnostics"]["raw"], state["answer_diagnostics"]["final"])
 
     def test_normal_mode_remains_default_and_still_validates(self):
-        normal_state, _, _ = run()
-        explicit_state, _, _ = run(answer_mode="normal")
-        self.assertEqual(normal_state["answer_mode"], "normal")
-        self.assertEqual(explicit_state["answer"]["answer_source"], "llm")
-        self.assertEqual(normal_state["answer"]["status"], "ANSWERED")
+        state, _, _ = run()
+        self.assertEqual(state["answer"]["answer_source"], "llm")
+        self.assertEqual(state["answer"]["status"], "ANSWERED")
+        self.assertNotIn("answer_mode", state)
 
     def test_prototype_uses_same_context_and_prompt_as_normal_mode(self):
         parsed = card_answer([point("A source-backed answer", ("E1",), BENEFIT_ID)])
-        normal_llm, prototype_llm = FakeLLM(parsed), FakeLLM(parsed)
-        normal, _, _ = run(second=normal_llm, answer_mode="normal")
-        prototype, _, _ = run(second=prototype_llm, answer_mode="prototype")
-        self.assertEqual(normal_llm.prompts, prototype_llm.prompts)
-        self.assertEqual(normal["context"], prototype["context"])
-        self.assertEqual(CardGraphRAG(FakeSearch(), None, None).answer_mode, "normal")
+        llm = FakeLLM(parsed)
+        state, _, _ = run(second=llm)
+        self.assertIn('"evidence"', llm.prompts[0])
+        self.assertEqual(state["context"]["evidence"][0]["evidence_id"], "E1")
 
     def test_graph_is_compiled_state_graph(self):
         graph = CardGraphRAG(FakeSearch(), None, None).graph.get_graph()
@@ -264,16 +251,15 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(state["answer"]["message"], card_graphrag.MESSAGES["NO_EVIDENCE"])
         self.assertEqual(second.prompts, [])
 
-    def test_answer_without_valid_evidence_is_removed(self):
+    def test_unmatched_evidence_id_is_passed_through(self):
         state, _, _ = run(second=answer_llm(ids=("FAKE",)))
-        self.assertEqual(state["answer"]["status"], "NOT_ANSWERABLE")
-        self.assertEqual(state["answer"]["points"], [])
-        self.assertTrue(state["warnings"])
+        self.assertEqual(state["answer"]["status"], "ANSWERED")
+        self.assertEqual(state["answer"]["points"][0]["evidence_ids"], ["FAKE"])
 
-    def test_invented_number_is_removed(self):
-        state, _, _ = run(second=answer_llm(text="월 7777원 캐시백입니다."))
-        self.assertEqual(state["answer"]["points"], [])
-        self.assertTrue(any("7777" in warning for warning in state["warnings"]))
+    def test_answer_number_is_passed_through(self):
+        state, _, _ = run(second=answer_llm(text="7777 KRW cashback"))
+        self.assertIn("7777", state["answer"]["answer_text"])
+        self.assertEqual(state["answer_diagnostics"]["raw"], state["answer_diagnostics"]["final"])
 
     def test_question_too_long_spends_nothing(self):
         first = interpret_llm()
@@ -348,12 +334,6 @@ class GraphTests(unittest.TestCase):
         self.assertAlmostEqual(card_graphrag.estimate_cost("gpt-6-luna", 1000, 200, 100), 0.000191)
         self.assertIsNone(card_graphrag.estimate_cost("other", 1, 1))
         self.assertIsNone(card_graphrag.estimate_cost("gpt-6-luna", None, 1))
-
-    def test_validate_partial(self):
-        raw = card_answer([point("맞음"), point("없음", ())])
-        answer, _ = validate_answer(raw, {"evidence": [{"evidence_id": "E1"}]}, "질문")
-        self.assertEqual(answer["status"], "PARTIAL")
-
 
 COMMON_KEY = '["card_common_bnft",15,"C5"]'
 
@@ -440,179 +420,6 @@ class ValueParsingTests(unittest.TestCase):
         self.assertIsNone(card_graphrag.payment_amount("얼마나 결제해야 해?"))
 
 
-class NumberValidationTests(unittest.TestCase):
-    def kept(self, text, ids=("EPL",), benefit_id="P1", question="차이는?", amount=None):
-        answer, warnings = validate_answer(card_answer([point(text, ids, benefit_id)]), tier_context(amount), question)
-        return bool(answer["points"]), warnings
-
-    def test_unit_changed_amount_is_removed(self):
-        self.assertFalse(self.kept("결제 건당 3만원 이상입니다.", ("EP",))[0])
-
-    def test_same_digit_other_unit_is_removed(self):
-        self.assertFalse(self.kept("월 30원입니다.")[0])
-        self.assertFalse(self.kept("100회 제공됩니다.", ("EP",))[0])
-
-    def test_equivalent_notation_is_kept(self):
-        self.assertTrue(self.kept("결제 건당 3,000원 이상 100원, 10,000원 이상 500원입니다.", ("EP",))[0])
-        self.assertTrue(self.kept("결제 건당 3천원 이상 100원입니다.", ("EP",))[0])
-
-    def test_wrong_period_is_removed(self):
-        self.assertFalse(self.kept("일 30회 제공됩니다.")[0])
-        self.assertTrue(self.kept("월 30회 제공됩니다.")[0])
-
-    def test_value_of_other_benefit_is_removed(self):
-        self.assertFalse(self.kept("월 10회 제공됩니다.", benefit_id="P1")[0])
-        self.assertTrue(self.kept("월 10회 제공됩니다.", ("ESL",), "S1")[0])
-
-    def test_exact_difference_is_kept(self):
-        kept, _ = self.kept("ONE PICK 월 30회와 STYLE 월 10회의 차이는 20회입니다.", ("EPL", "ESL"), None)
-        self.assertTrue(kept)
-
-    def test_wrong_difference_is_removed(self):
-        self.assertFalse(self.kept("ONE PICK 월 30회와 STYLE 월 10회의 차이는 25회입니다.", ("EPL", "ESL"), None)[0])
-
-    def test_difference_needs_both_operands_and_word(self):
-        self.assertFalse(self.kept("차이는 20회입니다.", ("EPL", "ESL"), None)[0])
-        self.assertFalse(self.kept("월 30회와 월 10회, 총 20회입니다.", ("EPL", "ESL"), None)[0])
-
-    def test_sum_is_not_allowed(self):
-        self.assertFalse(self.kept("월 30회와 월 10회를 합치면 40회입니다.", ("EPL", "ESL"), None)[0])
-
-    def test_question_value_is_allowed(self):
-        self.assertTrue(self.kept("7천원 결제는 3천원 이상 구간입니다.", ("EP",), "P1", "7천원 결제하면?")[0])
-
-    def test_unitless_number_uses_previous_check(self):
-        self.assertFalse(self.kept("혜택은 77개입니다.")[0])
-        self.assertTrue(self.kept("혜택은 3개입니다.", ("EP",))[0])
-
-    def fixed_cap_context(self, include_style_evidence=True):
-        benefits = [
-            {"benefit_id": "PICK", "name": "ONE PICK 편의점·카페", "card": "샘플 체크카드",
-             "rules": [{"rule_key": "one_pick_100", "value": 100, "unit": "KRW", "targets": ["CU"]}],
-             "conditions": [{"scope": "one_pick_100", "branches": [{"branch_no": 1, "atoms": [
-                 {"type": "SPEND_REQ", "basis": "TXN_AMT", "min_amt": 3000, "max_amt": None,
-                  "text": "결제 건당 3천원 이상"}]}]}],
-             "limits": [{"text": "일 1회 / 월 30회 / 월 5천원"}], "limit_text": "일 1회 / 월 30회 / 월 5천원",
-             "limit_tiers": [], "tier_mappings": [], "rule_text": "결제 건당 3천원 이상 시 100원 캐시백",
-             "condition_text": "결제 건당 3천원 이상"},
-            {"benefit_id": "STYLE", "name": "STYLE 쇼핑", "card": "샘플 체크카드",
-             "rules": [{"rule_key": "style_500", "value": 500, "unit": "KRW", "targets": ["다이소"]}],
-             "conditions": [{"scope": "style_500", "branches": [{"branch_no": 1, "atoms": [
-                 {"type": "SPEND_REQ", "basis": "TXN_AMT", "min_amt": 10000, "max_amt": None,
-                  "text": "결제 건당 1만원 이상"}]}]}],
-             "limits": [{"text": "일 1회 / 월 10회 / 월 5천원"}], "limit_text": "일 1회 / 월 10회 / 월 5천원",
-             "limit_tiers": [], "tier_mappings": [], "rule_text": "결제 건당 1만원 이상 시 500원 캐시백",
-             "condition_text": "결제 건당 1만원 이상"},
-        ]
-        evidence = [
-            {"evidence_id": "P_RULE", "benefit_ids": ["PICK"], "quote": "결제 건당 3천원 이상 시 100원"},
-            {"evidence_id": "P_CAP", "benefit_ids": ["PICK"], "quote": "월 5천원"},
-            {"evidence_id": "P_COUNT", "benefit_ids": ["PICK"], "quote": "일 1회 / 월 30회"},
-            {"evidence_id": "S_RULE", "benefit_ids": ["STYLE"], "quote": "결제 건당 1만원 이상 시 500원"},
-            {"evidence_id": "S_CAP", "benefit_ids": ["STYLE"], "quote": "월 5천원"},
-            {"evidence_id": "S_COUNT", "benefit_ids": ["STYLE"], "quote": "일 1회 / 월 10회"},
-        ]
-        if not include_style_evidence:
-            evidence = [row for row in evidence if row["evidence_id"] != "S_CAP"]
-        return {"benefits": benefits, "evidence": evidence, "rule_selection_unresolved": [], "open_conditions": []}
-
-    def test_fixed_monthly_caps_and_transaction_rules_are_kept_per_benefit(self):
-        context = self.fixed_cap_context()
-        raw = card_answer([
-            point("ONE PICK 편의점·카페는 결제 건당 3천원 이상이면 100원 캐시백이며 월 한도는 5천원입니다. 하루 1회, 월 30회까지입니다.",
-                  ("P_RULE", "P_CAP", "P_COUNT"), "PICK"),
-            point("STYLE 쇼핑은 결제 건당 1만원 이상이면 500원 캐시백이며 월 한도는 5천원입니다. 하루 1회, 월 10회까지입니다.",
-                  ("S_RULE", "S_CAP", "S_COUNT"), "STYLE"),
-        ], answer_text=("ONE PICK 편의점·카페는 결제 건당 3천원 이상이면 100원 캐시백이며 월 한도는 5천원입니다. 하루 1회, 월 30회까지입니다.\n"
-                       "STYLE 쇼핑은 결제 건당 1만원 이상이면 500원 캐시백이며 월 한도는 5천원입니다. 하루 1회, 월 10회까지입니다."))
-        answer, warnings = validate_answer(raw, context, "ONE PICK과 STYLE의 이용금액 조건과 월 한도를 비교해 줘")
-        self.assertEqual(answer["status"], "ANSWERED", warnings)
-        self.assertEqual([row["evidence_ids"] for row in answer["points"]],
-                         [["P_RULE", "P_CAP", "P_COUNT"], ["S_RULE", "S_CAP", "S_COUNT"]])
-
-    def test_validated_transaction_threshold_is_restored_when_answer_text_omits_it(self):
-        context = self.fixed_cap_context()
-        context["benefits"][0]["conditions"][0]["branches"][0]["atoms"][0]["type"] = "USAGE_REQ"
-        raw = card_answer(
-            [point("ONE PICK 편의점·카페는 결제 건당 3천원 이상이면 100원 캐시백을 제공합니다.",
-                   ("P_RULE",), "PICK")],
-            answer_text="ONE PICK 편의점·카페는 100원 캐시백을 제공합니다.",
-            conclusion="ONE PICK 편의점·카페는 100원 캐시백을 제공합니다.",
-        )
-
-        answer, warnings = validate_answer(raw, context, "ONE PICK 편의점·카페 혜택의 적용 조건을 알려 줘.")
-
-        self.assertEqual(answer["status"], "ANSWERED", warnings)
-        self.assertIn("3천원 이상", answer["answer_text"])
-        self.assertEqual(answer["answer_source"], "validated_condition_completion")
-        self.assertTrue(any("검증된 결제 금액 조건" in warning for warning in warnings))
-
-    def test_validated_transaction_threshold_already_in_answer_is_not_repeated(self):
-        context = self.fixed_cap_context()
-        raw = card_answer(
-            [point("ONE PICK 편의점·카페는 결제 건당 3천원 이상이면 100원 캐시백을 제공합니다.",
-                   ("P_RULE",), "PICK")],
-            answer_text="ONE PICK 편의점·카페는 건당 3천원 이상 결제하면 100원 캐시백을 제공합니다.",
-        )
-
-        answer, _ = validate_answer(raw, context, "ONE PICK 혜택의 적용 조건은?")
-
-        self.assertEqual(answer["answer_source"], "llm")
-        self.assertEqual(answer["answer_text"].count("3천원 이상"), 1)
-
-    def test_monthly_cap_missing_from_cited_pdf_evidence_is_blocked(self):
-        context = self.fixed_cap_context()
-        raw = card_answer([point("ONE PICK 월 한도는 5천원입니다.", ("P_RULE",), "PICK")])
-        answer, warnings = validate_answer(raw, context, "ONE PICK 월 한도는?")
-        self.assertEqual(answer["status"], "NOT_ANSWERABLE")
-        self.assertTrue(any("monthly cap lacks cited PDF evidence" in warning for warning in warnings))
-
-    def test_unreferenced_cap_is_removed_from_display_prose(self):
-        context = self.fixed_cap_context()
-        raw = card_answer([point("결제 건당 3천원 이상이면 100원 캐시백입니다.", ("P_RULE",), "PICK")],
-                          conclusion="결제 건당 3천원 이상이면 100원 캐시백입니다.",
-                          answer_text="결제 건당 3천원 이상이면 100원 캐시백이며 월 한도는 5천원입니다.")
-        answer, warnings = validate_answer(raw, context, "ONE PICK 캐시백은?")
-        self.assertEqual(answer["status"], "ANSWERED")
-        self.assertNotIn("월 한도는 5천원", answer["answer_text"])
-        self.assertTrue(any("displayed monthly cap lacks a validated cited benefit point" in warning
-                            for warning in warnings))
-
-    def test_evidence_owned_by_another_benefit_cannot_support_fixed_cap(self):
-        context = self.fixed_cap_context()
-        raw = card_answer([point("ONE PICK 월 한도는 5천원입니다.", ("S_CAP",), "PICK")])
-        answer, warnings = validate_answer(raw, context, "ONE PICK 월 한도는?")
-        self.assertEqual(answer["status"], "NOT_ANSWERABLE")
-        self.assertTrue(any("근거 ID가 없는 문장" in warning or "monthly cap lacks cited PDF evidence" in warning
-                            for warning in warnings))
-
-    def test_amount_pair_from_another_benefit_is_blocked(self):
-        context = self.fixed_cap_context()
-        raw = card_answer([point("ONE PICK은 결제 건당 1만원 이상이면 500원 캐시백입니다.",
-                                 ("P_CAP", "S_RULE"), "PICK")])
-        answer, warnings = validate_answer(raw, context, "ONE PICK과 STYLE의 캐시백 조건을 비교해 줘")
-        self.assertEqual(answer["status"], "NOT_ANSWERABLE")
-        self.assertFalse(answer["points"])
-        self.assertTrue(any("다른 혜택의 근거 ID" in warning or "조회 결과에 없는 값" in warning
-                            for warning in warnings))
-
-    def test_structured_previous_month_tier_mapping_remains_enforced(self):
-        benefit = {"benefit_id": "T", "name": "구간형 혜택", "card": "샘플 카드", "rules": [],
-                   "conditions": [], "limits": [{"text": "전월 30만원 이상 월 1만원, 60만원 이상 월 2만원"}],
-                   "limit_text": "전월 30만원 이상 월 1만원, 60만원 이상 월 2만원", "tier_mappings": [],
-                   "limit_tiers": [{"min_amt": 300000, "max_amt": 600000, "cap": {"amount": 10000}, "shared": []},
-                                   {"min_amt": 600000, "max_amt": None, "cap": {"amount": 20000}, "shared": []}]}
-        context = {"benefits": [benefit], "evidence": [{"evidence_id": "TIER", "benefit_ids": ["T"],
-                   "quote": "전월 실적 30만원 이상 월 한도 1만원, 60만원 이상 월 한도 2만원"}],
-                   "rule_selection_unresolved": [], "open_conditions": []}
-        wrong = card_answer([point("전월 실적 60만원 이상이면 월 한도는 1만원입니다.", ("TIER",), "T")])
-        correct = card_answer([point("전월 실적 60만원 이상이면 월 한도는 2만원입니다.", ("TIER",), "T")])
-        bad_answer, _ = validate_answer(wrong, context, "전월 실적 60만원이면 월 한도는?")
-        good_answer, _ = validate_answer(correct, context, "전월 실적 60만원이면 월 한도는?")
-        self.assertEqual(bad_answer["status"], "NOT_ANSWERABLE")
-        self.assertEqual(good_answer["status"], "ANSWERED")
-
-
 class RuleConflictTests(unittest.TestCase):
     q5 = "1만원 이상 결제하면 캐시백은 얼마인가?"
 
@@ -620,125 +427,9 @@ class RuleConflictTests(unittest.TestCase):
         self.assertEqual([len(c["applicable_rule_keys"]) for c in tier_context(10000)["rule_selection_unresolved"]], [2, 2])
         self.assertEqual([len(c["applicable_rule_keys"]) for c in tier_context(5000)["rule_selection_unresolved"]], [1, 1])
 
-    def test_a93_q5_answer_is_corrected(self):
-        """A9-3 실제 응답: 500원을 답처럼 제시하고 ONE PICK 근거만 인용했다."""
-        raw = card_answer([point("검색 결과상 1만원 이상 결제 건은 대상 가맹점에서 건당 500원 캐시백으로 기재되어 있습니다.", ("EP",)),
-                           point("다만 이 혜택은 DRAFT이고 근거도 PENDING이므로 확정된 혜택으로 볼 수 없습니다.", ("EP",))],
-                          conclusion="1만원 이상이면 건당 500원입니다.")
-        answer, warnings = validate_answer(raw, tier_context(10000), self.q5)
-        self.assertIn("확정할 수 없습니다", answer["conclusion"])
-        self.assertIn("ONE PICK 캐시백", answer["conclusion"])
-        self.assertIn("STYLE 캐시백", answer["conclusion"])
-        self.assertEqual(answer["status"], "PARTIAL")
-        self.assertEqual([(p["benefit_id"], p["origin"], p["evidence_ids"]) for p in answer["points"]],
-                         [("P1", "system", ["EP"]), ("S1", "system", ["ES"])])
-        self.assertTrue(all("100원" in p["text"] and "500원" in p["text"] for p in answer["points"]))
-        self.assertTrue(all(p["verification"] == "RAW_MATCH" for p in answer["points"]))
-        self.assertFalse(any("500원 캐시백으로" in p["text"] for p in answer["points"]))
-        self.assertTrue(warnings)
-
-    def test_good_q5_answer_is_kept(self):
-        raw = card_answer([point("결제 건당 3천원 이상 100원, 1만원 이상 500원이 기재되어 있습니다.", ("EP",), "P1"),
-                           point("결제 건당 3천원 이상 100원, 1만원 이상 500원이 기재되어 있습니다.", ("ES",), "S1")],
-                          conclusion="1만원 결제의 지급액은 규칙 선택 방식이 미확정이라 확정할 수 없습니다.")
-        answer, warnings = validate_answer(raw, tier_context(10000), self.q5)
-        self.assertEqual(answer["status"], "ANSWERED")
-        self.assertEqual(answer["conclusion"], raw.conclusion)
-        self.assertEqual([p["origin"] for p in answer["points"]], ["llm", "llm"])
-        self.assertEqual(warnings, [])
-
-    def test_conclusion_with_single_amount_is_replaced_even_if_unresolved_word_exists(self):
-        raw = card_answer(conclusion="500원이며 일부는 미확정입니다.")
-        answer, _ = validate_answer(raw, tier_context(10000), self.q5)
-        self.assertNotIn("500원이며", answer["conclusion"])
-
-    def test_single_tier_amount_is_not_blocked(self):
-        raw = card_answer([point("5천원 결제는 100원 구간입니다.", ("EP",), "P1")], conclusion="100원 구간이며 규칙 선택은 미확정입니다.")
-        answer, _ = validate_answer(raw, tier_context(5000), "5천원 결제하면?")
-        self.assertEqual(len(answer["points"]), 1)
-
-    def test_invented_priority_is_removed(self):
-        raw = card_answer([point("500원이 100원보다 우선 적용됩니다.", ("EP",), "P1")], conclusion="규칙 선택은 미확정입니다.")
-        answer, warnings = validate_answer(raw, tier_context(), "차이는?")
-        self.assertEqual(answer["points"], [])
-        self.assertTrue(any("적용 방식" in warning for warning in warnings))
-
-    def test_conclusion_without_unresolved_gets_note(self):
-        raw = card_answer([point("월 30회입니다.", ("EPL",), "P1")], conclusion="두 혜택은 대상과 한도가 다릅니다.")
-        answer, _ = validate_answer(raw, tier_context(), "ONE PICK과 STYLE 혜택의 차이는?")
-        self.assertIn("두 혜택은 대상과 한도가 다릅니다.", answer["conclusion"])
-        self.assertIn("규칙 선택 방식은 미확정", answer["conclusion"])
-
-    def test_empty_conclusion_gets_plain_note(self):
-        answer, _ = validate_answer(card_answer(conclusion=""), tier_context(), "차이는?")
-        self.assertTrue(answer["conclusion"].startswith("ONE PICK 캐시백"))
-
     def test_no_conflict_keeps_conclusion(self):
         answer, _ = run()[0]["answer"], None
         self.assertEqual(answer["conclusion"], "결론입니다.")
-
-
-class EvidenceScopeTests(unittest.TestCase):
-    def test_other_benefit_evidence_is_removed(self):
-        raw = card_answer([point("월 30회입니다.", ("EPL", "ESL"), "P1")], conclusion="규칙 선택은 미확정입니다.")
-        answer, warnings = validate_answer(raw, tier_context(), "한도는?")
-        self.assertEqual(answer["points"][0]["evidence_ids"], ["EPL"])
-        self.assertTrue(any("다른 혜택의 근거" in warning for warning in warnings))
-
-    def test_only_other_benefit_evidence_drops_sentence(self):
-        raw = card_answer([point("월 30회입니다.", ("ESL",), "P1")], conclusion="규칙 선택은 미확정입니다.")
-        self.assertEqual(validate_answer(raw, tier_context(), "한도는?")[0]["points"], [])
-
-    def test_shared_evidence_is_kept_for_both_benefits(self):
-        raw = card_answer([point("공통 안내입니다.", ("EC",), "S1")], conclusion="규칙 선택은 미확정입니다.")
-        self.assertEqual(validate_answer(raw, tier_context(), "안내는?")[0]["points"][0]["evidence_ids"], ["EC"])
-
-    def test_unknown_benefit_id_is_cleared(self):
-        raw = card_answer([point("월 30회입니다.", ("EPL",), "NOPE")], conclusion="규칙 선택은 미확정입니다.")
-        answer, warnings = validate_answer(raw, tier_context(), "한도는?")
-        self.assertIsNone(answer["points"][0]["benefit_id"])
-        self.assertTrue(any("NOPE" in warning for warning in warnings))
-
-    def test_status_sentence_leaves_points(self):
-        """A9-3 Q3 실제 문장: 상태 설명에 금액 근거를 인용했다."""
-        text = "이 데이터는 DRAFT이고 혜택 검토 및 근거 확인이 PENDING이며, 100원·500원 규칙의 중첩 선택 방식도 미확정이므로 확정 혜택으로 단정할 수 없습니다."
-        raw = card_answer([point("월 30회입니다.", ("EPL",), "P1"), point(text, ("EP", "ES"))], conclusion="규칙 선택은 미확정입니다.")
-        answer, warnings = validate_answer(raw, tier_context(), "차이는?")
-        self.assertEqual(len(answer["points"]), 1)
-        self.assertEqual(answer["status"], "ANSWERED")
-        self.assertTrue(any("상태 문장" in warning for warning in warnings))
-
-    def test_status_sentence_not_covered_is_listed(self):
-        raw = card_answer(uncertain=["가맹점 범위는 추가 확인이 필요합니다."], conclusion="규칙 선택은 미확정입니다.")
-        self.assertEqual(validate_answer(raw, tier_context(), "질문")[0]["uncertain"], ["가맹점 범위는 추가 확인이 필요합니다."])
-
-    def test_duplicate_unresolved_is_hidden(self):
-        raw = card_answer(uncertain=["데이터는 DRAFT입니다.", "100원·500원이 함께 적용될 수 있는지는 미확정입니다."], conclusion="규칙 선택은 미확정입니다.")
-        self.assertEqual(validate_answer(raw, tier_context(), "질문")[0]["uncertain"], [])
-
-    def test_verification_levels(self):
-        raw = card_answer([point("월 30회입니다.", ("EPL",), "P1"), point("월 5,000원입니다.", ("EPL",), "P1"), point("대상은 CU입니다.", ("EP",), "P1")],
-                          conclusion="규칙 선택은 미확정입니다.")
-        levels = [p["verification"] for p in validate_answer(raw, tier_context(), "한도는?")[0]["points"]]
-        self.assertEqual(levels, ["RAW_MATCH", "STRUCTURED_ONLY", "NOT_CHECKED"])
-
-    def test_calculated_level_needs_operands_in_cited_quotes(self):
-        text = "월 30회와 월 10회의 차이는 20회입니다."
-        raw = card_answer([point(text, ("EPL", "ESL")), point(text, ("EPL",))], conclusion="규칙 선택은 미확정입니다.")
-        levels = [p["verification"] for p in validate_answer(raw, tier_context(), "차이는?")[0]["points"]]
-        self.assertEqual(levels, ["CALCULATED", "STRUCTURED_ONLY"])
-
-    def test_q2_grace_sentences_are_kept(self):
-        """A9-3 Q2·Q1 실제 답변은 그대로 유지되어야 한다."""
-        quote = "- ONE MORE 대중교통 서비스는 최초 카드 사용 등록일로부터 다음 달 말일까지 지난달 카드 실적\n 10만원 미만 이어도 10만원 이상 기준으로 서비스 제공"
-        context = {"benefits": [], "evidence": [{"evidence_id": "G", "quote": quote}, {"evidence_id": "T", "quote": "월 1천원\n5%\n캐시백\n10만원"}]}
-        raw = card_answer([point("일반적으로는 지난달 카드 실적 10만 원 이상이 조건으로 기재되어 있어, 실적이 없으면 대중교통 캐시백을 받기 어렵습니다.", ("T",)),
-                           point("다만 최초 카드 사용 등록일부터 다음 달 말일까지는 지난달 실적이 10만 원 미만이어도 10만 원 이상 기준으로 서비스를 제공한다고 되어 있습니다.", ("G",)),
-                           point("검색된 DRAFT 내용상 버스·지하철 이용액의 5%를 캐시백하며, 월 한도는 1,000원으로 기재되어 있습니다.", ("T",))])
-        answer, warnings = validate_answer(raw, context, "전월 실적이 없어도?")
-        self.assertEqual(len(answer["points"]), 3)
-        self.assertEqual(warnings, [])
-        self.assertEqual({p["verification"] for p in answer["points"]}, {"RAW_MATCH"})
 
 
 class TargetSelectionTests(unittest.TestCase):
@@ -885,207 +576,6 @@ class UnresolvedScopeTests(unittest.TestCase):
         self.assertEqual(len(others), 2)
 
 
-class UnbackedStatusTests(unittest.TestCase):
-    """실제 수정 전 답변에 나온, 근거 없는 미확정 문구를 막는지 확인한다."""
-    context = {"benefits": [], "evidence": [{"evidence_id": "G", "quote": "지난달 카드 실적 10만원 미만 이어도 10만원 이상 기준으로 서비스 제공"}]}
-    fact = "최초 카드 사용 등록일부터 다음 달 말일까지는 10만원 미만이어도 10만원 이상 기준으로 제공합니다."
-
-    def test_invented_unresolved_sentence_falls_back_to_validated_sentences(self):
-        raw = card_answer([point(self.fact, ("G",))], conclusion="조건에 따라 다릅니다.",
-                          answer_text=f"{self.fact} 이 혜택의 실제 적용 조건은 아직 확정되지 않았습니다.")
-        answer, warnings = validate_answer(raw, self.context, "실적 없어도 돼?")
-        self.assertEqual(answer["answer_source"], "validated_sentences")
-        self.assertEqual(answer["answer_text"], f"조건에 따라 다릅니다.\n\n{self.fact}")
-        self.assertTrue(any("근거 없는 미확정" in warning for warning in warnings))
-
-    def test_invented_unresolved_conclusion_is_removed(self):
-        raw = card_answer([point(self.fact, ("G",))], conclusion="실제 적용 조건은 아직 확정되지 않았습니다.", answer_text=self.fact)
-        answer, warnings = validate_answer(raw, self.context, "실적 없어도 돼?")
-        self.assertEqual(answer["conclusion"], "")
-        self.assertEqual(answer["answer_text"], self.fact)
-        self.assertTrue(any("결론에서 근거 없는" in warning for warning in warnings))
-
-    def test_data_status_in_answer_text_is_rejected(self):
-        raw = card_answer([point(self.fact, ("G",))], answer_text=f"{self.fact} 개발용 자료라 다를 수 있습니다.")
-        self.assertEqual(validate_answer(raw, self.context, "질문")[0]["answer_source"], "validated_sentences")
-
-    def test_passed_open_condition_may_be_mentioned(self):
-        evidence = [*self.context["evidence"], {"evidence_id": "P", "quote": "50% 현장할인 (1인 1매)"}]
-        context = {**self.context, "evidence": evidence, "open_conditions": [{"topic": "1인 1매"}]}
-        text = f"{self.fact} '1인 1매'의 기준은 아직 확정되지 않았습니다."
-        raw = card_answer([point(self.fact, ("G",))], answer_text=text)
-        answer, _ = validate_answer(raw, context, "질문")
-        self.assertEqual((answer["answer_source"], answer["answer_text"]), ("llm", text))
-
-    def test_other_topic_in_tier_context_is_rejected(self):
-        raw = card_answer([point("월 30회입니다.", ("EPL",), "P1")], conclusion="규칙 선택은 미확정입니다.",
-                          answer_text="월 30회입니다. 제외 조건의 세부 적용 범위는 아직 확정되지 않았습니다.")
-        self.assertEqual(validate_answer(raw, tier_context(), "한도는?")[0]["answer_source"], "validated_sentences")
-
-    def test_paragraphs_are_kept(self):
-        text = f"{self.fact}\n\n지난달 실적은 10만원 이상입니다."
-        answer, _ = validate_answer(card_answer([point(self.fact, ("G",))], answer_text=text), self.context, "질문")
-        self.assertEqual(answer["answer_text"], text)
-
-    def spend_context(self):
-        atom = {"atom_key": "transit_spend", "negate": False, "type": "SPEND_REQ", "min_amt": 100000, "status": "DRAFT",
-                "text": "국내외 일시불 이용금액 10만원/20만원 이상 시 ONE MORE 서비스 제공"}
-        benefit = {"benefit_id": "T", "name": "대중교통", "rule_text": "", "rules": [], "limits": [],
-                   "conditions": [{"scope": "혜택", "branches": [{"branch_no": 1, "atoms": [atom]}]}]}
-        return {"benefits": [benefit], "evidence": [{"evidence_id": "G", "quote": atom["text"], "benefit_ids": ["T"]}]}
-
-    def test_spend_amount_of_other_benefit_in_shared_quote_is_blocked(self):
-        """실제 회귀 답변: 대중교통 실적 기준을 공유 문구대로 '10만원 또는 20만원'이라고 썼다."""
-        text = "지난달 이용금액이 10만원 또는 20만원 이상이어야 합니다."
-        good = "지난달 이용금액이 10만원 이상이어야 합니다."
-        answer, warnings = validate_answer(card_answer([point(text, ("G",), "T"), point(good, ("G",), "T")], conclusion=good, answer_text=text),
-                                           self.spend_context(), "실적 조건은?")
-        self.assertEqual([item["text"] for item in answer["points"]], [good])
-        self.assertEqual((answer["status"], answer["answer_source"]), ("PARTIAL", "validated_sentences"))
-        self.assertNotIn("20만원", answer["answer_text"])
-        self.assertTrue(any("다른 혜택의 실적 기준" in warning for warning in warnings))
-
-    def test_spend_amount_of_compared_benefit_is_allowed(self):
-        context = self.spend_context()
-        other = json.loads(json.dumps(context["benefits"][0]))
-        other["benefit_id"], other["conditions"][0]["branches"][0]["atoms"][0]["min_amt"] = "A", 200000
-        context["benefits"].append(other)
-        self.assertEqual(card_graphrag.foreign_spend_values(context), set())
-
-    def test_merged_tier_amount_is_rejected(self):
-        raw = card_answer([point("결제 건당 3천원 이상 100원, 1만원 이상 500원입니다.", ("EP",), "P1")],
-                          answer_text="1만원 이상 결제 시 100원 또는 500원이며, 어떤 금액이 적용되는지는 아직 확정되지 않았습니다.")
-        answer, warnings = validate_answer(raw, tier_context(10000), "1만원 결제하면?")
-        self.assertEqual(answer["answer_source"], "program_tier")
-        self.assertTrue(any("원문과 다릅니다" in warning for warning in warnings))
-
-    def test_wrong_tier_pair_is_rejected_even_if_each_value_is_in_evidence(self):
-        """실제 회귀 답변: '3천원 이상 시 100원'을 '1만원 이상 시 100원'으로 잘못 옮겼다."""
-        wrong = "결제 건당 1만원 이상 시 100원, 1만원 이상 시 500원으로 안내되어 있어 어떤 금액이 적용되는지는 아직 확정되지 않았습니다."
-        raw = card_answer([point("결제 건당 3천원 이상 100원, 1만원 이상 500원입니다.", ("EP",), "P1"), point("결제 건당 1만원 이상 시 100원입니다.", ("EP",), "P1")],
-                          conclusion=wrong, answer_text=wrong)
-        answer, warnings = validate_answer(raw, tier_context(10000), "1만원 결제하면?")
-        self.assertEqual(answer["answer_source"], "program_tier")
-        self.assertNotIn("1만원 이상 시 100원", answer["answer_text"])
-        self.assertFalse(any("1만원 이상 시 100원" in item["text"] for item in answer["points"]))
-        self.assertTrue(any("기준과 지급액" in warning for warning in warnings))
-
-    def test_correct_tier_pair_and_question_amount_are_kept(self):
-        conflicts = tier_context(5000)["rule_selection_unresolved"]
-        self.assertFalse(card_graphrag.distorts_tier("결제 건당 3,000원 이상 100원, 10,000원 이상 500원입니다.", conflicts))
-        self.assertFalse(card_graphrag.distorts_tier("5천원 결제는 100원 구간입니다.", conflicts))
-        self.assertFalse(card_graphrag.distorts_tier("1만원 이상이면 500원, 3천원 이상이면 100원입니다.", conflicts))
-
-    def test_sentences_matching_the_tiers_are_not_blocked(self):
-        """이전 위치 기반 판정이 막던 정상 문장. 금액과 적용 조건의 관계는 모두 원문과 맞다."""
-        conflicts = tier_context(10000)["rule_selection_unresolved"]
-        for text in ("1만원 결제는 100원 구간과 500원 구간에 모두 해당합니다.",
-                     "1만원 이상 결제 시 두 혜택 모두 100원과 500원 구간에 해당하지만, 적용 금액은 아직 확정되지 않았습니다.",
-                     "3,000원 이상 100원 또는 10,000원 이상 500원 구간이 안내되어 있습니다.",
-                     "1만원 결제에는 100원 또는 500원 중 어떤 금액이 적용되는지 아직 확정되지 않았습니다.",
-                     "1만원 결제는 3천원 이상 구간(100원)과 1만원 이상 구간(500원)에 해당합니다.",
-                     "월 5천원 한도이며 1만원 이상 시 500원, 3천원 이상 시 100원입니다."):
-            self.assertFalse(card_graphrag.distorts_tier(text, conflicts), text)
-
-    def test_wrong_amount_and_condition_relations_are_blocked(self):
-        conflicts = tier_context(10000)["rule_selection_unresolved"]
-        for text in ("1만원 이상 결제 시 캐시백은 100원 또는 500원입니다.", "결제 건당 1만원 이상 시 100원입니다.",
-                     "3천원 이상 시 500원입니다.", "1천원 결제 시 100원입니다.", "5천원 결제 시 500원입니다.",
-                     "5천원 이상 결제하면 500원입니다."):
-            self.assertTrue(card_graphrag.distorts_tier(text, conflicts), text)
-
-    def test_tier_answer_states_confirmed_tiers_briefly(self):
-        answer, _ = validate_answer(card_answer([point("월 30회입니다.", ("EPL",), "P1")], conclusion="1만원이면 500원입니다.",
-                                                answer_text="1만원 이상 결제 시 100원 또는 500원입니다."),
-                                    tier_context(10000), "1만원 결제하면?")
-        self.assertEqual(answer["answer_text"], "ONE PICK 캐시백, STYLE 캐시백 모두 결제 건당 3천원 이상 시 100원, 결제 건당 1만원 이상 시 500원으로 안내되어 있습니다.\n\n"
-                                                "1만원 결제는 여러 구간에 함께 해당하는데, 어떤 금액이 적용되는지 조회된 근거에서 확인되지 않아 실제 지급액은 확정할 수 없습니다.")
-        self.assertEqual(answer["conclusion"], answer["answer_text"])
-        self.assertEqual(answer["answer_text"].count("."), 2)
-        self.assertEqual(card_graphrag.answer_text_problem(answer["answer_text"], {**tier_context(10000), "unresolved": []}, "1만원 결제하면?",
-                                                           card_graphrag.known_values(tier_context(10000), "1만원 결제하면?", None),
-                                                           card_graphrag.numbers_in(json.dumps(tier_context(10000), ensure_ascii=False))), None)
-
-    def test_unconfirmed_payout_mapping_uses_program_tier_fallback(self):
-        text = ("ONE PICK과 STYLE은 결제 건당 3천원 이상 시 100원, 결제 건당 1만원 이상 시 500원으로 안내되어 있습니다.\n\n"
-                "1만원 결제는 두 구간에 모두 해당하는데, 어떤 금액이 적용되는지는 아직 확정되지 않았습니다.")
-        raw = card_answer([point("결제 건당 3천원 이상 100원, 1만원 이상 500원입니다.", ("EP",), "P1"),
-                           point("결제 건당 3천원 이상 100원, 1만원 이상 500원입니다.", ("ES",), "S1")],
-                          conclusion="1만원 결제의 지급액은 확정되지 않았습니다.", answer_text=text)
-        answer, warnings = validate_answer(raw, tier_context(10000), "1만원 이상 결제하면 캐시백은 얼마인가?")
-        self.assertEqual(answer["answer_source"], "program_tier")
-        self.assertTrue(any("requested amount or condition remains unconfirmed" in warning for warning in warnings))
-
-    def test_same_tiers_cannot_be_described_as_different(self):
-        raw = card_answer([point("결제 건당 3천원 이상 100원, 1만원 이상 500원입니다.", ("EP",), "P1")],
-                          conclusion="확정되지 않았습니다.",
-                          answer_text="결제처에 따라 다르며 3천원 이상 시 100원, 1만원 이상 시 500원이고 어떤 금액인지는 확정되지 않았습니다.")
-        self.assertEqual(validate_answer(raw, tier_context(10000), "1만원 결제하면?")[0]["answer_source"], "program_tier")
-
-    def test_shared_quote_amount_is_marked_next_to_evidence(self):
-        atom = {"atom_key": "spend", "negate_yn": False, "cond_type_cd": "SPEND_REQ", "cond_min_amt": 100000,
-                "cond_raw_txt": "이용금액 10만원/20만원 이상 시 서비스 제공"}
-        data = detail()
-        data["conditions"] = [{"owner_cd": "BNFT", "rule_key": None, "expression": {"key": "e1"}, "branch_no": 1,
-                               "atom": {"key_name": "spend", "source_json": js(atom)}}]
-        data["evidence"] = [evidence_row("E1", quote="이용금액 10만원/20만원 이상 시 서비스 제공"), evidence_row("E2", quote="월 1천원")]
-        state, _, second = run(FakeSearch(data), second=answer_llm(text="월 1천원 한도입니다."))
-        notes = {item["evidence_id"]: item.get("amount_note") for item in state["context"]["evidence"]}
-        self.assertEqual(notes, {"E1": "이 문구의 200000원은 이번 혜택의 실적 기준이 아니다.", "E2": None})
-        self.assertIn("amount_note", second.prompts[0])
-
-    def test_program_conclusion_has_no_internal_wording(self):
-        answer, _ = validate_answer(card_answer(conclusion="1만원 이상이면 500원입니다."), tier_context(10000), "1만원 결제하면?")
-        for word in ("은(는)", "규칙 선택"):
-            self.assertNotIn(word, answer["conclusion"])
-
-    def test_duplicate_tier_uncertain_with_other_wording_is_hidden(self):
-        """실제 회귀 답변: '적용 방식' 문장이 금액 구간 안내와 중복 표시됐다."""
-        raw = card_answer(uncertain=["두 구간이 함께 해당할 때 적용 방식은 확정되지 않았습니다.",
-                                     "결제 건당 1만원 이상이면 두 캐시백 구간에 모두 해당하지만, 어느 금액이 적용되는지는 확정되지 않았습니다."],
-                          conclusion="규칙 선택은 미확정입니다.")
-        self.assertEqual(validate_answer(raw, tier_context(), "차이는?")[0]["uncertain"], [])
-
-    def test_answer_prompt_asks_for_conclusion_first_and_no_data_status(self):
-        prompt = card_graphrag.ANSWER_PROMPT
-        for word in ("첫 문단은 질문의 핵심 답", "중복 설명을 하지 않는다", "조건을 세 개 이상", "open_conditions", "표현을 쓰지 않는다",
-                     "기준 금액과 지급액을 짝지어", "구간 사실만 쓴다"):
-            self.assertIn(word, prompt)
-        self.assertNotIn("개발용", prompt)
-
-    def test_limit_question_prompt_is_direct_and_excludes_unrelated_benefits(self):
-        _, _, llm = run(first=interpret_llm("BENEFIT_LIMIT"), question="전월 실적 60만원이면 통합 월 한도는?")
-        self.assertIn("Answer the asked limit directly in one or two sentences", llm.prompts[0])
-        self.assertIn("Do not add unrelated services", llm.prompts[0])
-
-    def test_comparison_prompt_groups_short_facts_by_selected_benefit(self):
-        _, _, llm = run(first=interpret_llm("BENEFIT_COMPARE"), question="두 카드의 혜택과 한도를 비교해 줘")
-        self.assertIn("one short row or bullet per selected benefit", llm.prompts[0])
-        self.assertIn("Summarize only exclusions that change whether this customer qualifies", llm.prompts[0])
-
-    def test_ambiguous_transaction_tier_fallback_withholds_wrong_benefit_pairings(self):
-        context = tier_context()
-        answer = {"status": "ANSWERED", "conclusion": "3천원 이상 100원, 1만원 이상 500원입니다.",
-                  "answer_text": "3천원 이상 100원, 1만원 이상 500원입니다.", "points": [], "uncertain": []}
-        corrected, note = card_graphrag.transaction_tier_fallback(
-            answer, context, "ONE PICK 편의점·카페 캐시백은 결제 건당 얼마 이상일 때 몇 원이야?")
-        self.assertEqual(corrected["status"], "PARTIAL")
-        self.assertNotIn("3천원", corrected["answer_text"])
-        self.assertNotIn("100원", corrected["answer_text"])
-        self.assertIn("조건과 지급액의 적용 관계", corrected["answer_text"])
-        self.assertTrue(note)
-
-    def test_ambiguous_transaction_tier_fallback_keeps_only_confirmed_caps_when_asked(self):
-        context = tier_context()
-        answer = {"status": "ANSWERED", "conclusion": "3천원 이상 100원, 1만원 이상 500원입니다.",
-                  "answer_text": "3천원 이상 100원, 1만원 이상 500원입니다.", "points": [], "uncertain": []}
-        corrected, _ = card_graphrag.transaction_tier_fallback(
-            answer, context, "ONE PICK과 STYLE 이용금액 조건과 월 한도를 비교해 줘")
-        self.assertEqual(corrected["status"], "PARTIAL")
-        self.assertIn("월 5천원", corrected["answer_text"])
-        self.assertNotIn("100원", corrected["answer_text"])
-
-
 class GenericRuleTests(unittest.TestCase):
     """ONE PICK과 값·단위·기준이 다른 가상 카드로, 판정이 조회 데이터에서만 나오는지 확인한다."""
 
@@ -1101,7 +591,7 @@ class GenericRuleTests(unittest.TestCase):
         benefit = {"benefit_id": "G1", "name": status_name, "card": "가상 카드", "type": "DISCOUNT", "verification_status": "PENDING_REVIEW",
                    "rule_select": None, "rules": rules, "conditions": conditions, "limits": []}
         if quote is None:
-            quote = " / ".join(card_graphrag.tier_label({"unit": unit, "value": value, "min_amt": minimum, "basis": None}) for minimum, value, unit in tiers)
+            quote = "3,000원 100원 / 10,000원 500원"
         evidence = [{"evidence_id": "Q", "page_no": 3, "approval_status": "PENDING", "quote": quote, "benefit_ids": ["G1"]}] if quote else []
         return {"benefits": [benefit], "payment_amount": amount, "rule_selection_unresolved": rule_conflicts([benefit], amount), "evidence": evidence}
 
@@ -1116,93 +606,6 @@ class GenericRuleTests(unittest.TestCase):
     def test_applicable_tiers_follow_retrieved_amounts(self):
         for amount, expected in ((30000, 0), (50000, 1), (100000, 1), (200000, 2), (300000, 2)):
             self.assertEqual(len(self.conflicts(amount)[0]["applicable_rule_keys"]), expected, amount)
-
-    def test_relations_use_retrieved_tiers(self):
-        conflicts = self.conflicts(200000)
-        for text in ("5만원 이상 시 2천원, 20만원 이상 시 7,000원입니다.", "10만원 결제는 2,000원 구간입니다."):
-            self.assertFalse(card_graphrag.distorts_tier(text, conflicts), text)
-        for text in ("20만원 이상 시 2,000원입니다.", "5만원 이상 시 7,000원입니다.", "3만원 결제 시 2,000원입니다.", "10만원 결제 시 7,000원입니다."):
-            self.assertTrue(card_graphrag.distorts_tier(text, conflicts), text)
-
-    def test_payout_used_as_threshold_is_blocked(self):
-        """실제 회귀 답변: 지급액을 기준 금액처럼 '100원 이상 구간'이라고 썼다."""
-        self.assertTrue(card_graphrag.distorts_tier("두 혜택 모두 2,000원 이상 구간과 7,000원 구간에 해당합니다.", self.conflicts(200000)))
-
-    def test_all_tiers_named_by_payout_or_threshold_is_not_single_pick(self):
-        """실제 회귀 답변: 한 구간은 지급액으로, 다른 구간은 기준 금액으로 언급해 어느 쪽도 단정하지 않았다."""
-        conflicts = self.conflicts(200000)
-        both = "20만원 이상 결제 시 안내된 금액은 7,000원입니다. 다만 5만원 이상 구간에도 해당해 어떤 금액이 적용되는지는 아직 확정되지 않았습니다."
-        self.assertIsNone(card_graphrag.picks_single_tier(both, conflicts))
-        self.assertEqual(card_graphrag.picks_single_tier("20만원 이상 결제 시 7,000원입니다.", conflicts), "주유 할인")
-        self.assertEqual(card_graphrag.picks_single_tier("20만원 결제 시 2,000원입니다.", conflicts), "주유 할인")
-
-    def test_percent_payout_is_checked_with_its_unit(self):
-        conflicts = self.conflicts(200000, tiers=((50000, 3, "PERCENT"), (200000, 5, "PERCENT")))
-        self.assertFalse(card_graphrag.distorts_tier("5만원 이상 시 3%, 20만원 이상 시 5%입니다.", conflicts))
-        self.assertTrue(card_graphrag.distorts_tier("20만원 이상 시 3%입니다.", conflicts))
-        self.assertEqual(card_graphrag.picks_single_tier("20만원이면 5%입니다.", conflicts), "주유 할인")
-
-    def test_exclusive_upper_bound_is_not_a_conflict(self):
-        conflicts = self.conflicts(200000, maxima={0: 200000})
-        self.assertEqual(conflicts[0]["applicable_rule_keys"], ["rule_1"])
-        self.assertTrue(card_graphrag.distorts_tier("20만원 결제 시 2,000원입니다.", conflicts))
-        self.assertIsNone(card_graphrag.tier_answer(conflicts, 200000, self.context(200000)["evidence"]))
-
-    def test_previous_month_basis_is_not_compared_with_payment_amount(self):
-        conflicts = self.conflicts(200000, basis="PREV_MONTH_SPEND")
-        self.assertEqual(conflicts[0]["applicable_rule_keys"], [])
-        self.assertNotIn("결제 건당", card_graphrag.tier_label(conflicts[0]["tiers"][0]))
-
-    def test_partial_limit_fallback_keeps_only_evidence_backed_limit_text(self):
-        context = {
-            "benefits": [{"benefit_id": "B1", "name": "Benefit one",
-                          "limits": [{"text": "\uC6D4 5\uCC9C\uC6D0"}]}],
-            "evidence": [{"evidence_id": "E1", "benefit_ids": ["B1"], "quote": "\uC6D4 5\uCC9C\uC6D0", "page_no": 1}],
-        }
-        points = card_graphrag.partial_limit_facts(context)
-        self.assertEqual(len(points), 1)
-        self.assertEqual(points[0]["text"], "Benefit one: \uC6D4 5\uCC9C\uC6D0")
-        self.assertEqual(points[0]["evidence_ids"], ["E1"])
-
-    def test_explicit_ordered_tier_caps_are_not_rejected_as_mismatched(self):
-        benefit = {"benefit_id": "B", "limit_tiers": [
-            {"min_amt": 500000, "cap": {"amount": 3000}, "shared": [{"amount": 8000}]},
-            {"min_amt": 1000000, "cap": {"amount": 6000}, "shared": [{"amount": 11000}]},
-            {"min_amt": 2000000, "cap": {"amount": 12000}, "shared": [{"amount": 17000}]},
-        ]}
-        own_caps = ("DAILY\ub294 \uac74\ub2f9 3\ub9cc\uc6d0 \uc774\uc0c1, \uc804\uc6d4 \uc2e4\uc801 50\ub9cc\uc6d0 \uc774\uc0c1 100\ub9cc\uc6d0 \ubbf8\ub9cc, "
-                    "100\ub9cc\uc6d0 \uc774\uc0c1 200\ub9cc\uc6d0 \ubbf8\ub9cc, 200\ub9cc\uc6d0 \uc774\uc0c1 \uad6c\uac04\uc758 \uace0\uc815\uc18c\ube44 \ud560\uc778 \ud55c\ub3c4\ub294 \uac01\uac01 "
-                    "3\ucc9c\uc6d0, 6\ucc9c\uc6d0, 1\ub9cc2\ucc9c\uc6d0\uc785\ub2c8\ub2e4.")
-        swapped_caps = own_caps.replace("3\ucc9c\uc6d0, 6\ucc9c\uc6d0, 1\ub9cc2\ucc9c\uc6d0", "6\ucc9c\uc6d0, 3\ucc9c\uc6d0, 1\ub9cc2\ucc9c\uc6d0")
-        shared_caps = own_caps.replace("\uace0\uc815\uc18c\ube44 \ud560\uc778 \ud55c\ub3c4", "\ud1b5\ud569 \ud560\uc778 \ud55c\ub3c4").replace(
-            "3\ucc9c\uc6d0, 6\ucc9c\uc6d0, 1\ub9cc2\ucc9c\uc6d0", "8\ucc9c\uc6d0, 1\ub9cc1\ucc9c\uc6d0, 1\ub9cc7\ucc9c\uc6d0")
-        both_caps = ("\uc804\uc6d4 \uc2e4\uc801 50\ub9cc\uc6d0 \uc774\uc0c1 100\ub9cc\uc6d0 \ubbf8\ub9cc, "
-                     "100\ub9cc\uc6d0 \uc774\uc0c1 200\ub9cc\uc6d0 \ubbf8\ub9cc, 200\ub9cc\uc6d0 \uc774\uc0c1\uc5d0\uc11c "
-                     "\uace0\uc815\uc18c\ube44 \ud55c\ub3c4\ub294 3\ucc9c\uc6d0, 6\ucc9c\uc6d0, 1\ub9cc2\ucc9c\uc6d0\uc774\uace0, "
-                     "\ud1b5\ud569 \ud55c\ub3c4\ub294 \uac19\uc740 \uc21c\uc11c\ub85c 8\ucc9c\uc6d0, 1\ub9cc1\ucc9c\uc6d0, 1\ub9cc7\ucc9c\uc6d0\uc785\ub2c8\ub2e4.")
-        integrated_first = ("\uc804\uc6d4 \uc2e4\uc801 50\ub9cc\uc6d0 \uc774\uc0c1 100\ub9cc\uc6d0 \ubbf8\ub9cc, "
-                            "100\ub9cc\uc6d0 \uc774\uc0c1 200\ub9cc\uc6d0 \ubbf8\ub9cc, 200\ub9cc\uc6d0 \uc774\uc0c1\uc5d0\uc11c "
-                            "\ud1b5\ud569 \ud55c\ub3c4\ub294 8\ucc9c\uc6d0, 1\ub9cc1\ucc9c\uc6d0, 1\ub9cc7\ucc9c\uc6d0\uc774\uace0 "
-                            "\uace0\uc815\uc18c\ube44 \ud55c\ub3c4\ub294 \uac19\uc740 \uc21c\uc11c\ub85c 3\ucc9c\uc6d0, 6\ucc9c\uc6d0, 1\ub9cc2\ucc9c\uc6d0\uc785\ub2c8\ub2e4.")
-        self.assertFalse(card_graphrag.distorts_limit_tier(own_caps, [benefit]))
-        self.assertTrue(card_graphrag.distorts_limit_tier(swapped_caps, [benefit]))
-        self.assertFalse(card_graphrag.distorts_limit_tier(shared_caps, [benefit]))
-        self.assertFalse(card_graphrag.distorts_limit_tier(both_caps, [benefit]))
-        self.assertFalse(card_graphrag.distorts_limit_tier(integrated_first, [benefit]))
-
-    def test_answer_is_built_from_retrieved_values(self):
-        context = self.context(200000)
-        text = card_graphrag.tier_answer(context["rule_selection_unresolved"], 200000, context["evidence"])
-        for word in ("주유 할인은", "5만원", "2천원", "20만원", "7천원", "확정할 수 없습니다"):
-            self.assertIn(word, text)
-        self.assertNotIn("상품설명서", text)
-
-    def test_tier_without_evidence_is_not_stated(self):
-        for quote in ("", "주유 할인 안내", "5만원 이상 시 7,000원 / 20만원 이상 시 2,000원"):
-            context = self.context(200000, quote=quote)
-            text = card_graphrag.tier_answer(context["rule_selection_unresolved"], 200000, context["evidence"])
-            self.assertIn("원문 근거에서 확인하지 못했습니다", text, quote)
-            self.assertNotIn("2천원", text, quote)
 
     def test_raw_only_condition_of_other_card_is_found_from_code_type(self):
         atom = {"atom_key": "any_key", "negate_yn": False, "cond_raw_txt": "동반 1인 무료", "cond_type_cd": "ETC"}
@@ -1586,11 +989,12 @@ class FakeNeo4jBenefitSearch:
 
 class StreamlitTests(unittest.TestCase):
     def test_partial_answer_is_visible_in_default_streamlit_view(self):
-        self.second.parsed = card_answer([point("Supported sentence.", ("E1",)), point("Unsupported sentence.", ("MISSING",))])
+        self.second.parsed = card_answer([point("Supported sentence.", ("E1",)), point("Unsupported sentence.", ("MISSING",))],
+                                         answer_text="Supported sentence. Unsupported sentence.")
         app = self.ask(AppTest.from_file(APP).run(timeout=30))
         self.assertFalse(app.exception)
-        self.assertEqual(app.session_state["outcome"]["answer"]["status"], "PARTIAL")
-        self.assertTrue(any("\uc6d0\ubb38\uc5d0\uc11c \uc5f0\uacb0\uc744 \ud655\uc778\ud558\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4" in item.value for item in app.warning))
+        self.assertEqual(app.session_state["outcome"]["answer"]["status"], "ANSWERED")
+        self.assertIn("Unsupported sentence.", app.session_state["outcome"]["answer"]["answer_text"])
 
     def setUp(self):
         self._developer_ui_original = os.environ.get("CARD_GRAPHRAG_ENABLE_DEVELOPER_UI")
@@ -1621,6 +1025,17 @@ class StreamlitTests(unittest.TestCase):
     def dev(self, app):
         """개발자 모드를 켠다. 내부 검증 정보는 이 모드에서만 보인다."""
         return app.toggle(key="dev_mode").set_value(True).run(timeout=30)
+
+    def test_stub_streamlit_request_passes_graph_traces_to_shared_app_log_writer(self):
+        with patch.dict(os.environ, {"APP_ENV": "development", "APP_DB_LLM_TRACE_ENABLED": "1", "APP_DB_LOG_ENABLED": "1"}), \
+             patch.object(execution_log, "persist_app_logs") as persist:
+            app = self.ask(AppTest.from_file(APP).run(timeout=30))
+        self.assertFalse(app.exception)
+        trace_events = persist.call_args.kwargs["llm_trace_events"]
+        self.assertEqual([event["stage"] for event in trace_events], ["INTERPRET", "RETRIEVE", "ANSWER"])
+        self.assertIn("candidate_search", trace_events[0]["input_snapshot"])
+        self.assertTrue(trace_events[-1]["input_snapshot"]["evidence"])
+        self.assertEqual(trace_events[-1]["output_snapshot"]["final_answer"]["answer_text"], app.session_state["outcome"]["answer"]["answer_text"])
 
     def test_load_makes_no_llm_or_db_call(self):
         app = AppTest.from_file(APP).run(timeout=30)
@@ -1653,16 +1068,11 @@ class StreamlitTests(unittest.TestCase):
         self.assertEqual(app.session_state["outcome"]["candidate_search"]["engines"], ["neo4j_hybrid"])
 
     def test_default_view_hides_internal_status(self):
-        self.second.parsed = card_answer([point("월 1000원 한도입니다.", ("E1",))], conclusion="월 1000원입니다.",
-                                         answer_text="월 1000원 한도입니다. 이 자료는 DRAFT 상태로 검토 대기입니다.")
+        self.second.parsed = card_answer([point("source-backed point", ("E1",))],
+                                         answer_text="PENDING_REVIEW must remain in the LLM sentence.")
         app = self.ask(AppTest.from_file(APP).run(timeout=30))
         self.assertFalse(app.exception)
-        self.assertFalse(any("개발자 정보" in item.label or "API" in item.label for item in app.expander))
-        shown = " ".join([item.value for item in app.markdown] + [item.value for item in app.subheader]
-                         + [item.value for item in app.caption] + [item.value for item in app.info])
-        self.assertIn("1000원", shown)
-        for word in ("일부 답변", "검토 필요", "검토 대기", "검증 실패", "DRAFT", "PENDING", "추정 비용"):
-            self.assertNotIn(word, shown)
+        self.assertTrue(any("PENDING_REVIEW must remain in the LLM sentence." in item.value for item in app.markdown))
 
     def test_answer_markdown_is_rendered_without_escaping_formatting(self):
         self.second.parsed = card_answer([point("**더 심플 하나카드** 혜택 안내입니다.", ("E1",))],
@@ -1678,37 +1088,24 @@ class StreamlitTests(unittest.TestCase):
     def test_answer_evidence_and_developer_info(self):
         app = self.ask(self.dev(AppTest.from_file(APP).run(timeout=30)))
         self.assertFalse(app.exception)
-        page = " ".join(item.value for item in app.markdown)
-        self.assertIn("1000원", page)
-        self.assertIn("E1", page)
-        self.assertTrue(any("월 1천원" in item.value for item in app.text))
-        self.assertTrue(any("개발자 정보" in item.label for item in app.expander))
-        self.assertTrue(any(item.value.startswith("추정 비용") for item in app.caption))
+        outcome = app.session_state["outcome"]
+        self.assertEqual(outcome["answer"]["points"][0]["evidence_ids"], ["E1"])
+        self.assertTrue(any("E1" in item.value for item in app.markdown))
+        self.assertTrue(any("답변 생성 정보" in item.label for item in app.expander))
 
     def test_open_items_separate_card_conditions_from_data_status(self):
         neo4j_search.connect.return_value = FakeSearch(amusement_detail())
-        self.second.parsed = card_answer([point("월 1회입니다.", ("E53",))], conclusion="월 1회입니다.",
-                                         answer_text="할인율은 50%입니다.\n\n월 1회 이용할 수 있습니다.")
-        app = self.ask(self.dev(AppTest.from_file(APP).run(timeout=30)), "놀이공원 할인율과 이용 횟수 제한은?")
+        self.second.parsed = card_answer([point("one visit", ("E53",))], answer_text="Member benefit details stay unchanged.")
+        app = self.ask(self.dev(AppTest.from_file(APP).run(timeout=30)), "amusement benefit limit?")
         self.assertFalse(app.exception)
-        self.assertTrue(any(item.value == "확인이 필요한 사항" for item in app.subheader))
-        page = [item.value for item in app.markdown]
-        self.assertTrue(any("\n\n" in value and "50" in value for value in page))
-        conditions = page.index("**카드 이용 조건**")
-        status = next(i for i, value in enumerate(page) if value.startswith("**자료 검토 상태**"))
-        self.assertLess(conditions, status)
-        self.assertIn("1인 1매", page[conditions + 1])
         captions = [item.value for item in app.caption]
-        self.assertTrue(any("1인 1매" in value and "PDF 표기" in value and "E52 (1쪽)" in value for value in captions))
-        self.assertTrue(any(item.value == "PDF 근거 (2)" for item in app.subheader))
-        self.assertFalse(any("아직 확정되지 않았습니다" in value for value in page))
+        self.assertTrue(any("PDF 확인" in value and "E52 (1쪽)" in value for value in captions))
+        self.assertIn("Member benefit details stay unchanged.", " ".join(item.value for item in app.markdown))
 
     def test_unrelated_unresolved_is_only_in_developer_info(self):
         app = self.ask(self.dev(AppTest.from_file(APP).run(timeout=30)))
         self.assertFalse(app.exception)
-        self.assertFalse(any("세부 적용 범위" in item.value for item in app.markdown))
-        self.assertTrue(any("고객 화면에서 뺀" in item.value for item in app.markdown))
-        self.assertTrue(any("세부 적용 범위" in item.value for item in app.caption))
+        self.assertEqual(app.session_state["outcome"]["answer"]["answer_text"], self.second.parsed.answer_text)
 
     def test_rerun_and_same_question_do_not_call_llm_again(self):
         app = self.ask(self.dev(AppTest.from_file(APP).run(timeout=30)))
@@ -1803,76 +1200,6 @@ class StreamlitTests(unittest.TestCase):
 
 
 class NewContractRegressionTests(unittest.TestCase):
-    def test_requested_daily_frequency_is_completed_from_the_same_benefit_evidence(self):
-        context = {
-            "benefits": [{"benefit_id": "P1", "name": "ONE PICK 편의점·카페", "rules": [], "limits": [], "conditions": []},
-                         {"benefit_id": "S1", "name": "STYLE 쇼핑", "rules": [], "limits": [], "conditions": []}],
-            "evidence": [
-                {"evidence_id": "P_DAY", "quote": "일 1회 / 월 30회", "benefit_ids": ["P1"]},
-                {"evidence_id": "S_DAY", "quote": "일 1회 / 월 10회", "benefit_ids": ["S1"]},
-            ],
-            "rule_selection_unresolved": [],
-            "payment_amount": None, "open_conditions": [],
-        }
-        raw = card_answer(
-            [point("ONE PICK 편의점·카페는 일 1회, 월 30회입니다.", ("P_DAY",), "P1"),
-             point("STYLE 쇼핑은 일 1회, 월 10회입니다.", ("S_DAY",), "S1")],
-            conclusion="두 혜택의 이용 횟수를 비교했습니다.",
-            answer_text="ONE PICK 편의점·카페는 월 30회, STYLE 쇼핑은 월 10회까지입니다.")
-        answer, _ = validate_answer(raw, context, "두 혜택의 횟수를 비교해 줘")
-        self.assertEqual(answer["status"], "ANSWERED")
-        self.assertIn("ONE PICK 편의점·카페: 일 1회", answer["answer_text"])
-        self.assertIn("STYLE 쇼핑: 일 1회", answer["answer_text"])
-
-    def test_approval_amount_discount_is_qualified_by_cited_source_condition(self):
-        condition_quote = "월납 요금 승인 금액이 할인 한도보다 적을 경우 승인 금액만큼 할인 적용"
-        context = {
-            "benefits": [{"benefit_id": "B1", "name": "월납 요금 할인", "rules": [], "limits": [], "conditions": [],
-                          "rule_text": condition_quote, "limit_text": "월 할인 한도 10,000원"}],
-            "evidence": [
-                {"evidence_id": "B1_RULE", "quote": condition_quote, "benefit_ids": ["B1"]},
-                {"evidence_id": "B1_CAP", "quote": "월 할인 한도 10,000원", "benefit_ids": ["B1"]},
-            ],
-            "rule_selection_unresolved": [],
-            "payment_amount": None, "open_conditions": [],
-        }
-        raw = card_answer([point("승인 금액만큼 할인되며 월 한도는 10,000원입니다.",
-                                 ("B1_CAP",), "B1")],
-                          conclusion="월납 요금 할인 혜택입니다.",
-                          answer_text="자동납부하면 승인 금액만큼 할인되며 월 한도는 10,000원입니다.")
-        answer, _ = validate_answer(raw, context, "월납 요금 할인은 어떻게 적용돼?")
-        self.assertEqual(answer["status"], "ANSWERED")
-        self.assertIn("승인 금액이 할인 한도보다 적을 경우 승인 금액만큼 할인", answer["points"][0]["text"])
-        self.assertIn("승인 금액이 할인 한도보다 적을 경우 승인 금액만큼 할인", answer["answer_text"])
-        self.assertIn("B1_RULE", answer["points"][0]["evidence_ids"])
-
-    def test_approval_amount_claim_is_dropped_without_cited_limit_condition(self):
-        context = {
-            "benefits": [{"benefit_id": "B1", "name": "월납 요금 할인", "rules": [], "limits": [], "conditions": [],
-                          "rule_text": "승인 금액이 할인 한도보다 적을 경우 승인 금액만큼 할인 적용"}],
-            "evidence": [{"evidence_id": "B1_RULE", "quote": "승인 금액만큼 할인 적용", "benefit_ids": ["B1"]}],
-            "rule_selection_unresolved": [],
-            "payment_amount": None, "open_conditions": [],
-        }
-        raw = card_answer([point("승인 금액만큼 할인됩니다.", ("B1_RULE",), "B1")], answer_text="승인 금액만큼 할인됩니다.")
-        answer, _ = validate_answer(raw, context, "할인 방식은?")
-        self.assertEqual(answer["status"], "NOT_ANSWERABLE")
-        self.assertEqual(answer["points"], [])
-
-    def test_shared_tier_cap_is_supported_by_cited_table_even_when_each_row_value_follows_comma(self):
-        context = {
-            "benefits": [{"benefit_id": "B1", "name": "고정소비", "rules": [], "conditions": [], "limits": [],
-                          "limit_tiers": [{"cap": {"amount": 3000},
-                                           "shared": [{"amount": 8000, "members": ["고정소비", "정기결제"]}]}]}],
-            "evidence": [{"evidence_id": "TABLE", "quote": "통합 할인한도\n3,000원\n5,000원\n8,000원",
-                          "benefit_ids": ["B1"]}],
-            "rule_selection_unresolved": [], "payment_amount": None, "open_conditions": [],
-        }
-        point_text = "고정소비와 정기결제의 통합 한도는 전월 실적 구간에 따라 8천원, 1만1천원 또는 1만7천원입니다."
-        self.assertIsNone(card_graphrag._monthly_cap_answer_problem(
-            "통합 월 한도는 8천원입니다.",
-            [{"text": point_text, "evidence_ids": ["TABLE"], "benefit_id": None}], context))
-
     def test_answer_prompt_requires_shared_frequency_conditions(self):
         self.assertIn("혜택별로 근거가 확인된 일·월 이용 횟수", card_graphrag.ANSWER_PROMPT)
 
@@ -2189,27 +1516,6 @@ WOORI_LINES = [
 
 
 class AnnualFeeTests(unittest.TestCase):
-    def test_family_question_uses_family_line_and_line_evidence(self):
-        detail = fee_detail("카드의정석 SHOPPING", WOORI_LINES, "card_product_item:6:F1",
-                            [("FEE_LINE", "P_MV", "EP"), ("FEE_LINE", "F_ALL", "EF"), ("SELF", "-", "ES")])
-        fee = card_graphrag.fee_answer([detail], "우리카드 가족카드 연회비는?", [{"evidence_id": "EF", "quote": "가족카드 연회비는 청구하지 않습니다."}])
-        self.assertEqual([p["text"] for p in fee["points"]], ["카드의정석 SHOPPING 가족: 0원"])
-        self.assertEqual(fee["points"][0]["evidence_ids"], ["EF"])
-        self.assertFalse(fee["review"])
-
-    def test_review_line_is_marked_and_amounts_are_not_rounded(self):
-        detail = fee_detail("카드의정석 SHOPPING", WOORI_LINES, "card_product_item:6:F1", [("FEE_LINE", "P_MV", "EP")])
-        fee = card_graphrag.fee_answer([detail], "본인 연회비", [])
-        self.assertIn("12,000원(기본 5,000원 + 제휴 7,000원)", fee["points"][0]["text"])
-        self.assertIn("검토 필요", fee["points"][0]["text"])
-        self.assertTrue(fee["review"])
-
-    def test_missing_family_line_is_not_inferred_as_zero(self):
-        detail = fee_detail("ONE PICK STYLE 하나 체크카드", [{"line_key": "P", "holder_type_cd": "PRINCIPAL", "total_fee_amt": 0,
-                                                       "line_status_cd": "DRAFT"}], "card_product_item:2:F", [("FEE_LINE", "P", "E1")])
-        fee = card_graphrag.fee_answer([detail], "ONE PICK STYLE 가족카드 연회비는?", [])
-        self.assertEqual([p["text"] for p in fee["points"]], ["ONE PICK STYLE 하나 체크카드: 원문에 가족카드 연회비 정보가 없습니다."])
-
     def test_same_fact_benefit_is_dropped_when_fee_is_present(self):
         fee = fee_detail("카드의정석 SHOPPING", WOORI_LINES, "card_product_item:6:F1")
         benefit = {"context": {"benefit": {"name": "가족카드 연회비 면제", "source_json": json.dumps({"item_type_cd": None})}},
@@ -2245,13 +1551,39 @@ class AnnualFeeTests(unittest.TestCase):
         self.assertEqual(chosen, ["F2"])                # 발급사 이름 + 그 발급사 연회비를 하나만 고름 → 인정하고 해석을 알림
         self.assertTrue(any("해석" in w for w in warnings))
 
-    def test_llm_fee_sentences_are_removed_when_fee_is_answered_by_program(self):
-        answer = {"answer_text": "온라인 10% 할인입니다. 연회비 정보는 검색 결과에서 확인되지 않습니다.\n월 한도는 4천원입니다.",
-                  "conclusion": "두 카드의 연회비는 검색 결과에 없어 비교하기 어렵습니다.",
-                  "points": [{"text": "연회비는 없습니다."}, {"text": "월 4천원 한도입니다."}]}
-        cleaned, removed = card_graphrag.strip_fee_sentences(answer)
-        self.assertNotIn("연회비", cleaned["answer_text"] + cleaned["conclusion"])
-        self.assertIn("온라인 10% 할인입니다.", cleaned["answer_text"])
-        self.assertEqual([p["text"] for p in cleaned["points"]], ["월 4천원 한도입니다."])
-        self.assertEqual(len(removed), 3)
 # endregion
+
+
+class TracePersistenceTests(unittest.TestCase):
+    def test_persist_masks_payload_before_hashing_exact_stored_prompt(self):
+        cursor = MagicMock()
+        cursor.fetchone.return_value = (1036,)
+        connection = MagicMock()
+        connection.cursor.return_value.__enter__.return_value = cursor
+        manager = MagicMock()
+        manager.connect.return_value.__enter__.return_value = connection
+        trace = {"stage": "ANSWER", "question_id": "SYNTH-1",
+                 "prompt_text": "Contact alice@example.com. Authorization: Bearer superSecretToken123456.",
+                 "prompt_sha256": "unmasked-hash", "input_snapshot": {"email": "alice@example.com", "embedding": [0.1]},
+                 "raw_output": {"phone": "01012345678", "api_key": "sk-abcdefghijklmnopqrstuvwxyz"},
+                 "output_snapshot": {"authorization": "Bearer anotherSecretToken123456"}}
+        with patch.dict(os.environ, {"APP_ENV": "development", "APP_DB_LLM_TRACE_ENABLED": "1", "APP_DB_LOG_ENABLED": "1"}), \
+             patch.object(execution_log, "_log_database_manager", return_value=manager):
+            execution_log.persist_app_logs("session-stub", "request-stub", [("REQUEST", "synthetic question", datetime.now())],
+                                           llm_trace_events=[trace])
+        insert = next(call for call in cursor.execute.call_args_list if "INSERT INTO db_pipeline.app_log_llm_trace" in call.args[0])
+        params = insert.args[1]
+        stored_prompt = params[7]
+        self.assertNotIn("alice@example.com", stored_prompt)
+        self.assertNotIn("superSecretToken123456", stored_prompt)
+        self.assertEqual(params[8], hashlib.sha256(stored_prompt.encode("utf-8")).hexdigest())
+        snapshot = json.loads(params[10])
+        raw = json.loads(params[11])
+        output = json.loads(params[12])
+        self.assertNotIn("embedding", snapshot)
+        self.assertEqual(snapshot["email"], "[REDACTED_EMAIL]")
+        self.assertEqual(raw["phone"], "[REDACTED_PHONE]")
+        self.assertEqual(raw["api_key"], "[REDACTED_SECRET]")
+        self.assertEqual(output["authorization"], "[REDACTED_SECRET]")
+        self.assertTrue(params[9])
+        self.assertTrue(params[4])

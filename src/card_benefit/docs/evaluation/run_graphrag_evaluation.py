@@ -92,8 +92,7 @@ def _answer_evidence_ids(answer: dict[str, Any] | None) -> list[str]:
     return sorted(ids)
 
 
-def _outcome_record(question: dict[str, Any], gold: dict[str, Any], outcome: dict[str, Any], elapsed_ms: float,
-                    answer_mode: str) -> dict[str, Any]:
+def _outcome_record(question: dict[str, Any], gold: dict[str, Any], outcome: dict[str, Any], elapsed_ms: float) -> dict[str, Any]:
     answer = outcome.get("answer") or {}
     candidate_search = outcome.get("candidate_search") or {}
     parameters = outcome.get("search_parameters") or {}
@@ -112,7 +111,7 @@ def _outcome_record(question: dict[str, Any], gold: dict[str, Any], outcome: dic
     llm_calls = outcome.get("llm_calls", [])
     embedding_tokens_estimate = estimate_embedding_tokens(question["question"])
     diagnostics = outcome.get("answer_diagnostics") or {}
-    raw_answer = diagnostics.get("raw") if answer_mode == "prototype" else None
+    raw_answer = diagnostics.get("raw")
     execution_status = "EXECUTION_ERROR" if error or answer.get("status") == "ERROR" else "COMPLETED"
     if question["question_id"] in HOLD_IDS:
         judgment = "JUDGMENT_HOLD"
@@ -127,11 +126,10 @@ def _outcome_record(question: dict[str, Any], gold: dict[str, Any], outcome: dic
         "hop_type": question["hop_type"],
         "source_type": question.get("source_type"),
         "question": question["question"],
-        "answer_mode": answer_mode,
         "llm_answer_evaluated": any(call.get("node") == "answer" for call in llm_calls),
         "answer_llm_raw": _safe_json(raw_answer),
         "final_answer": _safe_json(answer),
-        "prototype_content_preserved": diagnostics.get("content_preserved") if answer_mode == "prototype" else None,
+        "answer_content_preserved": diagnostics.get("content_preserved"),
         "embedding_usage": {"model": EMBEDDING_MODEL, "calls": 1, "input_tokens_estimate": embedding_tokens_estimate,
                             "estimated_cost_usd": round(embedding_tokens_estimate * EMBEDDING_USD_PER_MILLION_TOKENS / 1_000_000, 10),
                             "usage_source": "local tokenizer estimate; provider usage is not returned by current embedder"},
@@ -199,10 +197,8 @@ def estimate_embedding_tokens(question: str) -> int:
         return max(1, len(question) // 4)
 
 
-def print_plan(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, Any]], execute: bool,
-               answer_mode: str) -> None:
+def print_plan(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, Any]], execute: bool) -> None:
     print("Mode:", "EXECUTE (paid backend calls)" if execute else "PLAN ONLY (no network or DB calls)")
-    print("Answer mode:", answer_mode)
     print("Selected questions:", len(selected))
     for question in selected:
         gold = gold_by_id[question["question_id"]]
@@ -232,8 +228,7 @@ def print_plan(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, A
             print("Historical LLM baseline unavailable; actual API cost will be recorded from response usage.")
 
 
-def run_backend(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, Any]], output_path: Path,
-                answer_mode: str) -> None:
+def run_backend(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, Any]], output_path: Path) -> None:
     if output_path.exists():
         raise FileExistsError(f"Refusing to overwrite existing evaluation output: {output_path}")
     tracked_sources = [
@@ -269,7 +264,7 @@ def run_backend(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, 
         raise RuntimeError("OPENAI_API_KEY is unavailable; refusing to start paid evaluation requests")
     search = neo4j_search.connect()
     candidate_search = card_graphrag.create_neo4j_benefit_search(search)
-    pipeline = card_graphrag.CardGraphRAG(search, interpret_llm, answer_llm, candidate_search=candidate_search, answer_mode=answer_mode)
+    pipeline = card_graphrag.CardGraphRAG(search, interpret_llm, answer_llm, candidate_search=candidate_search)
 
     results = []
     try:
@@ -279,14 +274,14 @@ def run_backend(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, 
             try:
                 outcome = pipeline.run(question["question"])
                 elapsed_ms = (perf_counter() - started) * 1000
-                results.append(_outcome_record(question, gold, outcome, elapsed_ms, answer_mode))
+                results.append(_outcome_record(question, gold, outcome, elapsed_ms))
             except Exception as error:  # Preserve per-question exceptions and continue the requested smoke batch.
                 elapsed_ms = (perf_counter() - started) * 1000
                 results.append({
                     "question_id": question["question_id"], "hop_type": question["hop_type"],
                     "source_type": question.get("source_type"), "question": question["question"],
-                    "answer_mode": answer_mode, "llm_answer_evaluated": False, "answer_llm_raw": None,
-                    "final_answer": None, "prototype_content_preserved": None,
+                    "llm_answer_evaluated": False, "answer_llm_raw": None,
+                    "final_answer": None, "answer_content_preserved": None,
                     "gold_verification_status": gold.get("verification_status"),
                     "accuracy_eligible": gold.get("verification_status") == "VERIFIED",
                     "execution_status": "EXECUTION_ERROR",
@@ -306,7 +301,6 @@ def run_backend(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, 
     document = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "runner": "CardGraphRAG.run via direct backend; Streamlit not imported",
-        "answer_mode": answer_mode,
         "git_head_at_run": head,
         "source_sha256_at_run": source_hashes,
         "models": {"llm": "gpt-6-luna", "embedding": EMBEDDING_MODEL, "embedding_dimensions": 1536},
@@ -322,8 +316,6 @@ def run_backend(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--execute", action="store_true", help="Execute the selected backend questions; this makes paid API calls.")
-    parser.add_argument("--answer-mode", choices=("normal", "prototype"), default="normal",
-                        help="Select the normal validated Answer node or raw-LLM prototype; default: normal.")
     parser.add_argument("--question-ids", nargs="+", help="Select at most two IDs for a smoke execution; defaults to CARD10-001 and CARD10-021.")
     parser.add_argument("--all", action="store_true", help="Select all 50. Requires both explicit confirmation flags with --execute.")
     parser.add_argument("--confirm-paid-calls", action="store_true", help="Acknowledge paid embedding/LLM API requests for selected smoke questions.")
@@ -386,14 +378,14 @@ def main() -> int:
         print(f"Preflight failed: {error}", file=sys.stderr)
         return 2
 
-    print_plan(selected, gold_by_id, args.execute, args.answer_mode)
+    print_plan(selected, gold_by_id, args.execute)
     if not args.execute:
         return 0
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    output_path = args.output or (DEFAULT_OUTPUT / f"evaluation_{args.answer_mode}_{timestamp}.json")
+    output_path = args.output or (DEFAULT_OUTPUT / f"evaluation_{timestamp}.json")
     try:
-        run_backend(selected, gold_by_id, output_path, args.answer_mode)
+        run_backend(selected, gold_by_id, output_path)
     except Exception as error:
         print(f"Evaluation run did not complete: {type(error).__name__}: {error}", file=sys.stderr)
         return 1

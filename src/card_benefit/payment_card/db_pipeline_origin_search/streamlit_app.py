@@ -22,7 +22,6 @@ Streamlit 실행 모델 (Java 개발자 참고)
     get_pipeline → neo4j_search.connect, card_graphrag.create_llms, (N) card_graphrag.create_neo4j_benefit_search
                    (A/B/C 경로는 회귀 검증용으로 get_pipeline("A"|"B"|"C")에 남아 있으며 화면에서는 고를 수 없다)
     show_outcome → show_text / show_open_items / show_evidence / show_generation (화면 출력 전용, DB·LLM 미사용)
-    화면 문구 정리(customer_text 등)는 표시만 바꾸며 결과 State의 값은 바꾸지 않는다.
 """
 import os
 import re
@@ -60,8 +59,6 @@ SUPPORTED_CARDS = {
     "하나카드": ["ONE PICK STYLE", "JADE Classic", "JADE First", "JADE Prime", "더 심플 하나카드"],
     "우리카드": ["카드의정석 SHOPPING", "EVERY WON POINT", "카드의정석 POINT II", "카드의정석2 DAILY", "카드의정석2 SIMPLE"],
 }
-STATUS_LABELS = {"ANSWERED": "답변", "PARTIAL": "일부 답변 (검증 실패 문장 제외 또는 검토 필요 항목 포함)",
-                 "NOT_ANSWERABLE": "답변 불가", "ERROR": "실행 오류"}   # 개발자 정보에서만 쓴다.
 # 사용자 화면 제목. 판정(status) 값은 바꾸지 않고 표시 문구만 고른다.
 CUSTOMER_TITLES = {"ANSWERED": "카드 혜택 안내", "PARTIAL": "카드 혜택 안내", "NOT_ANSWERABLE": "검색 결과", "ERROR": "검색 결과"}
 ERROR_TEXT = "일시적인 문제로 답변을 준비하지 못했습니다. 잠시 후 다시 시도해 주세요."
@@ -73,21 +70,10 @@ CUSTOMER_MESSAGES = {
     card_graphrag.MESSAGES["NO_EVIDENCE"]: "상품설명서에서 확인된 정보가 없어 답변을 드리기 어렵습니다.",
     card_graphrag.MESSAGES["NO_GROUNDED_POINT"]: "상품설명서에서 질문에 맞는 내용을 확인하지 못했습니다. 아래 원문을 참고해 주세요.",
 }
-VERIFICATION_LABELS = {"RAW_MATCH": "값이 인용 원문과 일치", "STRUCTURED_ONLY": "값이 구조화 데이터와 일치, 인용 원문에서는 미확인",
-                       "CALCULATED": "인용 원문 값으로 계산한 차이", "NOT_CHECKED": "값이 없는 문장, 내용 일치 미검사"}
 APPROVAL_LABELS = {"PENDING": "검토 대기", "APPROVED": "승인", "REJECTED": "반려"}
-SOURCE_LABELS = {"llm": "LLM이 작성한 문장을 그대로 표시", "validated_sentences": "LLM 문장이 검증을 통과하지 못해 근거 확인 문장을 표시",
-                 "program_tier": "LLM 문장이 금액 구간 검증을 통과하지 못해 조회 값으로 만든 구간 안내를 표시",
-                 "program_fee": "연회비는 등록 값(item_data)으로 프로그램이 작성. LLM 미사용", "none": "답변 문장 없음"}
 NODE_LABELS = {"interpret": "질문 해석", "answer": "답변 생성"}
 _MARKDOWN_SPECIAL = re.compile(r"([\\`*_{}\[\]<>()#+\-.!|~$:])")
 # 사용자 화면에서만 지우는 내부 검증 표현. 판정·로그·결과 JSON은 그대로다.
-_FEE_REVIEW_SUFFIX = re.compile(r"\s*—\s*검토 필요:[^\n]*")
-_STATUS_CODE = re.compile(r"(?<![A-Za-z_])(?:PENDING_REVIEW|PENDING|DRAFT|REVIEW)(?![A-Za-z_])")
-_STATUS_PHRASE = re.compile(r"일부 답변|검토 필요 항목 포함|검증 실패 문장 제외|원문 추출\s*\(검토 대기\)|검토 대기|검토 필요"
-                            r"|담당자 검토|개발용|미승인")
-_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
-_FACT = re.compile(r"\d")
 # endregion
 
 card_graphrag.configure_card_logging()      # 재실행마다 호출해도 handler는 공통 함수가 한 번만 붙인다.
@@ -113,55 +99,25 @@ def plain(text: str) -> str:
     return _MARKDOWN_SPECIAL.sub(r"\\\1", text)
 
 
-def customer_sentence(sentence: str) -> str:
-    """내부 상태 표현이 든 문장을 정리한다.
-
-    숫자(금액·비율·횟수)가 있는 문장은 사실을 지우지 않고 상태 표현만 뺀다.
-    숫자 없이 자료 상태만 말하는 문장(예: 담당자 검토 전 안내)은 혜택 사실이 아니므로 통째로 뺀다.
-    """
-    if not (_STATUS_CODE.search(sentence) or _STATUS_PHRASE.search(sentence)):
-        return sentence
-    if not _FACT.search(sentence):
-        return ""
-    text = _STATUS_PHRASE.sub("", _STATUS_CODE.sub("", sentence))
-    text = re.sub(r"\(\s*[,·/]?\s*\)|\[\s*\]", "", text)      # 비어 버린 괄호
-    text = re.sub(r"\s*[—·,]\s*(?=[.!?]?$)", "", text)        # 끝에 남은 구분 기호
-    return re.sub(r"[ \t]{2,}", " ", text).strip()
-
-
-def customer_text(text: str) -> str:
-    """사용자에게 보여 줄 답변 본문. 줄 구조는 유지하고 내부 검증 문구만 정리한다."""
-    lines = []
-    for line in _FEE_REVIEW_SUFFIX.sub("", text or "").split("\n"):
-        if not line.strip():
-            lines.append("")
-            continue
-        kept = " ".join(item for item in (customer_sentence(part) for part in _SENTENCE_END.split(line)) if item)
-        if kept:
-            lines.append(kept)
-    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
-
-
 def customer_response_for_log(outcome: dict) -> str:
-    """저장되는 응답 본문을 최종 답변 전체 우선으로 선택한다."""
+    """Return the Answer LLM's final text without rewriting it."""
     answer = outcome.get("answer") or {}
     if answer.get("status") == "ERROR":
         return ""
     final_text = answer.get("answer_text") or answer.get("conclusion")
     if final_text:
-        return customer_text(str(final_text))
+        return str(final_text)
     message = answer.get("message")
     if message:
-        return CUSTOMER_MESSAGES.get(message) or customer_text(message)
-    return customer_text(response_message(outcome))
-
+        return CUSTOMER_MESSAGES.get(message) or str(message)
+    return response_message(outcome)
 
 def show_text(text: str) -> None:
-    """검증된 답변의 Markdown 서식을 유지하고, HTML은 비활성화한 채 표시한다."""
-    cleaned = customer_text(text)
-    if cleaned:
-        formatted = "\n\n".join(part.replace("\n", "  \n") for part in cleaned.split("\n\n"))
+    """Render the Answer LLM text while preserving its content."""
+    if text:
+        formatted = "\n\n".join(part.replace("\n", "  \n") for part in str(text).split("\n\n"))
         st.markdown(formatted, unsafe_allow_html=False)
+
 # endregion
 
 
@@ -201,147 +157,86 @@ def show_generation(outcome: dict) -> None:
                      f"{(call['elapsed_ms'] or 0) / 1000:.1f}초")
     if not calls:
         lines.append("LLM 미호출: 호출 전에 종료된 경로입니다.")
-    source = (outcome.get("answer") or {}).get("answer_source", "none")
-    lines.append(f"답변 문장: {SOURCE_LABELS.get(source, source)} · 다른 모델로 전환 없음 · 재시도 0회")
+    lines.append("답변 문장: Answer LLM 결과를 그대로 사용")
     with st.expander("답변 생성 정보 (API 호출·캐시)"):
         for line in lines:
             st.text(line)
 
 
 def show_open_items(outcome: dict, pages: dict) -> None:
-    """미확정 카드 이용 조건과 자료 검토 상태를 구분해 표시한다."""
+    """Show retrieved unresolved conditions and LLM uncertainty without rewriting their text."""
     conditions = outcome.get("open_conditions") or []
-    uncertain = outcome["answer"]["uncertain"]
+    uncertain = outcome["answer"].get("uncertain") or []
     notices = outcome.get("data_notices") or []
-    uncertain = [text for text in dict.fromkeys(customer_text(item) for item in uncertain) if text]
     if not (conditions or uncertain or (notices and dev_mode())):
         return
     st.subheader("확인이 필요한 사항", anchor=False)
     if conditions or uncertain:
         st.markdown("**카드 이용 조건**")
     for item in conditions:
-        st.markdown(f"- **{plain(item['topic'])}** ({plain(', '.join(item['benefits']))}): {plain(customer_text(item['open']))}")
+        st.markdown(f"- **{plain(item['topic'])}** ({plain(', '.join(item['benefits']))}): {plain(item['open'])}")
         cited = ", ".join(f"{evidence_id} ({pages[evidence_id]}쪽)" for evidence_id in item["evidence_ids"] if evidence_id in pages)
-        st.caption(f"PDF 표기: {plain(item['confirmed'])}" + (f" · 근거: {cited}" if cited else ""))
-    for text in uncertain:
-        st.markdown("- " + plain(text))
+        st.caption(f"PDF 확인: {plain(item['confirmed'])}" + (f" · 근거: {cited}" if cited else ""))
+    for text in dict.fromkeys(uncertain):
+        st.markdown("- " + plain(str(text)))
     if notices and dev_mode():
-        st.markdown("**자료 검토 상태** (카드 이용 조건이 아닌 개발 자료 안내)")
+        st.markdown("**자료 검토 상태**")
         for text in notices:
             st.caption(plain(text))
 
-
 def show_outcome(outcome: dict) -> None:
-    """마지막 실행 결과를 표시한다. 위젯 재실행은 이 저장값만 읽는다.
-
-    Args:
-            주로 읽는 키: answer(status·message·answer_text·conclusion·points·fee_rows·uncertain),
-            evidence, open_conditions, data_notices, search_parameters, (개발자) llm_calls·path·context 등.
-
-    일반 화면은 답변 본문(answer_text, 없으면 conclusion)과 실행 오류·답변 불가 안내만 표시한다.
-    개발자 모드에서는 기존 연회비·상세 내용·확인 필요 사항·PDF 근거와 진단 정보를 계속 표시한다.
-    """
+    """Render the final answer, its Evidence references, and developer diagnostics."""
     answer = outcome["answer"]
-    # evidence_id → 페이지 번호. 문장 출처와 근거 목록에 쪽수를 붙일 때 쓴다.
     evidence = outcome.get("evidence") or []
-    pages = {item["evidence_id"]: item["page_no"] for item in evidence}
+    pages = {item["evidence_id"]: item["page_no"] for item in evidence if item.get("evidence_id")}
     st.subheader(CUSTOMER_TITLES.get(answer["status"], "검색 결과"), anchor=False)
     if dev_mode():
         st.caption(f"질문: {outcome['question']}")
     if answer["status"] == "ERROR":
         st.error(ERROR_TEXT)
-    elif answer["status"] == "PARTIAL":
-        st.warning("일부 혜택이나 조건은 원문에서 연결을 확인하지 못했습니다. 아래 안내는 확인된 내용만 포함합니다.")
-    elif answer["message"]:
-        message = CUSTOMER_MESSAGES.get(answer["message"]) or customer_text(answer["message"])
+    elif answer.get("message"):
+        message = CUSTOMER_MESSAGES.get(answer["message"]) or answer["message"]
         if message:
             st.info(plain(message))
     ambiguity = (outcome.get("search_parameters") or {}).get("ambiguity")
-    if dev_mode() and ambiguity and answer["points"]:
+    if dev_mode() and ambiguity and answer.get("points"):
         st.info("참고: " + plain(ambiguity))
     if answer.get("answer_text"):
         show_text(answer["answer_text"])
-    elif answer["conclusion"]:
-        conclusion = customer_text(answer["conclusion"])
-        if conclusion:
-            st.markdown(f"**{plain(conclusion)}**")
-    if dev_mode() or answer["status"] == "PARTIAL":
+    elif answer.get("conclusion"):
+        st.markdown(f"**{plain(answer['conclusion'])}**")
+    if dev_mode() or answer.get("uncertain"):
         show_open_items(outcome, pages)
     if not dev_mode():
         return
-    if answer.get("fee_rows"):
-        st.subheader("연회비", anchor=False)
-        st.dataframe(answer["fee_rows"], hide_index=True)   # '상태' 열을 포함해 표는 그대로 보여 준다.
-        st.caption("금액은 카드 상품설명서의 연회비 표를 기준으로 합니다. 원문에 없는 금액은 '-'로 표시합니다. "
-                   "항목별 확인 상태는 '상태' 열을 참고해 주세요.")
-    names = list(dict.fromkeys(point["benefit_name"] for point in answer["points"]))
-    if names:
+    benefit_names = {item.get("benefit_id"): item.get("name") for item in (outcome.get("context") or {}).get("benefits", [])}
+    points = answer.get("points") or []
+    benefit_ids = list(dict.fromkeys(point.get("benefit_id") for point in points))
+    if points:
         st.subheader("상세 내용", anchor=False)
-    for name in names:
-        if len(names) > 1 or name:
-            st.markdown(f"**{plain(name or '혜택 공통')}**")
-        for point in (item for item in answer["points"] if item["benefit_name"] == name):
-            text = customer_text(point["text"])
-            if text:
-                st.markdown(plain(text))
-            source_text = "출처: " + ", ".join(f"{item} ({pages[item]}쪽)" for item in point["evidence_ids"])
-            if dev_mode():
-                origin = " · 프로그램이 조회 값으로 작성" if point["origin"] == "system" else ""
-                source_text += f" · {VERIFICATION_LABELS[point['verification']]}{origin}"
-            st.caption(source_text)
-    # PDF 근거를 "답변 문장이 인용한 근거"와 "조회는 됐지만 인용되지 않은 근거"로 나눠 보여 준다.
-    cited = {item for point in answer["points"] for item in point["evidence_ids"]}
-    cited.update(item for condition in outcome.get("open_conditions") or [] for item in condition["evidence_ids"])
-    used = [item for item in evidence if item["evidence_id"] in cited]
-    others = [item for item in evidence if item["evidence_id"] not in cited]
+    for benefit_id in benefit_ids:
+        name = benefit_names.get(benefit_id)
+        if len(benefit_ids) > 1 or name:
+            st.markdown(f"**{plain(name or benefit_id or '혜택 공통')}**")
+        for point in (item for item in points if item.get("benefit_id") == benefit_id):
+            if point.get("text"):
+                st.markdown(plain(point["text"]))
+            cited = point.get("evidence_ids") or []
+            if cited:
+                st.caption("출처: " + ", ".join(f"{item} ({pages[item]}쪽)" if item in pages else item for item in cited))
+    cited_ids = {item for point in points for item in point.get("evidence_ids", [])}
+    cited_ids.update(item for condition in outcome.get("open_conditions") or [] for item in condition.get("evidence_ids", []))
+    used = [item for item in evidence if item.get("evidence_id") in cited_ids]
+    others = [item for item in evidence if item.get("evidence_id") not in cited_ids]
     if evidence:
         st.subheader(f"PDF 근거 ({len(used)})", anchor=False)
         for item in used:
             show_evidence(item)
-        with st.expander(f"그 밖의 관련 원문 ({len(others)})"):
+        with st.expander(f"인용되지 않은 검색 근거 ({len(others)})"):
             for item in others:
                 show_evidence(item)
     show_generation(outcome)
-    with st.expander("개발자 정보"):
-        st.markdown(f"**판정** `{answer['status']}` ({plain(STATUS_LABELS.get(answer['status'], answer['status']))}) · "
-                    f"**요청** `{outcome['request_id']}` · **유형** `{outcome.get('intent')}` · "
-                    f"**실행 경로** `{' → '.join(outcome['path'])}`")
-        if answer.get("message"):
-            st.caption("원래 안내 문구: " + plain(answer["message"]))
-        if outcome.get("error"):
-            st.json(outcome["error"])
-        for warning in outcome["warnings"]:
-            st.warning(warning)
-        if outcome.get("other_unresolved"):
-            st.markdown("**고객 화면에서 뺀 미확정 사항** (이번 질문과 직접 관련 없음)")
-            for text in outcome["other_unresolved"]:
-                st.caption(plain(text))
-        st.markdown("**LLM 호출과 토큰**")
-        st.dataframe(outcome["llm_calls"], hide_index=True)
-        total = sum(call["cost_usd"] or 0 for call in outcome["llm_calls"])
-        st.caption(f"추정 비용 합계 USD {total:.6f}")
-        if outcome.get("candidate_search"):
-            st.markdown("**후보 검색 결과** (유사도는 후보 선정에만 사용)")
-            st.json(outcome["candidate_search"], expanded=False)
-            st.caption(f"엔진 {outcome['candidate_search'].get('engines')} · {outcome['candidate_search']['elapsed_ms']:.0f} ms")
-        if outcome.get("answer_diagnostics"):
-            st.markdown("**LLM 원본 구조화 응답과 검증 결과** (현재 세션 진단용; 로그 DB에는 저장하지 않음)")
-            st.json(outcome["answer_diagnostics"], expanded=False)
-        if outcome.get("retrieval_trace"):
-            st.markdown("**혜택별 상세 조회 엔진**")
-            st.dataframe(outcome["retrieval_trace"], hide_index=True)
-        st.markdown("**검색 조건**")
-        st.json(outcome.get("search_parameters") or {})
-        st.markdown(f"**실행한 Cypher** (라벨 접두사 `{GRAPH_PREFIX}`)")
-        st.write(outcome.get("statements") or [])
-        st.markdown("**LLM에 전달한 검색 결과**")
-        st.json(outcome.get("context") or {}, expanded=False)
-        st.markdown("**Neo4j 조회 원본**")
-        st.json(outcome.get("retrieved_data") or [], expanded=False)
-        st.markdown("**Cypher 템플릿**")
-        for name, query in QUERIES.items():
-            st.caption(name)
-            st.code(query, language="cypher")
+
 # endregion
 
 
@@ -438,7 +333,8 @@ if submitted:                                             # 폼 제출 이벤트
                                  detail_text=outcome_detail_text(outcome_for_log),
                                  pdf_evidence_text=outcome_pdf_evidence_text(outcome_for_log),
                                  neo4j_summary=outcome_neo4j_summary(outcome_for_log),
-                                 pdf_evidence_summary=outcome_pdf_evidence_summary(outcome_for_log))
+                                 pdf_evidence_summary=outcome_pdf_evidence_summary(outcome_for_log),
+                                 llm_trace_events=(outcome_for_log or {}).get("llm_trace_events"))
                 CARD_LOG.log_summary("PERF", (outcome_for_log or {}).get("request_id", request_id), phase="app_log_save",
                                      elapsed_ms=(perf_counter() - app_log_started) * 1000, reused=False)
 

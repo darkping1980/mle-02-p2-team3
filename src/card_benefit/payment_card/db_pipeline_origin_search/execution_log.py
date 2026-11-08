@@ -10,6 +10,8 @@ import logging
 import os
 import re
 import sys
+import subprocess
+from pathlib import Path
 from datetime import datetime, timezone
 
 from common.database_manager import DatabaseManager
@@ -290,6 +292,10 @@ _TRACE_REDACTIONS = (
     (re.compile(r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)"), "[REDACTED_ACCOUNT_OR_CARD]"),
 )
 _TRACE_OMIT_KEYS = {"embedding", "embeddings", "vector", "vectors", "qvec", "query_vector", "client_ip"}
+_TRACE_SENSITIVE_KEYS = {
+    "api_key", "apikey", "token", "access_token", "refresh_token", "bearer_token",
+    "authorization", "password", "passwd", "client_secret", "secret", "credential", "credentials",
+}
 
 
 def _redact_trace_value(value):
@@ -297,10 +303,11 @@ def _redact_trace_value(value):
     if isinstance(value, dict):
         result = {}
         for key, item in value.items():
-            normalized = str(key).strip().lower()
+            normalized = str(key).strip().lower().replace("-", "_").replace(" ", "_")
             if normalized in _TRACE_OMIT_KEYS or "embedding" in normalized or "vector" in normalized:
                 continue
-            if any(token in normalized for token in ("api_key", "access_token", "authorization", "secret")):
+            if (normalized in _TRACE_SENSITIVE_KEYS
+                    or normalized.endswith(("_api_key", "_token", "_secret", "_password", "_credential"))):
                 result[str(key)] = "[REDACTED_SECRET]"
             else:
                 result[str(key)] = _redact_trace_value(item)
@@ -316,6 +323,59 @@ def _redact_trace_value(value):
     if hasattr(value, "model_dump"):
         return _redact_trace_value(value.model_dump(mode="json"))
     return _redact_trace_value(str(value))
+
+
+@lru_cache(maxsize=1)
+def trace_source_revision() -> str:
+    """Identify the trace-producing code, including relevant uncommitted source edits."""
+    configured = os.getenv("SOURCE_REVISION") or os.getenv("GIT_COMMIT")
+    if configured:
+        return configured
+
+    source_files = (
+        Path(__file__).resolve(),
+        Path(__file__).with_name("card_graphrag.py"),
+        Path(__file__).with_name("streamlit_app.py"),
+    )
+    source_hash = hashlib.sha256()
+    root = Path(__file__).resolve().parents[4]
+    for source_file in source_files:
+        try:
+            source_hash.update(source_file.name.encode("utf-8"))
+            source_hash.update(source_file.read_bytes())
+        except OSError:
+            continue
+
+    try:
+        commit_result = subprocess.run(
+            ["git", "rev-parse", "--verify", "HEAD"],
+            cwd=root, capture_output=True, text=True, timeout=2, check=True,
+        )
+        commit = commit_result.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        commit = "local"
+
+    return f"{commit}+src.{source_hash.hexdigest()[:16]}"
+
+
+def sanitize_llm_trace_event(event: dict) -> dict:
+    """Sanitize every persisted field and hash only the exact prompt string stored."""
+    original = event if isinstance(event, dict) else {}
+    safe_event = _redact_trace_value(original)
+    original_prompt = original.get("prompt_text")
+    safe_prompt = safe_event.get("prompt_text")
+    safe_event["prompt_text"] = safe_prompt if isinstance(safe_prompt, str) else None
+    safe_event["prompt_redacted"] = (
+        isinstance(original_prompt, str) and safe_event["prompt_text"] != original_prompt
+    )
+    safe_event["prompt_sha256"] = (
+        hashlib.sha256(safe_prompt.encode("utf-8")).hexdigest()
+        if isinstance(safe_prompt, str) else None
+    )
+    safe_event["source_revision"] = _redact_trace_value(
+        original.get("source_revision") or trace_source_revision()
+    )
+    return safe_event
 
 
 @lru_cache(maxsize=1)
@@ -465,16 +525,7 @@ def persist_app_logs(
                             (app_log_id,),
                         )
                         for sequence_no, event in enumerate(llm_trace_events, start=1):
-                            event = event if isinstance(event, dict) else {}
-                            prompt = event.get("prompt_text")
-                            prompt_hash = hashlib.sha256(prompt.encode("utf-8")).hexdigest() if isinstance(prompt, str) else None
-                            safe_prompt = _redact_trace_value(prompt) if isinstance(prompt, str) else None
-                            prompt_redacted = safe_prompt != prompt if isinstance(prompt, str) else False
-                            input_snapshot = _redact_trace_value(event.get("input_snapshot") or {})
-                            output_snapshot = _redact_trace_value(event.get("output_snapshot") or {})
-                            raw_output = _redact_trace_value(event.get("raw_output"))
-                            response_schema = _redact_trace_value(event.get("response_schema"))
-                            usage = _redact_trace_value(event.get("usage") or {})
+                            event = sanitize_llm_trace_event(event)
                             cursor.execute(
                                 """INSERT INTO db_pipeline.app_log_llm_trace
                                        (app_log_id, trace_seq, stage, question_id, source_revision,
@@ -484,10 +535,13 @@ def persist_app_logs(
                                            %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb)""",
                                 (app_log_id, sequence_no, event.get("stage", "UNKNOWN"), event.get("question_id"),
                                  event.get("source_revision"), event.get("model_name"),
-                                 json.dumps(response_schema, ensure_ascii=False), safe_prompt, prompt_hash,
-                                 prompt_redacted, json.dumps(input_snapshot, ensure_ascii=False),
-                                 json.dumps(raw_output, ensure_ascii=False) if raw_output is not None else None,
-                                 json.dumps(output_snapshot, ensure_ascii=False), json.dumps(usage, ensure_ascii=False)),
+                                 json.dumps(event.get("response_schema"), ensure_ascii=False), event.get("prompt_text"),
+                                 event.get("prompt_sha256"), event.get("prompt_redacted", False),
+                                 json.dumps(event.get("input_snapshot") or {}, ensure_ascii=False),
+                                 json.dumps(event.get("raw_output"), ensure_ascii=False)
+                                 if event.get("raw_output") is not None else None,
+                                 json.dumps(event.get("output_snapshot") or {}, ensure_ascii=False),
+                                 json.dumps(event.get("usage") or {}, ensure_ascii=False)),
                             )
                         cursor.execute("RELEASE SAVEPOINT app_log_llm_trace_write")
                     except Exception as trace_error:
