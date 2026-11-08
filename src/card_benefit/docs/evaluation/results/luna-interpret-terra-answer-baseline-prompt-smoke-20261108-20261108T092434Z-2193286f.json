@@ -1,0 +1,856 @@
+{
+  "created_at_utc": "2026-11-08T09:25:06.432589+00:00",
+  "run_id": "luna-interpret-terra-answer-baseline-prompt-smoke-20261108-20261108T092434Z-2193286f",
+  "git_head": "1b2252b3805c80f88e352b54cbbfcfeaa2cf76fe",
+  "source_sha256": {
+    "card_benefit\\docs\\evaluation\\run_questionnaire_evaluation.py": "f81f0bf068e55399400ba164516a57499d8fb727611188ead804ded4c0e535f7",
+    "card_benefit\\payment_card\\db_pipeline_origin_search\\card_graphrag.py": "b1fd86691ffff494ca2d60cd853f8171ae0b468d1d30d13d0dddd48ed985cb34",
+    "card_benefit\\payment_card\\db_pipeline_origin_search\\execution_log.py": "fda5cb6921f01a63b7be5c4885d251c90f9d1dc77aa6b450e59146fc32115947",
+    "card_benefit\\payment_card\\db_pipeline_origin_search\\neo4j_search.py": "9a2f1b969b2b02a47c772b5f05fcd36ac7ba4ea7324fd96734ab2f6f5b6d66aa"
+  },
+  "model": "stage-specific (gpt-6-luna interpret / gpt-6.1-terra answer)",
+  "question_source": "D:\\Bootcamp\\vscode\\workspace\\mle-02-p2-team3\\src\\card_benefit\\docs\\evaluation\\card10_graphrag_golden_dataset_v1.jsonl",
+  "runner": "direct CardGraphRAG.run; real Neo4j and LLM; app_log persistence disabled",
+  "trace_requested": true,
+  "trace_enabled": true,
+  "retry_policy": "one call per question; no automatic retries",
+  "question_count": 1,
+  "results": [
+    {
+      "question_id": "CARD10-021",
+      "run_id": "luna-interpret-terra-answer-baseline-prompt-smoke-20261108-20261108T092434Z-2193286f:CARD10-021",
+      "hop_count": 2,
+      "question": "ONE PICK STYLE의 편의점·카페 캐시백은 결제금액과 이용 횟수에 어떤 조건이 있어?",
+      "ground_truth_status": "NEEDS_REVIEW",
+      "expected_answer": null,
+      "expected_facts": [],
+      "official_pdf_evidence": [
+        {
+          "source_pdf_name": "hana_all/debit/체크_ONEPICKSTYLE하나체크카드_상품설명서(공식PDF,URL추정확인)_15650_20260429.pdf",
+          "source_document_id": "20261101_000002",
+          "source_pdf_sha256": "6ec9641c2e318ce9429a916f5d01c0468ccc3cffb238eb1162a43b280e25c6d2",
+          "source_pdf_sha256_matches_local": true,
+          "source_page": 1,
+          "source_chunk_id": "20261101_000012",
+          "evidence_ids": [
+            {
+              "evidence_id": "20261101_000031",
+              "quote": "(지난달 실적 조건 없는 서비스)",
+              "start_pos": 1661,
+              "end_pos": 1678,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000032",
+              "quote": "CU, GS25, \n세븐일레븐",
+              "start_pos": 1475,
+              "end_pos": 1490,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000033",
+              "quote": "메가MGC커피, \n이디야커피, \n컴포즈커피",
+              "start_pos": 1541,
+              "end_pos": 1563,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000034",
+              "quote": "결제 건당\n3천원 이상 시 \n100원\n/\n결제 건당\n1만원 이상 시 \n500원",
+              "start_pos": 1565,
+              "end_pos": 1607,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000035",
+              "quote": "결제 건당\n3천원 이상 시 \n100원\n/\n결제 건당\n1만원 이상 시 \n500원",
+              "start_pos": 1565,
+              "end_pos": 1607,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000036",
+              "quote": "일 1회\n/ 월 30회",
+              "start_pos": 2257,
+              "end_pos": 2268,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000038",
+              "quote": "(지난달 실적 조건 없는 서비스)",
+              "start_pos": 1661,
+              "end_pos": 1678,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000039",
+              "quote": "다이소, 올리브영\n교보문고, 영풍문고,\n알라딘, yes24,\n아트박스\n무신사, 에이블리",
+              "start_pos": 1492,
+              "end_pos": 1539,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000040",
+              "quote": "결제 건당\n3천원 이상 시 \n100원\n/\n결제 건당\n1만원 이상 시 \n500원",
+              "start_pos": 1565,
+              "end_pos": 1607,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000041",
+              "quote": "결제 건당\n3천원 이상 시 \n100원\n/\n결제 건당\n1만원 이상 시 \n500원",
+              "start_pos": 1565,
+              "end_pos": 1607,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000042",
+              "quote": "일 1회\n/ 월 10회",
+              "start_pos": 1609,
+              "end_pos": 1620,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000043",
+              "quote": "월 5천원",
+              "start_pos": 1622,
+              "end_pos": 1626,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000044",
+              "quote": "대중교통\n버스, 지하철\n월 1천원\n5%\n캐시백\n10만원",
+              "start_pos": 2342,
+              "end_pos": 2371,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000045",
+              "quote": "5%\n캐시백",
+              "start_pos": 2361,
+              "end_pos": 2366,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000046",
+              "quote": "월 1천원",
+              "start_pos": 2355,
+              "end_pos": 2359,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000047",
+              "quote": "대중교통\n버스, 지하철\n월 1천원\n5%\n캐시백\n10만원",
+              "start_pos": 2342,
+              "end_pos": 2371,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000048",
+              "quote": "- 지난달 1일부터 말일(승인 시점 기준)까지 국내외 일시불 이용금액 10만원/20만원 이상 시\n ONE MORE 서비스 제공",
+              "start_pos": 435,
+              "end_pos": 504,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000049",
+              "quote": "- ONE MORE 대중교통 서비스는 최초 카드 사용 등록일로부터 다음 달 말일까지 지난달 카드 실적\n 10만원 미만 이어도 10만원 이상 기준으로 서비스 제공",
+              "start_pos": 807,
+              "end_pos": 895,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000050",
+              "quote": "- 대중교통 : 시외버스, 고속버스, 철도(KTX/SRT/ITX)는 제외",
+              "start_pos": 385,
+              "end_pos": 424,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000051",
+              "quote": "놀이공원\n에버랜드, 롯데월드\n월 1회 \n/ 연 2회\n50% \n현장할인\n(1인 1매)\n20만원\n최초 발급 월에는\n서비스 미제공",
+              "start_pos": 2373,
+              "end_pos": 2441,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000052",
+              "quote": "50% \n현장할인\n(1인 1매)",
+              "start_pos": 2402,
+              "end_pos": 2418,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000053",
+              "quote": "월 1회 \n/ 연 2회",
+              "start_pos": 2389,
+              "end_pos": 2400,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000054",
+              "quote": "* ONE MORE 놀이공원 서비스는 지난달 실적 20만원 이상 시 서비스 제공",
+              "start_pos": 898,
+              "end_pos": 941,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000055",
+              "quote": "최초 발급 월에는\n서비스 미제공",
+              "start_pos": 2425,
+              "end_pos": 2441,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000056",
+              "quote": "- 공통 : 상품권 및 기프트카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액 제외,\n 대상 가맹점의 공식 홈페이지(온라인/모바일 앱) 및 오프라인을 통한 결제 시에만 서비스가 제공되며,\n 배달 앱이나 식당 예약 앱을 통한 주문 결제, 대형시설(백화점, 할인점, 아울렛, 쇼핑몰, 휴게소,\n 호텔, 리조트, 공항, 역사, 마트) 입점 점포 및 임대 매장 결제 시 제외",
+              "start_pos": 169,
+              "end_pos": 383,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000057",
+              "quote": "대상 가맹점의 공식 홈페이지(온라인/모바일 앱) 및 오프라인을 통한 결제 시에만 서비스가 제공되며,\n 배달 앱이나 식당 예약 앱을 통한 주문 결제, 대형시설(백화점, 할인점, 아울렛, 쇼핑몰, 휴게소,\n 호텔, 리조트, 공항, 역사, 마트) 입점 점포 및 임대 매장 결제 시 제외",
+              "start_pos": 228,
+              "end_pos": 383,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000058",
+              "quote": "- 국세, 지방세, 수도/전기요금, 그 외 공과금[우편요금, 과태료, 범칙금, 벌금, 국가/공공기관/ \n 공공단체가 부과하는 부담금], 도시가스 요금, 아파트관리비, 국민연금/고용보험료/산재보험료/ \n 건강보험료 납부 금액, 스쿨뱅킹, 초·중·고 학교납입금, 대학등록금, 대학원등록금, 상품권 및 기프트 \n 카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액, 부동산 임대료, 국내외 ATM \n 이용금액, ONE PICK STYLE 하나 체크카드로 서비스 적용 받은 매출 제외",
+              "start_pos": 515,
+              "end_pos": 789,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000059",
+              "quote": "- 모든 서비스는 하나카드에 등록된 국내 가맹점 및 업종 기준에 따라 제공",
+              "start_pos": 1146,
+              "end_pos": 1186,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000060",
+              "quote": "- 가맹점 정보가 해당 업체가 아닌 결제대행업체(PG) 또는 간편결제 전용 가맹점으로 확인되는 \n 경우 ‘결제대행업체’ 또는 ‘간편결제’ 가맹점으로 분류되어 각 서비스 영역에 따른 혜택이 제공됨",
+              "start_pos": 1188,
+              "end_pos": 1295,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261101_000037",
+              "quote": "월 5천원",
+              "start_pos": 2270,
+              "end_pos": 2274,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002995",
+              "quote": "월 1회 \n/ 연 2회",
+              "start_pos": 2389,
+              "end_pos": 2400,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002996",
+              "quote": "월 1회 \n/ 연 2회",
+              "start_pos": 2389,
+              "end_pos": 2400,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002997",
+              "quote": "(1인 1매)",
+              "start_pos": 2412,
+              "end_pos": 2418,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002998",
+              "quote": "ONE MORE 놀이공원 서비스는 지난달 실적 20만원 이상 시 서비스 제공",
+              "start_pos": 900,
+              "end_pos": 941,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002999",
+              "quote": "최초 발급 월에는\n서비스 미제공",
+              "start_pos": 2425,
+              "end_pos": 2441,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261104_001827",
+              "quote": "[연회비] 없음",
+              "start_pos": 1,
+              "end_pos": 8,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_003000",
+              "quote": "공통 : 상품권 및 기프트카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액 제외",
+              "start_pos": 171,
+              "end_pos": 224,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002962",
+              "quote": "ONE PICK\n(편의점, \n 카페)",
+              "start_pos": 1433,
+              "end_pos": 1452,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002963",
+              "quote": "CU, GS25, \n세븐일레븐",
+              "start_pos": 1475,
+              "end_pos": 1490,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002964",
+              "quote": "메가MGC커피, \n이디야커피, \n컴포즈커피",
+              "start_pos": 1541,
+              "end_pos": 1563,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002965",
+              "quote": "100원",
+              "start_pos": 1581,
+              "end_pos": 1584,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002966",
+              "quote": "500원",
+              "start_pos": 1604,
+              "end_pos": 1607,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002967",
+              "quote": "결제 건당\n3천원 이상 시 \n100원",
+              "start_pos": 1565,
+              "end_pos": 1584,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002968",
+              "quote": "결제 건당\n1만원 이상 시 \n500원",
+              "start_pos": 1588,
+              "end_pos": 1607,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002969",
+              "quote": "일 1회\n/ 월 30회",
+              "start_pos": 2257,
+              "end_pos": 2268,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002970",
+              "quote": "일 1회\n/ 월 30회",
+              "start_pos": 2257,
+              "end_pos": 2268,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002971",
+              "quote": "월 5천원",
+              "start_pos": 1622,
+              "end_pos": 1626,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002972",
+              "quote": "(지난달 실적 조건 없는 서비스)",
+              "start_pos": 1661,
+              "end_pos": 1678,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002973",
+              "quote": "STYLE\n(쇼핑\n서점/문구,\n패션)",
+              "start_pos": 1454,
+              "end_pos": 1473,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002974",
+              "quote": "다이소, 올리브영",
+              "start_pos": 1492,
+              "end_pos": 1500,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002975",
+              "quote": "교보문고, 영풍문고,\n알라딘, yes24,\n아트박스",
+              "start_pos": 1502,
+              "end_pos": 1529,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002976",
+              "quote": "무신사, 에이블리",
+              "start_pos": 1531,
+              "end_pos": 1539,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002977",
+              "quote": "100원",
+              "start_pos": 1581,
+              "end_pos": 1584,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002978",
+              "quote": "500원",
+              "start_pos": 1604,
+              "end_pos": 1607,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002979",
+              "quote": "결제 건당\n3천원 이상 시 \n100원",
+              "start_pos": 1565,
+              "end_pos": 1584,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002980",
+              "quote": "결제 건당\n1만원 이상 시 \n500원",
+              "start_pos": 1588,
+              "end_pos": 1607,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002981",
+              "quote": "일 1회\n/ 월 10회",
+              "start_pos": 1609,
+              "end_pos": 1620,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002982",
+              "quote": "일 1회\n/ 월 10회",
+              "start_pos": 1609,
+              "end_pos": 1620,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002983",
+              "quote": "월 5천원",
+              "start_pos": 1622,
+              "end_pos": 1626,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002984",
+              "quote": "(지난달 실적 조건 없는 서비스)",
+              "start_pos": 1661,
+              "end_pos": 1678,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002985",
+              "quote": "대중교통",
+              "start_pos": 387,
+              "end_pos": 390,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002986",
+              "quote": "버스, 지하철",
+              "start_pos": 2347,
+              "end_pos": 2353,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002987",
+              "quote": "5%",
+              "start_pos": 2361,
+              "end_pos": 2362,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002988",
+              "quote": "월 1천원",
+              "start_pos": 2355,
+              "end_pos": 2359,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002989",
+              "quote": "10만원",
+              "start_pos": 474,
+              "end_pos": 477,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002990",
+              "quote": "ONE MORE 대중교통 서비스는 최초 카드 사용 등록일로부터 다음 달 말일까지 지난달 카드 실적\n 10만원 미만 이어도 10만원 이상 기준으로 서비스 제공",
+              "start_pos": 809,
+              "end_pos": 895,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002991",
+              "quote": "대중교통 : 시외버스, 고속버스, 철도(KTX/SRT/ITX)는 제외",
+              "start_pos": 387,
+              "end_pos": 424,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002992",
+              "quote": "놀이공원",
+              "start_pos": 909,
+              "end_pos": 912,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002993",
+              "quote": "에버랜드, 롯데월드",
+              "start_pos": 2378,
+              "end_pos": 2387,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002994",
+              "quote": "50%",
+              "start_pos": 2402,
+              "end_pos": 2404,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_003001",
+              "quote": "대상 가맹점의 공식 홈페이지(온라인/모바일 앱) 및 오프라인을 통한 결제 시에만 서비스가 제공되며",
+              "start_pos": 228,
+              "end_pos": 281,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_003002",
+              "quote": "배달 앱이나 식당 예약 앱을 통한 주문 결제, 대형시설(백화점, 할인점, 아울렛, 쇼핑몰, 휴게소,\n 호텔, 리조트, 공항, 역사, 마트) 입점 점포 및 임대 매장 결제 시 제외",
+              "start_pos": 285,
+              "end_pos": 383,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_003003",
+              "quote": "국세, 지방세, 수도/전기요금, 그 외 공과금[우편요금, 과태료, 범칙금, 벌금, 국가/공공기관/ \n 공공단체가 부과하는 부담금], 도시가스 요금, 아파트관리비, 국민연금/고용보험료/산재보험료/ \n 건강보험료 납부 금액, 스쿨뱅킹, 초·중·고 학교납입금, 대학등록금, 대학원등록금, 상품권 및 기프트 \n 카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액, 부동산 임대료, 국내외 ATM \n 이용금액, ONE PICK STYLE 하나 체크카드로 서비스 적용 받은 매출 제외",
+              "start_pos": 517,
+              "end_pos": 789,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_003004",
+              "quote": "모든 서비스는 하나카드에 등록된 국내 가맹점 및 업종 기준에 따라 제공",
+              "start_pos": 1148,
+              "end_pos": 1186,
+              "card_doc_chunk_id": "20261101_000012",
+              "chunk_seq": 1,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            }
+          ],
+          "evidence_text": "[연회비] 없음           [발급브랜드] 국내전용, 국내외겸용(Mastercard)\n                                                           [발급대상] 7세부터 발급 가능   [후불교통] 선택가능(12세부터 발급 가능)\n                                                                                           * ONE PICK STYLE 하나 체크카드의 결제계좌는 하나은행 계좌에 한하여 이용 가능합니다.\n\n\n\n\n\n                                                                                      서비스 제공 안내\n\n                                                                                               서비스 제외 대상\n                                                                                                                                                       - 공통 : 상품권 및 기프트카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액 제외,ONE PICK    ONE PICK                      대상 가맹점의 공식 홈페이지(온라인/모바일 앱) 및 오프라인을 통한 결제 시에만 서비스가 제공되며,\n                                                                                                   배달 앱이나 식당 예약 앱을 통한 주문 결제, 대형시설(백화점, 할인점, 아울렛, 쇼핑몰, 휴게소,\n                                                                                                                                   호텔, 리조트, 공항, 역사, 마트) 입점 점포 및 임대 매장 결제 시 제외\n                                                                                                                                                       - 대중교통 : 시외버스, 고속버스, 철도(KTX/SRT/ITX)는 제외STYLE         STYLE                                실적 산정 기준\n                                     (지난달 실적 조건 없는 서비스)                                             - 지난달 1일부터 말일(승인 시점 기준)까지 국내외 일시불 이용금액 10만원/20만원 이상 시\n                                                                                                                             ONE MORE 서비스 제공하나하나 체크카드체크카드                                                    캐시백 한도                                          서비스 영역  대상 가맹점     캐시백 조건                      실적 제외 대상\n                                                                  횟수 한도  금액 한도             - 국세, 지방세, 수도/전기요금, 그 외 공과금[우편요금, 과태료, 범칙금, 벌금, 국가/공공기관/\n                                                                                                     공공단체가 부과하는 부담금], 도시가스 요금, 아파트관리비, 국민연금/고용보험료/산재보험료/\n                                                                                CU, GS25,                                      건강보험료 납부 금액, 스쿨뱅킹, 초·중·고 학교납입금, 대학등록금, 대학원등록금, 상품권 및 기프트\n                                                   ONE PICK  세븐일레븐                                     카드 구매, 선불카드 및 선불전자지급수단(예시:하나머니) 충전 금액, 부동산 임대료, 국내외 ATM                                                                 일 1회   월 5천원           이용금액, ONE PICK STYLE 하나 체크카드로 서비스 적용 받은 매출 제외\n                                                      (편의점,\n                                                          메가MGC커피,                     / 월 30회               실적과 관계없이 서비스 제공                                                  카페)               결제 건당\n                                                        이디야커피,                                                      - ONE MORE 대중교통 서비스는 최초 카드 사용 등록일로부터 다음 달 말일까지 지난달 카드 실적                                                                    3천원 이상 시\n                                                 컴포즈커피                                             10만원 미만 이어도 10만원 이상 기준으로 서비스 제공\n                                                                                    100원\n                                                                                                                                                                                         * ONE MORE 놀이공원 서비스는 지난달 실적 20만원 이상 시 서비스 제공\n                                                            다이소, 올리브영      /\n                                                           결제 건당                       서비스 제공 방법\n                                                             STYLE                                                          교보문고, 영풍문고,  1만원 이상 시                                 - 캐시백 제공 시점 : 매출일자로부터 5영업일 이내 결제계좌로 입금 예정\n                                                                 일 1회   월 5천원             - 매출 접수된 국내 일시불 이용금액에 따라 캐시백 혜택을 제공하며, 매출 취소 시 취소가 접수된                                                 (쇼핑                                                            알라딘, yes24,      500원\n                                                  서점/문구,                                       / 월 10회                월에서 실적 및 캐시백 제공 금액 차감 반영                                                 아트박스\n                                                 패션)                                                                        - 후불교통요금 등 무승인 거래(카드사의 승인없이 이용금액이 카드사에 접수됨)의 경우 매출이\n                                                                                                    접수된 월의 이용금액에 반영\n                                                           무신사, 에이블리                                                  - 모든 서비스는 하나카드에 등록된 국내 가맹점 및 업종 기준에 따라 제공\n                                                                                                                                                       - 가맹점 정보가 해당 업체가 아닌 결제대행업체(PG) 또는 간편결제 전용 가맹점으로 확인되는\n                                                                                                    경우 ‘결제대행업체’ 또는 ‘간편결제’ 가맹점으로 분류되어 각 서비스 영역에 따른 혜택이 제공됨\n                                                                                                   자세한 사항은 하나카드 고객센터(1800-1111)에 문의하시기 바람\n                                                                                                  ※ 예시) 편의점에서 네이버페이로 결제 시 가맹점명이 ‘네이버페이’인 경우\n                                                                                                                                       “편의점” 가맹점이 아닌 ‘간편결제’ 가맹점으로 분류\n\n\n                                                                                               후불교통 기능 이용 안내\n                                                                                                                                                                                                 * 발급대상 : 12세 이상 손님 (단, 연체 등 특이 정보가 있는 경우 발급이 제한될 수 있음)          ONE MORE\n                                     (지난달 실적 10만원/20만원 이상 시 받는 서비스)                                 * 이용 시 유의사항 (후불교통기능 선택 시에만 해당)                                                                                                                                                        - 후불교통 이용금액은 손님 계좌에서 즉시 출금되지 않으며, 손님이 신용공여기간동안 이용한\n                                                                                                     금액이 결제일에 일시 출금됨\n                                          서비스 영역 대상 가맹점     서비스 방법 서비스 한도 지난달 실적               - 후불교통/하이브리드 서비스 동시 이용 시에는 하이브리드 서비스(소액신용거래)에서\n                                                                                                       결제 및 청구됨\n                                                                           5%                           하이브리드 서비스 이용 안내                                        대중교통   버스, 지하철          월 1천원   10만원\n                                                          캐시백                           하이브리드 서비스에 대한 상세한 내용은 하이브리드 서비스 신청 후 발송되는\n                                                                                                               “하나카드 체크카드 하이브리드 서비스 약관”을 통해 확인 가능함\n                                                                                 50%             20만원                                                               월 1회                   미성년자 체크카드 이용 안내                                        놀이공원   에버랜드, 롯데월드  현장할인          최초 발급 월에는                                                                                                                            / 연 2회                                                                                   서비스 미제공                 * 7~13세 미성년자 체크카드 발급 시 법정대리인 동의가 필수이며,                                                                                                      (1인 1매)\n                                                                                                                           1일 3만원/1개월 30만원의 이용 한도가 적용됨\n                                                                                                                                          (14세가 경과하면 고객센터에 요청하여 상향 가능)\n                                                                                                                                                                                                 * 후불교통 체크카드는 12~17세 이상 손님은 법정대리인 동의 하에 발급 받을 수 있으며,\n                                                                                                  월 이용한도 10만원/전체 카드사 기준 1인 1매만 소지 가능\n                                                                                                                                                        (18세 이상의 미성년자는 법정대리인 동의 불필요)",
+          "evidence_location": {
+            "page_no": 1,
+            "kind": "PDF text extraction",
+            "source_url": "https://m.hanacard.co.kr/leaflet/15/15650_20260429.pdf"
+          },
+          "evidence_type": "OFFICIAL_PDF_TEXT_EXTRACTION",
+          "source_provenance_note": "URL 추정으로 찾은 문서. 상품 페이지 직접 링크 없음, 공식 출처 미확정"
+        }
+      ],
+      "execution_status": "ERROR",
+      "path": [
+        "interpret",
+        "finish"
+      ],
+      "execution_stage_status": "EXECUTION_ERROR",
+      "answer_generation_status": "NOT_CALLED",
+      "judgment": "ERROR",
+      "judgment_basis": "Factual adjudication is pending; HOLD is not counted as wrong.",
+      "intent": null,
+      "search_parameters": null,
+      "search": null,
+      "retrieval_trace": [],
+      "retrieved_entity_refs": [],
+      "retrieved_data": [],
+      "pdf_evidence": [],
+      "answer": {
+        "status": "ERROR",
+        "conclusion": "",
+        "answer_text": "",
+        "answer_source": "none",
+        "points": [],
+        "uncertain": [],
+        "message": "Neo4j 조회에 실패했습니다. 연결 설정과 네트워크를 확인하세요."
+      },
+      "final_answer": "",
+      "llm_calls": [],
+      "llm_usage": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cost_usd": 0
+      },
+      "elapsed_ms": 32079.14,
+      "error": {
+        "stage": "interpret",
+        "code": "NEO4J_FAILED",
+        "type": "ServiceUnavailable"
+      },
+      "warnings": [],
+      "trace": {
+        "status": "INCOMPLETE",
+        "expected_stages": [
+          "INTERPRET"
+        ],
+        "captured_stages": [],
+        "missing_stages": [
+          "INTERPRET"
+        ],
+        "prompt_hash_mismatch_stages": [],
+        "missing_raw_output_stages": [],
+        "missing_input_output_snapshots": [],
+        "event_count": 0
+      },
+      "trace_write_status": "SAVED",
+      "prompt_control": {}
+    }
+  ],
+  "models": {
+    "interpret": "gpt-6-luna",
+    "answer": "gpt-6.1-terra",
+    "embedding": "text-embedding-3-small"
+  },
+  "model_assignment": {
+    "interpret": "gpt-6-luna",
+    "answer": "gpt-6.1-terra",
+    "search_retrieve_and_prompts": "unchanged from baseline code/configuration",
+    "harness_sha256": "60499b24cdb2c09623e805e239e75f46e06f6eae1448810c6bca0a4f5a84ba25"
+  }
+}

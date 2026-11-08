@@ -1,0 +1,33 @@
+{
+  "created_at_utc": "2026-11-08T09:25:06.450996+00:00",
+  "run_id": "luna-interpret-terra-answer-baseline-prompt-smoke-20261108-20261108T092434Z-2193286f",
+  "git_head": "1b2252b3805c80f88e352b54cbbfcfeaa2cf76fe",
+  "source_sha256": {
+    "card_benefit\\docs\\evaluation\\run_questionnaire_evaluation.py": "f81f0bf068e55399400ba164516a57499d8fb727611188ead804ded4c0e535f7",
+    "card_benefit\\payment_card\\db_pipeline_origin_search\\card_graphrag.py": "b1fd86691ffff494ca2d60cd853f8171ae0b468d1d30d13d0dddd48ed985cb34",
+    "card_benefit\\payment_card\\db_pipeline_origin_search\\execution_log.py": "fda5cb6921f01a63b7be5c4885d251c90f9d1dc77aa6b450e59146fc32115947",
+    "card_benefit\\payment_card\\db_pipeline_origin_search\\neo4j_search.py": "9a2f1b969b2b02a47c772b5f05fcd36ac7ba4ea7324fd96734ab2f6f5b6d66aa"
+  },
+  "model": "stage-specific (gpt-6-luna interpret / gpt-6.1-terra answer)",
+  "trace_policy": "PII/secret redacted; prompt hash is over stored prompt_text",
+  "question_count": 1,
+  "traces": [
+    {
+      "question_id": "CARD10-021",
+      "run_id": "luna-interpret-terra-answer-baseline-prompt-smoke-20261108-20261108T092434Z-2193286f:CARD10-021",
+      "request_id": "f39c8b07-f910-475f-b8a9-8a01c03a70bc",
+      "events": []
+    }
+  ],
+  "models": {
+    "interpret": "gpt-6-luna",
+    "answer": "gpt-6.1-terra",
+    "embedding": "text-embedding-3-small"
+  },
+  "model_assignment": {
+    "interpret": "gpt-6-luna",
+    "answer": "gpt-6.1-terra",
+    "search_retrieve_and_prompts": "unchanged from baseline code/configuration",
+    "harness_sha256": "60499b24cdb2c09623e805e239e75f46e06f6eae1448810c6bca0a4f5a84ba25"
+  }
+}
