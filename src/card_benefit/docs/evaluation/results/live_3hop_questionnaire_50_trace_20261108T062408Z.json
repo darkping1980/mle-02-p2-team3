@@ -1,9 +1,9 @@
 {
-  "created_at_utc": "2026-11-08T06:27:41.469766+00:00",
+  "created_at_utc": "2026-11-08T06:31:52.577351+00:00",
   "run_id": "live50-20261108T062408Z-5364151b",
   "code_revision": "4ff5c2244dceb29dc0eaa250cd6355e1ff4919b7+src.a08f5ac932dbabe8",
   "model": "gpt-6-luna",
-  "question_count": 26,
+  "question_count": 50,
   "traces": [
     {
       "question_id": "CARD10-001",
@@ -133,6 +133,126 @@
     {
       "question_id": "CARD10-026",
       "run_id": "live50-20261108T062408Z-5364151b-CARD10-026",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-027",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-027",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-028",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-028",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-029",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-029",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-030",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-030",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-031",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-031",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-032",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-032",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-033",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-033",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-034",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-034",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-035",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-035",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-036",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-036",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-037",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-037",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-038",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-038",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-039",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-039",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-040",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-040",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-041",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-041",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-042",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-042",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-043",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-043",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-044",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-044",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-045",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-045",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-046",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-046",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-047",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-047",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-048",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-048",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-049",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-049",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-050",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-050",
       "events": []
     }
   ]
