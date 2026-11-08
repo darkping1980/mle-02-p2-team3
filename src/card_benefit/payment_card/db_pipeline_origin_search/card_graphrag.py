@@ -34,16 +34,19 @@ from .neo4j_search import (
 )
 
 # region 1. 설정과 출력 형식
-DEFAULT_MODEL = "gpt-6-luna"
-REASONING_EFFORT = "low"               # gpt-6-luna 지원값: none, low, medium(기본), high, xhigh, max
+DEFAULT_MODEL = "gpt-6.1-terra"
+REASONING_EFFORT = "low"               # Terra 지원값: none, low, medium, high, xhigh, max
 INTERPRET_MAX_TOKENS = 600             # 추론 토큰을 포함한 출력 상한
 ANSWER_MAX_TOKENS = 2000
 LLM_TIMEOUT_SECONDS = 60
 MAX_QUESTION_CHARS = 500
 QUERY_LOG_ENV = "DB_QUERY_LOG"          # 카드는 레시피 전용 스위치를 보지 않는다.
 DEFAULT_LOG_LEVEL = "DEBUG"            # 개발 단계 기본값. CARD_SEARCH_LOG_LEVEL=INFO로 Cypher 전문 출력을 끈다.
-# USD / 100만 토큰 (입력, 캐시 입력, 출력). OpenAI 가격표 2026-11-01 확인. 272K 입력 이하 Standard 단가.
-MODEL_PRICES = {"gpt-6-luna": (0.10, 0.01, 0.50)}
+# USD / 100만 토큰 (입력, 캐시 입력, 출력). OpenAI Standard 가격표 기준, 272K 입력 이하.
+MODEL_PRICES = {
+    "gpt-6-luna": (0.10, 0.01, 0.50),
+    "gpt-6.1-terra": (1.00, 0.05, 5.00),
+}
 
 Intent = Literal["BENEFIT_DETAIL", "BENEFIT_CONDITION", "BENEFIT_LIMIT", "BENEFIT_COMPARE", "EVIDENCE_SEARCH", "UNKNOWN"]
 SECTIONS_BY_INTENT = {
@@ -253,6 +256,13 @@ answer_text 작성 규칙 (고객이 읽는 설명문):
 <question>
 {question}
 </question>
+
+카드 상품명과 혜택명 표현:
+- 모든 답변에 카드 상품명을 억지로 넣지 않는다. 질문에 카드명이 있으면 불필요하게 반복하지 않는다.
+- 카드 상품명과 혜택명이 혼동될 수 있으면 "이 카드의 [혜택명] 혜택은 ..."처럼 관계를 자연스럽게 밝힌다. 혜택명을 별도 카드 상품명처럼 쓰지 않는다.
+- 여러 카드를 비교할 때는 각 혜택이 어느 카드에 속하는지 분명히 구분한다. 공통 혜택은 특정 카드 전용인 것처럼 설명하지 않는다.
+- 질문에 카드명이 없더라도 답변에 꼭 필요할 때만 상품명을 덧붙인다.
+- 공식 혜택명, 원문 수치와 조건은 바꾸지 않는다. 질문에 필요한 길이에 맞춰 짧은 문장, 항목 또는 비교 표를 선택한다.
 
 검색 결과:
 {context}"""
@@ -1315,7 +1325,7 @@ class CardGraphRAG:
         call = {"node": node, "model": self.model, "response_model": None, "input_tokens": None,  # 토큰/비용 집계용 dict 초기화
                 "output_tokens": None, "cached_tokens": None, "reasoning_tokens": None, "cost_usd": None}
         try:
-            # gpt-6-luna의 Chat Completions 함수 호출은 effort none에서만 동작하므로 json_schema를 쓴다.
+            # Terra의 reasoning_effort와 함께 Structured Outputs strict JSON Schema를 사용한다.
             result = llm.with_structured_output(schema, method="json_schema", strict=True,  # Pydantic 스키마 기반 Strict JSON Schema 구조화 출력 설정
                                                 include_raw=True).invoke(prompt)             # LLM API 동기 호출 실행
         finally:

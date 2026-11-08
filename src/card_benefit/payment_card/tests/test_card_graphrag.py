@@ -332,6 +332,7 @@ class GraphTests(unittest.TestCase):
 
     def test_cost_estimate(self):
         self.assertAlmostEqual(card_graphrag.estimate_cost("gpt-6-luna", 1000, 200, 100), 0.000191)
+        self.assertAlmostEqual(card_graphrag.estimate_cost("gpt-6.1-terra", 1000, 200, 100), 0.001905)
         self.assertIsNone(card_graphrag.estimate_cost("other", 1, 1))
         self.assertIsNone(card_graphrag.estimate_cost("gpt-6-luna", None, 1))
 
@@ -927,7 +928,7 @@ class CreateLlmTests(unittest.TestCase):
                                                                  "benefit_id": BENEFIT_ID}],
                        "answer_text": "", "uncertain": [], "cannot_answer_reason": None})
             return httpx.Response(200, json={
-                "id": "x", "object": "chat.completion", "created": 1, "model": "gpt-6-luna-snapshot",
+                "id": "x", "object": "chat.completion", "created": 1, "model": "gpt-6.1-terra-snapshot",
                 "choices": [{"index": 0, "finish_reason": "stop",
                              "message": {"role": "assistant", "content": json.dumps(parsed)}}],
                 "usage": {"prompt_tokens": 1000, "completion_tokens": 200, "total_tokens": 1200,
@@ -942,7 +943,7 @@ class CreateLlmTests(unittest.TestCase):
         self.assertEqual(len(requests), 2)
         path, body = requests[0]
         self.assertTrue(path.endswith("/chat/completions"))
-        self.assertEqual(body["model"], "gpt-6-luna")
+        self.assertEqual(body["model"], "gpt-6.1-terra")
         self.assertEqual(body["reasoning_effort"], "low")
         self.assertEqual(body["max_completion_tokens"], card_graphrag.INTERPRET_MAX_TOKENS)
         self.assertEqual(body["response_format"]["type"], "json_schema")
@@ -955,8 +956,8 @@ class CreateLlmTests(unittest.TestCase):
         call = state["llm_calls"][0]
         self.assertEqual((call["input_tokens"], call["output_tokens"], call["cached_tokens"], call["reasoning_tokens"]),
                          (1000, 200, 100, 50))
-        self.assertEqual(call["response_model"], "gpt-6-luna-snapshot")
-        self.assertAlmostEqual(call["cost_usd"], 0.000191)
+        self.assertEqual(call["response_model"], "gpt-6.1-terra-snapshot")
+        self.assertAlmostEqual(call["cost_usd"], 0.001905)
 
     def test_no_key_no_llm(self):
         with patch.dict(os.environ, {"OPENAI_API_KEY": ""}), patch.object(card_graphrag, "load_project_environment"):
@@ -1202,6 +1203,11 @@ class StreamlitTests(unittest.TestCase):
 class NewContractRegressionTests(unittest.TestCase):
     def test_answer_prompt_requires_shared_frequency_conditions(self):
         self.assertIn("혜택별로 근거가 확인된 일·월 이용 횟수", card_graphrag.ANSWER_PROMPT)
+
+    def test_answer_prompt_distinguishes_card_products_from_benefit_names(self):
+        self.assertIn("카드 상품명과 혜택명 표현", card_graphrag.ANSWER_PROMPT)
+        self.assertIn("질문에 카드명이 있으면 불필요하게 반복하지 않는다", card_graphrag.ANSWER_PROMPT)
+        self.assertIn("공통 혜택은 특정 카드 전용인 것처럼 설명하지 않는다", card_graphrag.ANSWER_PROMPT)
 
     def test_item_and_common_use_distinct_name_and_rule_fields(self):
         item_detail = detail()

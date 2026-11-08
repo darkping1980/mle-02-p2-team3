@@ -242,7 +242,7 @@ def main() -> int:
         results_doc = {
             "created_at_utc": datetime.now(timezone.utc).isoformat(),
             "run_id": run_id, "git_head": head, "source_sha256": hashes,
-            "model": "gpt-6-luna", "question_source": str(QUESTIONNAIRE_PATH),
+            "model": card_graphrag.card_model(), "question_source": str(QUESTIONNAIRE_PATH),
             "runner": "direct CardGraphRAG.run; real Neo4j and LLM; app_log persistence disabled",
             "trace_requested": bool(args.trace), "trace_enabled": evaluation_llm_trace_enabled(),
             "retry_policy": "one call per question; no automatic retries",
@@ -256,7 +256,7 @@ def main() -> int:
             trace_doc = {
                 "created_at_utc": datetime.now(timezone.utc).isoformat(),
                 "run_id": run_id, "git_head": head, "source_sha256": hashes,
-                "model": "gpt-6-luna", "trace_policy": "PII/secret redacted; prompt hash is over stored prompt_text",
+                "model": card_graphrag.card_model(), "trace_policy": "PII/secret redacted; prompt hash is over stored prompt_text",
                 "question_count": len(traces), "traces": traces,
             }
             try:
