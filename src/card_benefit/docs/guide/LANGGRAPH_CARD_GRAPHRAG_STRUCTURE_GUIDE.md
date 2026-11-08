@@ -8,6 +8,11 @@
 
 > 아래 링크는 **A/B/C 제거 후 GitHub 커밋 `aa46df9`**의 소스 줄로 이동합니다. 발표 연습 시 소스 줄이 바뀌지 않도록 **커밋 고정 링크**를 사용했습니다. 로컬 작업 트리 또는 이후 `main` 수정과 다를 수 있습니다.
 
+> 현재 `CardGraphRAG`는 초기화 시 `answer_mode="normal"`(기본) 혹은 `"prototype"`을 받으며, 이에 따라 `_build()` 내부에서 `answer` 노드에 등록되는 함수가 결정됩니다. 이 선택은 그래프 생성 시점에 이루어지며, 실행 중 조건부 분기가 없습니다.
+
+
+> 아래 링크는 **A/B/C 제거 후 GitHub 커밋 `aa46df9`**의 소스 줄로 이동합니다. 발표 연습 시 소스 줄이 바뀌지 않도록 **커밋 고정 링크**를 사용했습니다. 로컬 작업 트리 또는 이후 `main` 수정과 다를 수 있습니다.
+
 | 순서 | 클릭할 함수·위치 | 코드에서 볼 것 |
 |---|---|---|
 | 1. 화면 실행 | [`get_pipeline()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/streamlit_app.py#L101-L105) · [`pipeline.run(question)`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/streamlit_app.py#L409-L414) | 질문 제출이 파이프라인을 어디에서 호출하는지 |
@@ -74,7 +79,7 @@ flowchart TD
     D1 -->|예| R["retrieve\nNeo4j 상세/규칙/조건/PDF 근거"]
     D1 -->|아니요 / 오류| F["finish\n오류·미응답 안내 및 로그"]
     R --> D2{"after_retrieve\n조회 결과와 근거 존재?"}
-    D2 -->|예| A["answer\n답변 LLM + 코드 검증"]
+    D2 -->|예| A["answer\nNormal: answer() / Prototype: answer_prototype() (mode 선택은 그래프 생성 시점에 결정)"]
     D2 -->|아니요 / 오류| F
     A --> F
     F --> END((END))

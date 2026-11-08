@@ -4,9 +4,11 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import lru_cache
+import hashlib
 import json
 import logging
 import os
+import re
 import sys
 from datetime import datetime, timezone
 
@@ -271,6 +273,51 @@ def app_db_log_enabled() -> bool:
     return value not in {"0", "false", "no", "off"}
 
 
+def app_db_llm_trace_enabled() -> bool:
+    """Detailed LLM traces are opt-in and restricted to an explicitly marked development environment."""
+    load_project_environment()
+    enabled = os.getenv("APP_DB_LLM_TRACE_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+    development = os.getenv("APP_ENV", "").strip().lower() == "development"
+    return enabled and development and app_db_log_enabled()
+
+
+_TRACE_REDACTIONS = (
+    (re.compile(r"(?i)\b(?:sk-[a-z0-9_-]{16,}|AKIA[A-Z0-9]{16})\b"), "[REDACTED_SECRET]"),
+    (re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+"), "Bearer [REDACTED_SECRET]"),
+    (re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I), "[REDACTED_EMAIL]"),
+    (re.compile(r"(?<!\d)(?:01[016789][ -]?\d{3,4}[ -]?\d{4})(?!\d)"), "[REDACTED_PHONE]"),
+    (re.compile(r"(?<!\d)\d{6}[ -]?[1-4]\d{6}(?!\d)"), "[REDACTED_RRN]"),
+    (re.compile(r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)"), "[REDACTED_ACCOUNT_OR_CARD]"),
+)
+_TRACE_OMIT_KEYS = {"embedding", "embeddings", "vector", "vectors", "qvec", "query_vector", "client_ip"}
+
+
+def _redact_trace_value(value):
+    """Redact common secrets/PII and omit vector-like fields from diagnostic payloads."""
+    if isinstance(value, dict):
+        result = {}
+        for key, item in value.items():
+            normalized = str(key).strip().lower()
+            if normalized in _TRACE_OMIT_KEYS or "embedding" in normalized or "vector" in normalized:
+                continue
+            if any(token in normalized for token in ("api_key", "access_token", "authorization", "secret")):
+                result[str(key)] = "[REDACTED_SECRET]"
+            else:
+                result[str(key)] = _redact_trace_value(item)
+        return result
+    if isinstance(value, (list, tuple)):
+        return [_redact_trace_value(item) for item in value]
+    if isinstance(value, str):
+        for pattern, replacement in _TRACE_REDACTIONS:
+            value = pattern.sub(replacement, value)
+        return value
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if hasattr(value, "model_dump"):
+        return _redact_trace_value(value.model_dump(mode="json"))
+    return _redact_trace_value(str(value))
+
+
 @lru_cache(maxsize=1)
 def _log_database_manager() -> DatabaseManager:
     """로그 저장 connection pool을 앱 프로세스에서 한 번만 만든다."""
@@ -361,6 +408,7 @@ def persist_app_logs(
     pdf_evidence_text: str | None = None,
     neo4j_summary: str | None = None,
     pdf_evidence_summary: str | None = None,
+    llm_trace_events: list[dict] | None = None,
 ) -> None:
     """요청의 이벤트를 요청당 한 행으로 모아 INSERT한다. 저장 예외는 검색으로 전파하지 않는다."""
     if not events:                                        # 저장할 이벤트가 없으면 조기 반환(Early Return)
@@ -400,11 +448,53 @@ def persist_app_logs(
                            neo4j_summary = EXCLUDED.neo4j_summary,
                            pdf_evidence_summary = EXCLUDED.pdf_evidence_summary,
                            error_text = EXCLUDED.error_text,
-                           created_at = LEAST(db_pipeline.app_log.created_at, EXCLUDED.created_at)""",
+                           created_at = LEAST(db_pipeline.app_log.created_at, EXCLUDED.created_at)
+                       RETURNING app_log_id""",
                     (session_id, request_id, request_text, execution_log,
                      response_text, detail_text, pdf_evidence_text, neo4j_summary,
                      pdf_evidence_summary, error_text, created_at),
                 )
+                parent = cursor.fetchone()
+                app_log_id = parent["app_log_id"] if isinstance(parent, dict) else parent[0]
+                if app_db_llm_trace_enabled() and llm_trace_events:
+                    # Keep the legacy app_log row even when the optional detail table is absent or fails.
+                    cursor.execute("SAVEPOINT app_log_llm_trace_write")
+                    try:
+                        cursor.execute(
+                            "DELETE FROM db_pipeline.app_log_llm_trace WHERE app_log_id = %s",
+                            (app_log_id,),
+                        )
+                        for sequence_no, event in enumerate(llm_trace_events, start=1):
+                            event = event if isinstance(event, dict) else {}
+                            prompt = event.get("prompt_text")
+                            prompt_hash = hashlib.sha256(prompt.encode("utf-8")).hexdigest() if isinstance(prompt, str) else None
+                            safe_prompt = _redact_trace_value(prompt) if isinstance(prompt, str) else None
+                            prompt_redacted = safe_prompt != prompt if isinstance(prompt, str) else False
+                            input_snapshot = _redact_trace_value(event.get("input_snapshot") or {})
+                            output_snapshot = _redact_trace_value(event.get("output_snapshot") or {})
+                            raw_output = _redact_trace_value(event.get("raw_output"))
+                            response_schema = _redact_trace_value(event.get("response_schema"))
+                            usage = _redact_trace_value(event.get("usage") or {})
+                            cursor.execute(
+                                """INSERT INTO db_pipeline.app_log_llm_trace
+                                       (app_log_id, trace_seq, stage, question_id, source_revision,
+                                        model_name, response_schema, prompt_text, prompt_sha256,
+                                        prompt_redacted, input_snapshot, raw_output, output_snapshot, usage)
+                                   VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s,
+                                           %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb)""",
+                                (app_log_id, sequence_no, event.get("stage", "UNKNOWN"), event.get("question_id"),
+                                 event.get("source_revision"), event.get("model_name"),
+                                 json.dumps(response_schema, ensure_ascii=False), safe_prompt, prompt_hash,
+                                 prompt_redacted, json.dumps(input_snapshot, ensure_ascii=False),
+                                 json.dumps(raw_output, ensure_ascii=False) if raw_output is not None else None,
+                                 json.dumps(output_snapshot, ensure_ascii=False), json.dumps(usage, ensure_ascii=False)),
+                            )
+                        cursor.execute("RELEASE SAVEPOINT app_log_llm_trace_write")
+                    except Exception as trace_error:
+                        cursor.execute("ROLLBACK TO SAVEPOINT app_log_llm_trace_write")
+                        cursor.execute("RELEASE SAVEPOINT app_log_llm_trace_write")
+                        LOG.warning("Optional LLM diagnostic persistence failed (%s); app_log request row was retained",
+                                    type(trace_error).__name__)
     except Exception as error:                                                                         # 로깅 실패가 비즈니스 로직(검색)에 영향 주지 않도록 격리
         LOG.warning("검색 로그 저장 실패 (%s); 검색 결과는 유지합니다.", type(error).__name__)
 

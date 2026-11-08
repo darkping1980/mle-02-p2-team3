@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 import operator
 import os
@@ -27,6 +28,7 @@ from common.query_log_config import (
 )
 from pydantic import BaseModel, Field
 
+from .execution_log import app_db_llm_trace_enabled
 from .neo4j_search import (
     ALL_SECTIONS, CARD_LOG, CARD_LOGGER_NAME, DETAIL_LOG, REQUEST_ID, catalog_batch_plan, detail_plan, detail_statements, entity_ref, source,
 )
@@ -260,6 +262,9 @@ class CardState(TypedDict, total=False):
     """LangGraph 노드 간 전달·공유되는 파이프라인 State(런타임에는 Python dict/Java Map으로 동작)."""
 
     request_id: str                                       # 요청별 고유 추적 ID(UUID)
+    question_id: str | None                               # 평가 실행에서 전달된 질문 ID(일반 Streamlit 요청은 미지정)
+    diagnostics_enabled: bool                             # 개발용 상세 추적 저장 여부
+    llm_trace_events: Annotated[list[dict], operator.add] # SEARCH/LLM/RETRIEVE/검증 상세 이벤트 누적
     started: float                                        # 파이프라인 시작 시각 타임스탬프(perf_counter)
     question: str                                         # 사용자 원문 입력 질문 문자열
     catalog: list[dict]                                   # Neo4j 전체 혜택 메타데이터 목록(Map의 List)
@@ -283,6 +288,42 @@ class CardState(TypedDict, total=False):
     warnings: Annotated[list[str], operator.add]          # 리듀서(operator.add)로 각 노드의 경고 리스트를 누적 병합(addAll)
     llm_calls: Annotated[list[dict], operator.add]        # 리듀서로 각 LLM 호출의 모델명·토큰 수·비용(USD)을 누적 기록
     path: Annotated[list[str], operator.add]              # 리듀서로 실제 경유한 노드 이름 순서(["interpret", "retrieve", ...]) 누적
+
+
+def _trace_value(value):
+    """Make a JSON-safe diagnostic copy without embeddings or source JSON blobs."""
+    if isinstance(value, BaseModel):
+        return _trace_value(value.model_dump(mode="json"))
+    if isinstance(value, dict):
+        result = {}
+        for key, item in value.items():
+            normalized = str(key).lower()
+            if "embedding" in normalized or "vector" in normalized or normalized in {"qvec", "query_vector"}:
+                continue
+            if normalized == "source_json" and isinstance(item, str):
+                try:
+                    result["source_fields"] = _trace_value(json.loads(item))
+                except (TypeError, ValueError):
+                    result["source_fields"] = "[unparseable source_json omitted]"
+            else:
+                result[str(key)] = _trace_value(item)
+        return result
+    if isinstance(value, (list, tuple)):
+        return [_trace_value(item) for item in value]
+    if value is None or isinstance(value, (str, bool, int, float)):
+        return value
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
+def _diagnostic_event(state: CardState, stage: str, **values) -> dict:
+    return {
+        "stage": stage,
+        "question_id": state.get("question_id"),
+        "source_revision": os.getenv("SOURCE_REVISION") or os.getenv("GIT_COMMIT"),
+        **_trace_value(values),
+    }
 
 
 def configure_card_logging() -> None:
@@ -2323,17 +2364,20 @@ class CardGraphRAG:
         builder.add_edge("finish", END)                   # finish 완료 후 종료점(END)으로 이동하여 그래프 실행 종료
         return builder.compile()                          # 선언된 상태 그래프 유효성 검증 및 동기 실행 가능한 인스턴스로 컴파일
 
-    def _initial_state(self, question: str, mode: str | None = None) -> CardState:
+    def _initial_state(self, question: str, mode: str | None = None, *, request_id: str | None = None,
+                       question_id: str | None = None) -> CardState:
         """요청을 기록하고 그래프 입력 State를 만든다."""
-        request_id = uuid4().hex[:8]                      # 요청별 고유 추적 ID 생성(8자리 Hex 문자열)
+        request_id = request_id or uuid4().hex[:8]        # Streamlit UUID가 있으면 공유하고, 직접 실행은 기존 짧은 ID를 유지
+        diagnostics_enabled = app_db_llm_trace_enabled()
         CARD_LOG.log_summary("REQUEST", request_id, question=repr(question), model=self.model, mode=mode,  # 신규 요청 요약 로그 출력
                              started_at=datetime.now().astimezone().isoformat(timespec="seconds"))
-        return {"request_id": request_id, "started": perf_counter(), "question": question.strip(),  # 파이프라인 진입용 초기 상태 dict 생성
+        return {"request_id": request_id, "question_id": question_id, "diagnostics_enabled": diagnostics_enabled,
+                "llm_trace_events": [], "started": perf_counter(), "question": question.strip(),
                 "error": None, "warnings": [], "llm_calls": [], "path": [], "answer_mode": self.answer_mode}
 
-    def run(self, question: str) -> CardState:
+    def run(self, question: str, *, request_id: str | None = None, question_id: str | None = None) -> CardState:
         """사용자 질문을 입력받아 LangGraph 전체 파이프라인을 1회 동기 실행하고 최종 State를 반환한다."""
-        return self.graph.invoke(self._initial_state(question))  # 초기 State를 주입하여 START부터 END까지 전체 그래프 동기 실행
+        return self.graph.invoke(self._initial_state(question, request_id=request_id, question_id=question_id))
 
     # 개발 검증 모드. 그래프와 같은 노드·라우팅 함수를 사용자가 누른 단계까지만 호출한다.
     def _step(self, state: CardState, node, route=None) -> CardState:
@@ -2365,9 +2409,11 @@ class CardGraphRAG:
             raise ValueError("조회 결과가 현재 질문·검색 조건과 다릅니다.")
         return self._step(state, self.answer)
 
-    def _call_llm(self, node: str, llm, schema, prompt: str, request_id: str) -> tuple[object | None, dict]:
+    def _call_llm(self, node: str, llm, schema, prompt: str, request_id: str,
+                  capture_diagnostics: bool = False) -> tuple[object | None, dict]:
         """구조화 출력을 한 번 호출한다. 호출 기록은 형식 오류일 때도 사용량을 보존한다."""
-        CARD_LOG.logger.debug("LLM PROMPT [%s/%s]\n%s", request_id, node, prompt)  # 디버그 모드 시 전송할 프롬프트 전문 로깅
+        prompt_sha256 = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+        CARD_LOG.logger.debug("LLM PROMPT [%s/%s] chars=%s sha256=%s", request_id, node, len(prompt), prompt_sha256)
         started = perf_counter()                          # API 호출 시작 타임스탬프 기록
         call = {"node": node, "model": self.model, "response_model": None, "input_tokens": None,  # 토큰/비용 집계용 dict 초기화
                 "output_tokens": None, "cached_tokens": None, "reasoning_tokens": None, "cost_usd": None}
@@ -2378,16 +2424,30 @@ class CardGraphRAG:
         finally:
             call["elapsed_ms"] = (perf_counter() - started) * 1000  # API 호출에 소요된 밀리초(ms) 계산
         raw = result["raw"]                               # 원본 API 응답 객체 추출
+        parsed_result = result.get("parsed")
+        if capture_diagnostics:
+            try:
+                response_schema = schema.model_json_schema()
+            except Exception:
+                response_schema = {"name": getattr(schema, "__name__", type(schema).__name__)}
+            call["diagnostic_trace"] = {
+                "prompt_text": prompt,
+                "prompt_sha256": prompt_sha256,
+                "raw_output": _trace_value(raw),
+                "parsed_output": _trace_value(parsed_result),
+                "response_schema": _trace_value(response_schema),
+                "parse_error_type": type(result.get("parsing_error")).__name__ if result.get("parsing_error") else None,
+            }
         usage = getattr(raw, "usage_metadata", None) or {}  # 토큰 사용량 메타데이터 추출
         call["response_model"] = (getattr(raw, "response_metadata", None) or {}).get("model_name")  # 실제 응답한 모델명 추출
         call["input_tokens"], call["output_tokens"] = usage.get("input_tokens"), usage.get("output_tokens")  # 입력/출력 토큰 수 기록
         call["cached_tokens"] = (usage.get("input_token_details") or {}).get("cache_read") or 0             # 프롬프트 캐시 히트 토큰 수 기록
         call["reasoning_tokens"] = (usage.get("output_token_details") or {}).get("reasoning") or 0          # 추론 토큰(Thinking tokens) 수 기록
         call["cost_usd"] = estimate_cost(self.model, call["input_tokens"], call["output_tokens"], call["cached_tokens"])  # 단가 기준 예상 비용(USD) 계산
-        if result.get("parsing_error") is not None or result.get("parsed") is None:  # JSON Schema 파싱 실패 여부 확인
+        if result.get("parsing_error") is not None or parsed_result is None:  # JSON Schema 파싱 실패 여부 확인
             call["parse_failed"] = True                   # 파싱 실패 플래그 기록
             return None, call                             # 실패 시 None과 메트릭 반환
-        return result["parsed"], call                     # 정상 파싱된 Pydantic 모델 인스턴스와 메트릭 반환
+        return parsed_result, call                        # 정상 파싱된 Pydantic 모델 인스턴스와 메트릭 반환
 
     def interpret(self, state: CardState) -> CardState:
         """[LangGraph 1단계] 질문 의도와 retrieve 대상 혜택을 확정한다.
@@ -2464,17 +2524,33 @@ class CardGraphRAG:
         update["catalog"] = rows                          # State의 catalog 필드에 후보 목록 저장
         prompt = INTERPRET_PROMPT.format(catalog=json.dumps(rows, ensure_ascii=False), question=question)  # 프롬프트 템플릿 완성
         try:
-            parsed, call = self._call_llm("interpret", self.interpret_llm, Interpretation, prompt, request_id)  # 해석 LLM 호출(의도 및 선택 혜택 파싱)
+            parsed, call = self._call_llm("interpret", self.interpret_llm, Interpretation, prompt, request_id,
+                                          capture_diagnostics=state.get("diagnostics_enabled", False))
         except Exception as error:                        # API 통신 실패 시 폴백
+            events = [_diagnostic_event(state, "INTERPRET", model_name=self.model, prompt_text=prompt,
+                                        response_schema={"name": Interpretation.__name__}, raw_output=None,
+                                        output_snapshot={"error_type": type(error).__name__},
+                                        input_snapshot={"candidate_search": update.get("candidate_search"), "catalog": rows})]
             return {**update, "llm_calls": [self._failed_call("interpret")],
+                    **({"llm_trace_events": events} if state.get("diagnostics_enabled") else {}),
                     "error": {"stage": "interpret", "code": "LLM_FAILED", "type": type(error).__name__}}
+        llm_trace = call.pop("diagnostic_trace", None)
         update["llm_calls"] = [call]                      # 호출 메트릭을 State의 llm_calls에 누적
         if parsed is None:                                # JSON Schema 파싱 실패 시
-            return {**update, "error": {"stage": "interpret", "code": "LLM_FAILED", "type": "ParsingError"}}
+            event = _diagnostic_event(state, "INTERPRET", model_name=self.model,
+                                      response_schema=(llm_trace or {}).get("response_schema"),
+                                      prompt_text=(llm_trace or {}).get("prompt_text"),
+                                      raw_output=(llm_trace or {}).get("raw_output"),
+                                      usage=call, input_snapshot={"candidate_search": update.get("candidate_search"), "catalog": rows},
+                                      output_snapshot={"parse_failed": True,
+                                                       "parse_error_type": (llm_trace or {}).get("parse_error_type")})
+            return {**update, **({"llm_trace_events": [event]} if state.get("diagnostics_enabled") else {}),
+                    "error": {"stage": "interpret", "code": "LLM_FAILED", "type": "ParsingError"}}
         # LLM 출력 검증: LLM이 고른 ID 중 실제 목록에 있는 것만 남긴다(환각 ID 차단).
         by_id = {row["id"]: row for row in catalog}       # ID 기반 카탈로그 조회용 Map 생성
         chosen = list(dict.fromkeys(item for item in parsed.benefit_ids if item in by_id))  # 유효 ID만 중복 제거 후 선정(환각 ID 필터링)
         dropped = [item for item in parsed.benefit_ids if item not in by_id]  # 환각으로 탈락된 가짜 ID 목록
+        selected_after_id_validation = list(chosen)
         warnings = [f"혜택 목록에 없는 ID를 버렸습니다: {dropped}"] if dropped else []
         requested_topics = _requested_benefit_topics(question) if parsed.intent == "BENEFIT_COMPARE" else {}
         named_cards = list(dict.fromkeys(row.get("card") for row in catalog
@@ -2496,6 +2572,7 @@ class CardGraphRAG:
             if coverage_gaps:
                 warnings.append("No topic-matching benefit was found for every named-card/topic pair.")
         selected_ids = list(chosen)
+        selected_after_topic_supplement = list(chosen)
         if update.get("candidate_search"):
             hit_ids = [hit["id"] for hit in update["candidate_search"]["hits"]]
             update["candidate_search"].update({
@@ -2510,15 +2587,23 @@ class CardGraphRAG:
                                  selected_ids=selected_ids, supplemented_ids=supplemented,
                                  omitted_candidate_ids=[item for item in hit_ids if item not in selected_ids],
                                  requested_topics=list(requested_topics), coverage_gaps=coverage_gaps or None)
+        chosen_before_fee_choice = list(chosen)
         chosen, fee_warnings = resolve_fee_choice(question, chosen, by_id, catalog)
+        fee_choice_excluded = [item for item in chosen_before_fee_choice if item not in chosen]
+        selected_after_fee_choice = list(chosen)
         warnings += fee_warnings
         intent = parsed.intent
         if intent == "UNKNOWN":
+            intent_excluded = list(chosen)
             chosen = []
+        else:
+            intent_excluded = []
+        selected_after_intent = list(chosen)
         elif intent == "BENEFIT_COMPARE" and len(chosen) < 2:
             warnings.append("비교 질문이지만 확인된 혜택이 2개 미만입니다.")
         amount = payment_amount(question)                 # 질문에서 특정 결제 금액(예: "5만원 결제 시") 파싱
         chosen, filtered = filter_by_payment(chosen, by_id, amount, intent)  # 최소 결제 금액 미달 혜택 필터링
+        selected_after_payment_filter = list(chosen)
         if filtered:
             warnings.append(f"결제 금액 기준이 없는 혜택을 제외했습니다: {[by_id[item]['name'] for item in filtered]}")
         ambiguity = (parsed.ambiguity or "").strip()[:200] or None  # 질문의 모호성 설명 텍스트 추출
@@ -2532,7 +2617,34 @@ class CardGraphRAG:
                              intent=intent, benefits=parameters["benefit_names"], sections=parameters["sections"],
                              dropped=dropped or None, filtered=filtered or None, payment_amount=amount,
                              ambiguity=repr(ambiguity) if ambiguity else None, **_token_fields(call))
+        trace_events = []
+        if state.get("diagnostics_enabled"):
+            trace_events.append(_diagnostic_event(
+                state, "INTERPRET", model_name=call.get("response_model") or self.model,
+                response_schema=(llm_trace or {}).get("response_schema"),
+                prompt_text=(llm_trace or {}).get("prompt_text"),
+                prompt_sha256=(llm_trace or {}).get("prompt_sha256"),
+                raw_output=(llm_trace or {}).get("raw_output"),
+                usage={key: call.get(key) for key in ("input_tokens", "output_tokens", "cached_tokens", "reasoning_tokens", "elapsed_ms", "cost_usd")},
+                input_snapshot={"question": question, "candidate_search": update.get("candidate_search"), "catalog_sent": rows},
+                output_snapshot={
+                    "parsed_output": (llm_trace or {}).get("parsed_output"),
+                    "llm_selected_ids": list(parsed.benefit_ids),
+                    "after_id_validation": selected_after_id_validation,
+                    "invalid_ids_dropped": [{"id": item, "reason": "ID_NOT_IN_CATALOG"} for item in dropped],
+                    "after_topic_supplement": selected_after_topic_supplement,
+                    "topic_supplemented_ids": supplemented,
+                    "after_fee_choice": selected_after_fee_choice,
+                    "fee_choice_excluded_ids": [{"id": item, "reason": "FEE_CHOICE_RESOLUTION"} for item in fee_choice_excluded],
+                    "after_intent_filter": selected_after_intent,
+                    "intent_excluded_ids": [{"id": item, "reason": "INTENT_UNKNOWN"} for item in intent_excluded],
+                    "after_payment_filter": selected_after_payment_filter,
+                    "payment_excluded_ids": [{"id": item, "reason": "MINIMUM_PAYMENT_NOT_MET"} for item in filtered],
+                    "final_retrieve_benefit_ids": list(chosen),
+                },
+            ))
         return {**update, "intent": intent, "search_parameters": parameters,  # Delta State 반환
+                **({"llm_trace_events": trace_events} if trace_events else {}),
                 "warnings": [*update.get("warnings", []), *warnings]}
 
     def after_interpret(self, state: CardState) -> str:
@@ -2570,8 +2682,13 @@ class CardGraphRAG:
                                   "rules": len(detail["rules"]), "conditions": len(detail["conditions"]),
                                   "limits": len(detail["limits"]), "evidence": len(detail["evidence"])})  # 건수 메트릭 추적
         except Exception as error:                        # Neo4j 통신/실행 오류 포착 시
+            events = [_diagnostic_event(state, "RETRIEVE", input_snapshot={
+                "selected_benefit_ids": parameters.get("benefit_ids"),
+                "selected_benefit_keys": parameters.get("benefit_keys"), "sections": sections,
+            }, output_snapshot={"error_type": type(error).__name__})]
             return {"path": ["retrieve"], "error": {"stage": "retrieve", "code": "NEO4J_FAILED",
-                                                     "type": type(error).__name__}}
+                                                     "type": type(error).__name__,
+                    **({"llm_trace_events": events} if state.get("diagnostics_enabled") else {})}
         evidence = collect_evidence(details, intent)      # PDF 원문 근거를 evidence_id 기준으로 병합 및 필터링
         CARD_LOG.log_summary("RETRIEVE DONE", request_id, benefits=len(details), missing=len(missing) or None,
                              rules=sum(len(d["rules"]) for d in details),
@@ -2580,8 +2697,19 @@ class CardGraphRAG:
                              evidence_ids=[item["evidence_id"] for item in evidence],
                              elapsed_ms=(perf_counter() - started) * 1000)
         conditions, notices, others = split_unresolved(details, state["question"], intent, parameters.get("payment_amount"))  # 미확정 조건 분류
+        trace_events = []
+        if state.get("diagnostics_enabled"):
+            trace_events.append(_diagnostic_event(
+                state, "RETRIEVE",
+                input_snapshot={"selected_benefit_ids": parameters.get("benefit_ids"),
+                                "selected_benefit_keys": parameters.get("benefit_keys"),
+                                "sections": sections, "cypher_statement_ids": statements},
+                output_snapshot={"retrieved_benefits_rules_conditions_limits_evidence": details,
+                                 "collected_evidence": evidence, "missing_benefit_keys": missing},
+            ))
         return {"path": ["retrieve"], "retrieved_data": details, "evidence": evidence, "statements": statements,  # Delta State 반환
                 "retrieval_trace": trace,
+                **({"llm_trace_events": trace_events} if trace_events else {}),
                 "unresolved": find_unresolved(details), "open_conditions": conditions, "data_notices": notices, "other_unresolved": others,
                 "warnings": [f"조회되지 않은 혜택 {len(missing)}건이 있습니다."] if missing else []}
 
@@ -2596,6 +2724,7 @@ class CardGraphRAG:
         Answer LLM은 이 문맥으로 구조화 응답을 만들며, validate_answer와 후속 가드가 point/Evidence/금액 관계를 확인한다.
         """
         request_id, evidence = state["request_id"], state["evidence"]  # State에서 요청 ID 및 PDF 근거 목록 추출
+        retrieved_evidence = list(evidence)
         REQUEST_ID.set(request_id)                        # 스레드 로컬에 요청 ID 바인딩
         details, duplicates = drop_duplicate_benefits(state["retrieved_data"])  # 동일 내용의 중복 혜택 항목 제거
         fees = [detail for detail in details if is_fee_detail(detail)]  # 연회비 항목 분리(Java Stream filter)
@@ -2608,19 +2737,26 @@ class CardGraphRAG:
                       "answer_text": fee["text"], "answer_source": FEE_SOURCE, "points": fee["points"], "uncertain": [],
                       "message": None, "fee_rows": fee["rows"]}
             CARD_LOG.log_summary("ANSWER", request_id, status=answer["status"], fee_rows=len(fee["rows"]), llm="skipped")
-            return {"path": ["answer"], "context": {"fees": fee["rows"]}, "answer": answer, "warnings": notes}
+            event = _diagnostic_event(state, "ANSWER", output_snapshot={"llm_skipped": True,
+                                                                          "skip_reason": "FEE_ONLY_PROGRAMMATIC_ANSWER",
+                                                                          "final_answer": answer})
+            return {"path": ["answer"], "context": {"fees": fee["rows"]}, "answer": answer, "warnings": notes,
+                    **({"llm_trace_events": [event]} if state.get("diagnostics_enabled") else {})}
         # LLM 문맥 구성: 답변 대상 혜택에 연결된 근거만 남기고, 혜택 상세는 benefit_context로 필요한 필드만 추린다.
         refs = {detail_ref(detail) for detail in details}  # 대상 혜택 식별자 집합(Set)
         evidence = [item for item in evidence if set(item.get("benefit_ids", [])) & refs]  # 해당 혜택에 연결된 PDF 근거만 필터링(교집합)
+        evidence_after_owner_filter = list(evidence)
         monthly_spend = previous_month_spend(state["question"])  # 질문에서 언급된 전월 실적 조건 파싱
         benefits = [benefit_context(detail, monthly_spend) for detail in details]  # 혜택 상세 데이터를 프롬프트용 구조화 문맥으로 변환
         amount = state["search_parameters"].get("payment_amount")  # 질문의 결제 금액 추출
+        llm_evidence_rows = answer_evidence_rows(
+            evidence, benefits,
+            per_benefit=4 if state.get("intent") == "BENEFIT_COMPARE" and len(benefits) >= 4 else 12,
+        )
         context = {"benefits": benefits, "payment_amount": amount,  # 답변 LLM에 전달할 context Map 구성
                    "rule_selection_unresolved": rule_conflicts(benefits, amount), "open_conditions": state["open_conditions"],
                    "evidence": [{key: item[key] for key in ("evidence_id", "page_no", "approval_status", "quote", "benefit_ids")}
-                                for item in answer_evidence_rows(
-                                    evidence, benefits,
-                                    per_benefit=4 if state.get("intent") == "BENEFIT_COMPARE" and len(benefits) >= 4 else 12)]}
+                                for item in llm_evidence_rows]}
         # TERMS(할인 제공 유의사항·제외 목록): 선택된 카드 혜택에 적용 범위가 맞는 항목과 그 원문 근거만 붙인다.
         if self.candidate_search is not None and hasattr(self.candidate_search, "card_terms"):
             card_ids = sorted({item[0] for item in (_card_item(detail_ref(detail)) for detail in details) if item})
