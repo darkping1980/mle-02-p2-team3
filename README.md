@@ -113,7 +113,7 @@ uv run streamlit run src/card_benefit/payment_card/db_pipeline_origin_search/str
 
 ## Streamlit 시연
 
-[배포 앱 열기](https://mle-02-p2-team3-rzlzgdjvne.streamlit.app/)
+[배포 앱 열기](https://mle-02-p2-team3-rzlzgdajdysf7nijchzvne.streamlit.app/)
 
 ## 진행 현황
 
@@ -353,7 +353,7 @@ uv run python src/card_benefit/payment_card/tests/evaluation_runner.py   # 연�
 *API 사용량·비용은 실제 LLM 호출 시 발생하니 사전 확인 필요.*
 
 ### 배포 (Streamlit Cloud)
-- 현재 배포된 앱: **[https://mle-02-p2-team3-rzlzgdjvne.streamlit.app/](https://mle-02-p2-team3-rzlzgdjvne.streamlit.app/)**
+- 현재 배포된 앱: **[https://mle-02-p2-team3-rzlzgdajdysf7nijchzvne.streamlit.app/](https://mle-02-p2-team3-rzlzgdajdysf7nijchzvne.streamlit.app/)**
 - 배포 시 `requirements.txt` 은 `src/card_benefit/payment_card/db_pipeline_origin_search/requirements.txt` 를 사용합니다.
 
 ## 10. 알려진 한계 & 개선 과제
