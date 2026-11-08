@@ -303,7 +303,7 @@ PostgreSQL에는 PDF 원문과 추출·검증 이력을 원장으로 관리하�
 |---|---|---|
 | 01. PDF 원문 | `card_doc` → `card_doc_page` → `card_doc_chunk` | 문서·페이지·청크 단위 원문 관리 |
 | 02. AI 추출 이력 | `card_ai_run` → `card_ai_call` → `card_extr_stg` | 실행·호출·추출 후보와 검증 상태 관리 |
-| 03. 상품·혜택 정보 | `card_product` → `card_product_item` | 카드 상품과 혜택·약관 등 상품 항목 관리 |
+| 03. 상품·혜택 정보 | 개별: `card_product` → `card_product_item`<br>공통: `card_common` → `card_common_bnft` | 카드별 상품 항목 및 공통 서비스·혜택 관리 |
 | 04. 공식 근거 연결 | `card_source_evidence` + `card_evidence_link` | PDF 인용 근거 보존 및 상품정보와의 연결 |
 
 **하단 설계 핵심**  
@@ -313,13 +313,13 @@ PostgreSQL에는 PDF 원문과 추출·검증 이력을 원장으로 관리하�
 
 PostgreSQL은 단순히 카드 혜택만 저장하는 데이터베이스가 아니라, 원본 PDF에서 어떤 정보가 추출됐고 최종 상품정보와 어떻게 연결됐는지 확인하기 위한 원장입니다.
 
-먼저 PDF 문서와 페이지·청크를 보존하고, AI의 실행과 호출, 추출 후보 및 검증 상태를 별도로 기록했습니다. 카드 상품은 `card_product`, 혜택·약관 등 상품 항목은 `card_product_item`에서 관리합니다. 상품 항목의 규칙과 조건은 별도 규칙 테이블로 일괄 분리한 구조가 아니라 `rule_list`, `item_cond_expr` 등 JSON 필드에도 보존됩니다.
+먼저 PDF 문서와 페이지·청크를 보존하고, AI의 실행과 호출, 추출 후보 및 검증 상태를 별도로 기록했습니다. 개별 카드 상품은 `card_product`, 혜택·약관 등 상품 항목은 `card_product_item`에서 관리합니다. 여러 카드에 적용되는 공통 서비스와 혜택은 `card_common`, `card_common_bnft`에서 별도로 관리합니다. 상품 항목의 규칙과 조건은 별도 규칙 테이블로 일괄 분리한 구조가 아니라 `rule_list`, `item_cond_expr` 등 JSON 필드에도 보존됩니다.
 
 또한 PDF에서 인용한 실제 문구는 `card_source_evidence`에, 이를 카드나 상품 항목에 연결하는 정보는 `card_evidence_link`에 관리합니다. 그래서 값뿐 아니라 출처와 추출 과정을 다시 확인할 수 있도록 구성했습니다.
 
 **실제 구현 기준 보충**
 
-- 공통 서비스·공통 혜택 원장은 `card_common`과 `card_common_bnft`에 별도로 관리함. PPT 본문은 공간을 고려해 카드 상품 중심으로 표시함.
+- 공통 서비스·공통 혜택은 `card_common`과 `card_common_bnft`에서 관리하며, 카드별 공통 혜택 적용 연결은 `card_common_bnft_apply`가 담당함. PPT 본문에는 개별·공통 구조를 함께 표시하고 연결 테이블은 설명에서만 언급함.
 - `card_product_item`에는 혜택뿐 아니라 TERMS, ANNUAL_FEE 등 상품 항목도 포함됨. '혜택 전용 테이블'로 설명하지 않음.
 - `card_evidence_link`는 원문 자체가 아니라 카드/상품 항목과 `card_source_evidence` 사이의 연결을 관리함.
 - `app_log`, `app_log_event_archive`는 질의·실행 로그 테이블로 PostgreSQL에 보존하며, 13페이지에서 설명함.
