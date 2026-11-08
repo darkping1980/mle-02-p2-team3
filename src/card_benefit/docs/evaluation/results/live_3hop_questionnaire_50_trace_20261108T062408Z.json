@@ -1,0 +1,39 @@
+{
+  "created_at_utc": "2026-11-08T06:25:10.948543+00:00",
+  "run_id": "live50-20261108T062408Z-5364151b",
+  "code_revision": "4ff5c2244dceb29dc0eaa250cd6355e1ff4919b7+src.a08f5ac932dbabe8",
+  "model": "gpt-6-luna",
+  "question_count": 6,
+  "traces": [
+    {
+      "question_id": "CARD10-001",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-001",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-002",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-002",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-003",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-003",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-004",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-004",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-005",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-005",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-006",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-006",
+      "events": []
+    }
+  ]
+}
