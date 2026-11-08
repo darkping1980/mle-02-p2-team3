@@ -333,47 +333,42 @@ PostgreSQL은 단순히 카드 혜택만 저장하는 데이터베이스가 아�
 - `src/card_benefit/docs/guide/SCHEMA_DEEP_DIVE_POSTGRESQL_NEO4J.md`
 ---
 
-## 슬라이드 15/19 — PostgreSQL 원장 기반 Neo4j 그래프 구성
+## 슬라이드 15/19 — PostgreSQL 테이블과 Neo4j 라벨 비교
 
 **구분:** 기술 구현 02  
-**제목:** PostgreSQL 원장 기반 Neo4j 그래프 구성
+**제목:** PostgreSQL 테이블과 Neo4j 라벨 비교
 
-**변환 흐름**  
-`PostgreSQL 원장 → 테이블·키·참조 관계 매핑 → Neo4j 노드·관계 적재 → 원장 대조 검증`
+**원장 데이터와 검색 데이터의 대응 (PPT 적용용)**
 
-| 항목 | PPT 적용 문구 |
+| PostgreSQL 테이블 | Neo4j 노드 라벨 |
 |---|---|
-| 원장 구조 확인 | PostgreSQL 테이블·PK·참조 컬럼을 기준으로 변환 구조 정의 |
-| 노드·관계 구성 | 상품·혜택·문서 등을 노드로, 연결 테이블과 참조 관계를 그래프 관계로 변환 |
-| 원본 정보 보존 | 원본 키·행 정보·혜택 규칙 JSON을 보존하고 기존 임베딩 재사용 |
-| 적재 후 검증 | PostgreSQL 원장과 Neo4j의 노드·관계·속성을 대조 |
+| `card_product` | `dp_card_product` |
+| `card_product_item` | `dp_card_product_item` |
+| `card_common_bnft` | `dp_card_common_bnft` |
+| `card_doc` | `dp_card_doc` |
+| `card_source_evidence` | `dp_card_source_evidence` |
+
+**실행 로그는 PostgreSQL에 저장**  
+`app_log` · `app_log_event_archive` → Neo4j 검색용 노드로 적재하지 않음
 
 **하단 핵심 메시지**  
-독립적인 업무 그래프 모델을 새로 설계하기보다, 기존 PostgreSQL 원장을 검색용 그래프로 변환
+원장 테이블을 바탕으로 Neo4j에 비슷한 이름의 노드를 구성해 검색에 사용하고, 질문·실행 로그는 PostgreSQL에서 관리
 
-**발표 설명 초안**
+**발표 설명 초안 (약 30초)**
 
-이번 프로젝트는 처음부터 Neo4j 전용 그래프 모델을 따로 설계한 방식은 아닙니다. PostgreSQL에 문서, 카드 상품, 혜택, 원문 근거를 관리하는 원장을 먼저 구축했습니다.
+앞에서 PostgreSQL 원장 테이블을 보셨는데, Neo4j에서도 테이블명 앞에 `dp_`를 붙인 형태의 라벨을 사용했습니다. 원장의 카드 상품, 혜택, 문서, 근거 정보를 검색용 그래프에 반영한 것입니다.
 
-그 원장의 테이블과 키, 실제 참조 컬럼을 기준으로 Neo4j 노드와 관계를 만들었습니다. 특히 상품 혜택의 규칙과 조건은 별도 그래프 노드로 모두 쪼개지 않고, PostgreSQL의 JSON 데이터를 원본 그대로 보존했습니다. 검색에는 원장에 저장된 임베딩도 재사용했습니다.
+테이블 구조를 그대로 새 업무 모델로 재설계하기보다는 원장의 데이터를 최대한 대응시켰습니다. 다만 연결 테이블은 노드가 아니라 관계로 변환되는 경우도 있어 두 데이터베이스의 물리 구조가 완전히 같은 것은 아닙니다.
 
-이 변환·적재 과정에는 LLM을 사용하지 않았습니다. Python 매핑 코드와 Cypher 적재 로직으로 처리하고, 적재 후에는 PostgreSQL과 Neo4j의 데이터가 일치하는지 검증했습니다.
+사용자 질문에 대한 혜택 검색은 Neo4j에서 처리하고, 질문과 실행·오류 로그는 PostgreSQL의 `app_log`에 저장하도록 역할을 구분했습니다.
 
-**용어·구현 기준 참고**
+**발표자 참고 (PPT에 생략)**
 
-- **PDF 추출과 구분:** PDF의 혜택·조건 구조화 단계에서는 LLM과 Pydantic `PageExtraction`을 사용했지만, **PostgreSQL → Neo4j 적재 단계에는 LLM을 사용하지 않았음**.
-- **그래프 스키마가 없는 것은 아님:** 노드 라벨·관계 유형·제약조건·인덱스는 존재함. 별도 도메인 그래프 모델을 완전히 재설계하지 않았다는 의미임.
-- **FK 주의:** PostgreSQL 원장에는 선언된 FK 제약조건이 없으므로, 연결은 실제 참조 컬럼과 대상 PK를 대조한 명시적 매핑임.
-- **규칙 구조:** `card_product_item`의 `rule_list`, `item_cond_expr` 등은 JSON으로 보존했고, RULE·COND 등 별도 파생 노드를 만들지 않았음.
-- **2026-11-06 재구축 검증 기록:** Neo4j 4,359노드·8,648관계, 원장 대조에서 누락·초과·속성 차이 0. 발표 시점 최신 상태는 별도 확인 필요.
-
-**확인 근거**
-
-- `src/card_benefit/payment_card/db_pipeline/neo4j_relational_model.py`
-- `src/card_benefit/payment_card/db_pipeline/neo4j_load_draft.py`
-- `src/card_benefit/docs/guide/POSTGRESQL_TO_NEO4J_SCHEMA_MAPPING.md`
-- `src/card_benefit/docs/guide/POSTGRESQL_NEO4J_REBUILD_GUIDE.md`
-- `src/card_benefit/payment_card/db_pipeline/extraction_service.py`
+- 위 표는 실제 매핑의 일부 예시임. Neo4j 노드 라벨의 접두어는 `dp_`이며, 모든 PostgreSQL 테이블이 1:1 노드가 되는 것은 아님.
+- 예: `card_evidence_link`는 `dp_supported_by` 관계, `card_product_doc`는 `dp_has_document` 관계로 매핑.
+- PostgreSQL의 `app_log`, `app_log_event_archive`는 그래프 적재 대상에서 제외. 로그 저장은 Streamlit의 별도 경로에서 처리.
+- PostgreSQL 원장에 선언된 FK가 없더라도 참조 컬럼을 기준으로 관계를 매핑함. '구조가 완전히 동일하다'는 표현은 피함.
+- 소스 근거: `src/card_benefit/docs/guide/POSTGRESQL_TO_NEO4J_SCHEMA_MAPPING.md`
 
 ---
 
