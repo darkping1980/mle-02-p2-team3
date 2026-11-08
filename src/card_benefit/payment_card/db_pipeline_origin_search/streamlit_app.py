@@ -115,8 +115,8 @@ def customer_response_for_log(outcome: dict) -> str:
 def show_text(text: str) -> None:
     """Render the Answer LLM text while preserving its content."""
     if text:
-        formatted = "\n\n".join(part.replace("\n", "  \n") for part in str(text).split("\n\n"))
-        st.markdown(formatted, unsafe_allow_html=False)
+        with st.container(key="answer_content"):
+            st.markdown(str(text), unsafe_allow_html=False)
 
 # endregion
 
@@ -242,6 +242,25 @@ def show_outcome(outcome: dict) -> None:
 
 # region 페이지 본문 (Streamlit 재실행마다 위에서부터 실행되는 진입점)
 st.set_page_config(page_title="카드 혜택 안내", layout="wide")
+
+# Keep the answer readable on desktop while preserving left alignment.
+st.markdown(
+    """
+    <style>
+    .st-key-answer_content {
+        width: 70%;
+        max-width: 70%;
+        margin-left: 0;
+        text-align: left;
+    }
+    .st-key-answer_content p,
+    .st-key-answer_content li {
+        overflow-wrap: anywhere;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 st.title("카드 혜택 안내", anchor=False)
 st.caption("하나·우리카드 상품설명서의 근거로 혜택과 연회비를 안내합니다. 실제 적용 조건은 카드사 안내를 함께 확인해 주세요.")
 with st.expander("지원 카드 10종 보기", expanded=False):
@@ -251,6 +270,7 @@ with st.expander("지원 카드 10종 보기", expanded=False):
             st.markdown(f"**{issuer}**")
             for card in cards:
                 st.markdown(f"- {card}")
+    st.divider()
 st.caption("카드를 선택하지 않아도 됩니다. 카드 혜택 추천·비교를 포함해 자유롭게 질문해 주세요.")
 
 with st.sidebar:
@@ -280,7 +300,8 @@ if submitted:                                             # 폼 제출 이벤트
     question = question.strip()                           # 사용자 입력 문자열 앞뒤 공백 제거(Java의 String.trim())
     session_id = st.session_state.execution_log_session_id  # 현재 브라우저 세션 ID(HttpSessionId와 유사) 추출
     request_id = str(uuid4())                             # 요청 추적을 위한 고유 트랜잭션 UUID 생성
-    last = st.session_state.get("outcome")                # 세션에 캐시된 직전 질문의 실행 결과(Map) 조회
+    last = st.session_state.get("outcome")
+    outcome_rendered = False
     if not question:                                      # 입력 검증: 빈 문자열 체크
         st.warning("질문을 입력하세요.")                  # 화면에 경고 알림 렌더링
     # 분기: 직전과 같은 질문·모드이고 오류가 없었으면 LLM 비용을 쓰지 않고 이전 결과를 재사용한다.
@@ -306,12 +327,15 @@ if submitted:                                             # 폼 제출 이벤트
         outcome_for_log = None                            # 로그 적재를 위한 최종 결과 변수 초기화
         try:
             pipeline = get_pipeline()                     # 싱글톤 파이프라인 인스턴스 획득
-            with st.spinner("카드 혜택을 찾아 답변을 준비하고 있습니다..."):  # UI 로딩 스피너 컨텍스트 표시
+            with st.spinner("질문에 맞는 카드 혜택을 찾고 답변을 작성하고 있습니다..."):
                 # GraphRAG 실행: interpret → (retrieve → answer) → finish. 반환값은 최종 State(dict)다.
                 # 노드가 직접 잡는 실패(LLM·Neo4j·후보 검색)는 예외가 아니라 State의 error와 answer.status=ERROR로 돌아온다.
                 with capture_request_queries() as query_events:  # 실행 중 발생한 DB 쿼리 인터셉트 및 수집
                     st.session_state.outcome = pipeline.run(question)  # LangGraph 파이프라인 진입점 호출 및 결과를 세션에 저장
-                outcome_for_log = st.session_state.outcome  # 로그 기록용 결과 참조 복사
+                outcome_for_log = st.session_state.outcome
+                if st.session_state.outcome:
+                    show_outcome(st.session_state.outcome)
+                    outcome_rendered = True
         except Exception as e:                            # 예기치 못한 런타임 예외 발생 시 폴백 처리
             import traceback                              # 스택 트레이스 출력을 위한 모듈 임포트
             traceback.print_exc()                         # 콘솔에 에러 스택 트레이스 로깅
@@ -339,7 +363,7 @@ if submitted:                                             # 폼 제출 이벤트
                                      elapsed_ms=(perf_counter() - app_log_started) * 1000, reused=False)
 
 # 재실행마다 저장된 마지막 결과를 다시 그린다(위젯 조작만 해도 결과가 화면에 남는 이유).
-if st.session_state.get("outcome"):
+if st.session_state.get("outcome") and not (submitted and outcome_rendered):
     show_outcome(st.session_state.outcome)
 if submitted:
     CARD_LOG.log_summary("PERF", (st.session_state.get("outcome") or {}).get("request_id", request_id),

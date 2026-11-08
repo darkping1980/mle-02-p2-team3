@@ -283,6 +283,21 @@ def app_db_llm_trace_enabled() -> bool:
     return enabled and development and app_db_log_enabled()
 
 
+def evaluation_llm_trace_enabled() -> bool:
+    """Enable local evaluation traces independently of PostgreSQL app_log persistence.
+
+    This separate opt-in is still limited to APP_ENV=development. It intentionally
+    does not inspect APP_DB_LOG_ENABLED because evaluation traces are written to a
+    local JSON artifact, not to the app_log tables.
+    """
+    load_project_environment()
+    enabled = os.getenv("APP_EVALUATION_TRACE_ENABLED", "0").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    development = os.getenv("APP_ENV", "").strip().lower() == "development"
+    return enabled and development
+
+
 _TRACE_REDACTIONS = (
     (re.compile(r"(?i)\b(?:sk-[a-z0-9_-]{16,}|AKIA[A-Z0-9]{16})\b"), "[REDACTED_SECRET]"),
     (re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+"), "Bearer [REDACTED_SECRET]"),

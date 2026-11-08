@@ -28,7 +28,7 @@ from common.query_log_config import (
 )
 from pydantic import BaseModel, Field
 
-from .execution_log import app_db_llm_trace_enabled, trace_source_revision
+from .execution_log import app_db_llm_trace_enabled, evaluation_llm_trace_enabled, trace_source_revision
 from .neo4j_search import (
     ALL_SECTIONS, CARD_LOG, CARD_LOGGER_NAME, DETAIL_LOG, REQUEST_ID, catalog_batch_plan, detail_plan, detail_statements, entity_ref, source,
 )
@@ -1250,19 +1250,31 @@ class CardGraphRAG:
         return builder.compile()                          # 선언된 상태 그래프 유효성 검증 및 동기 실행 가능한 인스턴스로 컴파일
 
     def _initial_state(self, question: str, mode: str | None = None, *, request_id: str | None = None,
-                       question_id: str | None = None) -> CardState:
+                       question_id: str | None = None, capture_diagnostics: bool = False) -> CardState:
         """요청을 기록하고 그래프 입력 State를 만든다."""
         request_id = request_id or uuid4().hex[:8]        # Streamlit UUID가 있으면 공유하고, 직접 실행은 기존 짧은 ID를 유지
-        diagnostics_enabled = app_db_llm_trace_enabled()
+        if capture_diagnostics:
+            if not evaluation_llm_trace_enabled():
+                raise RuntimeError(
+                    "Local evaluation trace capture requires APP_ENV=development and "
+                    "APP_EVALUATION_TRACE_ENABLED=1."
+                )
+            diagnostics_enabled = True
+        else:
+            diagnostics_enabled = app_db_llm_trace_enabled()
         CARD_LOG.log_summary("REQUEST", request_id, question=repr(question), model=self.model, mode=mode,  # 신규 요청 요약 로그 출력
                              started_at=datetime.now().astimezone().isoformat(timespec="seconds"))
         return {"request_id": request_id, "question_id": question_id, "diagnostics_enabled": diagnostics_enabled,
                 "llm_trace_events": [], "started": perf_counter(), "question": question.strip(),
                 "error": None, "warnings": [], "llm_calls": [], "path": []}
 
-    def run(self, question: str, *, request_id: str | None = None, question_id: str | None = None) -> CardState:
+    def run(self, question: str, *, request_id: str | None = None, question_id: str | None = None,
+            capture_diagnostics: bool = False) -> CardState:
         """사용자 질문을 입력받아 LangGraph 전체 파이프라인을 1회 동기 실행하고 최종 State를 반환한다."""
-        return self.graph.invoke(self._initial_state(question, request_id=request_id, question_id=question_id))
+        return self.graph.invoke(self._initial_state(
+            question, request_id=request_id, question_id=question_id,
+            capture_diagnostics=capture_diagnostics,
+        ))
 
     # 개발 검증 모드. 그래프와 같은 노드·라우팅 함수를 사용자가 누른 단계까지만 호출한다.
     def _step(self, state: CardState, node, route=None) -> CardState:

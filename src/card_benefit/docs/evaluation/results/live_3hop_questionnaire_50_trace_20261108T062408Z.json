@@ -255,5 +255,7 @@
       "run_id": "live50-20261108T062408Z-5364151b-CARD10-050",
       "events": []
     }
-  ]
+  ],
+  "capture_status": "NOT_CAPTURED",
+  "capture_error": "The evaluation process set APP_DB_LOG_ENABLED=off. app_db_llm_trace_enabled() requires app logging enabled, so diagnostics_enabled was false. Prompts and raw LLM outputs cannot be reconstructed after the completed calls."
 }

@@ -4055,7 +4055,8 @@
       },
       "elapsed_ms": 12759.52,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-001"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-001",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-002",
@@ -5193,7 +5194,8 @@
       },
       "elapsed_ms": 7196.32,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-002"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-002",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-003",
@@ -6963,7 +6965,8 @@
       },
       "elapsed_ms": 8701.59,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-003"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-003",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-004",
@@ -7845,7 +7848,8 @@
       },
       "elapsed_ms": 9820.48,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-004"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-004",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-005",
@@ -10033,7 +10037,8 @@
       },
       "elapsed_ms": 9312.41,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-005"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-005",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-006",
@@ -11592,7 +11597,8 @@
       },
       "elapsed_ms": 10243.0,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-006"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-006",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-007",
@@ -13326,7 +13332,8 @@
       },
       "elapsed_ms": 8477.28,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-007"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-007",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-008",
@@ -14035,7 +14042,8 @@
       },
       "elapsed_ms": 7658.8,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-008"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-008",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-009",
@@ -16012,7 +16020,8 @@
       },
       "elapsed_ms": 8686.9,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-009"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-009",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-010",
@@ -16430,7 +16439,8 @@
       },
       "elapsed_ms": 4183.17,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-010"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-010",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-011",
@@ -19695,7 +19705,8 @@
       },
       "elapsed_ms": 7147.28,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-011"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-011",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-012",
@@ -20544,7 +20555,8 @@
       },
       "elapsed_ms": 6849.26,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-012"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-012",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-013",
@@ -21439,7 +21451,8 @@
       },
       "elapsed_ms": 9084.43,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-013"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-013",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-014",
@@ -21998,7 +22011,8 @@
       },
       "elapsed_ms": 6330.38,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-014"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-014",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-015",
@@ -23903,7 +23917,8 @@
       },
       "elapsed_ms": 8981.08,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-015"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-015",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-016",
@@ -24564,7 +24579,8 @@
       },
       "elapsed_ms": 7061.26,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-016"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-016",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-017",
@@ -29523,7 +29539,8 @@
       },
       "elapsed_ms": 10500.79,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-017"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-017",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-018",
@@ -31573,7 +31590,8 @@
       },
       "elapsed_ms": 9194.83,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-018"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-018",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-019",
@@ -32634,7 +32652,8 @@
       },
       "elapsed_ms": 8349.45,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-019"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-019",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-020",
@@ -32877,7 +32896,8 @@
       },
       "elapsed_ms": 3540.43,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-020"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-020",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-021",
@@ -34464,7 +34484,8 @@
       },
       "elapsed_ms": 8065.1,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-021"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-021",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-022",
@@ -36008,7 +36029,8 @@
       },
       "elapsed_ms": 9191.79,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-022"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-022",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-023",
@@ -37756,7 +37778,8 @@
       },
       "elapsed_ms": 5578.44,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-023"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-023",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-024",
@@ -38639,7 +38662,8 @@
       },
       "elapsed_ms": 7862.44,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-024"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-024",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-025",
@@ -40167,7 +40191,8 @@
       },
       "elapsed_ms": 6699.89,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-025"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-025",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-026",
@@ -41337,7 +41362,8 @@
       },
       "elapsed_ms": 6513.51,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-026"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-026",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-027",
@@ -43044,7 +43070,8 @@
       },
       "elapsed_ms": 6129.83,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-027"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-027",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-028",
@@ -43755,7 +43782,8 @@
       },
       "elapsed_ms": 6256.65,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-028"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-028",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-029",
@@ -44002,7 +44030,7 @@
         }
       ],
       "execution_status": "COMPLETED",
-      "judgment": "HOLD",
+      "judgment": "CORRECT",
       "answer_status": "ANSWERED",
       "final_answer": "지난달 이용액이 30만 원 이상 80만 원 미만이면 월 할인 한도는 1만 원이고, 80만 원 이상이면 1만 5천 원입니다.",
       "answer": {
@@ -45721,7 +45749,8 @@
       },
       "elapsed_ms": 6307.79,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-029"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-029",
+      "judgment_basis": "PDF_VERIFIED record; expected facts require 300k?<800k => 10,000 KRW and >=800k => 15,000 KRW; final answer contains both thresholds and caps. It omits an extra enrollment-grace note not listed in expected_facts and outside the question."
     },
     {
       "question_id": "CARD10-030",
@@ -47687,7 +47716,8 @@
       },
       "elapsed_ms": 12751.64,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-030"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-030",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-031",
@@ -49428,7 +49458,8 @@
       },
       "elapsed_ms": 11622.19,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-031"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-031",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-032",
@@ -52075,7 +52106,8 @@
       },
       "elapsed_ms": 7018.05,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-032"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-032",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-033",
@@ -52964,7 +52996,8 @@
       },
       "elapsed_ms": 7942.61,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-033"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-033",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-034",
@@ -53525,7 +53558,8 @@
       },
       "elapsed_ms": 7498.28,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-034"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-034",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-035",
@@ -55396,7 +55430,8 @@
       },
       "elapsed_ms": 10473.68,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-035"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-035",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-036",
@@ -56054,7 +56089,8 @@
       },
       "elapsed_ms": 6015.18,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-036"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-036",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-037",
@@ -61953,7 +61989,8 @@
       },
       "elapsed_ms": 8410.17,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-037"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-037",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-038",
@@ -66915,7 +66952,8 @@
       },
       "elapsed_ms": 11914.11,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-038"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-038",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-039",
@@ -67975,7 +68013,8 @@
       },
       "elapsed_ms": 9245.32,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-039"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-039",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-040",
@@ -69038,7 +69077,8 @@
       },
       "elapsed_ms": 11193.86,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-040"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-040",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-041",
@@ -72893,7 +72933,8 @@
       },
       "elapsed_ms": 10991.68,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-041"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-041",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-042",
@@ -78283,7 +78324,8 @@
       },
       "elapsed_ms": 14565.82,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-042"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-042",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-043",
@@ -82380,7 +82422,8 @@
       },
       "elapsed_ms": 15093.7,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-043"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-043",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-044",
@@ -90062,7 +90105,8 @@
       },
       "elapsed_ms": 21280.92,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-044"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-044",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-045",
@@ -95065,7 +95109,8 @@
       },
       "elapsed_ms": 16826.52,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-045"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-045",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-046",
@@ -96761,7 +96806,8 @@
       },
       "elapsed_ms": 8479.29,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-046"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-046",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-047",
@@ -98310,7 +98356,8 @@
       },
       "elapsed_ms": 6567.08,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-047"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-047",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-048",
@@ -104239,7 +104286,8 @@
       },
       "elapsed_ms": 14942.73,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-048"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-048",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-049",
@@ -106684,7 +106732,8 @@
       },
       "elapsed_ms": 14129.19,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-049"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-049",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     },
     {
       "question_id": "CARD10-050",
@@ -109455,17 +109504,18 @@
       },
       "elapsed_ms": 3584.67,
       "trace_event_stages": [],
-      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-050"
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-050",
+      "judgment_basis": "Ground truth status NEEDS_REVIEW; retained as HOLD pending PDF adjudication."
     }
   ],
   "totals": {
     "completed": 50,
     "errors": 0,
     "judgments": {
-      "CORRECT": 0,
+      "CORRECT": 1,
       "PARTIAL": 0,
       "WRONG": 0,
-      "HOLD": 50,
+      "HOLD": 49,
       "ERROR": 0
     },
     "llm_calls": 96,
@@ -109475,5 +109525,28 @@
     "embedding_tokens_estimate": 2010,
     "embedding_cost_estimate_usd": 4.02e-05,
     "total_elapsed_ms": 459828.71
+  },
+  "trace_capture": {
+    "status": "NOT_CAPTURED",
+    "event_count": 0,
+    "reason": "The evaluation process set APP_DB_LOG_ENABLED=off. app_db_llm_trace_enabled() requires app logging enabled, so diagnostics_enabled was false. Prompts and raw LLM outputs cannot be reconstructed after the completed calls.",
+    "retry_policy": "No questions were rerun. Each Notion question ID was invoked once."
+  },
+  "stage_analysis": {
+    "not_answerable_question_ids": [
+      "CARD10-010",
+      "CARD10-020",
+      "CARD10-047",
+      "CARD10-050"
+    ],
+    "observed": "Each ended at interpret -> finish with empty selected benefit_ids; no Retrieve/Answer call. Search hits and final Interpret state are present in the result JSON.",
+    "likely_stage": "SEARCH / INTERPRET",
+    "confidence": "Observed final states support missing or unsuitable candidates and an empty Interpret selection; exact LLM reasoning cannot be confirmed because the 50-run raw Interpret prompt/response trace was not captured.",
+    "questions": {
+      "CARD10-010": "Candidate list did not include the requested card annual-fee record; it included unrelated benefit items and another card family-fee item. Interpret selected none.",
+      "CARD10-020": "Candidate list did not include the requested card annual-fee record; it included SIMPLE purchase discount and unrelated family-fee items. Interpret selected none.",
+      "CARD10-047": "Search surfaced POINT II and SHOPPING candidates but not the required DAILY delivery-benefit candidate in the recorded hits. Interpret cited the missing DAILY candidate and selected none.",
+      "CARD10-050": "Search top hits were airport-related travel/valet/common benefits but no airport-lounge benefit; Interpret selected none and reported no lounge candidate."
+    }
   }
 }
