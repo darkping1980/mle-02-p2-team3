@@ -1,5 +1,5 @@
 {
-  "created_at_utc": "2026-11-08T06:25:10.948543+00:00",
+  "created_at_utc": "2026-11-08T06:25:27.114904+00:00",
   "run_id": "live50-20261108T062408Z-5364151b",
   "code_revision": "4ff5c2244dceb29dc0eaa250cd6355e1ff4919b7+src.a08f5ac932dbabe8",
   "git_head": "4ff5c2244dceb29dc0eaa250cd6355e1ff4919b7",
@@ -8,7 +8,7 @@
   "trace_enabled": "development-only, process scoped",
   "retry_policy": "one invocation per question; no retries",
   "question_source": "src\\card_benefit\\docs\\evaluation\\card10_graphrag_golden_dataset_v1.jsonl",
-  "question_count": 6,
+  "question_count": 8,
   "results": [
     {
       "question_id": "CARD10-001",
@@ -11593,10 +11593,2453 @@
       "elapsed_ms": 10243.0,
       "trace_event_stages": [],
       "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-006"
+    },
+    {
+      "question_id": "CARD10-007",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-007",
+      "hop_count": 1,
+      "question": "JADE Prime의 공항 라운지 혜택은 무엇이야?",
+      "golden_source": "card10_graphrag_golden_dataset_v1.jsonl (question text matched Notion source exactly)",
+      "golden_status": "NEEDS_REVIEW",
+      "expected_answer": null,
+      "expected_facts": [],
+      "required_conditions": [],
+      "required_limits": [],
+      "exclusion_conditions": [],
+      "expected_evidence_ids": [],
+      "official_pdf_evidence": [
+        {
+          "source_pdf_name": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+          "source_document_id": "20261105_000041",
+          "source_pdf_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+          "source_pdf_sha256_matches_local": true,
+          "source_page": 3,
+          "source_chunk_id": "20261105_000167",
+          "evidence_ids": [
+            {
+              "evidence_id": "20261105_002589",
+              "quote": "연 누적 이용금액 2,400만원 이상 시 10만 하나머니 적립 제공 (연 1회)",
+              "start_pos": 427,
+              "end_pos": 470,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002590",
+              "quote": "10만 하나머니 적립",
+              "start_pos": 204,
+              "end_pos": 214,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002591",
+              "quote": "연 1회",
+              "start_pos": 466,
+              "end_pos": 469,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002592",
+              "quote": "서비스 실적 금액 달성 다음 다음달 10영업일 이내 적립",
+              "start_pos": 27,
+              "end_pos": 57,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002593",
+              "quote": "매년 BONUS 바우처(10만 하나머니 적립) 서비스 제공 시점에 정상 이용 가능한 ‘JADE Prime’카드를 소지한 본인 회원에 한하여 제공됩니다.",
+              "start_pos": 191,
+              "end_pos": 274,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002594",
+              "quote": "서비스 실적 금액 : 서비스 실적 기간 내 2,400만원 이상 이용 시",
+              "start_pos": 93,
+              "end_pos": 131,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002595",
+              "quote": "서비스 실적 기간 : 매년 / 카드 발급 월 포함 12개월",
+              "start_pos": 59,
+              "end_pos": 90,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002596",
+              "quote": "정상 결제 건에 한하여 실적으로 인정됩니다.(승인취소, 매입취소 결제 건은 서비스 실적 금액에서 제외)",
+              "start_pos": 346,
+              "end_pos": 402,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002597",
+              "quote": "매년 BONUS 바우처(10만 하나머니 적립) 서비스 제공 시점에 정상 이용 가능한 ‘JADE Prime’카드를 소지한 본인 회원에 한하여 제공됩니다.",
+              "start_pos": 191,
+              "end_pos": 274,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002598",
+              "quote": "본인 회원 탈회, 유효기간만료, 거래정지, 신용불량 등의 경우 보너스 바우처(10만 하나머니 적립) 제공 불가",
+              "start_pos": 281,
+              "end_pos": 341,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002599",
+              "quote": "전세계 공항 라운지 무료 이용 (본인/가족/동반자 통합 연 6회, 일 3회)",
+              "start_pos": 473,
+              "end_pos": 514,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002600",
+              "quote": "무료 이용",
+              "start_pos": 484,
+              "end_pos": 488,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002601",
+              "quote": "본인/가족/동반자 통합 연 6회",
+              "start_pos": 491,
+              "end_pos": 507,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002602",
+              "quote": "본인/가족/동반자 통합 연 6회, 일 3회",
+              "start_pos": 491,
+              "end_pos": 513,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002603",
+              "quote": "카드 해지 이후 다시 신규로 발급하는 경우에도 해지된 카드로 \n\t 이용한 횟수와 합산되어 통합 연 6회, 일 3회 한도로 제공됩니다.",
+              "start_pos": 976,
+              "end_pos": 1049,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002604",
+              "quote": "카드 해지 이후 다시 신규로 발급하는 경우에도 해지된 카드로 \n\t 이용한 횟수와 합산되어 통합 연 6회, 일 3회 한도로 제공됩니다.",
+              "start_pos": 976,
+              "end_pos": 1049,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002605",
+              "quote": "국내외겸용카드로 발급 시 서비스 제공(국내전용카드 보유 회원 제외)",
+              "start_pos": 518,
+              "end_pos": 554,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002606",
+              "quote": "1차년도 : 카드 발급 월 포함 12개월\n2차년도 이후 : 전년도 서비스 제공 기간 종료 후 12개월",
+              "start_pos": 582,
+              "end_pos": 637,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002607",
+              "quote": "THE LOUNGE 앱 설치 및 ‘JADE Prime’카드를 등록 후 \n\t 라운지 이용권 다운로드",
+              "start_pos": 791,
+              "end_pos": 844,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002608",
+              "quote": "국내외겸용카드로 발급 시 서비스 제공(국내전용카드 보유 회원 제외)",
+              "start_pos": 518,
+              "end_pos": 554,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002609",
+              "quote": "1차년도 : 지난달 1일부터 말일까지 100만원 이상 이용 시 제공",
+              "start_pos": 640,
+              "end_pos": 676,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002610",
+              "quote": "2차년도 이후 : 서비스 제공 기간 직전 1년간 1,200만원 이상 이용 시",
+              "start_pos": 678,
+              "end_pos": 719,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002611",
+              "quote": "최초 카드 사용 등록 후 다음달 말일까지는 지난달 카드 이용금액 \n\t 100만원 미만 시에도 서비스 제공",
+              "start_pos": 724,
+              "end_pos": 781,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002612",
+              "quote": "THE LOUNGE 앱 설치 및 ‘JADE Prime’카드를 등록 후 \n\t 라운지 이용권 다운로드",
+              "start_pos": 791,
+              "end_pos": 844,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002613",
+              "quote": "제휴 라운지에 THE LOUNGE 이용권과 함께 \n\t 여권 및 항공 탑승권 제시 후 이용",
+              "start_pos": 850,
+              "end_pos": 898,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002614",
+              "quote": "항공권 탑승자 이름, 여권 및 THE LOUNGE 앱에 등록된 영문명이  \n\t 동일해야 이용 가능합니다.",
+              "start_pos": 1055,
+              "end_pos": 1112,
+              "card_doc_chunk_id": "20261105_000167",
+              "chunk_seq": 3,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            }
+          ],
+          "evidence_text": "BONUS VOUCHER                                                          AIRPORT\n\n\n\n 연 누적 이용금액 2,400만원 이상 시 10만 하나머니 적립 제공 (연 1회)                         전세계 공항 라운지 무료 이용 (본인/가족/동반자 통합 연 6회, 일 3회)\n                                                                                                                                                                                               * 국내외겸용카드로 발급 시 서비스 제공(국내전용카드 보유 회원 제외)\n\n\n\n\n 서비스 제공 시점    서비스 실적 금액 달성 다음 다음달 10영업일 이내 적립                                                               서비스 제공 기간     1차년도 : 카드 발급 월 포함 12개월                    유의 사항               ⦁ 본인카드 회원과 라운지 입장 동반인/가족카드 회원 이용 횟수는\n                                                                                                                                 2차년도 이후 : 전년도 서비스 제공 기간 종료 후 12개월                          합산되어 통합 연 6회, 일 3회 서비스 제공 됩니다.\n 서비스 실적 조건    서비스 실적 기간 : 매년 / 카드 발급 월 포함 12개월                                                                                                                                                                                                                                                                  ⦁ 카드 해지 이후 다시 신규로 발급하는 경우에도 해지된 카드로\n             서비스 실적 금액 : 서비스 실적 기간 내 2,400만원 이상 이용 시                                                           서비스 실적 조건     1차년도 : 지난달 1일부터 말일까지 100만원 이상 이용 시 제공                      이용한 횟수와 합산되어 통합 연 6회, 일 3회 한도로 제공됩니다.\n                예시) ’24년 6월 발급 → ’24년 6월~’25년 5월 기간 중 2,400만원 누적 이용                                                                            2차년도 이후 : 서비스 제공 기간 직전 1년간 1,200만원 이상 이용 시                                      ⦁ 항공권 탑승자 이름, 여권 및 THE LOUNGE 앱에 등록된 영문명이\n                                                                                                                                                                         동일해야                                                                                                                                                                            이용 가능합니다.\n                                                                                                                                                                                                                                        ⦁ 최초                                                                                                                        카드                                                                                                                         사용                                                                                                                             등록 후                                                                                                                                 다음달                                                                                                                                    말일까지는 지난달 카드 이용금액                                        ⦁                                                                                                                                                                             앱 아이디                                                                                                                                                                                    공유                                                                                                                                                                                    및 라운지                                                                                                                                                                                           이용권 양도는                                                                                                                                                                                                                        불가능합니다.                                                                                                                                                                                                                                  THE LOUNGE\n                                                                                                                           미만                                                                                                                             시에도                                                                                                                                서비스                                                                                                                                   제공                                                                                                                                                      100만원 유의 사항               ⦁ 매년 BONUS 바우처(10만 하나머니 적립) 서비스 제공 시점에 정상 이용 가능한 ‘JADE Prime’카드를 소지한 본인 회원에 한하여 제공됩니다.                                                                                                                                                                                                                                                                                                                                          ⦁ 다운로드(발급)                                                                                                                                                                               받은                                                                                                                                                                                 라운지                                                                                                                                                                                     이용권은                                                                                                                                                                                                                  ‘마이페이지                                                                                                                                                                                               이용권                                                                                                                                                                                                                               보관함’에\n             ※ 본인 회원 탈회, 유효기간만료, 거래정지, 신용불량 등의 경우 보너스 바우처(10만 하나머니 적립) 제공 불가                                                                                                     자동 저장되어 발급 후 24시간까지 유효하고 미사용 시 자동 취소되어\n                          ⦁ 정상 결제 건에 한하여 실적으로 인정됩니다.(승인취소, 매입취소 결제 건은 서비스 실적 금액에서 제외)                                         이용 방법               ⦁ THE LOUNGE 앱 설치 및 ‘JADE Prime’카드를 등록 후                        이용 가능 횟수는 자동 복원됩니다.\n                                                                                                                       라운지 이용권 다운로드                                                                           ⦁ 라운지 입장 시 동반인 현장 결제 및 기타 사항은 각 라운지 규정을 준수합니다.\n                                                                                                                                                                                                                                        ⦁ 제휴 라운지에 THE LOUNGE 이용권과 함께                                                        ⦁ 이용 가능 라운지 및 사용방법 등 서비스 관련 상세 내용은 THE LOUNGE\n                                                                                                                      여권 및 항공 탑승권 제시 후 이용                                   홈페이지 및 고객센터에서 확인 가능합니다.\n                                                                                                                                                                      ※ THE LOUNGE 홈페이지 : www.theloungemembers.com\n                                                                                                                                                                      ※ 고객센터 : (국내)1811-7437, (해외)+82-2-2664-7436\n3                                                                                                                                                                                                                                                                                                                                                                   4",
+          "evidence_location": {
+            "page_no": 3,
+            "kind": "PDF text extraction",
+            "source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+          },
+          "evidence_type": "OFFICIAL_PDF_TEXT_EXTRACTION",
+          "source_provenance_note": "공식 원본 PDF / 공유 상품: JADE Prime, JADE Prime 골드클럽멤버스"
+        }
+      ],
+      "execution_status": "COMPLETED",
+      "judgment": "HOLD",
+      "answer_status": "ANSWERED",
+      "final_answer": "JADE Prime은 전 세계 공항 라운지를 무료로 이용할 수 있으며, 본인·가족·동반자 통합 연 6회, 일 3회까지 제공됩니다. 1차년도에는 지난달 100만 원 이상 이용해야 하고, 2차년도부터는 서비스 제공 기간 직전 1년간 1,200만 원 이상 이용해야 합니다. THE LOUNGE 앱에 카드를 등록해 이용권을 다운로드하고, 제휴 라운지에서 여권과 탑승권을 제시하셔야 합니다.",
+      "answer": {
+        "answer_text": "JADE Prime은 전 세계 공항 라운지를 무료로 이용할 수 있으며, 본인·가족·동반자 통합 연 6회, 일 3회까지 제공됩니다. 1차년도에는 지난달 100만 원 이상 이용해야 하고, 2차년도부터는 서비스 제공 기간 직전 1년간 1,200만 원 이상 이용해야 합니다. THE LOUNGE 앱에 카드를 등록해 이용권을 다운로드하고, 제휴 라운지에서 여권과 탑승권을 제시하셔야 합니다.",
+        "conclusion": "전 세계 공항 라운지를 본인·가족·동반자 통합 연 6회, 일 3회까지 무료 이용할 수 있습니다.",
+        "points": [
+          {
+            "text": "전 세계 공항 라운지는 본인·가족·동반자 통합 연 6회, 일 3회까지 무료 이용할 수 있습니다.",
+            "benefit_id": "card_product_item:21:20261105_000096",
+            "evidence_ids": [
+              "20261105_002599"
+            ]
+          },
+          {
+            "text": "1차년도에는 지난달 100만 원 이상 이용해야 하며, 2차년도 이후에는 서비스 제공 기간 직전 1년간 1,200만 원 이상 이용해야 합니다.",
+            "benefit_id": "card_product_item:21:20261105_000096",
+            "evidence_ids": [
+              "20261105_002610"
+            ]
+          },
+          {
+            "text": "THE LOUNGE 앱에 JADE Prime 카드를 등록해 이용권을 다운로드한 뒤, 제휴 라운지에서 이용권과 여권 및 항공 탑승권을 제시해야 합니다.",
+            "benefit_id": "card_product_item:21:20261105_000096",
+            "evidence_ids": [
+              "20261105_002607",
+              "20261105_002613"
+            ]
+          }
+        ],
+        "uncertain": [],
+        "cannot_answer_reason": null,
+        "status": "ANSWERED",
+        "answer_source": "llm",
+        "message": null
+      },
+      "error": null,
+      "warnings": [],
+      "path": [
+        "interpret",
+        "retrieve",
+        "answer",
+        "finish"
+      ],
+      "search": {
+        "mode": "N",
+        "elapsed_ms": 1016.4871998131275,
+        "merged_duplicates": [],
+        "hits": [
+          {
+            "source": "CARD_BNFT",
+            "key": "[\"card_product_item\",21,\"20261105_000096\"]",
+            "benefit_id": "20261105_000096",
+            "id": "card_product_item:21:20261105_000096",
+            "bnft_nm": "전세계 공항 라운지 무료 이용",
+            "similarity": 0.7215142250061035,
+            "cards": [
+              "JADE Prime"
+            ],
+            "applied": true,
+            "graph_targets": [],
+            "target_terms": [],
+            "excluded_terms": []
+          },
+          {
+            "source": "CARD_BNFT",
+            "key": "[\"card_product_item\",21,\"20261105_000097\"]",
+            "benefit_id": "20261105_000097",
+            "id": "card_product_item:21:20261105_000097",
+            "bnft_nm": "기본적립",
+            "similarity": 0.6637882590293884,
+            "cards": [
+              "JADE Prime"
+            ],
+            "applied": true,
+            "graph_targets": [],
+            "target_terms": [],
+            "excluded_terms": []
+          },
+          {
+            "source": "CARD_BNFT",
+            "key": "[\"card_product_item\",21,\"20261105_000098\"]",
+            "benefit_id": "20261105_000098",
+            "id": "card_product_item:21:20261105_000098",
+            "bnft_nm": "월 적립 한도 소진 후 1.0% 하나머니 적립",
+            "similarity": 0.6215286254882812,
+            "cards": [
+              "JADE Prime"
+            ],
+            "applied": true,
+            "graph_targets": [],
+            "target_terms": [],
+            "excluded_terms": []
+          },
+          {
+            "source": "CARD_BNFT",
+            "key": "[\"card_product_item\",20,\"20261105_000093\"]",
+            "benefit_id": "20261105_000093",
+            "id": "card_product_item:20:20261105_000093",
+            "bnft_nm": "전세계 공항 라운지 무료 이용",
+            "similarity": 0.7271336913108826,
+            "cards": [
+              "JADE First"
+            ],
+            "applied": true,
+            "graph_targets": [],
+            "target_terms": [],
+            "excluded_terms": []
+          },
+          {
+            "source": "CARD_BNFT",
+            "key": "[\"card_product_item\",5,\"20261105_000105\"]",
+            "benefit_id": "20261105_000105",
+            "id": "card_product_item:5:20261105_000105",
+            "bnft_nm": "전세계 공항 라운지 무료 이용",
+            "similarity": 0.727388858795166,
+            "cards": [
+              "JADE Classic"
+            ],
+            "applied": true,
+            "graph_targets": [],
+            "target_terms": [],
+            "excluded_terms": []
+          },
+          {
+            "source": "CARD_BNFT",
+            "key": "[\"card_product_item\",5,\"20261102_000008\"]",
+            "benefit_id": "20261102_000008",
+            "id": "card_product_item:5:20261102_000008",
+            "bnft_nm": "Visa 컨시어지",
+            "similarity": 0.68719083070755,
+            "cards": [
+              "JADE Classic"
+            ],
+            "applied": true,
+            "graph_targets": [],
+            "target_terms": [],
+            "excluded_terms": []
+          },
+          {
+            "source": "CARD_COMMON_BNFT",
+            "key": "[\"card_common_bnft\",24,\"20261105_000291\"]",
+            "benefit_id": "20261105_000291",
+            "id": "card_common_bnft:24:20261105_000291",
+            "bnft_nm": "K공항리무진 승차권 1+1",
+            "similarity": 0.6786923408508301,
+            "cards": [],
+            "applied": false,
+            "graph_targets": [],
+            "target_terms": [],
+            "excluded_terms": []
+          },
+          {
+            "source": "CARD_COMMON_BNFT",
+            "key": "[\"card_common_bnft\",24,\"20261105_000293\"]",
+            "benefit_id": "20261105_000293",
+            "id": "card_common_bnft:24:20261105_000293",
+            "bnft_nm": "경복궁면세점 인천공항점 사은품 제공",
+            "similarity": 0.6851392388343811,
+            "cards": [],
+            "applied": false,
+            "graph_targets": [],
+            "target_terms": [],
+            "excluded_terms": []
+          }
+        ],
+        "engines": [
+          "neo4j_keyword",
+          "neo4j_vector",
+          "neo4j_rrf"
+        ],
+        "named_cards": [
+          "JADE Prime"
+        ],
+        "requested_topics": [],
+        "selected_ids": [
+          "card_product_item:21:20261105_000096"
+        ],
+        "supplemented_ids": [],
+        "coverage_gaps": [],
+        "unselected_candidate_ids": [
+          "card_product_item:21:20261105_000097",
+          "card_product_item:21:20261105_000098",
+          "card_product_item:20:20261105_000093",
+          "card_product_item:5:20261105_000105",
+          "card_product_item:5:20261102_000008",
+          "card_common_bnft:24:20261105_000291",
+          "card_common_bnft:24:20261105_000293"
+        ]
+      },
+      "interpret": {
+        "benefit_ids": [
+          "card_product_item:21:20261105_000096"
+        ],
+        "benefit_names": [
+          "전세계 공항 라운지 무료 이용"
+        ],
+        "benefit_keys": [
+          "[\"card_product_item\",21,\"20261105_000096\"]"
+        ],
+        "sections": [
+          "evidence"
+        ],
+        "payment_amount": null,
+        "ambiguity": null
+      },
+      "retrieval_trace": [
+        {
+          "benefit": "전세계 공항 라운지 무료 이용",
+          "engine": "neo4j",
+          "evidence_engine": "neo4j",
+          "rules": 1,
+          "conditions": 7,
+          "limits": 1,
+          "evidence": 16
+        }
+      ],
+      "retrieved_data": [
+        {
+          "context": {
+            "card": {
+              "product_nm": "JADE Prime",
+              "card_id": 21,
+              "issuer": "하나카드"
+            },
+            "benefit": {
+              "item_cond_expr": "{\"branches\":[{\"atoms\":[{\"atom_key\":\"lounge_international_card\",\"atom_seq\":1,\"cond_basis_cd\":null,\"cond_max_amt_excl\":null,\"cond_min_amt\":null,\"cond_raw_txt\":\"국내외겸용카드로 발급 시 서비스 제공(국내전용카드 보유 회원 제외)\",\"cond_status_cd\":\"DRAFT\",\"cond_type_cd\":\"ETC\",\"excl_raw_txt\":\"국내전용카드 보유 회원\",\"negate_yn\":false},{\"atom_key\":\"lounge_first_year_spend\",\"atom_seq\":2,\"cond_basis_cd\":\"PREV_MONTH_SPEND\",\"cond_max_amt_excl\":null,\"cond_min_amt\":1000000,\"cond_raw_txt\":\"1차년도 : 지난달 1일부터 말일까지 100만원 이상 이용 시 제공\",\"cond_status_cd\":\"DRAFT\",\"cond_type_cd\":\"SPEND_REQ\",\"excl_raw_txt\":null,\"negate_yn\":false},{\"atom_key\":\"lounge_later_year_spend\",\"atom_seq\":3,\"cond_basis_cd\":\"PREV_YEAR_SPEND\",\"cond_max_amt_excl\":null,\"cond_min_amt\":12000000,\"cond_raw_txt\":\"2차년도 이후 : 서비스 제공 기간 직전 1년간 1,200만원 이상 이용 시\",\"cond_status_cd\":\"DRAFT\",\"cond_type_cd\":\"SPEND_REQ\",\"excl_raw_txt\":null,\"negate_yn\":false},{\"atom_key\":\"lounge_grace\",\"atom_seq\":4,\"cond_basis_cd\":\"PREV_MONTH_SPEND\",\"cond_max_amt_excl\":1000000,\"cond_min_amt\":null,\"cond_raw_txt\":\"최초 카드 사용 등록 후 다음달 말일까지는 지난달 카드 이용금액 \\n\\t 100만원 미만 시에도 서비스 제공\",\"cond_status_cd\":\"DRAFT\",\"cond_type_cd\":\"GRACE\",\"excl_raw_txt\":null,\"negate_yn\":false},{\"atom_key\":\"lounge_app\",\"atom_seq\":5,\"cond_basis_cd\":null,\"cond_max_amt_excl\":null,\"cond_min_amt\":null,\"cond_raw_txt\":\"THE LOUNGE 앱 설치 및 ‘JADE Prime’카드를 등록 후 \\n\\t 라운지 이용권 다운로드\",\"cond_status_cd\":\"DRAFT\",\"cond_type_cd\":\"USAGE_REQ\",\"excl_raw_txt\":null,\"negate_yn\":false},{\"atom_key\":\"lounge_documents\",\"atom_seq\":6,\"cond_basis_cd\":null,\"cond_max_amt_excl\":null,\"cond_min_amt\":null,\"cond_raw_txt\":\"제휴 라운지에 THE LOUNGE 이용권과 함께 \\n\\t 여권 및 항공 탑승권 제시 후 이용\",\"cond_status_cd\":\"DRAFT\",\"cond_type_cd\":\"USAGE_REQ\",\"excl_raw_txt\":null,\"negate_yn\":false},{\"atom_key\":\"lounge_name_match\",\"atom_seq\":7,\"cond_basis_cd\":null,\"cond_max_amt_excl\":null,\"cond_min_amt\":null,\"cond_raw_txt\":\"항공권 탑승자 이름, 여권 및 THE LOUNGE 앱에 등록된 영문명이  \\n\\t 동일해야 이용 가능합니다.\",\"cond_status_cd\":\"DRAFT\",\"cond_type_cd\":\"USAGE_REQ\",\"excl_raw_txt\":null,\"negate_yn\":false}],\"branch_no\":1}],\"expr_status_cd\":\"DRAFT\"}",
+              "card_product_item_id": "20261105_000096",
+              "verification_status_cd": "PENDING_REVIEW",
+              "item_nm": "전세계 공항 라운지 무료 이용",
+              "item_limit_txt": "본인/가족/동반자 통합 연 6회 / 본인/가족/동반자 통합 연 6회, 일 3회 / 카드 해지 이후 다시 신규로 발급하는 경우에도 해지된 카드로 이용한 횟수와 합산되어 통합 연 6회, 일 3회 한도로 제공됩니다.",
+              "item_type_cd": "BENEFIT",
+              "rule_list": "[{\"cond_expr\":null,\"rule_key\":\"lounge_free\",\"rule_status_cd\":\"DRAFT\",\"target_list\":[{\"target_key\":\"전세계 공항 라운지\",\"target_nm\":\"전세계 공항 라운지\",\"target_type_cd\":\"SERVICE\"}],\"value_num\":null,\"value_unit_cd\":null}]",
+              "card_id": 21,
+              "item_data": "{}",
+              "item_cd": "BNFT_790CAD9264BF",
+              "item_rule_txt": "무료 이용",
+              "relation_list": "[]",
+              "item_subtype_cd": "SERVICE",
+              "key": "[\"card_product_item\",21,\"20261105_000096\"]",
+              "search_text": "전세계 공항 라운지 무료 이용\n무료 이용\n본인/가족/동반자 통합 연 6회 / 본인/가족/동반자 통합 연 6회, 일 3회 / 카드 해지 이후 다시 신규로 발급하는 경우에도 해지된 카드로 이용한 횟수와 합산되어 통합 연 6회, 일 3회 한도로 제공됩니다.\n혜택명: 전세계 공항 라운지 무료 이용\n혜택 유형: 서비스 제공\n서비스 대상: 전세계 공항 라운지\n혜택 내용: 무료 이용"
+            },
+            "card_sources": [
+              {
+                "product_nm": "JADE Prime",
+                "card_id": 21,
+                "issuer": "하나카드"
+              }
+            ],
+            "common": null,
+            "common_docs": [],
+            "card_labels": [
+              "dp_node",
+              "dp_card_product"
+            ],
+            "benefit_labels": [
+              "dp_node",
+              "dp_card_product_item"
+            ],
+            "extraction_sources": [
+              "{\"call_seq\":1,\"card_ai_run_id\":\"20261105_000041\",\"card_doc_chunk_id\":\"20261105_000167\",\"card_doc_id\":\"20261105_000041\",\"card_extr_stg_id\":\"20261105_000601\",\"card_id\":21,\"create_date\":\"2026-11-05 01:46:16.266713+00:00\",\"create_user_id\":\"SYSTEM\",\"page_no\":3,\"stg_ai_vrfy_card_ai_run_id\":null,\"stg_ai_vrfy_cd\":null,\"stg_approved_date\":null,\"stg_approved_user_id\":null,\"stg_evidence_end_pos\":514,\"stg_evidence_start_pos\":473,\"stg_evidence_txt\":\"전세계 공항 라운지 무료 이용 (본인/가족/동반자 통합 연 6회, 일 3회)\",\"stg_item_seq\":2,\"stg_kind_cd\":\"BENEFIT\",\"stg_parent_card_extr_stg_id\":null,\"stg_raw_item\":{\"applicable_cards\":[\"JADE Prime\"],\"bnft_nm\":\"전세계 공항 라운지 무료 이용\",\"bnft_type_cd\":\"SERVICE\",\"brand_txt\":null,\"certainty\":\"HIGH\",\"conditions\":[{\"cond_basis_cd\":null,\"cond_key\":\"lounge_international_card\",\"cond_max_amt_excl\":null,\"cond_min_amt\":null,\"cond_raw_txt\":\"국내외겸용카드로 발급 시 서비스 제공(국내전용카드 보유 회원 제외)\",\"cond_type_cd\":\"ETC\",\"evidence\":[{\"link_basis\":\"SAME_TEXT\",\"quote_txt\":\"국내외겸용카드로 발급 시 서비스 제공(국내전용카드 보유 회원 제외)\",\"support_key\":\"lounge_international_card\",\"supports\":\"COND\"}],\"excl_raw_txt\":\"국내전용카드 보유 회원\",\"negate_yn\":false,\"scope\":\"THIS_BENEFIT\",\"target_benefit_nms\":[]},{\"cond_basis_cd\":\"PREV_MONTH_SPEND\",\"cond_key\":\"lounge_first_year_spend\",\"cond_max_amt_excl\":null,\"cond_min_amt\":1000000,\"cond_raw_txt\":\"1차년도 : 지난달 1일부터 말일까지 100만원 이상 이용 시 제공\",\"cond_type_cd\":\"SPEND_REQ\",\"evidence\":[{\"link_basis\":\"TABLE_IMAGE\",\"quote_txt\":\"1차년도 : 지난달 1일부터 말일까지 100만원 이상 이용 시 제공\",\"support_key\":\"lounge_first_year_spend\",\"supports\":\"COND\"}],\"excl_raw_txt\":null,\"negate_yn\":false,\"scope\":\"THIS_BENEFIT\",\"target_benefit_nms\":[]},{\"cond_basis_cd\":\"PREV_YEAR_SPEND\",\"cond_key\":\"lounge_later_year_spend\",\"cond_max_amt_excl\":null,\"cond_min_amt\":12000000,\"cond_raw_txt\":\"2차년도 이후 : 서비스 제공 기간 직전 1년간 1,200만원 이상 이용 시\",\"cond_type_cd\":\"SPEND_REQ\",\"evidence\":[{\"link_basis\":\"TABLE_IMAGE\",\"quote_txt\":\"2차년도 이후 : 서비스 제공 기간 직전 1년간 1,200만원 이상 이용 시\",\"support_key\":\"lounge_later_year_spend\",\"supports\":\"COND\"}],\"excl_raw_txt\":null,\"negate_yn\":false,\"scope\":\"THIS_BENEFIT\",\"target_benefit_nms\":[]},{\"cond_basis_cd\":\"PREV_MONTH_SPEND\",\"cond_key\":\"lounge_grace\",\"cond_max_amt_excl\":1000000,\"cond_min_amt\":null,\"cond_raw_txt\":\"최초 카드 사용 등록 후 다음달 말일까지는 지난달 카드 이용금액 \\n\\t 100만원 미만 시에도 서비스 제공\",\"cond_type_cd\":\"GRACE\",\"evidence\":[{\"link_basis\":\"TABLE_IMAGE\",\"quote_txt\":\"최초 카드 사용 등록 후 다음달 말일까지는 지난달 카드 이용금액 \\n\\t 100만원 미만 시에도 서비스 제공\",\"support_key\":\"lounge_grace\",\"supports\":\"COND\"}],\"excl_raw_txt\":null,\"negate_yn\":false,\"scope\":\"THIS_BENEFIT\",\"target_benefit_nms\":[]},{\"cond_basis_cd\":null,\"cond_key\":\"lounge_app\",\"cond_max_amt_excl\":null,\"cond_min_amt\":null,\"cond_raw_txt\":\"THE LOUNGE 앱 설치 및 ‘JADE Prime’카드를 등록 후 \\n\\t 라운지 이용권 다운로드\",\"cond_type_cd\":\"USAGE_REQ\",\"evidence\":[{\"link_basis\":\"TABLE_IMAGE\",\"quote_txt\":\"THE LOUNGE 앱 설치 및 ‘JADE Prime’카드를 등록 후 \\n\\t 라운지 이용권 다운로드\",\"support_key\":\"lounge_app\",\"supports\":\"COND\"}],\"excl_raw_txt\":null,\"negate_yn\":false,\"scope\":\"THIS_BENEFIT\",\"target_benefit_nms\":[]},{\"cond_basis_cd\":null,\"cond_key\":\"lounge_documents\",\"cond_max_amt_excl\":null,\"cond_min_amt\":null,\"cond_raw_txt\":\"제휴 라운지에 THE LOUNGE 이용권과 함께 \\n\\t 여권 및 항공 탑승권 제시 후 이용\",\"cond_type_cd\":\"USAGE_REQ\",\"evidence\":[{\"link_basis\":\"TABLE_IMAGE\",\"quote_txt\":\"제휴 라운지에 THE LOUNGE 이용권과 함께 \\n\\t 여권 및 항공 탑승권 제시 후 이용\",\"support_key\":\"lounge_documents\",\"supports\":\"COND\"}],\"excl_raw_txt\":null,\"negate_yn\":false,\"scope\":\"THIS_BENEFIT\",\"target_benefit_nms\":[]},{\"cond_basis_cd\":null,\"cond_key\":\"lounge_name_match\",\"cond_max_amt_excl\":null,\"cond_min_amt\":null,\"cond_raw_txt\":\"항공권 탑승자 이름, 여권 및 THE LOUNGE 앱에 등록된 영문명이  \\n\\t 동일해야 이용 가능합니다.\",\"cond_type_cd\":\"USAGE_REQ\",\"evidence\":[{\"link_basis\":\"TABLE_IMAGE\",\"quote_txt\":\"항공권 탑승자 이름, 여권 및 THE LOUNGE 앱에 등록된 영문명이  \\n\\t 동일해야 이용 가능합니다.\",\"support_key\":\"lounge_name_match\",\"supports\":\"COND\"}],\"excl_raw_txt\":null,\"negate_yn\":false,\"scope\":\"THIS_BENEFIT\",\"target_benefit_nms\":[]}],\"evidence\":[{\"link_basis\":\"SAME_TEXT\",\"quote_txt\":\"전세계 공항 라운지 무료 이용 (본인/가족/동반자 통합 연 6회, 일 3회)\",\"support_key\":null,\"supports\":\"BNFT\"},{\"link_basis\":\"SAME_TEXT\",\"quote_txt\":\"무료 이용\",\"support_key\":\"lounge_free\",\"supports\":\"RULE\"},{\"link_basis\":\"SAME_TEXT\",\"quote_txt\":\"본인/가족/동반자 통합 연 6회\",\"support_key\":\"lounge_year_count\",\"supports\":\"LIMIT\"},{\"link_basis\":\"SAME_TEXT\",\"quote_txt\":\"본인/가족/동반자 통합 연 6회, 일 3회\",\"support_key\":\"lounge_day_count\",\"supports\":\"LIMIT\"},{\"link_basis\":\"TABLE_IMAGE\",\"quote_txt\":\"카드 해지 이후 다시 신규로 발급하는 경우에도 해지된 카드로 \\n\\t 이용한 횟수와 합산되어 통합 연 6회, 일 3회 한도로 제공됩니다.\",\"support_key\":\"lounge_year_count\",\"supports\":\"LIMIT\"},{\"link_basis\":\"TABLE_IMAGE\",\"quote_txt\":\"카드 해지 이후 다시 신규로 발급하는 경우에도 해지된 카드로 \\n\\t 이용한 횟수와 합산되어 통합 연 6회, 일 3회 한도로 제공됩니다.\",\"support_key\":\"lounge_day_count\",\"supports\":\"LIMIT\"},{\"link_basis\":\"SAME_TEXT\",\"quote_txt\":\"국내외겸용카드로 발급 시 서비스 제공(국내전용카드 보유 회원 제외)\",\"support_key\":null,\"supports\":\"APPLICABILITY\"},{\"link_basis\":\"TABLE_IMAGE\",\"quote_txt\":\"1차년도 : 카드 발급 월 포함 12개월\\n2차년도 이후 : 전년도 서비스 제공 기간 종료 후 12개월\",\"support_key\":null,\"supports\":\"APPLICABILITY\"},{\"link_basis\":\"TABLE_IMAGE\",\"quote_txt\":\"THE LOUNGE 앱 설치 및 ‘JADE Prime’카드를 등록 후 \\n\\t 라운지 이용권 다운로드\",\"support_key\":null,\"supports\":\"APPLICABILITY\"}],\"excluded_cards\":[\"국내전용카드\"],\"is_common_candidate\":false,\"item_key\":\"airport_lounge\",\"limits\":[{\"applies_to_benefit_nms\":[],\"cap_unit_cd\":\"COUNT\",\"limit_key\":\"lounge_year_count\",\"limit_num\":6,\"limit_raw_txt\":\"통합 연 6회\",\"period_cd\":\"YEAR\",\"shared_scope_txt\":\"본인/가족/동반자\"},{\"applies_to_benefit_nms\":[],\"cap_unit_cd\":\"COUNT\",\"limit_key\":\"lounge_day_count\",\"limit_num\":3,\"limit_raw_txt\":\"일 3회\",\"period_cd\":\"DAY\",\"shared_scope_txt\":\"본인/가족/동반자\"}],\"no_condition_stated\":false,\"relations\":[],\"rules\":[{\"conditions\":[],\"limit_keys\":[\"lounge_year_count\",\"lounge_day_count\"],\"min_txn_amt\":null,\"min_txn_raw_txt\":null,\"rule_key\":\"lounge_free\",\"value_num\":null,\"value_raw_txt\":\"무료 이용\",\"value_unit_cd\":null}],\"selection_service_txt\":null,\"service_grade_txt\":null,\"targets\":[{\"target_nm\":\"전세계 공항 라운지\",\"target_type_cd\":\"SERVICE\"}],\"uncertainty_note\":null,\"validity_period_txt\":\"1차년도 : 카드 발급 월 포함 12개월\\n2차년도 이후 : 전년도 서비스 제공 기간 종료 후 12개월\"},\"stg_review_note\":null,\"stg_sql_check_cd\":\"LINK_REVIEW\",\"stg_status\":\"PENDING_REVIEW\",\"update_date\":\"2026-11-05 01:49:37.224137+00:00\",\"update_user_id\":\"SYSTEM\"}"
+            ]
+          },
+          "rules": [
+            {
+              "rule": {
+                "cond_expr": null,
+                "rule_key": "lounge_free",
+                "rule_status_cd": "DRAFT",
+                "target_list": [
+                  {
+                    "target_key": "전세계 공항 라운지",
+                    "target_nm": "전세계 공항 라운지",
+                    "target_type_cd": "SERVICE"
+                  }
+                ],
+                "value_num": null,
+                "value_unit_cd": null
+              },
+              "targets": [
+                "전세계 공항 라운지"
+              ]
+            }
+          ],
+          "conditions": [
+            {
+              "owner_cd": "BENEFIT",
+              "rule_key": null,
+              "expression": {
+                "key": "BENEFIT:item"
+              },
+              "branch_no": 1,
+              "atom": {
+                "atom_key": "lounge_international_card",
+                "atom_seq": 1,
+                "cond_basis_cd": null,
+                "cond_max_amt_excl": null,
+                "cond_min_amt": null,
+                "cond_raw_txt": "국내외겸용카드로 발급 시 서비스 제공(국내전용카드 보유 회원 제외)",
+                "cond_status_cd": "DRAFT",
+                "cond_type_cd": "ETC",
+                "excl_raw_txt": "국내전용카드 보유 회원",
+                "negate_yn": false
+              }
+            },
+            {
+              "owner_cd": "BENEFIT",
+              "rule_key": null,
+              "expression": {
+                "key": "BENEFIT:item"
+              },
+              "branch_no": 1,
+              "atom": {
+                "atom_key": "lounge_first_year_spend",
+                "atom_seq": 2,
+                "cond_basis_cd": "PREV_MONTH_SPEND",
+                "cond_max_amt_excl": null,
+                "cond_min_amt": 1000000,
+                "cond_raw_txt": "1차년도 : 지난달 1일부터 말일까지 100만원 이상 이용 시 제공",
+                "cond_status_cd": "DRAFT",
+                "cond_type_cd": "SPEND_REQ",
+                "excl_raw_txt": null,
+                "negate_yn": false
+              }
+            },
+            {
+              "owner_cd": "BENEFIT",
+              "rule_key": null,
+              "expression": {
+                "key": "BENEFIT:item"
+              },
+              "branch_no": 1,
+              "atom": {
+                "atom_key": "lounge_later_year_spend",
+                "atom_seq": 3,
+                "cond_basis_cd": "PREV_YEAR_SPEND",
+                "cond_max_amt_excl": null,
+                "cond_min_amt": 12000000,
+                "cond_raw_txt": "2차년도 이후 : 서비스 제공 기간 직전 1년간 1,200만원 이상 이용 시",
+                "cond_status_cd": "DRAFT",
+                "cond_type_cd": "SPEND_REQ",
+                "excl_raw_txt": null,
+                "negate_yn": false
+              }
+            },
+            {
+              "owner_cd": "BENEFIT",
+              "rule_key": null,
+              "expression": {
+                "key": "BENEFIT:item"
+              },
+              "branch_no": 1,
+              "atom": {
+                "atom_key": "lounge_grace",
+                "atom_seq": 4,
+                "cond_basis_cd": "PREV_MONTH_SPEND",
+                "cond_max_amt_excl": 1000000,
+                "cond_min_amt": null,
+                "cond_raw_txt": "최초 카드 사용 등록 후 다음달 말일까지는 지난달 카드 이용금액 \n\t 100만원 미만 시에도 서비스 제공",
+                "cond_status_cd": "DRAFT",
+                "cond_type_cd": "GRACE",
+                "excl_raw_txt": null,
+                "negate_yn": false
+              }
+            },
+            {
+              "owner_cd": "BENEFIT",
+              "rule_key": null,
+              "expression": {
+                "key": "BENEFIT:item"
+              },
+              "branch_no": 1,
+              "atom": {
+                "atom_key": "lounge_app",
+                "atom_seq": 5,
+                "cond_basis_cd": null,
+                "cond_max_amt_excl": null,
+                "cond_min_amt": null,
+                "cond_raw_txt": "THE LOUNGE 앱 설치 및 ‘JADE Prime’카드를 등록 후 \n\t 라운지 이용권 다운로드",
+                "cond_status_cd": "DRAFT",
+                "cond_type_cd": "USAGE_REQ",
+                "excl_raw_txt": null,
+                "negate_yn": false
+              }
+            },
+            {
+              "owner_cd": "BENEFIT",
+              "rule_key": null,
+              "expression": {
+                "key": "BENEFIT:item"
+              },
+              "branch_no": 1,
+              "atom": {
+                "atom_key": "lounge_documents",
+                "atom_seq": 6,
+                "cond_basis_cd": null,
+                "cond_max_amt_excl": null,
+                "cond_min_amt": null,
+                "cond_raw_txt": "제휴 라운지에 THE LOUNGE 이용권과 함께 \n\t 여권 및 항공 탑승권 제시 후 이용",
+                "cond_status_cd": "DRAFT",
+                "cond_type_cd": "USAGE_REQ",
+                "excl_raw_txt": null,
+                "negate_yn": false
+              }
+            },
+            {
+              "owner_cd": "BENEFIT",
+              "rule_key": null,
+              "expression": {
+                "key": "BENEFIT:item"
+              },
+              "branch_no": 1,
+              "atom": {
+                "atom_key": "lounge_name_match",
+                "atom_seq": 7,
+                "cond_basis_cd": null,
+                "cond_max_amt_excl": null,
+                "cond_min_amt": null,
+                "cond_raw_txt": "항공권 탑승자 이름, 여권 및 THE LOUNGE 앱에 등록된 영문명이  \n\t 동일해야 이용 가능합니다.",
+                "cond_status_cd": "DRAFT",
+                "cond_type_cd": "USAGE_REQ",
+                "excl_raw_txt": null,
+                "negate_yn": false
+              }
+            }
+          ],
+          "limits": [
+            {
+              "limit_text": "본인/가족/동반자 통합 연 6회 / 본인/가족/동반자 통합 연 6회, 일 3회 / 카드 해지 이후 다시 신규로 발급하는 경우에도 해지된 카드로 이용한 횟수와 합산되어 통합 연 6회, 일 3회 한도로 제공됩니다."
+            }
+          ],
+          "evidence": [
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000096",
+                "item_nm": "전세계 공항 라운지 무료 이용",
+                "key": "[\"card_product_item\",21,\"20261105_000096\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261105_002599",
+                "quote_txt": "전세계 공항 라운지 무료 이용 (본인/가족/동반자 통합 연 6회, 일 3회)",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",3,\"20261105_000167\",\"20261105_002599\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261105_000167"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000096",
+                "item_nm": "전세계 공항 라운지 무료 이용",
+                "key": "[\"card_product_item\",21,\"20261105_000096\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": "lounge_free",
+              "link": {
+                "ev_subject_cd": "RULE",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261105_002600",
+                "quote_txt": "무료 이용",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",3,\"20261105_000167\",\"20261105_002600\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261105_000167"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000096",
+                "item_nm": "전세계 공항 라운지 무료 이용",
+                "key": "[\"card_product_item\",21,\"20261105_000096\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261105_002601",
+                "quote_txt": "본인/가족/동반자 통합 연 6회",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",3,\"20261105_000167\",\"20261105_002601\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261105_000167"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000096",
+                "item_nm": "전세계 공항 라운지 무료 이용",
+                "key": "[\"card_product_item\",21,\"20261105_000096\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261105_002602",
+                "quote_txt": "본인/가족/동반자 통합 연 6회, 일 3회",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",3,\"20261105_000167\",\"20261105_002602\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261105_000167"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000096",
+                "item_nm": "전세계 공항 라운지 무료 이용",
+                "key": "[\"card_product_item\",21,\"20261105_000096\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261105_002603",
+                "quote_txt": "카드 해지 이후 다시 신규로 발급하는 경우에도 해지된 카드로 \n\t 이용한 횟수와 합산되어 통합 연 6회, 일 3회 한도로 제공됩니다.",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",3,\"20261105_000167\",\"20261105_002603\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261105_000167"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000096",
+                "item_nm": "전세계 공항 라운지 무료 이용",
+                "key": "[\"card_product_item\",21,\"20261105_000096\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": null,
+                "ev_item_cd": null,
+                "source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg",
+                "ev_item_key": null
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261105_002604",
+                "quote_txt": "카드 해지 이후 다시 신규로 발급하는 경우에도 해지된 카드로 \n\t 이용한 횟수와 합산되어 통합 연 6회, 일 3회 한도로 제공됩니다.",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",3,\"20261105_000167\",\"20261105_002604\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261105_000167"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000096",
+                "item_nm": "전세계 공항 라운지 무료 이용",
+                "key": "[\"card_product_item\",21,\"20261105_000096\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261105_002605",
+                "quote_txt": "국내외겸용카드로 발급 시 서비스 제공(국내전용카드 보유 회원 제외)",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",3,\"20261105_000167\",\"20261105_002605\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261105_000167"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000096",
+                "item_nm": "전세계 공항 라운지 무료 이용",
+                "key": "[\"card_product_item\",21,\"20261105_000096\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261105_002606",
+                "quote_txt": "1차년도 : 카드 발급 월 포함 12개월\n2차년도 이후 : 전년도 서비스 제공 기간 종료 후 12개월",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",3,\"20261105_000167\",\"20261105_002606\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261105_000167"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000096",
+                "item_nm": "전세계 공항 라운지 무료 이용",
+                "key": "[\"card_product_item\",21,\"20261105_000096\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261105_002607",
+                "quote_txt": "THE LOUNGE 앱 설치 및 ‘JADE Prime’카드를 등록 후 \n\t 라운지 이용권 다운로드",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",3,\"20261105_000167\",\"20261105_002607\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261105_000167"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000096",
+                "item_nm": "전세계 공항 라운지 무료 이용",
+                "key": "[\"card_product_item\",21,\"20261105_000096\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": null,
+                "ev_item_cd": null,
+                "source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg",
+                "ev_item_key": null
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261105_002608",
+                "quote_txt": "국내외겸용카드로 발급 시 서비스 제공(국내전용카드 보유 회원 제외)",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",3,\"20261105_000167\",\"20261105_002608\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261105_000167"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000096",
+                "item_nm": "전세계 공항 라운지 무료 이용",
+                "key": "[\"card_product_item\",21,\"20261105_000096\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": null,
+                "ev_item_cd": null,
+                "source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg",
+                "ev_item_key": null
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261105_002609",
+                "quote_txt": "1차년도 : 지난달 1일부터 말일까지 100만원 이상 이용 시 제공",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",3,\"20261105_000167\",\"20261105_002609\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261105_000167"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000096",
+                "item_nm": "전세계 공항 라운지 무료 이용",
+                "key": "[\"card_product_item\",21,\"20261105_000096\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": null,
+                "ev_item_cd": null,
+                "source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg",
+                "ev_item_key": null
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261105_002610",
+                "quote_txt": "2차년도 이후 : 서비스 제공 기간 직전 1년간 1,200만원 이상 이용 시",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",3,\"20261105_000167\",\"20261105_002610\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261105_000167"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000096",
+                "item_nm": "전세계 공항 라운지 무료 이용",
+                "key": "[\"card_product_item\",21,\"20261105_000096\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": null,
+                "ev_item_cd": null,
+                "source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg",
+                "ev_item_key": null
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261105_002611",
+                "quote_txt": "최초 카드 사용 등록 후 다음달 말일까지는 지난달 카드 이용금액 \n\t 100만원 미만 시에도 서비스 제공",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",3,\"20261105_000167\",\"20261105_002611\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261105_000167"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000096",
+                "item_nm": "전세계 공항 라운지 무료 이용",
+                "key": "[\"card_product_item\",21,\"20261105_000096\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": null,
+                "ev_item_cd": null,
+                "source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg",
+                "ev_item_key": null
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261105_002612",
+                "quote_txt": "THE LOUNGE 앱 설치 및 ‘JADE Prime’카드를 등록 후 \n\t 라운지 이용권 다운로드",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",3,\"20261105_000167\",\"20261105_002612\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261105_000167"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000096",
+                "item_nm": "전세계 공항 라운지 무료 이용",
+                "key": "[\"card_product_item\",21,\"20261105_000096\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": null,
+                "ev_item_cd": null,
+                "source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg",
+                "ev_item_key": null
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261105_002613",
+                "quote_txt": "제휴 라운지에 THE LOUNGE 이용권과 함께 \n\t 여권 및 항공 탑승권 제시 후 이용",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",3,\"20261105_000167\",\"20261105_002613\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261105_000167"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000096",
+                "item_nm": "전세계 공항 라운지 무료 이용",
+                "key": "[\"card_product_item\",21,\"20261105_000096\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": null,
+                "ev_item_cd": null,
+                "source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg",
+                "ev_item_key": null
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261105_002614",
+                "quote_txt": "항공권 탑승자 이름, 여권 및 THE LOUNGE 앱에 등록된 영문명이  \n\t 동일해야 이용 가능합니다.",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",3,\"20261105_000167\",\"20261105_002614\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261105_000167"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            }
+          ],
+          "entity_ref": "card_product_item:21:20261105_000096"
+        }
+      ],
+      "pdf_evidence": [
+        {
+          "evidence_id": "20261105_002599",
+          "page_no": 3,
+          "approval_status": "PENDING",
+          "quote": "전세계 공항 라운지 무료 이용 (본인/가족/동반자 통합 연 6회, 일 3회)",
+          "subjects": [
+            "BNFT"
+          ],
+          "items": [],
+          "benefits": [
+            "전세계 공항 라운지 무료 이용"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000096"
+          ],
+          "rule_keys": []
+        },
+        {
+          "evidence_id": "20261105_002600",
+          "page_no": 3,
+          "approval_status": "PENDING",
+          "quote": "무료 이용",
+          "subjects": [
+            "RULE"
+          ],
+          "items": [],
+          "benefits": [
+            "전세계 공항 라운지 무료 이용"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000096"
+          ],
+          "rule_keys": [
+            "lounge_free"
+          ]
+        },
+        {
+          "evidence_id": "20261105_002601",
+          "page_no": 3,
+          "approval_status": "PENDING",
+          "quote": "본인/가족/동반자 통합 연 6회",
+          "subjects": [
+            "BNFT"
+          ],
+          "items": [],
+          "benefits": [
+            "전세계 공항 라운지 무료 이용"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000096"
+          ],
+          "rule_keys": []
+        },
+        {
+          "evidence_id": "20261105_002602",
+          "page_no": 3,
+          "approval_status": "PENDING",
+          "quote": "본인/가족/동반자 통합 연 6회, 일 3회",
+          "subjects": [
+            "BNFT"
+          ],
+          "items": [],
+          "benefits": [
+            "전세계 공항 라운지 무료 이용"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000096"
+          ],
+          "rule_keys": []
+        },
+        {
+          "evidence_id": "20261105_002603",
+          "page_no": 3,
+          "approval_status": "PENDING",
+          "quote": "카드 해지 이후 다시 신규로 발급하는 경우에도 해지된 카드로 \n\t 이용한 횟수와 합산되어 통합 연 6회, 일 3회 한도로 제공됩니다.",
+          "subjects": [
+            "BNFT"
+          ],
+          "items": [],
+          "benefits": [
+            "전세계 공항 라운지 무료 이용"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000096"
+          ],
+          "rule_keys": []
+        },
+        {
+          "evidence_id": "20261105_002604",
+          "page_no": 3,
+          "approval_status": "PENDING",
+          "quote": "카드 해지 이후 다시 신규로 발급하는 경우에도 해지된 카드로 \n\t 이용한 횟수와 합산되어 통합 연 6회, 일 3회 한도로 제공됩니다.",
+          "subjects": [
+            "EXTRACTION_STAGE"
+          ],
+          "items": [],
+          "benefits": [
+            "전세계 공항 라운지 무료 이용"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000096"
+          ],
+          "rule_keys": []
+        },
+        {
+          "evidence_id": "20261105_002605",
+          "page_no": 3,
+          "approval_status": "PENDING",
+          "quote": "국내외겸용카드로 발급 시 서비스 제공(국내전용카드 보유 회원 제외)",
+          "subjects": [
+            "BNFT"
+          ],
+          "items": [],
+          "benefits": [
+            "전세계 공항 라운지 무료 이용"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000096"
+          ],
+          "rule_keys": []
+        },
+        {
+          "evidence_id": "20261105_002606",
+          "page_no": 3,
+          "approval_status": "PENDING",
+          "quote": "1차년도 : 카드 발급 월 포함 12개월\n2차년도 이후 : 전년도 서비스 제공 기간 종료 후 12개월",
+          "subjects": [
+            "BNFT"
+          ],
+          "items": [],
+          "benefits": [
+            "전세계 공항 라운지 무료 이용"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000096"
+          ],
+          "rule_keys": []
+        },
+        {
+          "evidence_id": "20261105_002607",
+          "page_no": 3,
+          "approval_status": "PENDING",
+          "quote": "THE LOUNGE 앱 설치 및 ‘JADE Prime’카드를 등록 후 \n\t 라운지 이용권 다운로드",
+          "subjects": [
+            "BNFT"
+          ],
+          "items": [],
+          "benefits": [
+            "전세계 공항 라운지 무료 이용"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000096"
+          ],
+          "rule_keys": []
+        },
+        {
+          "evidence_id": "20261105_002608",
+          "page_no": 3,
+          "approval_status": "PENDING",
+          "quote": "국내외겸용카드로 발급 시 서비스 제공(국내전용카드 보유 회원 제외)",
+          "subjects": [
+            "EXTRACTION_STAGE"
+          ],
+          "items": [],
+          "benefits": [
+            "전세계 공항 라운지 무료 이용"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000096"
+          ],
+          "rule_keys": []
+        },
+        {
+          "evidence_id": "20261105_002609",
+          "page_no": 3,
+          "approval_status": "PENDING",
+          "quote": "1차년도 : 지난달 1일부터 말일까지 100만원 이상 이용 시 제공",
+          "subjects": [
+            "EXTRACTION_STAGE"
+          ],
+          "items": [],
+          "benefits": [
+            "전세계 공항 라운지 무료 이용"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000096"
+          ],
+          "rule_keys": []
+        },
+        {
+          "evidence_id": "20261105_002610",
+          "page_no": 3,
+          "approval_status": "PENDING",
+          "quote": "2차년도 이후 : 서비스 제공 기간 직전 1년간 1,200만원 이상 이용 시",
+          "subjects": [
+            "EXTRACTION_STAGE"
+          ],
+          "items": [],
+          "benefits": [
+            "전세계 공항 라운지 무료 이용"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000096"
+          ],
+          "rule_keys": []
+        },
+        {
+          "evidence_id": "20261105_002611",
+          "page_no": 3,
+          "approval_status": "PENDING",
+          "quote": "최초 카드 사용 등록 후 다음달 말일까지는 지난달 카드 이용금액 \n\t 100만원 미만 시에도 서비스 제공",
+          "subjects": [
+            "EXTRACTION_STAGE"
+          ],
+          "items": [],
+          "benefits": [
+            "전세계 공항 라운지 무료 이용"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000096"
+          ],
+          "rule_keys": []
+        },
+        {
+          "evidence_id": "20261105_002612",
+          "page_no": 3,
+          "approval_status": "PENDING",
+          "quote": "THE LOUNGE 앱 설치 및 ‘JADE Prime’카드를 등록 후 \n\t 라운지 이용권 다운로드",
+          "subjects": [
+            "EXTRACTION_STAGE"
+          ],
+          "items": [],
+          "benefits": [
+            "전세계 공항 라운지 무료 이용"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000096"
+          ],
+          "rule_keys": []
+        },
+        {
+          "evidence_id": "20261105_002613",
+          "page_no": 3,
+          "approval_status": "PENDING",
+          "quote": "제휴 라운지에 THE LOUNGE 이용권과 함께 \n\t 여권 및 항공 탑승권 제시 후 이용",
+          "subjects": [
+            "EXTRACTION_STAGE"
+          ],
+          "items": [],
+          "benefits": [
+            "전세계 공항 라운지 무료 이용"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000096"
+          ],
+          "rule_keys": []
+        },
+        {
+          "evidence_id": "20261105_002614",
+          "page_no": 3,
+          "approval_status": "PENDING",
+          "quote": "항공권 탑승자 이름, 여권 및 THE LOUNGE 앱에 등록된 영문명이  \n\t 동일해야 이용 가능합니다.",
+          "subjects": [
+            "EXTRACTION_STAGE"
+          ],
+          "items": [],
+          "benefits": [
+            "전세계 공항 라운지 무료 이용"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000096"
+          ],
+          "rule_keys": []
+        }
+      ],
+      "llm_calls": [
+        {
+          "node": "interpret",
+          "model": "gpt-6-luna",
+          "response_model": "gpt-6-luna",
+          "input_tokens": 3008,
+          "output_tokens": 38,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "cost_usd": 0.0003198,
+          "elapsed_ms": 1751.1361001525074
+        },
+        {
+          "node": "answer",
+          "model": "gpt-6-luna",
+          "response_model": "gpt-6-luna",
+          "input_tokens": 4846,
+          "output_tokens": 403,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "cost_usd": 0.0006861,
+          "elapsed_ms": 3588.2198000326753
+        }
+      ],
+      "llm_usage": {
+        "calls": 2,
+        "input_tokens": 7854,
+        "output_tokens": 441,
+        "cost_usd": 0.0010059
+      },
+      "embedding_usage": {
+        "model": "text-embedding-3-small",
+        "input_tokens_estimate": 24,
+        "estimated_cost_usd": 4.8e-07,
+        "usage_source": "local tokenizer estimate; provider embedding usage unavailable"
+      },
+      "elapsed_ms": 8477.28,
+      "trace_event_stages": [],
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-007"
+    },
+    {
+      "question_id": "CARD10-008",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-008",
+      "hop_count": 1,
+      "question": "JADE Prime의 기본 적립 혜택을 알려줘.",
+      "golden_source": "card10_graphrag_golden_dataset_v1.jsonl (question text matched Notion source exactly)",
+      "golden_status": "NEEDS_REVIEW",
+      "expected_answer": null,
+      "expected_facts": [],
+      "required_conditions": [],
+      "required_limits": [],
+      "exclusion_conditions": [],
+      "expected_evidence_ids": [],
+      "official_pdf_evidence": [
+        {
+          "source_pdf_name": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+          "source_document_id": "20261105_000041",
+          "source_pdf_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+          "source_pdf_sha256_matches_local": true,
+          "source_page": 4,
+          "source_chunk_id": "20261105_000168",
+          "evidence_ids": [
+            {
+              "evidence_id": "20261105_002615",
+              "quote": "국내 가맹점 1.5%~1.0% 하나머니 적립 제공",
+              "start_pos": 21,
+              "end_pos": 47,
+              "card_doc_chunk_id": "20261105_000168",
+              "chunk_seq": 4,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002616",
+              "quote": "1.5%",
+              "start_pos": 28,
+              "end_pos": 31,
+              "card_doc_chunk_id": "20261105_000168",
+              "chunk_seq": 4,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002617",
+              "quote": "1.0%",
+              "start_pos": 33,
+              "end_pos": 36,
+              "card_doc_chunk_id": "20261105_000168",
+              "chunk_seq": 4,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002618",
+              "quote": "10만 하나머니",
+              "start_pos": 80,
+              "end_pos": 87,
+              "card_doc_chunk_id": "20261105_000168",
+              "chunk_seq": 4,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002619",
+              "quote": "제한 없음",
+              "start_pos": 103,
+              "end_pos": 107,
+              "card_doc_chunk_id": "20261105_000168",
+              "chunk_seq": 4,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002620",
+              "quote": "200만원 이상",
+              "start_pos": 66,
+              "end_pos": 73,
+              "card_doc_chunk_id": "20261105_000168",
+              "chunk_seq": 4,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002621",
+              "quote": "200만원 미만",
+              "start_pos": 89,
+              "end_pos": 96,
+              "card_doc_chunk_id": "20261105_000168",
+              "chunk_seq": 4,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002622",
+              "quote": "영역별 3.0% 하나머니 적립",
+              "start_pos": 109,
+              "end_pos": 124,
+              "card_doc_chunk_id": "20261105_000168",
+              "chunk_seq": 4,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002623",
+              "quote": "3.0%",
+              "start_pos": 113,
+              "end_pos": 116,
+              "card_doc_chunk_id": "20261105_000168",
+              "chunk_seq": 4,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002624",
+              "quote": "월 통합 적립한도 5만 하나머니",
+              "start_pos": 143,
+              "end_pos": 159,
+              "card_doc_chunk_id": "20261105_000168",
+              "chunk_seq": 4,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002625",
+              "quote": "지난달 실적 50만원 이상",
+              "start_pos": 127,
+              "end_pos": 140,
+              "card_doc_chunk_id": "20261105_000168",
+              "chunk_seq": 4,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002626",
+              "quote": "항공/면세 :\t공식 홈페이지(온라인/모바일앱) 및 오프라인 매장을 통한 결제 시에만 서비스 제공",
+              "start_pos": 208,
+              "end_pos": 260,
+              "card_doc_chunk_id": "20261105_000168",
+              "chunk_seq": 4,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002627",
+              "quote": "여행사, 구매대행사이트, 온라인쇼핑몰(오픈마켓, 소셜 등)을 통한",
+              "start_pos": 263,
+              "end_pos": 298,
+              "card_doc_chunk_id": "20261105_000168",
+              "chunk_seq": 4,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002628",
+              "quote": "여행 :\t공식 홈페이지(온라인/모바일앱)를 통한 결제 시에만 서비스 제공되며",
+              "start_pos": 322,
+              "end_pos": 363,
+              "card_doc_chunk_id": "20261105_000168",
+              "chunk_seq": 4,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002629",
+              "quote": "몰 이동을 통해 다른 온라인 쇼핑몰로 이동하여 결제하는 경우는 서비스 제외됨",
+              "start_pos": 366,
+              "end_pos": 407,
+              "card_doc_chunk_id": "20261105_000168",
+              "chunk_seq": 4,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            },
+            {
+              "evidence_id": "20261105_002630",
+              "quote": "하나투어 가맹점은 오프라인 결제 시에도 서비스 제공됨",
+              "start_pos": 413,
+              "end_pos": 441,
+              "card_doc_chunk_id": "20261105_000168",
+              "chunk_seq": 4,
+              "evidence_type": "POSTGRES_CARD_SOURCE_EVIDENCE_REFERENCE",
+              "provenance": "backup DB extraction metadata; quote not independently treated as ground truth"
+            }
+          ],
+          "evidence_text": "REWARD\n\n\n 기본 적립      국내 가맹점 1.5%~1.0% 하나머니 적립 제공                             특별 적립      영역별 3.0% 하나머니 적립\n                                                                                                             (지난달 실적 50만원 이상, 월 통합 적립한도 5만 하나머니)\n\n                       지난달 실적                 적립률                  적립한도                             영역     적립 대상 가맹점                                적립률       적립 한도\n\n                                                                                                   해외     해외 가맹점\n                          200만원 이상                       1.5%                   10만 하나머니\n                                                                                                  항공      대한항공, 아시아나 항공, 진에어, 에어부산, 에어서울, 제주항공, 티웨이 항공                  월 통합\n                                                                                                                                                                                                                                              3.0%           5만\n                                                                                                   면세      신라면세점, 롯데면세점, 신세계면세점, 현대백화점면세점                         하나머니\n                          200만원 미만                       1.0%               제한 없음\n                                                                                                   여행      하나투어, 아고다, 익스피디아, 호텔스닷컴\n\n\n\n                                                                                                                                                                                                                                              · 해외결제 시 수수료가 발생할 수 있으니, [해외결제 및 기타 안내] 참조\n                                                                                                                                                                                                                                              · 항공/면세 : 공식 홈페이지(온라인/모바일앱) 및 오프라인 매장을 통한 결제 시에만 서비스 제공, 여행사, 구매대행사이트, 온라인쇼핑몰(오픈마켓, 소셜 등)을 통한\n                                                                                                                         결제건은 서비스 제외됨\n                                                                                                                                                                                                                                              · 여행 : 공식 홈페이지(온라인/모바일앱)를 통한 결제 시에만 서비스 제공되며, 몰 이동을 통해 다른 온라인 쇼핑몰로 이동하여 결제하는 경우는 서비스 제외됨\n                                                                                                                           하나투어 가맹점은 오프라인 결제 시에도 서비스 제공됨\n5                                                                                                                                                                                                                                                                                                                                                                   6",
+          "evidence_location": {
+            "page_no": 4,
+            "kind": "PDF text extraction",
+            "source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+          },
+          "evidence_type": "OFFICIAL_PDF_TEXT_EXTRACTION",
+          "source_provenance_note": "공식 원본 PDF / 공유 상품: JADE Prime, JADE Prime 골드클럽멤버스"
+        }
+      ],
+      "execution_status": "COMPLETED",
+      "judgment": "HOLD",
+      "answer_status": "ANSWERED",
+      "final_answer": "JADE Prime의 기본적립은 지난달 1일부터 말일까지 200만원 이상 이용하시면 하나머니 1.5%를 적립해 드립니다.",
+      "answer": {
+        "answer_text": "JADE Prime의 기본적립은 지난달 1일부터 말일까지 200만원 이상 이용하시면 하나머니 1.5%를 적립해 드립니다.",
+        "conclusion": "지난달 이용금액이 200만원 이상이면 기본적립으로 하나머니 1.5%가 적립됩니다.",
+        "points": [
+          {
+            "text": "지난달 1일부터 말일까지 200만원 이상 이용 시 하나머니 1.5%를 적립합니다.",
+            "benefit_id": "card_product_item:21:20261105_000097",
+            "evidence_ids": [
+              "20261105_002659"
+            ]
+          }
+        ],
+        "uncertain": [],
+        "cannot_answer_reason": null,
+        "status": "ANSWERED",
+        "answer_source": "llm",
+        "message": null
+      },
+      "error": null,
+      "warnings": [],
+      "path": [
+        "interpret",
+        "retrieve",
+        "answer",
+        "finish"
+      ],
+      "search": {
+        "mode": "N",
+        "elapsed_ms": 1232.0383000187576,
+        "merged_duplicates": [],
+        "hits": [
+          {
+            "source": "CARD_BNFT",
+            "key": "[\"card_product_item\",21,\"20261105_000097\"]",
+            "benefit_id": "20261105_000097",
+            "id": "card_product_item:21:20261105_000097",
+            "bnft_nm": "기본적립",
+            "similarity": 0.7544330358505249,
+            "cards": [
+              "JADE Prime"
+            ],
+            "applied": true,
+            "graph_targets": [],
+            "target_terms": [],
+            "excluded_terms": []
+          },
+          {
+            "source": "CARD_BNFT",
+            "key": "[\"card_product_item\",21,\"20261105_000098\"]",
+            "benefit_id": "20261105_000098",
+            "id": "card_product_item:21:20261105_000098",
+            "bnft_nm": "월 적립 한도 소진 후 1.0% 하나머니 적립",
+            "similarity": 0.6817265152931213,
+            "cards": [
+              "JADE Prime"
+            ],
+            "applied": true,
+            "graph_targets": [],
+            "target_terms": [],
+            "excluded_terms": []
+          },
+          {
+            "source": "CARD_BNFT",
+            "key": "[\"card_product_item\",21,\"20261105_000096\"]",
+            "benefit_id": "20261105_000096",
+            "id": "card_product_item:21:20261105_000096",
+            "bnft_nm": "전세계 공항 라운지 무료 이용",
+            "similarity": 0.646500289440155,
+            "cards": [
+              "JADE Prime"
+            ],
+            "applied": true,
+            "graph_targets": [],
+            "target_terms": [],
+            "excluded_terms": []
+          },
+          {
+            "source": "CARD_BNFT",
+            "key": "[\"card_product_item\",20,\"20261105_000095\"]",
+            "benefit_id": "20261105_000095",
+            "id": "card_product_item:20:20261105_000095",
+            "bnft_nm": "기본적립",
+            "similarity": 0.7544330358505249,
+            "cards": [
+              "JADE First"
+            ],
+            "applied": true,
+            "graph_targets": [],
+            "target_terms": [],
+            "excluded_terms": []
+          },
+          {
+            "source": "CARD_BNFT",
+            "key": "[\"card_product_item\",40,\"20261105_000104\"]",
+            "benefit_id": "20261105_000104",
+            "id": "card_product_item:40:20261105_000104",
+            "bnft_nm": "국내외 가맹점 기본 적립",
+            "similarity": 0.6946014165878296,
+            "cards": [
+              "EVERY WON POINT"
+            ],
+            "applied": true,
+            "graph_targets": [],
+            "target_terms": [],
+            "excluded_terms": []
+          },
+          {
+            "source": "CARD_BNFT",
+            "key": "[\"card_product_item\",23,\"20261105_000100\"]",
+            "benefit_id": "20261105_000100",
+            "id": "card_product_item:23:20261105_000100",
+            "bnft_nm": "주요 간편결제 모아포인트 추가적립",
+            "similarity": 0.7027761936187744,
+            "cards": [
+              "카드의정석 POINT II"
+            ],
+            "applied": true,
+            "graph_targets": [],
+            "target_terms": [],
+            "excluded_terms": []
+          },
+          {
+            "source": "CARD_COMMON_BNFT",
+            "key": "[\"card_common_bnft\",1,\"20261103_000001\"]",
+            "benefit_id": "20261103_000001",
+            "id": "card_common_bnft:1:20261103_000001",
+            "bnft_nm": "Visa 컨시어지",
+            "similarity": 0.6281858682632446,
+            "cards": [
+              "JADE Classic"
+            ],
+            "applied": true,
+            "graph_targets": [],
+            "target_terms": [],
+            "excluded_terms": []
+          },
+          {
+            "source": "CARD_COMMON_BNFT",
+            "key": "[\"card_common_bnft\",9,\"20261104_000016\"]",
+            "benefit_id": "20261104_000016",
+            "id": "card_common_bnft:9:20261104_000016",
+            "bnft_nm": "제주도닷컴 국내선 항공권 발권대행수수료 무료",
+            "similarity": 0.6888266801834106,
+            "cards": [],
+            "applied": false,
+            "graph_targets": [],
+            "target_terms": [],
+            "excluded_terms": []
+          }
+        ],
+        "engines": [
+          "neo4j_keyword",
+          "neo4j_vector",
+          "neo4j_rrf"
+        ],
+        "named_cards": [
+          "JADE Prime"
+        ],
+        "requested_topics": [],
+        "selected_ids": [
+          "card_product_item:21:20261105_000097"
+        ],
+        "supplemented_ids": [],
+        "coverage_gaps": [],
+        "unselected_candidate_ids": [
+          "card_product_item:21:20261105_000098",
+          "card_product_item:21:20261105_000096",
+          "card_product_item:20:20261105_000095",
+          "card_product_item:40:20261105_000104",
+          "card_product_item:23:20261105_000100",
+          "card_common_bnft:1:20261103_000001",
+          "card_common_bnft:9:20261104_000016"
+        ]
+      },
+      "interpret": {
+        "benefit_ids": [
+          "card_product_item:21:20261105_000097"
+        ],
+        "benefit_names": [
+          "기본적립"
+        ],
+        "benefit_keys": [
+          "[\"card_product_item\",21,\"20261105_000097\"]"
+        ],
+        "sections": [
+          "evidence"
+        ],
+        "payment_amount": null,
+        "ambiguity": null
+      },
+      "retrieval_trace": [
+        {
+          "benefit": "기본적립",
+          "engine": "neo4j",
+          "evidence_engine": "neo4j",
+          "rules": 1,
+          "conditions": 1,
+          "limits": 0,
+          "evidence": 3
+        }
+      ],
+      "retrieved_data": [
+        {
+          "context": {
+            "card": {
+              "product_nm": "JADE Prime",
+              "card_id": 21,
+              "issuer": "하나카드"
+            },
+            "benefit": {
+              "item_cond_expr": "{\"branches\":[{\"atoms\":[{\"atom_key\":\"b2_c1\",\"atom_seq\":1,\"cond_basis_cd\":\"PREV_MONTH_SPEND\",\"cond_max_amt_excl\":null,\"cond_min_amt\":2000000,\"cond_raw_txt\":\"지난달 1일부터 말일까지 200만원 이상 이용 시\",\"cond_status_cd\":\"DRAFT\",\"cond_type_cd\":\"SPEND_REQ\",\"excl_raw_txt\":null,\"negate_yn\":false}],\"branch_no\":1}],\"expr_status_cd\":\"DRAFT\"}",
+              "card_product_item_id": "20261105_000097",
+              "verification_status_cd": "PENDING_REVIEW",
+              "item_nm": "기본적립",
+              "item_limit_txt": null,
+              "item_type_cd": "BENEFIT",
+              "rule_list": "[{\"cond_expr\":null,\"rule_key\":\"b2_r1\",\"rule_status_cd\":\"DRAFT\",\"target_list\":[],\"value_num\":1.5,\"value_unit_cd\":\"PERCENT\"}]",
+              "card_id": 21,
+              "item_data": "{}",
+              "item_cd": "BNFT_5217D1108CE7",
+              "item_rule_txt": "1.5% 하나머니 적립",
+              "relation_list": "[]",
+              "item_subtype_cd": "POINT",
+              "key": "[\"card_product_item\",21,\"20261105_000097\"]",
+              "search_text": "기본적립\n1.5% 하나머니 적립\n혜택명: 기본적립\n혜택 유형: 포인트 적립\n혜택 내용: 1.5%"
+            },
+            "card_sources": [
+              {
+                "product_nm": "JADE Prime",
+                "card_id": 21,
+                "issuer": "하나카드"
+              }
+            ],
+            "common": null,
+            "common_docs": [],
+            "card_labels": [
+              "dp_node",
+              "dp_card_product"
+            ],
+            "benefit_labels": [
+              "dp_node",
+              "dp_card_product_item"
+            ],
+            "extraction_sources": [
+              "{\"call_seq\":1,\"card_ai_run_id\":\"20261105_000041\",\"card_doc_chunk_id\":\"20261105_000170\",\"card_doc_id\":\"20261105_000041\",\"card_extr_stg_id\":\"20261105_000608\",\"card_id\":21,\"create_date\":\"2026-11-05 01:48:49.292434+00:00\",\"create_user_id\":\"SYSTEM\",\"page_no\":6,\"stg_ai_vrfy_card_ai_run_id\":null,\"stg_ai_vrfy_cd\":null,\"stg_approved_date\":null,\"stg_approved_user_id\":null,\"stg_evidence_end_pos\":1133,\"stg_evidence_start_pos\":1070,\"stg_evidence_txt\":\"⦁\\t 기본적립 \\n\\t : 지난달 1일부터 말일까지 200만원 이상 이용 시 1.5% 하나머니 적립 \\n\\t  서비스 제공\",\"stg_item_seq\":2,\"stg_kind_cd\":\"BENEFIT\",\"stg_parent_card_extr_stg_id\":null,\"stg_raw_item\":{\"applicable_cards\":[],\"bnft_nm\":\"기본적립\",\"bnft_type_cd\":\"POINT\",\"brand_txt\":null,\"certainty\":\"HIGH\",\"conditions\":[{\"cond_basis_cd\":\"PREV_MONTH_SPEND\",\"cond_key\":\"b2_c1\",\"cond_max_amt_excl\":null,\"cond_min_amt\":2000000,\"cond_raw_txt\":\"지난달 1일부터 말일까지 200만원 이상 이용 시\",\"cond_type_cd\":\"SPEND_REQ\",\"evidence\":[{\"link_basis\":\"SAME_TEXT\",\"quote_txt\":\"지난달 1일부터 말일까지 200만원 이상 이용 시 1.5% 하나머니 적립 \\n\\t  서비스 제공\",\"support_key\":\"b2_c1\",\"supports\":\"COND\"}],\"excl_raw_txt\":null,\"negate_yn\":false,\"scope\":\"THIS_BENEFIT\",\"target_benefit_nms\":[]}],\"evidence\":[{\"link_basis\":\"SAME_TEXT\",\"quote_txt\":\"⦁\\t 기본적립 \\n\\t : 지난달 1일부터 말일까지 200만원 이상 이용 시 1.5% 하나머니 적립 \\n\\t  서비스 제공\",\"support_key\":null,\"supports\":\"BNFT\"},{\"link_basis\":\"SAME_TEXT\",\"quote_txt\":\"1.5% 하나머니 적립\",\"support_key\":\"b2_r1\",\"supports\":\"RULE\"}],\"excluded_cards\":[],\"is_common_candidate\":false,\"item_key\":\"b2\",\"limits\":[],\"no_condition_stated\":false,\"relations\":[],\"rules\":[{\"conditions\":[],\"limit_keys\":[],\"min_txn_amt\":null,\"min_txn_raw_txt\":null,\"rule_key\":\"b2_r1\",\"value_num\":\"1.5\",\"value_raw_txt\":\"1.5%\",\"value_unit_cd\":\"PERCENT\"}],\"selection_service_txt\":null,\"service_grade_txt\":null,\"targets\":[],\"uncertainty_note\":\"이 페이지에는 기본적립의 전체 대상 및 월 적립 한도 금액이 명시되지 않음.\",\"validity_period_txt\":null},\"stg_review_note\":null,\"stg_sql_check_cd\":\"LINK_REVIEW\",\"stg_status\":\"PENDING_REVIEW\",\"update_date\":\"2026-11-05 01:49:37.224137+00:00\",\"update_user_id\":\"SYSTEM\"}"
+            ]
+          },
+          "rules": [
+            {
+              "rule": {
+                "cond_expr": null,
+                "rule_key": "b2_r1",
+                "rule_status_cd": "DRAFT",
+                "target_list": [],
+                "value_num": 1.5,
+                "value_unit_cd": "PERCENT"
+              },
+              "targets": []
+            }
+          ],
+          "conditions": [
+            {
+              "owner_cd": "BENEFIT",
+              "rule_key": null,
+              "expression": {
+                "key": "BENEFIT:item"
+              },
+              "branch_no": 1,
+              "atom": {
+                "atom_key": "b2_c1",
+                "atom_seq": 1,
+                "cond_basis_cd": "PREV_MONTH_SPEND",
+                "cond_max_amt_excl": null,
+                "cond_min_amt": 2000000,
+                "cond_raw_txt": "지난달 1일부터 말일까지 200만원 이상 이용 시",
+                "cond_status_cd": "DRAFT",
+                "cond_type_cd": "SPEND_REQ",
+                "excl_raw_txt": null,
+                "negate_yn": false
+              }
+            }
+          ],
+          "limits": [],
+          "evidence": [
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000097",
+                "item_nm": "기본적립",
+                "key": "[\"card_product_item\",21,\"20261105_000097\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 6,
+                "evidence_id": "20261105_002659",
+                "quote_txt": "⦁\t 기본적립 \n\t : 지난달 1일부터 말일까지 200만원 이상 이용 시 1.5% 하나머니 적립 \n\t  서비스 제공",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",6,\"20261105_000170\",\"20261105_002659\"]"
+              },
+              "chunk": {
+                "page_no": 6,
+                "chunk_id": "20261105_000170"
+              },
+              "page": {
+                "page_no": 6
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000097",
+                "item_nm": "기본적립",
+                "key": "[\"card_product_item\",21,\"20261105_000097\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": "b2_r1",
+              "link": {
+                "ev_subject_cd": "RULE",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 6,
+                "evidence_id": "20261105_002660",
+                "quote_txt": "1.5% 하나머니 적립",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",6,\"20261105_000170\",\"20261105_002660\"]"
+              },
+              "chunk": {
+                "page_no": 6,
+                "chunk_id": "20261105_000170"
+              },
+              "page": {
+                "page_no": 6
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261105_000097",
+                "item_nm": "기본적립",
+                "key": "[\"card_product_item\",21,\"20261105_000097\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": null,
+                "ev_item_cd": null,
+                "source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg",
+                "ev_item_key": null
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 6,
+                "evidence_id": "20261105_002661",
+                "quote_txt": "지난달 1일부터 말일까지 200만원 이상 이용 시 1.5% 하나머니 적립 \n\t  서비스 제공",
+                "key": "[\"card_source_evidence\",\"20261105_000041\",6,\"20261105_000170\",\"20261105_002661\"]"
+              },
+              "chunk": {
+                "page_no": 6,
+                "chunk_id": "20261105_000170"
+              },
+              "page": {
+                "page_no": 6
+              },
+              "document": {
+                "card_doc_id": "20261105_000041",
+                "doc_file_nm": "hana_all/credit/신용_JADEPrime_상품설명서(공식PDF)_14997_20250703.pdf",
+                "doc_title": "JADE Prime 상품설명서",
+                "doc_sha256": "6d419a782a237bd0aa4f4316fdc90663a79ce31c4b862231d80a4ccc6fe6d011",
+                "doc_source_url": "https://m.hanacard.co.kr/leaflet/14/14997_20250703.pdf"
+              }
+            }
+          ],
+          "entity_ref": "card_product_item:21:20261105_000097"
+        }
+      ],
+      "pdf_evidence": [
+        {
+          "evidence_id": "20261105_002659",
+          "page_no": 6,
+          "approval_status": "PENDING",
+          "quote": "⦁\t 기본적립 \n\t : 지난달 1일부터 말일까지 200만원 이상 이용 시 1.5% 하나머니 적립 \n\t  서비스 제공",
+          "subjects": [
+            "BNFT"
+          ],
+          "items": [],
+          "benefits": [
+            "기본적립"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000097"
+          ],
+          "rule_keys": []
+        },
+        {
+          "evidence_id": "20261105_002660",
+          "page_no": 6,
+          "approval_status": "PENDING",
+          "quote": "1.5% 하나머니 적립",
+          "subjects": [
+            "RULE"
+          ],
+          "items": [],
+          "benefits": [
+            "기본적립"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000097"
+          ],
+          "rule_keys": [
+            "b2_r1"
+          ]
+        },
+        {
+          "evidence_id": "20261105_002661",
+          "page_no": 6,
+          "approval_status": "PENDING",
+          "quote": "지난달 1일부터 말일까지 200만원 이상 이용 시 1.5% 하나머니 적립 \n\t  서비스 제공",
+          "subjects": [
+            "EXTRACTION_STAGE"
+          ],
+          "items": [],
+          "benefits": [
+            "기본적립"
+          ],
+          "benefit_ids": [
+            "card_product_item:21:20261105_000097"
+          ],
+          "rule_keys": []
+        }
+      ],
+      "llm_calls": [
+        {
+          "node": "interpret",
+          "model": "gpt-6-luna",
+          "response_model": "gpt-6-luna",
+          "input_tokens": 2696,
+          "output_tokens": 38,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "cost_usd": 0.0002886,
+          "elapsed_ms": 2652.150700101629
+        },
+        {
+          "node": "answer",
+          "model": "gpt-6-luna",
+          "response_model": "gpt-6-luna",
+          "input_tokens": 3429,
+          "output_tokens": 147,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "cost_usd": 0.00041640000000000004,
+          "elapsed_ms": 1827.565300045535
+        }
+      ],
+      "llm_usage": {
+        "calls": 2,
+        "input_tokens": 6125,
+        "output_tokens": 185,
+        "cost_usd": 0.000705
+      },
+      "embedding_usage": {
+        "model": "text-embedding-3-small",
+        "input_tokens_estimate": 23,
+        "estimated_cost_usd": 4.6e-07,
+        "usage_source": "local tokenizer estimate; provider embedding usage unavailable"
+      },
+      "elapsed_ms": 7658.8,
+      "trace_event_stages": [],
+      "trace_file_run_id": "live50-20261108T062408Z-5364151b-CARD10-008"
     }
   ],
   "summary": {
-    "completed": 6,
+    "completed": 8,
     "errors": 0
   }
 }
