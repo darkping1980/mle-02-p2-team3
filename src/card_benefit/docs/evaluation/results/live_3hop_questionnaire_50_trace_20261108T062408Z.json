@@ -1,9 +1,9 @@
 {
-  "created_at_utc": "2026-11-08T06:25:27.114904+00:00",
+  "created_at_utc": "2026-11-08T06:27:20.274901+00:00",
   "run_id": "live50-20261108T062408Z-5364151b",
   "code_revision": "4ff5c2244dceb29dc0eaa250cd6355e1ff4919b7+src.a08f5ac932dbabe8",
   "model": "gpt-6-luna",
-  "question_count": 8,
+  "question_count": 23,
   "traces": [
     {
       "question_id": "CARD10-001",
@@ -43,6 +43,81 @@
     {
       "question_id": "CARD10-008",
       "run_id": "live50-20261108T062408Z-5364151b-CARD10-008",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-009",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-009",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-010",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-010",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-011",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-011",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-012",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-012",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-013",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-013",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-014",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-014",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-015",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-015",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-016",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-016",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-017",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-017",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-018",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-018",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-019",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-019",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-020",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-020",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-021",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-021",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-022",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-022",
+      "events": []
+    },
+    {
+      "question_id": "CARD10-023",
+      "run_id": "live50-20261108T062408Z-5364151b-CARD10-023",
       "events": []
     }
   ]
