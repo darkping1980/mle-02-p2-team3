@@ -140,9 +140,9 @@ def tier_context(amount=None):
                            "ONE PICK 캐시백: 규칙 P1_100, P1_500의 중첩 선택 방식은 미확정입니다."], "evidence": evidence}
 
 
-def run(search=None, first=None, second=None, question="대중교통 혜택은?"):
+def run(search=None, first=None, second=None, question="test transit benefit?", answer_mode="normal"):
     first, second = first or interpret_llm(), second or answer_llm()
-    return CardGraphRAG(search or FakeSearch(), first, second).run(question), first, second
+    return CardGraphRAG(search or FakeSearch(), first, second, answer_mode=answer_mode).run(question), first, second
 
 
 class GraphTests(unittest.TestCase):
@@ -156,6 +156,45 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(state["evidence"][0]["page_no"], 1)
         self.assertEqual((len(first.prompts), len(second.prompts)), (1, 1))
         self.assertEqual([call["node"] for call in state["llm_calls"]], ["interpret", "answer"])
+
+    def test_prototype_preserves_raw_answer_without_validation_or_fallback(self):
+        original = card_answer([point("LLM original wording: 5% and 30000 KRW condition", ("E1",), BENEFIT_ID)],
+                               conclusion="original conclusion", uncertain=["original uncertainty"], reason="original reason",
+                               answer_text="original answer text exactly")
+        llm = FakeLLM(original)
+        with patch("card_benefit.payment_card.db_pipeline_origin_search.card_graphrag.validate_answer",
+                   side_effect=AssertionError("validate_answer must not run")), \
+             patch("card_benefit.payment_card.db_pipeline_origin_search.card_graphrag.transaction_tier_fallback",
+                   side_effect=AssertionError("transaction_tier_fallback must not run")):
+            state, _, _ = run(second=llm, answer_mode="prototype")
+        answer = state["answer"]
+        self.assertEqual(state["path"], ["interpret", "retrieve", "answer", "finish"])
+        self.assertEqual(state["answer_mode"], "prototype")
+        self.assertEqual(answer["answer_source"], "llm_prototype")
+        self.assertEqual(answer["verification_status"], "NOT_PERFORMED")
+        self.assertEqual(answer["answer_text"], original.answer_text)
+        self.assertEqual(answer["conclusion"], original.conclusion)
+        self.assertEqual(answer["points"], [{"text": original.points[0].text, "benefit_id": BENEFIT_ID, "evidence_ids": ["E1"]}])
+        self.assertEqual(answer["uncertain"], original.uncertain)
+        self.assertEqual(answer["cannot_answer_reason"], original.cannot_answer_reason)
+        self.assertTrue(state["answer_diagnostics"]["content_preserved"])
+        self.assertEqual([call["node"] for call in state["llm_calls"]], ["interpret", "answer"])
+
+    def test_normal_mode_remains_default_and_still_validates(self):
+        normal_state, _, _ = run()
+        explicit_state, _, _ = run(answer_mode="normal")
+        self.assertEqual(normal_state["answer_mode"], "normal")
+        self.assertEqual(explicit_state["answer"]["answer_source"], "llm")
+        self.assertEqual(normal_state["answer"]["status"], "ANSWERED")
+
+    def test_prototype_uses_same_context_and_prompt_as_normal_mode(self):
+        parsed = card_answer([point("A source-backed answer", ("E1",), BENEFIT_ID)])
+        normal_llm, prototype_llm = FakeLLM(parsed), FakeLLM(parsed)
+        normal, _, _ = run(second=normal_llm, answer_mode="normal")
+        prototype, _, _ = run(second=prototype_llm, answer_mode="prototype")
+        self.assertEqual(normal_llm.prompts, prototype_llm.prompts)
+        self.assertEqual(normal["context"], prototype["context"])
+        self.assertEqual(CardGraphRAG(FakeSearch(), None, None).answer_mode, "normal")
 
     def test_graph_is_compiled_state_graph(self):
         graph = CardGraphRAG(FakeSearch(), None, None).graph.get_graph()
@@ -1878,17 +1917,37 @@ class NewContractRegressionTests(unittest.TestCase):
              "cond_max_amt_excl": 8000 if row["rule"]["rule_key"] == "30_80" else None}]}]}}} for row in rules]
         self.assertTrue(card_graphrag.rule_selection_open(transaction_rules))
 
-    def test_broad_exclusion_terms_do_not_reject_a_differently_scoped_benefit(self):
-        data = detail()
-        rule = {"rule_key": "online", "target_list": [{"target_nm": "online shopping"}],
-                "cond_expr": {"branches": [{"atoms": [{"cond_type_cd": "BNFT_EXCL",
-                    "excl_raw_txt": "\uad6c\ub3c5, \uc694\uae08 \uc81c\uc678"}]}]}}
-        benefit = {"card_product_item_id": "I2", "item_nm": "monthly bill discount", "card_id": 2,
-                   "rule_list": [rule], "source_json": js({"card_product_item_id": "I2", "item_nm": "monthly bill discount",
-                                                                  "card_id": 2, "rule_list": [rule]})}
+    def test_answer_keeps_source_exclusion_conditions_without_token_override(self):
+        self.assertFalse(hasattr(card_graphrag, "find_exclusions"))
+        self.assertFalse(hasattr(card_graphrag, "enforce_exclusions"))
+        self.assertNotIn("exclusions", card_graphrag.CardState.__annotations__)
+        response = "\ucd94\uac00 \uc801\ub9bd 5% \uce90\uc2dc\ubc31\uc785\ub2c8\ub2e4."
+        quote = "\ucd94\uac00 \uc801\ub9bd 5% \uce90\uc2dc\ubc31, \uc6d4 1\ucc9c\uc6d0"
+        data = detail(evidence=[evidence_row("E1", quote=quote)])
+        benefit = {"card_product_item_id": "I3", "card_id": 2, "item_type_cd": "BENEFIT",
+                   "item_nm": "\ucd94\uac00 \uc801\ub9bd", "item_rule_txt": response,
+                   "item_limit_txt": "\uc6d4 1\ucc9c\uc6d0", "item_data": {}, "rule_list": [],
+                   "source_json": js({"card_product_item_id": "I3", "card_id": 2, "item_type_cd": "BENEFIT",
+                                       "item_nm": "\ucd94\uac00 \uc801\ub9bd", "item_rule_txt": response,
+                                       "item_limit_txt": "\uc6d4 1\ucc9c\uc6d0", "item_data": {}, "rule_list": []})}
         data["context"]["benefit"] = benefit
-        self.assertEqual(card_graphrag.find_exclusions(
-            "\uc694\uae08\uacfc \uad6c\ub3c5\uc744 \uc790\ub3d9\ub0a9\ubd80\ud574\uc694", [data]), [])
+        data["entity_ref"] = "card_product_item:2:I3"
+        atom = {"atom_key": "bonus_exclusion", "negate_yn": True,
+                "cond_raw_txt": "\ucd94\uac00 \uc801\ub9bd \uc11c\ube44\uc2a4\ub294 \uc81c\uc678", "cond_type_cd": "BNFT_EXCL"}
+        data["conditions"] = [{"owner_cd": "RULE", "rule_key": "bonus", "expression": {"key": "e1"},
+                               "branch_no": 1, "atom": {"key_name": "bonus_exclusion", "source_json": js(atom)}}]
+        llm = FakeLLM(card_answer([point(response, ("E1",), "card_product_item:2:I3")],
+                                  conclusion=response, answer_text=response))
+
+        state, _, _ = run(FakeSearch(result=data), second=llm, question="\ucd94\uac00 \uc801\ub9bd \ud61c\ud0dd\uc740?")
+
+        self.assertIn("\ucd94\uac00 \uc801\ub9bd \uc11c\ube44\uc2a4\ub294 \uc81c\uc678", llm.prompts[0])
+        self.assertNotIn("excluded_terms", llm.prompts[0])
+        self.assertEqual(state["answer"]["answer_source"], "llm")
+        self.assertEqual(state["answer"]["status"], "ANSWERED")
+        self.assertEqual(state["answer"]["answer_text"], response)
+        self.assertNotEqual(state["answer"].get("answer_source"), "program_exclusion")
+        self.assertNotIn("exclusions", state)
 
     def test_interpret_supplements_named_card_topics_from_catalog_when_hybrid_top_k_misses_one(self):
         from card_benefit.payment_card.db_pipeline_origin_search.search_contract import SearchOutcome

@@ -45,8 +45,8 @@ flowchart TD
 | `get_pipeline` | 자동 화면의 검색 모드 | 모드별 Neo4j, 선택적 PostgreSQL 검색, LLM 및 `CardGraphRAG` 생성; 예외는 캐시되지 않음 | [streamlit_app.py:31](../payment_card/db_pipeline_origin_search/streamlit_app.py#L31) |
 | `run` / `_initial_state` | 화면 질문 | UUID 일부, 시간과 빈 누적 목록을 만들어 `graph.invoke` 결과 반환 | [card_graphrag.py:988](../payment_card/db_pipeline_origin_search/card_graphrag.py#L988) |
 | `interpret` | 그래프; 질문·검색 모드 | 카탈로그/후보 조회와 구조화 LLM 해석, ID 검증 및 검색 파라미터 반환 | [card_graphrag.py:1054](../payment_card/db_pipeline_origin_search/card_graphrag.py#L1054) |
-| `retrieve` | 검증된 혜택 키·sections | 선택된 키별 그래프 또는 PostgreSQL 상세, 근거·제외·미확정 분류 반환 | [card_graphrag.py:1128](../payment_card/db_pipeline_origin_search/card_graphrag.py#L1128) |
-| `answer` | 상세·근거·질문 | context 구성, LLM 구조화 응답, `validate_answer`, `enforce_exclusions` 순서 | [card_graphrag.py:1175](../payment_card/db_pipeline_origin_search/card_graphrag.py#L1175) |
+| `retrieve` | 검증된 혜택 키·sections | Neo4j 상세·Evidence 조회 및 원문 조건의 미확정 항목 분류 | [card_graphrag.py](../../payment_card/db_pipeline_origin_search/card_graphrag.py) |
+| `answer` | 상세·근거·질문 | 원문 조건을 포함한 context로 LLM 응답을 만들고 `validate_answer`, `transaction_tier_fallback`을 실행 | [card_graphrag.py](../../payment_card/db_pipeline_origin_search/card_graphrag.py) |
 | `finish` | 각 종료 경로 | 답변이 없을 때 오류/답변 불가 안내를 만들고 사용량·경고 기록 | [card_graphrag.py:1216](../payment_card/db_pipeline_origin_search/card_graphrag.py#L1216) |
 
 ## 3. 질문 해석과 대상 선택
@@ -120,21 +120,18 @@ flowchart LR
 
 Neo4j 실행은 `READ_ACCESS`와 `execute_read`, 파라미터화된 고정 Cypher를 사용한다 ([neo4j_search.py:148](../payment_card/db_pipeline_origin_search/neo4j_search.py#L148)). 다중 홉 템플릿도 있으나 자동 `retrieve`의 기본 호출은 아니다. `collect_evidence`는 ID별 인용·페이지·승인 상태와 혜택 ID/규칙 키 등을 합친다. 한도 질문은 `ev_subject_cd=BNFT`만 남긴다. 이 함수는 승인 상태를 표시하지만 승인 상태로 필터하지 않는다 ([card_graphrag.py:306](../payment_card/db_pipeline_origin_search/card_graphrag.py#L306)).
 
-## 6. 미확정 조건과 제외 대상
+## 6. 미확정 조건과 제외 조건 원문
 
 | 함수·시점 | 입력과 실제 조건 | 반환 및 영향 | 근거 |
 |---|---|---|---|
-| `find_exclusions` / retrieve | 질문에서 뽑은 낱말과 상세 혜택의 제외 토큰을 비교. B/C에서 카드 ID가 있으면 PostgreSQL 원본을 우선 읽고 없으면 그래프 source JSON. 같은 낱말이 대상명과 정확히 일치하면 제외 매치에서 뺌 | 혜택 ID·이름·일치 낱말·검증 출처를 `exclusions`에 저장. DB 원본 조회 오류는 `SEARCH_FAILED` | [card_graphrag.py:331](../payment_card/db_pipeline_origin_search/card_graphrag.py#L331) |
-| `unresolved_items` / retrieve | 항상 개발 자료 상태 안내. 규칙 키 2개 이상이고 `rule_select_cd`가 없으면 구간 선택 미확정. `cond_type_cd=ETC`와 raw가 있으면 원문만 있는 조건. `transit_exclusions`는 고정 검토 항목 | DATA, CONDITION, REVIEW 항목과 관련 근거 구성. 특정 키와 한국어 정규식에 의존 | [card_graphrag.py:429](../payment_card/db_pipeline_origin_search/card_graphrag.py#L429) |
-| `find_unresolved` | `unresolved_items(details)` | 중복 제거한 전체 문장 목록. 개발자 표시 및 답변 중복 판별용 | [card_graphrag.py:458](../payment_card/db_pipeline_origin_search/card_graphrag.py#L458) |
-| `split_unresolved` | 질문·intent·결제금액과 위 항목. `affects_question`은 intent 또는 지정 단어, 금액 구간이면 결제금액이나 확인된 값과 질문값 교집합을 검사 | 관련 CONDITION은 같은 topic/open끼리 혜택명과 근거 병합; DATA는 notices, 나머지는 others | [card_graphrag.py:463](../payment_card/db_pipeline_origin_search/card_graphrag.py#L463) |
-| `enforce_exclusions` / validate 이후 | 찾아낸 제외 낱말과 검증된 points | 낱말이 있고 제외 표현이 없는 point 제거, 프로그램 고정 제외 결론. 모든 낱말이 들어간 인용이 있으면 system point 추가, 없으면 경고. points가 없으면 `NOT_ANSWERABLE` | [card_graphrag.py:359](../payment_card/db_pipeline_origin_search/card_graphrag.py#L359) |
+| `benefit_context` / answer | 혜택의 `BNFT_EXCL`, `SPEND_EXCL` 조건 원문을 `exclusion_text` 및 구조화 conditions에 포함 | 실제 제외 조건은 Answer LLM 문맥에 남아 답변 생성에 사용된다. 질문 단어와 제외 토큰을 비교해 적용 여부를 자동 판정하지 않는다. | [card_graphrag.py](../../payment_card/db_pipeline_origin_search/card_graphrag.py) |
+| `split_unresolved` / retrieve | 질문·intent·결제금액과 상세 조건. 질문 영향, 금액 구간, 상태별 분류 | 관련 CONDITION은 topic/open별로 혜택명과 근거를 병합하고 DATA·기타 항목을 구분한다. | [card_graphrag.py](../../payment_card/db_pipeline_origin_search/card_graphrag.py) |
 
-이 제외 검증은 토큰·문자열 기반이다. 제외 문구의 의미 전체나 모든 동의어를 이해하는 범용 정책 엔진은 아니다. 고정 결론은 원문 근거를 찾지 못해도 만들어지며 그 경우 경고가 남는다.
+답변 검증은 `validate_answer()`와 거래 금액 구간용 `transaction_tier_fallback()`이 담당한다. 혜택의 제외 조건 원문은 계속 보존되어 LLM에 전달되지만, 질문 토큰만으로 적용 제외 결론을 만들거나 기존 답변을 대체하지 않는다.
 
 ## 7. Answer 호출과 검증 입력
 
-`after_retrieve`는 오류가 없고 병합 근거가 하나 이상일 때만 answer로 간다. `benefit_context`는 source JSON에서 규칙 값·단위·대상, 조건의 OR branches와 AND atoms, 한도, 공통 적용 카드 등을 뽑는다. `answer`는 질문 결제 금액, `rule_conflicts`, 관련 open conditions, 제외 항목과 근거 ID·페이지·상태·인용을 context에 넣는다. 공유 실적 문구의 다른 금액에는 `amount_note`를 붙인다 ([card_graphrag.py:384](../payment_card/db_pipeline_origin_search/card_graphrag.py#L384), [card_graphrag.py:1175](../payment_card/db_pipeline_origin_search/card_graphrag.py#L1175)).
+`after_retrieve`는 오류가 없고 병합 근거가 하나 이상일 때 answer로 간다. `benefit_context`는 source JSON에서 규칙 값·단위·대상, 조건의 OR branches와 AND atoms, 한도, 제외 문구 등을 뽑는다. `answer`는 질문 결제 금액, `rule_conflicts`, 관련 open conditions, 조건 원문과 근거 ID·페이지·상태·인용을 context에 넣는다. 공유 실적 문구의 다른 금액에는 `amount_note`를 붙인다 ([card_graphrag.py](../../payment_card/db_pipeline_origin_search/card_graphrag.py)).
 
 LLM은 `CardAnswer` 구조화 출력 `answer_text`, `conclusion`, `points`(text, evidence_ids, benefit_id), `uncertain`, `cannot_answer_reason`을 반환한다. `_call_llm`은 JSON schema strict 설정으로 한 번 호출하며 파싱 오류면 `None`과 호출 기록을 돌려준다. 프롬프트는 근거만 사용하고 금액 구간·적용 조건을 보존하도록 지시하지만, 그 지시 자체가 검증은 아니다 ([card_graphrag.py:134](../payment_card/db_pipeline_origin_search/card_graphrag.py#L134), [card_graphrag.py:1030](../payment_card/db_pipeline_origin_search/card_graphrag.py#L1030)).
 
@@ -177,10 +174,10 @@ flowchart TD
   TEXT -->|실패 및 point 존재| FALL[검증된 문장 조합]
   FALL -->|중첩 구간 프로그램 답변 있음| TIER[tier_answer]
   CON -->|point 없음| NO[NOT_ANSWERABLE]
-  LLM --> EX[enforce_exclusions]
-  FALL --> EX
-  TIER --> EX
-  NO --> EX
+  LLM --> DONE[최종 답변]
+  FALL --> DONE
+  TIER --> DONE
+  NO --> DONE
 ```
 
 ### `validate_answer` 세부 순서
@@ -232,6 +229,6 @@ flowchart TD
 | 근거 품질 | 인용과 값의 존재·연결을 검사하지만 모든 문장에 대해 의미적 entailment를 증명하지 않는다. `NOT_CHECKED`, `STRUCTURED_ONLY` 및 승인 상태에 주의해야 한다. |
 | 고정 패턴 | `transit_exclusions`, `ETC`, `TXN_AMT`, 금액·실적·미확정·적용 방식의 정규식은 코드의 고정 규칙이다. 인식하지 못하는 표현과 잘못 일치하는 표현이 있을 수 있다. |
 | 공통 근거 | Neo4j는 `dp_same_as` 기존 행을 통해, PostgreSQL은 문서와 staging의 혜택명 일치로 근거를 찾는다. 양 경로의 결과 동일성은 실제 데이터에서 확인 필요다. |
-| 원문 없는 제외 | `enforce_exclusions`는 인용을 찾지 못해도 프로그램 결론을 만든다. warning 및 point 상태를 함께 확인해야 한다. |
+| 제외 조건 | 혜택의 제외 원문은 LLM context에 제공된다. 토큰 기반 강제 판정은 실행 경로에서 제거되었으며, 원문 자체의 정확성은 Evidence와 함께 검토해야 한다. |
 | 등록 후보 상태 | 앞선 등록 분석에서 카드별 후보 SQL은 `SUCCEEDED` 필터가 없고 공통 후보 SQL에는 있다. 의도 및 부분 실행 후보 영향은 확인 필요이며 이 문서 작업에서 수정하지 않았다. |
 | 질문 사례 | 화면에 놀이공원, 대중교통, 전월 실적, 1만원 결제, ONE PICK과 STYLE 비교 예시가 있다. 실제 실행하지 않았으므로 해당 질문의 답·근거·비용은 미확인이다. |

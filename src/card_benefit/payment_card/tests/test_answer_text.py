@@ -1,6 +1,6 @@
 """고객용 자연어 답변의 검증. LLM은 Mock이다."""
 from card_benefit.payment_card.db_pipeline_origin_search.card_graphrag import (
-    AnswerPoint, CardAnswer, enforce_exclusions, topic_marker, validate_answer,
+    AnswerPoint, CardAnswer, topic_marker, validate_answer,
 )
 
 
@@ -57,13 +57,6 @@ def test_unresolved_tier_cannot_be_decided_in_natural_text():
     item["benefits"][0]["limits"] = [{"text": "100원 500원 월 1천원"}]
     answer, _ = validate_answer(raw("1만원을 결제하면 500원을 받습니다."), item, "1만원 결제")
     assert answer["answer_source"] == "program_tier"
-
-
-def test_exclusion_overrides_llm_text():
-    answer = {"status": "ANSWERED", "conclusion": "됩니다.", "answer_text": "KTX도 됩니다.", "answer_source": "llm", "points": [], "uncertain": [], "message": None}
-    fixed, _ = enforce_exclusions(answer, [{"benefit_id": "T", "name": "대중교통", "terms": ["KTX"], "verified_by": "postgresql"}],
-                                  [{"evidence_id": "E", "quote": "KTX 제외"}])
-    assert fixed["answer_text"] == "KTX는 대중교통의 제외 대상이라 이 혜택을 받을 수 없습니다."
 
 
 def test_topic_marker():

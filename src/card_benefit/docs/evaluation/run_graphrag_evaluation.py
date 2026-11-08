@@ -10,9 +10,11 @@ confirmation flag and should only be used after explicit approval.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import sys
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
@@ -22,10 +24,13 @@ from typing import Any
 EVALUATION_DIR = Path(__file__).resolve().parent
 QUESTIONS_PATH = EVALUATION_DIR / "evaluation_set_50.json"
 GOLD_PATH = EVALUATION_DIR / "golden_answer_set_50.json"
-DEFAULT_OUTPUT = EVALUATION_DIR / "runs"
+DEFAULT_OUTPUT = EVALUATION_DIR / "results"
 ALLOWED_JUDGMENTS = {"CORRECT", "PARTIAL", "WRONG", "EXECUTION_ERROR", "JUDGMENT_HOLD"}
 HOLD_IDS = {"CARD10-030"}
 DEFAULT_SMOKE_IDS = ("CARD10-001", "CARD10-021")
+PREVIOUS_RESULT = DEFAULT_OUTPUT / "graphrag_evaluation_50_20261107.json"
+EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_USD_PER_MILLION_TOKENS = 0.02
 
 
 def load_evaluation_sets() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
@@ -87,7 +92,8 @@ def _answer_evidence_ids(answer: dict[str, Any] | None) -> list[str]:
     return sorted(ids)
 
 
-def _outcome_record(question: dict[str, Any], gold: dict[str, Any], outcome: dict[str, Any], elapsed_ms: float) -> dict[str, Any]:
+def _outcome_record(question: dict[str, Any], gold: dict[str, Any], outcome: dict[str, Any], elapsed_ms: float,
+                    answer_mode: str) -> dict[str, Any]:
     answer = outcome.get("answer") or {}
     candidate_search = outcome.get("candidate_search") or {}
     parameters = outcome.get("search_parameters") or {}
@@ -103,6 +109,10 @@ def _outcome_record(question: dict[str, Any], gold: dict[str, Any], outcome: dic
     cited_evidence_ids = _answer_evidence_ids(answer)
     all_evidence_ids = sorted({str(item.get("evidence_id")) for item in evidence if item.get("evidence_id")})
     error = outcome.get("error")
+    llm_calls = outcome.get("llm_calls", [])
+    embedding_tokens_estimate = estimate_embedding_tokens(question["question"])
+    diagnostics = outcome.get("answer_diagnostics") or {}
+    raw_answer = diagnostics.get("raw") if answer_mode == "prototype" else None
     execution_status = "EXECUTION_ERROR" if error or answer.get("status") == "ERROR" else "COMPLETED"
     if question["question_id"] in HOLD_IDS:
         judgment = "JUDGMENT_HOLD"
@@ -117,6 +127,18 @@ def _outcome_record(question: dict[str, Any], gold: dict[str, Any], outcome: dic
         "hop_type": question["hop_type"],
         "source_type": question.get("source_type"),
         "question": question["question"],
+        "answer_mode": answer_mode,
+        "llm_answer_evaluated": any(call.get("node") == "answer" for call in llm_calls),
+        "answer_llm_raw": _safe_json(raw_answer),
+        "final_answer": _safe_json(answer),
+        "prototype_content_preserved": diagnostics.get("content_preserved") if answer_mode == "prototype" else None,
+        "embedding_usage": {"model": EMBEDDING_MODEL, "calls": 1, "input_tokens_estimate": embedding_tokens_estimate,
+                            "estimated_cost_usd": round(embedding_tokens_estimate * EMBEDDING_USD_PER_MILLION_TOKENS / 1_000_000, 10),
+                            "usage_source": "local tokenizer estimate; provider usage is not returned by current embedder"},
+        "llm_usage": {"calls": len(llm_calls),
+                       "input_tokens": sum(call.get("input_tokens") or 0 for call in llm_calls),
+                       "output_tokens": sum(call.get("output_tokens") or 0 for call in llm_calls),
+                       "estimated_cost_usd": round(sum(call.get("cost_usd") or 0 for call in llm_calls), 10)},
         "gold_verification_status": gold.get("verification_status"),
         "accuracy_eligible": gold.get("verification_status") == "VERIFIED",
         "execution_status": execution_status,
@@ -160,7 +182,7 @@ def _outcome_record(question: dict[str, Any], gold: dict[str, Any], outcome: dic
             "evidence_records": _safe_json(detail.get("evidence", [])),
         } for detail in (outcome.get("retrieved_data") or [])],
         "answer_cited_evidence_ids": cited_evidence_ids,
-        "llm_calls": _safe_json(outcome.get("llm_calls", [])),
+        "llm_calls": _safe_json(llm_calls),
         "error": _safe_json(error),
         "warnings": _safe_json(outcome.get("warnings", [])),
         "expected_answer_for_review": gold.get("expected_answer"),
@@ -169,8 +191,18 @@ def _outcome_record(question: dict[str, Any], gold: dict[str, Any], outcome: dic
     }
 
 
-def print_plan(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, Any]], execute: bool) -> None:
+def estimate_embedding_tokens(question: str) -> int:
+    try:
+        import tiktoken
+        return len(tiktoken.get_encoding("cl100k_base").encode(question))
+    except Exception:
+        return max(1, len(question) // 4)
+
+
+def print_plan(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, Any]], execute: bool,
+               answer_mode: str) -> None:
     print("Mode:", "EXECUTE (paid backend calls)" if execute else "PLAN ONLY (no network or DB calls)")
+    print("Answer mode:", answer_mode)
     print("Selected questions:", len(selected))
     for question in selected:
         gold = gold_by_id[question["question_id"]]
@@ -179,10 +211,44 @@ def print_plan(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, A
         print("  ", question["question"])
     if execute:
         count = len(selected)
+        embedding_tokens = sum(estimate_embedding_tokens(question["question"]) for question in selected)
+        embedding_cost = embedding_tokens * EMBEDDING_USD_PER_MILLION_TOKENS / 1_000_000
+        baseline_cost = None
+        baseline_calls = None
+        if PREVIOUS_RESULT.exists():
+            try:
+                previous = json.loads(PREVIOUS_RESULT.read_text(encoding="utf-8"))
+                rows = {row["question_id"]: row for row in previous.get("results", [])}
+                selected_rows = [rows[item["question_id"]] for item in selected if item["question_id"] in rows]
+                baseline_cost = sum(call.get("cost_usd") or 0 for row in selected_rows for call in row.get("llm_calls", []))
+                baseline_calls = sum(len(row.get("llm_calls", [])) for row in selected_rows)
+            except (OSError, json.JSONDecodeError, KeyError, TypeError):
+                pass
         print(f"Call budget: {count} embedding request(s), up to {2 * count} LLM request(s), plus read-only Neo4j queries.")
+        print(f"Embedding estimate: ~{embedding_tokens} input token(s), ~${embedding_cost:.6f} at ${EMBEDDING_USD_PER_MILLION_TOKENS}/1M tokens.")
+        if baseline_cost is not None:
+            print(f"Historical LLM estimate for these IDs: {baseline_calls} call(s), ${baseline_cost:.6f}; actual varies with generated output.")
+        else:
+            print("Historical LLM baseline unavailable; actual API cost will be recorded from response usage.")
 
 
-def run_backend(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, Any]], output_path: Path) -> None:
+def run_backend(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, Any]], output_path: Path,
+                answer_mode: str) -> None:
+    if output_path.exists():
+        raise FileExistsError(f"Refusing to overwrite existing evaluation output: {output_path}")
+    tracked_sources = [
+        Path(__file__).resolve(),
+        EVALUATION_DIR.parents[1] / "payment_card" / "db_pipeline_origin_search" / "card_graphrag.py",
+        EVALUATION_DIR.parents[1] / "payment_card" / "db_pipeline_origin_search" / "neo4j_search.py",
+        EVALUATION_DIR.parents[1] / "payment_card" / "db_pipeline_origin_search" / "neo4j_hybrid_search.py",
+    ]
+    source_hashes = {str(path.relative_to(EVALUATION_DIR.parents[2])): hashlib.sha256(path.read_bytes()).hexdigest()
+                     for path in tracked_sources}
+    try:
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=EVALUATION_DIR.parents[2],
+                              check=True, capture_output=True, text=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        head = None
     # Resolve src/ so the project package can be imported from this standalone script.
     source_root = Path(__file__).resolve().parents[3]
     sys.path.insert(0, str(source_root))
@@ -203,7 +269,7 @@ def run_backend(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, 
         raise RuntimeError("OPENAI_API_KEY is unavailable; refusing to start paid evaluation requests")
     search = neo4j_search.connect()
     candidate_search = card_graphrag.create_neo4j_benefit_search(search)
-    pipeline = card_graphrag.CardGraphRAG(search, interpret_llm, answer_llm, candidate_search=candidate_search)
+    pipeline = card_graphrag.CardGraphRAG(search, interpret_llm, answer_llm, candidate_search=candidate_search, answer_mode=answer_mode)
 
     results = []
     try:
@@ -213,12 +279,14 @@ def run_backend(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, 
             try:
                 outcome = pipeline.run(question["question"])
                 elapsed_ms = (perf_counter() - started) * 1000
-                results.append(_outcome_record(question, gold, outcome, elapsed_ms))
+                results.append(_outcome_record(question, gold, outcome, elapsed_ms, answer_mode))
             except Exception as error:  # Preserve per-question exceptions and continue the requested smoke batch.
                 elapsed_ms = (perf_counter() - started) * 1000
                 results.append({
                     "question_id": question["question_id"], "hop_type": question["hop_type"],
                     "source_type": question.get("source_type"), "question": question["question"],
+                    "answer_mode": answer_mode, "llm_answer_evaluated": False, "answer_llm_raw": None,
+                    "final_answer": None, "prototype_content_preserved": None,
                     "gold_verification_status": gold.get("verification_status"),
                     "accuracy_eligible": gold.get("verification_status") == "VERIFIED",
                     "execution_status": "EXECUTION_ERROR",
@@ -238,6 +306,10 @@ def run_backend(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, 
     document = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "runner": "CardGraphRAG.run via direct backend; Streamlit not imported",
+        "answer_mode": answer_mode,
+        "git_head_at_run": head,
+        "source_sha256_at_run": source_hashes,
+        "models": {"llm": "gpt-6-luna", "embedding": EMBEDDING_MODEL, "embedding_dimensions": 1536},
         "app_log_persistence": "disabled / not invoked",
         "result_count": len(results),
         "results": results,
@@ -250,6 +322,8 @@ def run_backend(selected: list[dict[str, Any]], gold_by_id: dict[str, dict[str, 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--execute", action="store_true", help="Execute the selected backend questions; this makes paid API calls.")
+    parser.add_argument("--answer-mode", choices=("normal", "prototype"), default="normal",
+                        help="Select the normal validated Answer node or raw-LLM prototype; default: normal.")
     parser.add_argument("--question-ids", nargs="+", help="Select at most two IDs for a smoke execution; defaults to CARD10-001 and CARD10-021.")
     parser.add_argument("--all", action="store_true", help="Select all 50. Requires both explicit confirmation flags with --execute.")
     parser.add_argument("--confirm-paid-calls", action="store_true", help="Acknowledge paid embedding/LLM API requests for selected smoke questions.")
@@ -312,14 +386,14 @@ def main() -> int:
         print(f"Preflight failed: {error}", file=sys.stderr)
         return 2
 
-    print_plan(selected, gold_by_id, args.execute)
+    print_plan(selected, gold_by_id, args.execute, args.answer_mode)
     if not args.execute:
         return 0
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    output_path = args.output or (DEFAULT_OUTPUT / f"evaluation_run_{timestamp}.json")
+    output_path = args.output or (DEFAULT_OUTPUT / f"evaluation_{args.answer_mode}_{timestamp}.json")
     try:
-        run_backend(selected, gold_by_id, output_path)
+        run_backend(selected, gold_by_id, output_path, args.answer_mode)
     except Exception as error:
         print(f"Evaluation run did not complete: {type(error).__name__}: {error}", file=sys.stderr)
         return 1

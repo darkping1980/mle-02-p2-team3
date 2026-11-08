@@ -227,7 +227,7 @@ return "retrieve" if state["search_parameters"]["benefit_keys"] else "finish"
 - 실제 코드에는 [`get_details()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_search.py#L459-L489) 일괄 조회(P3 배칭)가 있으면 이를 우선 사용하고, 없으면 [`get_detail()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/neo4j_search.py#L504)을 사용한다.
 - 혜택별 context, rules, conditions, limits, evidence를 가져온다. PDF 근거에는 evidence ID·문서·페이지·인용이 연결된다.
 - [`collect_evidence()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L366)는 여러 혜택의 근거를 evidence ID 기준으로 합친다.
-- [`find_exclusions()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L468)는 질문과 제외 조건을 대조한다.
+- `benefit_context()`는 혜택에 연결된 제외 조건 원문을 답변 문맥에 포함한다. Answer LLM은 질문 의도와 이 원문 조건을 함께 참고한다.
 - [`split_unresolved()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L1190)는 불확실성을 **질문 영향 조건 / 자료 상태 / 그 외**로 분리한다.
 
 **N-only 런타임은 질문 응답용 혜택 검색을 Neo4j로 처리한다.** PostgreSQL은 이 그래프의 N 검색에서 원장 관리·사전 적재 경로이지, 일반 질문의 후보/상세를 매번 PostgreSQL에서 읽는 모드가 아니다. 단, `execution_log.py` 등 앱 로깅은 별도 경로를 통해 PostgreSQL에 쓸 수 있으므로 **애플리케이션 전체가 DB 쓰기 0이라는 뜻은 아니다.**
@@ -246,8 +246,8 @@ return "answer" if not state.get("error") and state.get("evidence") else "finish
 2. 그 외에는 [`benefit_context()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L783)로 검색 결과를 답변용 `context`로 축약한다.
 3. [`CardAnswer`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L146) 구조화 출력으로 답변 LLM을 호출한다.
 4. [`validate_answer()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L1647)가 근거 ID, 값, 구간 등 조회 결과와 답변을 대조한다.
-5. [`enforce_exclusions()`](https://github.com/encore-ai-campus/mle-02-p2-team3/blob/aa46df90b36976bd0ad7cf65e36b0159f62a09b4/src/card_benefit/payment_card/db_pipeline_origin_search/card_graphrag.py#L508)가 제외 조건을 확인한다.
-6. 통과한 내용과 경고를 `state.answer`, `state.warnings`로 반환한다.
+5. `transaction_tier_fallback()`은 거래 금액 구간의 매핑이 모호할 때만 혜택별 지급액을 보수적으로 보류한다.
+6. 검증된 내용과 경고를 `state.answer`, `state.warnings`로 반환한다. 질문 단어와 제외 문구 단어를 대조해 답변을 강제로 바꾸는 단계는 없다.
 
 중요한 helper:
 

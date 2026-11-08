@@ -1,0 +1,2640 @@
+{
+  "created_at_utc": "2026-11-07T12:32:23.614988+00:00",
+  "runner": "CardGraphRAG.run via direct backend; Streamlit not imported",
+  "answer_mode": "prototype",
+  "git_head_at_run": "ab3638381ee4bbffe7ca59963ce1dd71234fdcbc",
+  "source_sha256_at_run": {
+    "card_benefit\\docs\\evaluation\\run_graphrag_evaluation.py": "f59b9f3fcd4302bfb588f2e5c0b9fbeb6cffc56b73ecfcea564e4887f65ab3ca",
+    "card_benefit\\payment_card\\db_pipeline_origin_search\\card_graphrag.py": "bd67f34a9652c0429c2604eb5a304c7268a87c50652c96dac3f589422cf2b707",
+    "card_benefit\\payment_card\\db_pipeline_origin_search\\neo4j_search.py": "9a2f1b969b2b02a47c772b5f05fcd36ac7ba4ea7324fd96734ab2f6f5b6d66aa",
+    "card_benefit\\payment_card\\db_pipeline_origin_search\\neo4j_hybrid_search.py": "e683d840ac277b811b6c7fe8376749b72214da4f7d51bc996c147e8cde5edebb"
+  },
+  "models": {
+    "llm": "gpt-6-luna",
+    "embedding": "text-embedding-3-small",
+    "embedding_dimensions": 1536
+  },
+  "app_log_persistence": "disabled / not invoked",
+  "result_count": 2,
+  "results": [
+    {
+      "question_id": "CARD10-032",
+      "hop_type": "2-hop",
+      "source_type": "NOTION_EXISTING",
+      "question": "카드의정석 SHOPPING의 4대 PAY 추가 할인은 기본 할인과 한도를 공유하니?",
+      "answer_mode": "prototype",
+      "llm_answer_evaluated": true,
+      "answer_llm_raw": {
+        "answer_text": "네, 4대 PAY 추가 할인은 온라인 쇼핑 기본 할인과 온라인 업종 통합 월 할인한도를 공유합니다. 전월 국내 가맹점 이용금액 30만원 이상부터 적용되며, 한도는 30만원 이상 70만원 미만 구간 월 4천원, 70만원 이상 120만원 미만 구간 월 8천원, 120만원 이상 구간 월 1만6천원입니다.",
+        "conclusion": "네, 기본 온라인 쇼핑 할인과 온라인 업종 통합 월 할인한도를 공유합니다.",
+        "points": [
+          {
+            "text": "온라인 업종 4대 PAY 추가 할인은 온라인 쇼핑 할인과 온라인 업종 통합 월 할인한도를 공유하며, 전월 국내 가맹점 이용금액 30만원 이상부터 적용됩니다.",
+            "benefit_id": "card_product_item:6:20261104_000017",
+            "evidence_ids": [
+              "20261104_001728",
+              "20261104_001729",
+              "20261104_001788",
+              "20261104_001798"
+            ]
+          },
+          {
+            "text": "전월 국내 가맹점 이용금액이 30만원 이상 70만원 미만이면 온라인 월 할인한도는 4천원, 70만원 이상 120만원 미만이면 8천원, 120만원 이상이면 1만6천원입니다.",
+            "benefit_id": "card_product_item:6:20261104_000013",
+            "evidence_ids": [
+              "20261104_001785",
+              "20261104_001786"
+            ]
+          }
+        ],
+        "uncertain": [],
+        "cannot_answer_reason": null
+      },
+      "final_answer": {
+        "answer_text": "네, 4대 PAY 추가 할인은 온라인 쇼핑 기본 할인과 온라인 업종 통합 월 할인한도를 공유합니다. 전월 국내 가맹점 이용금액 30만원 이상부터 적용되며, 한도는 30만원 이상 70만원 미만 구간 월 4천원, 70만원 이상 120만원 미만 구간 월 8천원, 120만원 이상 구간 월 1만6천원입니다.",
+        "conclusion": "네, 기본 온라인 쇼핑 할인과 온라인 업종 통합 월 할인한도를 공유합니다.",
+        "points": [
+          {
+            "text": "온라인 업종 4대 PAY 추가 할인은 온라인 쇼핑 할인과 온라인 업종 통합 월 할인한도를 공유하며, 전월 국내 가맹점 이용금액 30만원 이상부터 적용됩니다.",
+            "benefit_id": "card_product_item:6:20261104_000017",
+            "evidence_ids": [
+              "20261104_001728",
+              "20261104_001729",
+              "20261104_001788",
+              "20261104_001798"
+            ]
+          },
+          {
+            "text": "전월 국내 가맹점 이용금액이 30만원 이상 70만원 미만이면 온라인 월 할인한도는 4천원, 70만원 이상 120만원 미만이면 8천원, 120만원 이상이면 1만6천원입니다.",
+            "benefit_id": "card_product_item:6:20261104_000013",
+            "evidence_ids": [
+              "20261104_001785",
+              "20261104_001786"
+            ]
+          }
+        ],
+        "uncertain": [],
+        "cannot_answer_reason": null,
+        "status": "ANSWERED",
+        "answer_source": "llm_prototype",
+        "verification_status": "NOT_PERFORMED",
+        "answer_mode": "prototype"
+      },
+      "prototype_content_preserved": true,
+      "embedding_usage": {
+        "model": "text-embedding-3-small",
+        "calls": 1,
+        "input_tokens_estimate": 34,
+        "estimated_cost_usd": 6.8e-07,
+        "usage_source": "local tokenizer estimate; provider usage is not returned by current embedder"
+      },
+      "llm_usage": {
+        "calls": 2,
+        "input_tokens": 11743,
+        "output_tokens": 435,
+        "estimated_cost_usd": 0.0013918
+      },
+      "gold_verification_status": "VERIFIED",
+      "accuracy_eligible": true,
+      "execution_status": "COMPLETED",
+      "judgment": "PENDING_PDF_REVIEW",
+      "evidence_match": null,
+      "evidence_review_status": "PENDING_PDF_REVIEW",
+      "wall_elapsed_ms": 10891.64,
+      "answer": {
+        "answer_text": "네, 4대 PAY 추가 할인은 온라인 쇼핑 기본 할인과 온라인 업종 통합 월 할인한도를 공유합니다. 전월 국내 가맹점 이용금액 30만원 이상부터 적용되며, 한도는 30만원 이상 70만원 미만 구간 월 4천원, 70만원 이상 120만원 미만 구간 월 8천원, 120만원 이상 구간 월 1만6천원입니다.",
+        "conclusion": "네, 기본 온라인 쇼핑 할인과 온라인 업종 통합 월 할인한도를 공유합니다.",
+        "points": [
+          {
+            "text": "온라인 업종 4대 PAY 추가 할인은 온라인 쇼핑 할인과 온라인 업종 통합 월 할인한도를 공유하며, 전월 국내 가맹점 이용금액 30만원 이상부터 적용됩니다.",
+            "benefit_id": "card_product_item:6:20261104_000017",
+            "evidence_ids": [
+              "20261104_001728",
+              "20261104_001729",
+              "20261104_001788",
+              "20261104_001798"
+            ]
+          },
+          {
+            "text": "전월 국내 가맹점 이용금액이 30만원 이상 70만원 미만이면 온라인 월 할인한도는 4천원, 70만원 이상 120만원 미만이면 8천원, 120만원 이상이면 1만6천원입니다.",
+            "benefit_id": "card_product_item:6:20261104_000013",
+            "evidence_ids": [
+              "20261104_001785",
+              "20261104_001786"
+            ]
+          }
+        ],
+        "uncertain": [],
+        "cannot_answer_reason": null,
+        "status": "ANSWERED",
+        "answer_source": "llm_prototype",
+        "verification_status": "NOT_PERFORMED",
+        "answer_mode": "prototype"
+      },
+      "answer_diagnostics": {
+        "raw": {
+          "answer_text": "네, 4대 PAY 추가 할인은 온라인 쇼핑 기본 할인과 온라인 업종 통합 월 할인한도를 공유합니다. 전월 국내 가맹점 이용금액 30만원 이상부터 적용되며, 한도는 30만원 이상 70만원 미만 구간 월 4천원, 70만원 이상 120만원 미만 구간 월 8천원, 120만원 이상 구간 월 1만6천원입니다.",
+          "conclusion": "네, 기본 온라인 쇼핑 할인과 온라인 업종 통합 월 할인한도를 공유합니다.",
+          "points": [
+            {
+              "text": "온라인 업종 4대 PAY 추가 할인은 온라인 쇼핑 할인과 온라인 업종 통합 월 할인한도를 공유하며, 전월 국내 가맹점 이용금액 30만원 이상부터 적용됩니다.",
+              "benefit_id": "card_product_item:6:20261104_000017",
+              "evidence_ids": [
+                "20261104_001728",
+                "20261104_001729",
+                "20261104_001788",
+                "20261104_001798"
+              ]
+            },
+            {
+              "text": "전월 국내 가맹점 이용금액이 30만원 이상 70만원 미만이면 온라인 월 할인한도는 4천원, 70만원 이상 120만원 미만이면 8천원, 120만원 이상이면 1만6천원입니다.",
+              "benefit_id": "card_product_item:6:20261104_000013",
+              "evidence_ids": [
+                "20261104_001785",
+                "20261104_001786"
+              ]
+            }
+          ],
+          "uncertain": [],
+          "cannot_answer_reason": null
+        },
+        "prototype": {
+          "answer_text": "네, 4대 PAY 추가 할인은 온라인 쇼핑 기본 할인과 온라인 업종 통합 월 할인한도를 공유합니다. 전월 국내 가맹점 이용금액 30만원 이상부터 적용되며, 한도는 30만원 이상 70만원 미만 구간 월 4천원, 70만원 이상 120만원 미만 구간 월 8천원, 120만원 이상 구간 월 1만6천원입니다.",
+          "conclusion": "네, 기본 온라인 쇼핑 할인과 온라인 업종 통합 월 할인한도를 공유합니다.",
+          "points": [
+            {
+              "text": "온라인 업종 4대 PAY 추가 할인은 온라인 쇼핑 할인과 온라인 업종 통합 월 할인한도를 공유하며, 전월 국내 가맹점 이용금액 30만원 이상부터 적용됩니다.",
+              "benefit_id": "card_product_item:6:20261104_000017",
+              "evidence_ids": [
+                "20261104_001728",
+                "20261104_001729",
+                "20261104_001788",
+                "20261104_001798"
+              ]
+            },
+            {
+              "text": "전월 국내 가맹점 이용금액이 30만원 이상 70만원 미만이면 온라인 월 할인한도는 4천원, 70만원 이상 120만원 미만이면 8천원, 120만원 이상이면 1만6천원입니다.",
+              "benefit_id": "card_product_item:6:20261104_000013",
+              "evidence_ids": [
+                "20261104_001785",
+                "20261104_001786"
+              ]
+            }
+          ],
+          "uncertain": [],
+          "cannot_answer_reason": null
+        },
+        "content_preserved": true
+      },
+      "search": {
+        "candidate_benefit_ids": [
+          "20261104_000017",
+          "20261104_000018",
+          "20261104_000015",
+          "20261104_000016",
+          "20261104_000013",
+          "20261104_000020",
+          "20261104_000022",
+          "20261105_000100"
+        ],
+        "expected_benefit_ids": [
+          "20261104_000017"
+        ],
+        "expected_ids_missing_from_candidates": [],
+        "expected_ids_not_selected_from_hybrid_hits": [],
+        "candidate_keys": [
+          "[\"card_product_item\",6,\"20261104_000017\"]",
+          "[\"card_product_item\",6,\"20261104_000018\"]",
+          "[\"card_product_item\",6,\"20261104_000015\"]",
+          "[\"card_product_item\",6,\"20261104_000016\"]",
+          "[\"card_product_item\",6,\"20261104_000013\"]",
+          "[\"card_product_item\",6,\"20261104_000020\"]",
+          "[\"card_product_item\",6,\"20261104_000022\"]",
+          "[\"card_product_item\",23,\"20261105_000100\"]"
+        ],
+        "candidate_names": [
+          "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+          "4대 주유소 주말 주유 청구할인",
+          "오프라인 쇼핑 10% 청구할인",
+          "오프라인 쇼핑 Two-in-One 결제서비스 0.3% 캐시백",
+          "온라인 쇼핑 10% 청구할인",
+          "스타벅스, 폴바셋 청구할인",
+          "Two-in-One 결제서비스",
+          "주요 간편결제 모아포인트 추가적립"
+        ],
+        "selected_benefit_ids_from_hybrid_hits": [
+          "20261104_000017",
+          "20261104_000013"
+        ],
+        "selected_entity_refs": [
+          "card_product_item:6:20261104_000017",
+          "card_product_item:6:20261104_000013"
+        ],
+        "selected_benefit_keys": [
+          "[\"card_product_item\",6,\"20261104_000017\"]",
+          "[\"card_product_item\",6,\"20261104_000013\"]"
+        ],
+        "selected_candidate_refs": [
+          "card_product_item:6:20261104_000017",
+          "card_product_item:6:20261104_000013"
+        ],
+        "unselected_candidate_refs": [
+          "card_product_item:6:20261104_000018",
+          "card_product_item:6:20261104_000015",
+          "card_product_item:6:20261104_000016",
+          "card_product_item:6:20261104_000020",
+          "card_product_item:6:20261104_000022",
+          "card_product_item:23:20261105_000100"
+        ],
+        "coverage_gaps": [],
+        "candidate_search_elapsed_ms": 2046.380699845031,
+        "engines": [
+          "neo4j_keyword",
+          "neo4j_vector",
+          "neo4j_rrf"
+        ]
+      },
+      "retrieval_trace": [
+        {
+          "benefit": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+          "engine": "neo4j",
+          "evidence_engine": "neo4j",
+          "rules": 1,
+          "conditions": 3,
+          "limits": 1,
+          "evidence": 16
+        },
+        {
+          "benefit": "온라인 쇼핑 10% 청구할인",
+          "engine": "neo4j",
+          "evidence_engine": "neo4j",
+          "rules": 1,
+          "conditions": 0,
+          "limits": 1,
+          "evidence": 9
+        }
+      ],
+      "retrieved_entity_refs": [
+        "card_product_item:6:20261104_000017",
+        "card_product_item:6:20261104_000013"
+      ],
+      "pdf_evidence": [
+        {
+          "evidence_id": "20261104_001710",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 2,
+          "chunk_id": null,
+          "quote": "온라인 쇼핑 10% 청구할인",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000013"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001711",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 2,
+          "chunk_id": null,
+          "quote": "온라인 쇼핑 10% 청구할인",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000013"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001712",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 2,
+          "chunk_id": null,
+          "quote": "• 인터넷 P/G, 인터넷 상거래 등 온라인 업종",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000013"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001724",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 2,
+          "chunk_id": null,
+          "quote": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000017"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001725",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 2,
+          "chunk_id": null,
+          "quote": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000017"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001726",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 2,
+          "chunk_id": null,
+          "quote": "• 4대 간편결제 : 삼성페이, 네이버페이, 카카오페이, PAYCO",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000017"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001727",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 2,
+          "chunk_id": null,
+          "quote": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000017"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001728",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 2,
+          "chunk_id": null,
+          "quote": "• 온라인 업종 통합 할인한도 내에서 할인 적용",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000017"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001729",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 2,
+          "chunk_id": null,
+          "quote": "• 전월 국내 가맹점 이용금액 30만원 이상 시 할인",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000017"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001730",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 2,
+          "chunk_id": null,
+          "quote": "• 추가 청구할인은 4대 간편결제에 본 카드를 등록하여 온라인에서 \n사용한 경우에 제공",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000017"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001731",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 2,
+          "chunk_id": null,
+          "quote": "• Two-in-One 결제서비스(체크매출) 이용 시 추가 캐시백 미제공",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000017"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001788",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 2,
+          "chunk_id": null,
+          "quote": "온라인 업종 통합 할인한도 내에서 할인 적용",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000013"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001798",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 2,
+          "chunk_id": null,
+          "quote": "온라인 업종 통합 할인한도 내에서 할인 적용",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000017"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001785",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 3,
+          "chunk_id": null,
+          "quote": "전월 국내 가맹점 이용금액\n30만원 이상\n70만원 미만\n70만원 이상\n120만원 미만\n120만원 이상",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000013"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001786",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 3,
+          "chunk_id": null,
+          "quote": "온라인\n4천원\n8천원\n16천원",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000013"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001787",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 3,
+          "chunk_id": null,
+          "quote": "합계\n1만원\n2만원\n4만원",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000013"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001795",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 3,
+          "chunk_id": null,
+          "quote": "전월 국내 가맹점 이용금액\n30만원 이상\n70만원 미만\n70만원 이상\n120만원 미만\n120만원 이상",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000017"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001796",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 3,
+          "chunk_id": null,
+          "quote": "온라인\n4천원\n8천원\n16천원",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000017"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001797",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 3,
+          "chunk_id": null,
+          "quote": "합계\n1만원\n2만원\n4만원",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000017"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001799",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 4,
+          "chunk_id": null,
+          "quote": "단, 온라인 업종 4대 PAY 결제로 추가할인 적용 시 (10%＋5%) 할인 \n(최대 7,500원 할인)",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000017"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001800",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 4,
+          "chunk_id": null,
+          "quote": "• 매출 건당 5만원까지 할인",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000017"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001789",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 5,
+          "chunk_id": null,
+          "quote": "카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다.",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000013"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001801",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 5,
+          "chunk_id": null,
+          "quote": "카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다.",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000017"
+          ]
+        }
+      ],
+      "unreferenced_retrieved_evidence_ids": [
+        "20261104_001710",
+        "20261104_001711",
+        "20261104_001712",
+        "20261104_001724",
+        "20261104_001725",
+        "20261104_001726",
+        "20261104_001727",
+        "20261104_001730",
+        "20261104_001731",
+        "20261104_001787",
+        "20261104_001789",
+        "20261104_001795",
+        "20261104_001796",
+        "20261104_001797",
+        "20261104_001799",
+        "20261104_001800",
+        "20261104_001801"
+      ],
+      "pdf_evidence_records_by_benefit": [
+        {
+          "benefit_key": "card_product_item:6:20261104_000017",
+          "evidence_records": [
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000017",
+                "item_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_product_item\",6,\"20261104_000017\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001724",
+                "quote_txt": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001724\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000017",
+                "item_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_product_item\",6,\"20261104_000017\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": "online_pay_discount_rate",
+              "link": {
+                "ev_subject_cd": "RULE",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001724",
+                "quote_txt": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001724\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000017",
+                "item_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_product_item\",6,\"20261104_000017\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": null,
+                "ev_item_cd": null,
+                "source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg",
+                "ev_item_key": null
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001725",
+                "quote_txt": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001725\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000017",
+                "item_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_product_item\",6,\"20261104_000017\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001726",
+                "quote_txt": "• 4대 간편결제 : 삼성페이, 네이버페이, 카카오페이, PAYCO",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001726\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000017",
+                "item_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_product_item\",6,\"20261104_000017\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": null,
+                "ev_item_cd": null,
+                "source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg",
+                "ev_item_key": null
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001727",
+                "quote_txt": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001727\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000017",
+                "item_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_product_item\",6,\"20261104_000017\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001728",
+                "quote_txt": "• 온라인 업종 통합 할인한도 내에서 할인 적용",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001728\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000017",
+                "item_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_product_item\",6,\"20261104_000017\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": null,
+                "ev_item_cd": null,
+                "source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg",
+                "ev_item_key": null
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001729",
+                "quote_txt": "• 전월 국내 가맹점 이용금액 30만원 이상 시 할인",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001729\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000017",
+                "item_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_product_item\",6,\"20261104_000017\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": null,
+                "ev_item_cd": null,
+                "source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg",
+                "ev_item_key": null
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001730",
+                "quote_txt": "• 추가 청구할인은 4대 간편결제에 본 카드를 등록하여 온라인에서 \n사용한 경우에 제공",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001730\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000017",
+                "item_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_product_item\",6,\"20261104_000017\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": null,
+                "ev_item_cd": null,
+                "source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg",
+                "ev_item_key": null
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001731",
+                "quote_txt": "• Two-in-One 결제서비스(체크매출) 이용 시 추가 캐시백 미제공",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001731\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000017",
+                "item_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_product_item\",6,\"20261104_000017\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001798",
+                "quote_txt": "온라인 업종 통합 할인한도 내에서 할인 적용",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001798\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000017",
+                "item_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_product_item\",6,\"20261104_000017\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261104_001795",
+                "quote_txt": "전월 국내 가맹점 이용금액\n30만원 이상\n70만원 미만\n70만원 이상\n120만원 미만\n120만원 이상",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",3,\"20261104_000080\",\"20261104_001795\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261104_000080"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000017",
+                "item_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_product_item\",6,\"20261104_000017\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261104_001796",
+                "quote_txt": "온라인\n4천원\n8천원\n16천원",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",3,\"20261104_000080\",\"20261104_001796\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261104_000080"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000017",
+                "item_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_product_item\",6,\"20261104_000017\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261104_001797",
+                "quote_txt": "합계\n1만원\n2만원\n4만원",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",3,\"20261104_000080\",\"20261104_001797\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261104_000080"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000017",
+                "item_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_product_item\",6,\"20261104_000017\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 4,
+                "evidence_id": "20261104_001799",
+                "quote_txt": "단, 온라인 업종 4대 PAY 결제로 추가할인 적용 시 (10%＋5%) 할인 \n(최대 7,500원 할인)",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",4,\"20261104_000081\",\"20261104_001799\"]"
+              },
+              "chunk": {
+                "page_no": 4,
+                "chunk_id": "20261104_000081"
+              },
+              "page": {
+                "page_no": 4
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000017",
+                "item_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_product_item\",6,\"20261104_000017\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 4,
+                "evidence_id": "20261104_001800",
+                "quote_txt": "• 매출 건당 5만원까지 할인",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",4,\"20261104_000081\",\"20261104_001800\"]"
+              },
+              "chunk": {
+                "page_no": 4,
+                "chunk_id": "20261104_000081"
+              },
+              "page": {
+                "page_no": 4
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000017",
+                "item_nm": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+                "key": "[\"card_product_item\",6,\"20261104_000017\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 5,
+                "evidence_id": "20261104_001801",
+                "quote_txt": "카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다.",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",5,\"20261104_000082\",\"20261104_001801\"]"
+              },
+              "chunk": {
+                "page_no": 5,
+                "chunk_id": "20261104_000082"
+              },
+              "page": {
+                "page_no": 5
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            }
+          ]
+        },
+        {
+          "benefit_key": "card_product_item:6:20261104_000013",
+          "evidence_records": [
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000013",
+                "item_nm": "온라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000013\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001710",
+                "quote_txt": "온라인 쇼핑 10% 청구할인",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001710\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000013",
+                "item_nm": "온라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000013\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": "online_discount_rate",
+              "link": {
+                "ev_subject_cd": "RULE",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001710",
+                "quote_txt": "온라인 쇼핑 10% 청구할인",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001710\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000013",
+                "item_nm": "온라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000013\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": null,
+                "ev_item_cd": null,
+                "source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg",
+                "ev_item_key": null
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001711",
+                "quote_txt": "온라인 쇼핑 10% 청구할인",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001711\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000013",
+                "item_nm": "온라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000013\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001712",
+                "quote_txt": "• 인터넷 P/G, 인터넷 상거래 등 온라인 업종",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001712\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000013",
+                "item_nm": "온라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000013\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001788",
+                "quote_txt": "온라인 업종 통합 할인한도 내에서 할인 적용",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001788\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000013",
+                "item_nm": "온라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000013\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261104_001785",
+                "quote_txt": "전월 국내 가맹점 이용금액\n30만원 이상\n70만원 미만\n70만원 이상\n120만원 미만\n120만원 이상",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",3,\"20261104_000080\",\"20261104_001785\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261104_000080"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000013",
+                "item_nm": "온라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000013\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261104_001786",
+                "quote_txt": "온라인\n4천원\n8천원\n16천원",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",3,\"20261104_000080\",\"20261104_001786\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261104_000080"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000013",
+                "item_nm": "온라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000013\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261104_001787",
+                "quote_txt": "합계\n1만원\n2만원\n4만원",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",3,\"20261104_000080\",\"20261104_001787\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261104_000080"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000013",
+                "item_nm": "온라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000013\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 5,
+                "evidence_id": "20261104_001789",
+                "quote_txt": "카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다.",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",5,\"20261104_000082\",\"20261104_001789\"]"
+              },
+              "chunk": {
+                "page_no": 5,
+                "chunk_id": "20261104_000082"
+              },
+              "page": {
+                "page_no": 5
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            }
+          ]
+        }
+      ],
+      "answer_cited_evidence_ids": [
+        "20261104_001728",
+        "20261104_001729",
+        "20261104_001785",
+        "20261104_001786",
+        "20261104_001788",
+        "20261104_001798"
+      ],
+      "llm_calls": [
+        {
+          "node": "interpret",
+          "model": "gpt-6-luna",
+          "response_model": "gpt-6-luna",
+          "input_tokens": 6053,
+          "output_tokens": 94,
+          "cached_tokens": 0,
+          "reasoning_tokens": 37,
+          "cost_usd": 0.0006523000000000001,
+          "elapsed_ms": 2566.8166999239475
+        },
+        {
+          "node": "answer",
+          "model": "gpt-6-luna",
+          "response_model": "gpt-6-luna",
+          "input_tokens": 5690,
+          "output_tokens": 341,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "cost_usd": 0.0007395,
+          "elapsed_ms": 3582.8193000052124
+        }
+      ],
+      "error": null,
+      "warnings": [],
+      "expected_answer_for_review": "삼성페이·네이버페이·카카오페이·PAYCO에 카드를 등록해 온라인 결제하면 기본 10%에 5%를 추가해 총 15% 할인됩니다. 전월 국내 가맹점 30만원 이상 조건이며 온라인 쇼핑과 온라인 통합한도를 공유합니다.",
+      "expected_facts_for_review": {
+        "must_include": {
+          "RATE": [
+            "10% 기본+5% 추가"
+          ],
+          "TARGET": [
+            "4대 PAY의 온라인 결제"
+          ],
+          "SPEND": [
+            "전월 국내 30만원 이상"
+          ],
+          "CAP": [
+            "온라인 쇼핑과 공유하는 온라인 4천/8천/16천원 한도"
+          ],
+          "EXCLUDE": [
+            "Two-in-One 체크매출 추가 캐시백 미제공"
+          ]
+        },
+        "rates": [
+          "10% 기본+5% 추가"
+        ],
+        "transaction_amount": [],
+        "previous_month_spend": [
+          "전월 국내 30만원 이상"
+        ],
+        "frequency": [],
+        "caps": [
+          "온라인 쇼핑과 공유하는 온라인 4천/8천/16천원 한도"
+        ],
+        "targets": [
+          "4대 PAY의 온라인 결제"
+        ],
+        "exclusions": [
+          "Two-in-One 체크매출 추가 캐시백 미제공"
+        ],
+        "payment_conditions": [],
+        "other_conditions": []
+      },
+      "pdf_for_review": {
+        "document_id": "20261104_000023",
+        "document_title": "카드의정석 SHOPPING 상품안내장",
+        "file_name": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+        "sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+        "page_numbers": [
+          2,
+          4
+        ],
+        "quotes": [
+          {
+            "evidence_id": "20261104_001724",
+            "document_id": "20261104_000023",
+            "page_no": 2,
+            "chunk_id": "20261104_000079",
+            "quote_text": "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+            "evidence_link_id": "20261104_000138",
+            "rule_key": null,
+            "source": "PostgreSQL Evidence read-only snapshot"
+          },
+          {
+            "evidence_id": "20261104_001726",
+            "document_id": "20261104_000023",
+            "page_no": 2,
+            "chunk_id": "20261104_000079",
+            "quote_text": "• 4대 간편결제 : 삼성페이, 네이버페이, 카카오페이, PAYCO",
+            "evidence_link_id": "20261104_000140",
+            "rule_key": null,
+            "source": "PostgreSQL Evidence read-only snapshot"
+          },
+          {
+            "evidence_id": "20261104_001728",
+            "document_id": "20261104_000023",
+            "page_no": 2,
+            "chunk_id": "20261104_000079",
+            "quote_text": "• 온라인 업종 통합 할인한도 내에서 할인 적용",
+            "evidence_link_id": "20261104_000141",
+            "rule_key": null,
+            "source": "PostgreSQL Evidence read-only snapshot"
+          },
+          {
+            "evidence_id": "20261104_001799",
+            "document_id": "20261104_000023",
+            "page_no": 4,
+            "chunk_id": "20261104_000081",
+            "quote_text": "단, 온라인 업종 4대 PAY 결제로 추가할인 적용 시 (10%＋5%) 할인 \n(최대 7,500원 할인)",
+            "evidence_link_id": "20261104_000146",
+            "rule_key": null,
+            "source": "PostgreSQL Evidence read-only snapshot"
+          }
+        ],
+        "citation_reason": "상품설명서의 페이지 원문이 핵심 정답 사실을 직접 표시합니다. 표는 PDF 행/열 구조를 확인해 대응시켰습니다."
+      }
+    },
+    {
+      "question_id": "CARD10-056",
+      "hop_type": "2-hop",
+      "source_type": "NEW",
+      "question": "카드의정석 SHOPPING 오프라인 쇼핑은 전월 실적 구간별 월 한도와 건당 할인 대상 금액 한도가 어떻게 돼?",
+      "answer_mode": "prototype",
+      "llm_answer_evaluated": true,
+      "answer_llm_raw": {
+        "answer_text": "전월 국내 가맹점 이용금액이 30만원 이상 70만원 미만이면 오프라인 월 한도는 6천원, 70만원 이상 120만원 미만이면 1만2천원, 120만원 이상이면 2만4천원입니다. 건당 할인 대상 금액은 최대 5만원으로, 10만원 결제 시 5만원에 대해서만 할인이 적용되는 예시가 제시되어 있습니다.",
+        "conclusion": "전월 실적 구간별 오프라인 월 한도는 6천원·1만2천원·2만4천원이며, 건당 할인 대상 금액은 최대 5만원입니다.",
+        "points": [
+          {
+            "text": "전월 국내 가맹점 이용금액 30만원 이상 70만원 미만이면 오프라인 월 한도는 6천원, 70만원 이상 120만원 미만이면 1만2천원, 120만원 이상이면 2만4천원입니다.",
+            "benefit_id": "card_product_item:6:20261104_000015",
+            "evidence_ids": [
+              "20261104_001790",
+              "20261104_001791"
+            ]
+          },
+          {
+            "text": "건당 할인 대상 금액은 최대 5만원으로, 10만원 결제 시 5만원에 대해서만 할인이 적용되는 예시가 제시되어 있습니다.",
+            "benefit_id": "card_product_item:6:20261104_000015",
+            "evidence_ids": [
+              "20261104_001793"
+            ]
+          }
+        ],
+        "uncertain": [],
+        "cannot_answer_reason": null
+      },
+      "final_answer": {
+        "answer_text": "전월 국내 가맹점 이용금액이 30만원 이상 70만원 미만이면 오프라인 월 한도는 6천원, 70만원 이상 120만원 미만이면 1만2천원, 120만원 이상이면 2만4천원입니다. 건당 할인 대상 금액은 최대 5만원으로, 10만원 결제 시 5만원에 대해서만 할인이 적용되는 예시가 제시되어 있습니다.",
+        "conclusion": "전월 실적 구간별 오프라인 월 한도는 6천원·1만2천원·2만4천원이며, 건당 할인 대상 금액은 최대 5만원입니다.",
+        "points": [
+          {
+            "text": "전월 국내 가맹점 이용금액 30만원 이상 70만원 미만이면 오프라인 월 한도는 6천원, 70만원 이상 120만원 미만이면 1만2천원, 120만원 이상이면 2만4천원입니다.",
+            "benefit_id": "card_product_item:6:20261104_000015",
+            "evidence_ids": [
+              "20261104_001790",
+              "20261104_001791"
+            ]
+          },
+          {
+            "text": "건당 할인 대상 금액은 최대 5만원으로, 10만원 결제 시 5만원에 대해서만 할인이 적용되는 예시가 제시되어 있습니다.",
+            "benefit_id": "card_product_item:6:20261104_000015",
+            "evidence_ids": [
+              "20261104_001793"
+            ]
+          }
+        ],
+        "uncertain": [],
+        "cannot_answer_reason": null,
+        "status": "ANSWERED",
+        "answer_source": "llm_prototype",
+        "verification_status": "NOT_PERFORMED",
+        "answer_mode": "prototype"
+      },
+      "prototype_content_preserved": true,
+      "embedding_usage": {
+        "model": "text-embedding-3-small",
+        "calls": 1,
+        "input_tokens_estimate": 58,
+        "estimated_cost_usd": 1.16e-06,
+        "usage_source": "local tokenizer estimate; provider usage is not returned by current embedder"
+      },
+      "llm_usage": {
+        "calls": 2,
+        "input_tokens": 10426,
+        "output_tokens": 482,
+        "estimated_cost_usd": 0.0012836
+      },
+      "gold_verification_status": "VERIFIED",
+      "accuracy_eligible": true,
+      "execution_status": "COMPLETED",
+      "judgment": "PENDING_PDF_REVIEW",
+      "evidence_match": null,
+      "evidence_review_status": "PENDING_PDF_REVIEW",
+      "wall_elapsed_ms": 9012.18,
+      "answer": {
+        "answer_text": "전월 국내 가맹점 이용금액이 30만원 이상 70만원 미만이면 오프라인 월 한도는 6천원, 70만원 이상 120만원 미만이면 1만2천원, 120만원 이상이면 2만4천원입니다. 건당 할인 대상 금액은 최대 5만원으로, 10만원 결제 시 5만원에 대해서만 할인이 적용되는 예시가 제시되어 있습니다.",
+        "conclusion": "전월 실적 구간별 오프라인 월 한도는 6천원·1만2천원·2만4천원이며, 건당 할인 대상 금액은 최대 5만원입니다.",
+        "points": [
+          {
+            "text": "전월 국내 가맹점 이용금액 30만원 이상 70만원 미만이면 오프라인 월 한도는 6천원, 70만원 이상 120만원 미만이면 1만2천원, 120만원 이상이면 2만4천원입니다.",
+            "benefit_id": "card_product_item:6:20261104_000015",
+            "evidence_ids": [
+              "20261104_001790",
+              "20261104_001791"
+            ]
+          },
+          {
+            "text": "건당 할인 대상 금액은 최대 5만원으로, 10만원 결제 시 5만원에 대해서만 할인이 적용되는 예시가 제시되어 있습니다.",
+            "benefit_id": "card_product_item:6:20261104_000015",
+            "evidence_ids": [
+              "20261104_001793"
+            ]
+          }
+        ],
+        "uncertain": [],
+        "cannot_answer_reason": null,
+        "status": "ANSWERED",
+        "answer_source": "llm_prototype",
+        "verification_status": "NOT_PERFORMED",
+        "answer_mode": "prototype"
+      },
+      "answer_diagnostics": {
+        "raw": {
+          "answer_text": "전월 국내 가맹점 이용금액이 30만원 이상 70만원 미만이면 오프라인 월 한도는 6천원, 70만원 이상 120만원 미만이면 1만2천원, 120만원 이상이면 2만4천원입니다. 건당 할인 대상 금액은 최대 5만원으로, 10만원 결제 시 5만원에 대해서만 할인이 적용되는 예시가 제시되어 있습니다.",
+          "conclusion": "전월 실적 구간별 오프라인 월 한도는 6천원·1만2천원·2만4천원이며, 건당 할인 대상 금액은 최대 5만원입니다.",
+          "points": [
+            {
+              "text": "전월 국내 가맹점 이용금액 30만원 이상 70만원 미만이면 오프라인 월 한도는 6천원, 70만원 이상 120만원 미만이면 1만2천원, 120만원 이상이면 2만4천원입니다.",
+              "benefit_id": "card_product_item:6:20261104_000015",
+              "evidence_ids": [
+                "20261104_001790",
+                "20261104_001791"
+              ]
+            },
+            {
+              "text": "건당 할인 대상 금액은 최대 5만원으로, 10만원 결제 시 5만원에 대해서만 할인이 적용되는 예시가 제시되어 있습니다.",
+              "benefit_id": "card_product_item:6:20261104_000015",
+              "evidence_ids": [
+                "20261104_001793"
+              ]
+            }
+          ],
+          "uncertain": [],
+          "cannot_answer_reason": null
+        },
+        "prototype": {
+          "answer_text": "전월 국내 가맹점 이용금액이 30만원 이상 70만원 미만이면 오프라인 월 한도는 6천원, 70만원 이상 120만원 미만이면 1만2천원, 120만원 이상이면 2만4천원입니다. 건당 할인 대상 금액은 최대 5만원으로, 10만원 결제 시 5만원에 대해서만 할인이 적용되는 예시가 제시되어 있습니다.",
+          "conclusion": "전월 실적 구간별 오프라인 월 한도는 6천원·1만2천원·2만4천원이며, 건당 할인 대상 금액은 최대 5만원입니다.",
+          "points": [
+            {
+              "text": "전월 국내 가맹점 이용금액 30만원 이상 70만원 미만이면 오프라인 월 한도는 6천원, 70만원 이상 120만원 미만이면 1만2천원, 120만원 이상이면 2만4천원입니다.",
+              "benefit_id": "card_product_item:6:20261104_000015",
+              "evidence_ids": [
+                "20261104_001790",
+                "20261104_001791"
+              ]
+            },
+            {
+              "text": "건당 할인 대상 금액은 최대 5만원으로, 10만원 결제 시 5만원에 대해서만 할인이 적용되는 예시가 제시되어 있습니다.",
+              "benefit_id": "card_product_item:6:20261104_000015",
+              "evidence_ids": [
+                "20261104_001793"
+              ]
+            }
+          ],
+          "uncertain": [],
+          "cannot_answer_reason": null
+        },
+        "content_preserved": true
+      },
+      "search": {
+        "candidate_benefit_ids": [
+          "20261104_000015",
+          "20261104_000013",
+          "20261104_000016",
+          "20261104_000017",
+          "20261104_000018",
+          "20261104_000014",
+          "20261104_000020",
+          "20261104_000022"
+        ],
+        "expected_benefit_ids": [
+          "20261104_000015"
+        ],
+        "expected_ids_missing_from_candidates": [],
+        "expected_ids_not_selected_from_hybrid_hits": [],
+        "candidate_keys": [
+          "[\"card_product_item\",6,\"20261104_000015\"]",
+          "[\"card_product_item\",6,\"20261104_000013\"]",
+          "[\"card_product_item\",6,\"20261104_000016\"]",
+          "[\"card_product_item\",6,\"20261104_000017\"]",
+          "[\"card_product_item\",6,\"20261104_000018\"]",
+          "[\"card_product_item\",6,\"20261104_000014\"]",
+          "[\"card_product_item\",6,\"20261104_000020\"]",
+          "[\"card_product_item\",6,\"20261104_000022\"]"
+        ],
+        "candidate_names": [
+          "오프라인 쇼핑 10% 청구할인",
+          "온라인 쇼핑 10% 청구할인",
+          "오프라인 쇼핑 Two-in-One 결제서비스 0.3% 캐시백",
+          "온라인 업종 4대 PAY 결제 시 5% 추가할인",
+          "4대 주유소 주말 주유 청구할인",
+          "온라인 쇼핑 Two-in-One 결제서비스 0.3% 캐시백",
+          "스타벅스, 폴바셋 청구할인",
+          "Two-in-One 결제서비스"
+        ],
+        "selected_benefit_ids_from_hybrid_hits": [
+          "20261104_000015"
+        ],
+        "selected_entity_refs": [
+          "card_product_item:6:20261104_000015"
+        ],
+        "selected_benefit_keys": [
+          "[\"card_product_item\",6,\"20261104_000015\"]"
+        ],
+        "selected_candidate_refs": [
+          "card_product_item:6:20261104_000015"
+        ],
+        "unselected_candidate_refs": [
+          "card_product_item:6:20261104_000013",
+          "card_product_item:6:20261104_000016",
+          "card_product_item:6:20261104_000017",
+          "card_product_item:6:20261104_000018",
+          "card_product_item:6:20261104_000014",
+          "card_product_item:6:20261104_000020",
+          "card_product_item:6:20261104_000022"
+        ],
+        "coverage_gaps": [],
+        "candidate_search_elapsed_ms": 611.0211000777781,
+        "engines": [
+          "neo4j_keyword",
+          "neo4j_vector",
+          "neo4j_rrf"
+        ]
+      },
+      "retrieval_trace": [
+        {
+          "benefit": "오프라인 쇼핑 10% 청구할인",
+          "engine": "neo4j",
+          "evidence_engine": "neo4j",
+          "rules": 1,
+          "conditions": 0,
+          "limits": 1,
+          "evidence": 9
+        }
+      ],
+      "retrieved_entity_refs": [
+        "card_product_item:6:20261104_000015"
+      ],
+      "pdf_evidence": [
+        {
+          "evidence_id": "20261104_001717",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 2,
+          "chunk_id": null,
+          "quote": "오프라인 쇼핑 10% 청구할인",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000015"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001718",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 2,
+          "chunk_id": null,
+          "quote": "오프라인 쇼핑 10% 청구할인",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000015"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001719",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 2,
+          "chunk_id": null,
+          "quote": "오프라인 가맹점 \n백화점 \n롯데, 현대, 신세계 \n대형마트 \n이마트, 홈플러스, 롯데마트, 메가마트,  \nY-MART(영암마트) \n창고형 할인매장 \n트레이더스 홀세일 클럽, 이케아, 롯데마트맥스 \n슈퍼마켓 \n이마트 에브리데이, 롯데슈퍼, GS 더프레시,  \n홈플러스 익스프레스 \n프리미엄 아울렛 \n롯데, 현대, 신세계사이먼 \n편의점 \nCU, GS25, 이마트24 \n잡화 \n올리브영, 롭스플러스(LOHB'S+), 시코르, 다이소",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000015"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001790",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 3,
+          "chunk_id": null,
+          "quote": "전월 국내 가맹점 이용금액\n30만원 이상\n70만원 미만\n70만원 이상\n120만원 미만\n120만원 이상",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000015"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001791",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 3,
+          "chunk_id": null,
+          "quote": "오프라인\n6천원\n12천원\n24천원",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000015"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001792",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 3,
+          "chunk_id": null,
+          "quote": "합계\n1만원\n2만원\n4만원",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000015"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001793",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 4,
+          "chunk_id": null,
+          "quote": "예) 이마트(오프라인 가맹점)에서 10만원 결제 시 5만원에 대해서만 10% \n할인 적용 (5,000원 할인)",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000015"
+          ]
+        },
+        {
+          "evidence_id": "20261104_001794",
+          "document_id": null,
+          "document_title": null,
+          "pdf_file_name": null,
+          "page_no": 5,
+          "chunk_id": null,
+          "quote": "카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다.",
+          "benefit_ids": [
+            "card_product_item:6:20261104_000015"
+          ]
+        }
+      ],
+      "unreferenced_retrieved_evidence_ids": [
+        "20261104_001717",
+        "20261104_001718",
+        "20261104_001719",
+        "20261104_001792",
+        "20261104_001794"
+      ],
+      "pdf_evidence_records_by_benefit": [
+        {
+          "benefit_key": "card_product_item:6:20261104_000015",
+          "evidence_records": [
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000015",
+                "item_nm": "오프라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000015\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001717",
+                "quote_txt": "오프라인 쇼핑 10% 청구할인",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001717\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000015",
+                "item_nm": "오프라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000015\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": "offline_discount_rate",
+              "link": {
+                "ev_subject_cd": "RULE",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001717",
+                "quote_txt": "오프라인 쇼핑 10% 청구할인",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001717\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000015",
+                "item_nm": "오프라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000015\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": null,
+                "ev_item_cd": null,
+                "source_table": "derived:card_evidence_link+card_source_evidence+card_extr_stg",
+                "ev_item_key": null
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001718",
+                "quote_txt": "오프라인 쇼핑 10% 청구할인",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001718\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000015",
+                "item_nm": "오프라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000015\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 2,
+                "evidence_id": "20261104_001719",
+                "quote_txt": "오프라인 가맹점 \n백화점 \n롯데, 현대, 신세계 \n대형마트 \n이마트, 홈플러스, 롯데마트, 메가마트,  \nY-MART(영암마트) \n창고형 할인매장 \n트레이더스 홀세일 클럽, 이케아, 롯데마트맥스 \n슈퍼마켓 \n이마트 에브리데이, 롯데슈퍼, GS 더프레시,  \n홈플러스 익스프레스 \n프리미엄 아울렛 \n롯데, 현대, 신세계사이먼 \n편의점 \nCU, GS25, 이마트24 \n잡화 \n올리브영, 롭스플러스(LOHB'S+), 시코르, 다이소",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",2,\"20261104_000079\",\"20261104_001719\"]"
+              },
+              "chunk": {
+                "page_no": 2,
+                "chunk_id": "20261104_000079"
+              },
+              "page": {
+                "page_no": 2
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000015",
+                "item_nm": "오프라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000015\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261104_001790",
+                "quote_txt": "전월 국내 가맹점 이용금액\n30만원 이상\n70만원 미만\n70만원 이상\n120만원 미만\n120만원 이상",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",3,\"20261104_000080\",\"20261104_001790\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261104_000080"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000015",
+                "item_nm": "오프라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000015\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261104_001791",
+                "quote_txt": "오프라인\n6천원\n12천원\n24천원",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",3,\"20261104_000080\",\"20261104_001791\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261104_000080"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000015",
+                "item_nm": "오프라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000015\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 3,
+                "evidence_id": "20261104_001792",
+                "quote_txt": "합계\n1만원\n2만원\n4만원",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",3,\"20261104_000080\",\"20261104_001792\"]"
+              },
+              "chunk": {
+                "page_no": 3,
+                "chunk_id": "20261104_000080"
+              },
+              "page": {
+                "page_no": 3
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000015",
+                "item_nm": "오프라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000015\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 4,
+                "evidence_id": "20261104_001793",
+                "quote_txt": "예) 이마트(오프라인 가맹점)에서 10만원 결제 시 5만원에 대해서만 10% \n할인 적용 (5,000원 할인)",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",4,\"20261104_000081\",\"20261104_001793\"]"
+              },
+              "chunk": {
+                "page_no": 4,
+                "chunk_id": "20261104_000081"
+              },
+              "page": {
+                "page_no": 4
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            },
+            {
+              "owner_labels": [
+                "dp_node",
+                "dp_card_product_item"
+              ],
+              "owner": {
+                "card_product_item_id": "20261104_000015",
+                "item_nm": "오프라인 쇼핑 10% 청구할인",
+                "key": "[\"card_product_item\",6,\"20261104_000015\"]"
+              },
+              "evidence_labels": [
+                "dp_node",
+                "dp_card_source_evidence"
+              ],
+              "rule_key": null,
+              "link": {
+                "ev_subject_cd": "BNFT",
+                "ev_item_cd": "SELF",
+                "source_table": "card_evidence_link",
+                "ev_item_key": "-"
+              },
+              "evidence": {
+                "approval_status_cd": "PENDING",
+                "page_no": 5,
+                "evidence_id": "20261104_001794",
+                "quote_txt": "카드 사용등록일로부터 다음달 말일까지는 이용실적 조건없이 30만원 \n실적구간 서비스를 제공하며, 30만원이 넘는 경우 다음달부터 해당 실적\n구간 서비스가 제공됩니다.",
+                "key": "[\"card_source_evidence\",\"20261104_000023\",5,\"20261104_000082\",\"20261104_001794\"]"
+              },
+              "chunk": {
+                "page_no": 5,
+                "chunk_id": "20261104_000082"
+              },
+              "page": {
+                "page_no": 5
+              },
+              "document": {
+                "card_doc_id": "20261104_000023",
+                "doc_file_nm": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+                "doc_title": "카드의정석 SHOPPING 상품안내장",
+                "doc_sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+                "doc_source_url": null
+              }
+            }
+          ]
+        }
+      ],
+      "answer_cited_evidence_ids": [
+        "20261104_001790",
+        "20261104_001791",
+        "20261104_001793"
+      ],
+      "llm_calls": [
+        {
+          "node": "interpret",
+          "model": "gpt-6-luna",
+          "response_model": "gpt-6-luna",
+          "input_tokens": 5955,
+          "output_tokens": 62,
+          "cached_tokens": 0,
+          "reasoning_tokens": 18,
+          "cost_usd": 0.0006265,
+          "elapsed_ms": 2257.4722999706864
+        },
+        {
+          "node": "answer",
+          "model": "gpt-6-luna",
+          "response_model": "gpt-6-luna",
+          "input_tokens": 4471,
+          "output_tokens": 420,
+          "cached_tokens": 0,
+          "reasoning_tokens": 73,
+          "cost_usd": 0.0006571,
+          "elapsed_ms": 4196.958999847993
+        }
+      ],
+      "error": null,
+      "warnings": [],
+      "expected_answer_for_review": "오프라인 쇼핑은 10% 청구할인입니다. 전월 실적 30만~70만원 미만은 월 6,000원, 70만~120만원 미만은 12,000원, 120만원 이상은 24,000원 한도이며 매출 건당 5만원까지 할인 대상입니다.",
+      "expected_facts_for_review": {
+        "must_include": {
+          "RATE": [
+            "오프라인 쇼핑 10% 청구할인"
+          ],
+          "SPEND": [
+            "30만~70만원 미만",
+            "70만~120만원 미만",
+            "120만원 이상"
+          ],
+          "CAP": [
+            "월 6,000원",
+            "월 12,000원",
+            "월 24,000원",
+            "매출 건당 5만원까지 할인 대상"
+          ]
+        },
+        "rates": [
+          "오프라인 쇼핑 10% 청구할인"
+        ],
+        "transaction_amount": [],
+        "previous_month_spend": [
+          "30만~70만원 미만",
+          "70만~120만원 미만",
+          "120만원 이상"
+        ],
+        "frequency": [],
+        "caps": [
+          "월 6,000원",
+          "월 12,000원",
+          "월 24,000원",
+          "매출 건당 5만원까지 할인 대상"
+        ],
+        "targets": [],
+        "exclusions": [],
+        "payment_conditions": [],
+        "other_conditions": []
+      },
+      "pdf_for_review": {
+        "document_id": "20261104_000023",
+        "document_title": "카드의정석 SHOPPING 상품안내장",
+        "file_name": "woori_all/credit/상품안내장_카드의정석 SHOPPING_260901.pdf",
+        "sha256": "917bba9e9473831ea31aba5340f3b69e34d294308f83a2fcc9168d72ea510324",
+        "page_numbers": [
+          3,
+          4
+        ],
+        "quotes": [
+          {
+            "evidence_id": "20261104_001790",
+            "document_id": "20261104_000023",
+            "page_no": 3,
+            "chunk_id": "20261104_000080",
+            "quote_text": "전월 국내 가맹점 이용금액\n30만원 이상\n70만원 미만\n70만원 이상\n120만원 미만\n120만원 이상",
+            "evidence_link_id": "20261104_000130",
+            "rule_key": null,
+            "source": "PostgreSQL Evidence read-only snapshot"
+          },
+          {
+            "evidence_id": "20261104_001791",
+            "document_id": "20261104_000023",
+            "page_no": 3,
+            "chunk_id": "20261104_000080",
+            "quote_text": "오프라인\n6천원\n12천원\n24천원",
+            "evidence_link_id": "20261104_000131",
+            "rule_key": null,
+            "source": "PostgreSQL Evidence read-only snapshot"
+          },
+          {
+            "evidence_id": "20261104_001793",
+            "document_id": "20261104_000023",
+            "page_no": 4,
+            "chunk_id": "20261104_000081",
+            "quote_text": "예) 이마트(오프라인 가맹점)에서 10만원 결제 시 5만원에 대해서만 10% \n할인 적용 (5,000원 할인)",
+            "evidence_link_id": "20261104_000133",
+            "rule_key": null,
+            "source": "PostgreSQL Evidence read-only snapshot"
+          }
+        ],
+        "citation_reason": "공식 PDF p.3 표에서 전월 실적 구간 열과 오프라인 월 한도 행의 대응을 직접 대조하고 p.4의 건당 할인대상 상한을 확인했습니다."
+      }
+    }
+  ],
+  "adjudication_note": "Do not finalize factual judgments from string overlap; review the cited official PDF and benefit ownership."
+}

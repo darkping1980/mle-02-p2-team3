@@ -77,7 +77,6 @@ VERIFICATION_LABELS = {"RAW_MATCH": "값이 인용 원문과 일치", "STRUCTURE
                        "CALCULATED": "인용 원문 값으로 계산한 차이", "NOT_CHECKED": "값이 없는 문장, 내용 일치 미검사"}
 APPROVAL_LABELS = {"PENDING": "검토 대기", "APPROVED": "승인", "REJECTED": "반려"}
 SOURCE_LABELS = {"llm": "LLM이 작성한 문장을 그대로 표시", "validated_sentences": "LLM 문장이 검증을 통과하지 못해 근거 확인 문장을 표시",
-                 "program_exclusion": "제외 대상이라 프로그램 고정 문구로 표시",
                  "program_tier": "LLM 문장이 금액 구간 검증을 통과하지 못해 조회 값으로 만든 구간 안내를 표시",
                  "program_fee": "연회비는 등록 값(item_data)으로 프로그램이 작성. LLM 미사용", "none": "답변 문장 없음"}
 NODE_LABELS = {"interpret": "질문 해석", "answer": "답변 생성"}

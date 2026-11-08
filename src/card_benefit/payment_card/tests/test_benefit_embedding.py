@@ -9,7 +9,6 @@ from card_benefit.payment_card.db_pipeline.benefit_search_text import (
 )
 from card_benefit.payment_card.db_pipeline.embedding_service import EmbeddingError, EmbeddingService, vector_literal
 from card_benefit.payment_card.db_pipeline.product_benefit_service import ProductBenefitService
-from card_benefit.payment_card.db_pipeline_origin_search.card_graphrag import enforce_exclusions, find_exclusions
 from card_benefit.payment_card.db_pipeline_origin_search.search_contract import search_terms
 
 import pytest
