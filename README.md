@@ -104,7 +104,7 @@ uv run streamlit run src/card_benefit/payment_card/db_pipeline_origin_search/str
 
 ## Streamlit 시연
 
-[배포 앱 열기](https://mle-02-p2-team3-bwwnpmzpjxd4ahu39tazko.streamlit.app/)
+[배포 앱 열기](https://mle-02-p2-team3-rzlzgdajdysf7nijchzvne.streamlit.app/)
 
 현재 작업 환경에서 배포 앱의 접속 및 정상 응답을 확인하지 못했습니다. 링크는 프로젝트에서 제공된 주소이며, 실시간 동작 상태를 보증하지 않습니다.
 
