@@ -34,12 +34,13 @@ ORDER BY name,key;
 // dp_supported_by → dp_in_chunk → dp_on_page → dp_in_document 경로는 선택적 연결로 따라가며, 관계·원문·페이지 메타데이터를 분리 반환한다.
 MATCH (p:dp_card_product)-[:dp_has_item]->(i:dp_card_product_item {key:$key})
 OPTIONAL MATCH (i)-[l:dp_supported_by]->(e:dp_card_source_evidence)
-OPTIONAL MATCH (e)-[:dp_in_chunk]->(chunk:dp_card_doc_chunk)-[:dp_on_page]->(page:dp_card_doc_page)-[:dp_in_document]->(doc:dp_card_doc)
+OPTIONAL MATCH (e)-[:dp_in_chunk]->(chunk:dp_card_doc_chunk)
+OPTIONAL MATCH (chunk)-[:dp_on_page]->(page:dp_card_doc_page)-[:dp_in_document]->(doc:dp_card_doc)
 RETURN labels(i) AS owner_labels,{key:i.key,card_product_item_id:i.card_product_item_id,item_nm:i.item_nm} AS owner,
        labels(e) AS evidence_labels,{ev_subject_cd:l.ev_subject_cd,source_table:l.source_table,
          ev_item_key:l.ev_item_key,ev_item_cd:l.ev_item_cd} AS link,l.rule_key AS rule_key,
        {key:e.key,evidence_id:e.evidence_id,page_no:e.page_no,quote_txt:e.quote_txt,approval_status_cd:e.approval_status_cd} AS evidence,
-       CASE WHEN chunk IS NULL THEN null ELSE {chunk_id:chunk.card_doc_chunk_id,page_no:chunk.page_no} END AS chunk,
+       CASE WHEN chunk IS NULL THEN null ELSE {chunk_id:chunk.card_doc_chunk_id,page_no:chunk.page_no,source_json:chunk.source_json} END AS chunk,
        CASE WHEN page IS NULL THEN null ELSE {page_no:page.page_no} END AS page,
        CASE WHEN doc IS NULL THEN null ELSE {card_doc_id:doc.card_doc_id,doc_title:doc.doc_title,doc_file_nm:doc.doc_file_nm,
          doc_source_url:doc.doc_source_url,doc_sha256:doc.doc_sha256} END AS document
@@ -119,7 +120,8 @@ RETURN head([c IN cards WHERE c:dp_card_product | {card_id:c.card_id,product_nm:
 // key를 가진 혜택 노드에서 dp_supported_by 관계를 통해 연결된 Evidence를 조회한다.
 // Evidence에 문서 계층 관계를 선택적으로 연결하고, 소유 라벨·관계 속성·원문·페이지·청크·문서 정보를 반환한다.
 MATCH (owner {key:$key})-[l:dp_supported_by]->(e:dp_card_source_evidence)
-OPTIONAL MATCH (e)-[:dp_in_chunk]->(chunk:dp_card_doc_chunk)-[:dp_on_page]->(page:dp_card_doc_page)-[:dp_in_document]->(doc:dp_card_doc)
+OPTIONAL MATCH (e)-[:dp_in_chunk]->(chunk:dp_card_doc_chunk)
+OPTIONAL MATCH (chunk)-[:dp_on_page]->(page:dp_card_doc_page)-[:dp_in_document]->(doc:dp_card_doc)
 RETURN labels(owner) AS owner_labels,null AS owner,labels(e) AS evidence_labels,
        l.rule_key AS rule_key,properties(l) AS link,
        {evidence_id:e.evidence_id,page_no:e.page_no,quote_txt:e.quote_txt,approval_status_cd:e.approval_status_cd,source_json:e.source_json} AS evidence,
@@ -132,12 +134,13 @@ ORDER BY e.page_no,e.evidence_id;
 // 공통 혜택 노드만 대상으로 Evidence 관계를 조회한다.
 // Evidence → 청크 → 페이지 → 문서 연결이 없더라도 원문 Evidence는 유지하도록 위치 경로는 OPTIONAL MATCH로 처리한다.
 MATCH (owner:dp_card_common_bnft {key:$key})-[l:dp_supported_by]->(e:dp_card_source_evidence)
-OPTIONAL MATCH (e)-[:dp_in_chunk]->(chunk:dp_card_doc_chunk)-[:dp_on_page]->(page:dp_card_doc_page)-[:dp_in_document]->(doc:dp_card_doc)
+OPTIONAL MATCH (e)-[:dp_in_chunk]->(chunk:dp_card_doc_chunk)
+OPTIONAL MATCH (chunk)-[:dp_on_page]->(page:dp_card_doc_page)-[:dp_in_document]->(doc:dp_card_doc)
 RETURN labels(owner) AS owner_labels,null AS owner,labels(e) AS evidence_labels,
        null AS rule_key,{ev_subject_cd:l.ev_subject_cd,source_table:l.source_table,
          ev_item_key:l.ev_item_key,ev_item_cd:l.ev_item_cd} AS link,
        {key:e.key,evidence_id:e.evidence_id,page_no:e.page_no,quote_txt:e.quote_txt,approval_status_cd:e.approval_status_cd} AS evidence,
-       CASE WHEN chunk IS NULL THEN null ELSE {chunk_id:chunk.card_doc_chunk_id,page_no:chunk.page_no} END AS chunk,
+       CASE WHEN chunk IS NULL THEN null ELSE {chunk_id:chunk.card_doc_chunk_id,page_no:chunk.page_no,source_json:chunk.source_json} END AS chunk,
        CASE WHEN page IS NULL THEN null ELSE {page_no:page.page_no} END AS page,
        CASE WHEN doc IS NULL THEN null ELSE {card_doc_id:doc.card_doc_id,doc_title:doc.doc_title,doc_file_nm:doc.doc_file_nm,
          doc_source_url:doc.doc_source_url,doc_sha256:doc.doc_sha256} END AS document
