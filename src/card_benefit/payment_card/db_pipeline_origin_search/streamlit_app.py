@@ -289,6 +289,22 @@ if run_mode == "개발 검증":
     st.stop()
 
 st.pills("예시 질문", EXAMPLES, key="example", on_change=use_example)
+
+# region 발표 시연용 예시 질문 버튼
+DEMO_QUESTIONS = {
+    "대중교통 혜택 조회": "ONE PICK STYLE 하나 체크카드의 ONE MORE 대중교통 캐시백 혜택과 적용 조건을 알려줘.",
+    "두 카드 혜택 비교": "더 심플 하나카드와 카드의정석2 DAILY의 휴대전화 요금 자동납부 할인 조건과 한도를 비교해 줘.",
+}
+
+st.markdown("**🎤 발표 시연용 예시 질문**")
+demo_cols = st.columns(2)
+for col, (label, demo_q) in zip(demo_cols, DEMO_QUESTIONS.items()):
+    with col:
+        if st.button(label, key=f"demo_{label}", use_container_width=True):
+            st.session_state.question = demo_q
+            st.rerun()
+# endregion
+
 with st.form("question_form"):
     question = st.text_area("질문", key="question", max_chars=card_graphrag.MAX_QUESTION_CHARS, height=80,
                             placeholder="카드 혜택이나 연회비를 자연어로 물어보세요.")
@@ -300,28 +316,10 @@ if submitted:                                             # 폼 제출 이벤트
     question = question.strip()                           # 사용자 입력 문자열 앞뒤 공백 제거(Java의 String.trim())
     session_id = st.session_state.execution_log_session_id  # 현재 브라우저 세션 ID(HttpSessionId와 유사) 추출
     request_id = str(uuid4())                             # 요청 추적을 위한 고유 트랜잭션 UUID 생성
-    last = st.session_state.get("outcome")
     outcome_rendered = False
     if not question:                                      # 입력 검증: 빈 문자열 체크
         st.warning("질문을 입력하세요.")                  # 화면에 경고 알림 렌더링
-    # 분기: 직전과 같은 질문·모드이고 오류가 없었으면 LLM 비용을 쓰지 않고 이전 결과를 재사용한다.
-    elif (last and last["question"] == question and not last.get("error") and not force):  # 동일 질문 및 캐시 유효성 검사
-        request_event = log_event("REQUEST", question)    # 요청 로그 이벤트 객체 생성
-        if dev_mode():                                    # 개발자 모드 플래그 활성화 여부 확인
-            st.info("같은 질문이라 API를 호출하지 않고 이전 결과를 표시합니다.")  # 캐시 히트 안내 메시지 출력
-        st.session_state.outcome = {**last, "reused": True}  # 얕은 복사로 reused 플래그만 변경하여 세션 상태 갱신
-        if APP_DB_LOG_ENABLED:                            # PostgreSQL 로그 저장 활성화 여부 확인
-            events = [request_event,                      # 저장할 이벤트 목록 리스트 초기화
-                      log_event("RESPONSE", customer_response_for_log(st.session_state.outcome))]  # 응답 이벤트 추가
-            app_log_started = perf_counter()              # DB 저장 소요 시간 측정 시작
-            persist_app_logs(session_id, request_id, events,  # PostgreSQL의 app_log 테이블에 배치 저장 수행
-                             detail_text=outcome_detail_text(st.session_state.outcome),
-                             pdf_evidence_text=outcome_pdf_evidence_text(st.session_state.outcome),
-                             neo4j_summary=outcome_neo4j_summary(st.session_state.outcome),
-                             pdf_evidence_summary=outcome_pdf_evidence_summary(st.session_state.outcome))
-            CARD_LOG.log_summary("PERF", st.session_state.outcome.get("request_id", request_id), phase="app_log_save",
-                                 elapsed_ms=(perf_counter() - app_log_started) * 1000, reused=True)
-    else:                                                 # 새로운 질문이거나 캐시 미스인 경우 파이프라인 실제 실행
+    else:                                                 # 질문이 있으면 항상 파이프라인을 실행한다
         request_event = log_event("REQUEST", question)    # 요청 로그 이벤트 생성
         query_events = []                                 # 실행 도중 캡처될 Cypher/SQL 쿼리 로그 목록 초기화
         outcome_for_log = None                            # 로그 적재를 위한 최종 결과 변수 초기화
